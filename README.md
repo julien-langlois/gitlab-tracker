@@ -1,10 +1,10 @@
 # 🚀 GitLab MR Tracker
 
-[![CI Quality Gate](https://github.com/julien-langlois/gitlab_tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab_tracker/actions)
+[![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.80+-orange.svg)](https://www.rust-lang.org/)
 
-**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`master`, `preproduction`, `staging`, etc.), handling strict SHA verification as well as cherry-picked commit identification.
+**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), handling strict SHA verification as well as cherry-picked commit identification.
 
 ![gitlab-tracker demo](assets/demo.gif)
 
@@ -104,7 +104,7 @@ keyring (GNOME Keyring, macOS Keychain, or Windows Credential Manager).
    * **Windows:** Windows Credential Manager
 
 3. **Subsequent Launches:**
-   You can delete the `GITLAB_TOKEN` entry from your `.env` completely. On subsequent runs, `gitlab_tracker` retrieves the token silently from the OS Keyring without requiring plain-text files or manual re-entry.
+   You can delete the `GITLAB_TOKEN` entry from your `.env` completely. On subsequent runs, `gitlab-tracker` retrieves the token silently from the OS Keyring without requiring plain-text files or manual re-entry.
 
 ---
 
@@ -165,15 +165,15 @@ You can edit this file to adjust default environment branches, label badge color
 
 ### Pre-built Binaries
 
-Download the latest pre-compiled binary for your architecture from the [Releases Page](https://github.com/your-username/gitlab_tracker/releases).
+Download the latest pre-compiled binary for your architecture from the [Releases Page](https://github.com/julien-langlois/gitlab-tracker/releases).
 
 ### Building from Source & Global Installation
 
 Ensure you have Rust (1.80+) installed:
 
 ```bash
-git clone [https://github.com/your-username/gitlab_tracker.git](https://github.com/your-username/gitlab_tracker.git)
-cd gitlab_tracker
+git clone git@github.com:julien-langlois/gitlab-tracker.git
+cd gitlab-tracker
 
 # Build optimized release executable
 cargo build --release
@@ -185,7 +185,7 @@ cargo install --path .
 Once installed globally, you can launch the dashboard from any terminal folder by running:
 
 ```bash
-gitlab_tracker
+gitlab-tracker
 ```
 
 ---
