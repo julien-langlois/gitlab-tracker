@@ -1,0 +1,17 @@
+# --- Rust Build Artifacts ---
+/target/
+
+# --- Environment & Secrets ---
+.env
+!.env.example
+
+# --- IDEs & Text Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS Specifics ---
+.DS_Store
+Thumbs.db

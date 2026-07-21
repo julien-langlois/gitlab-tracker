@@ -1,0 +1,56 @@
+name: Automated Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive_name: gitlab_tracker-linux-amd64.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive_name: gitlab_tracker-macos-amd64.tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive_name: gitlab_tracker-macos-arm64.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive_name: gitlab_tracker-windows-amd64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build Release Binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package Binary (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../${{ matrix.archive_name }} gitlab_tracker
+
+      - name: Package Binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path gitlab_tracker.exe -DestinationPath ../../../${{ matrix.archive_name }}
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.archive_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
