@@ -6,7 +6,7 @@ mod storage;
 mod ui;
 mod utils;
 
-use app::{App, TrackedMrExt, REFRESH_INTERVAL_SECS};
+use app::{App, TrackedMrExt};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use gitlab::{spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS};
@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "demo-token".into(),
             "123456".into(),
             "https://gitlab.com".into(),
+            900,
             config,
         );
 
@@ -118,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if app.time_left > 0 {
                         app.time_left -= 1;
                     } else {
-                        app.time_left = REFRESH_INTERVAL_SECS;
+                        app.time_left = app.refresh_interval_secs;
                     }
                 }
             }
@@ -135,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Char('s') => app.cycle_sort_column(),
                             KeyCode::Char('S') => app.toggle_sort_order(),
                             KeyCode::Char('r') | KeyCode::Char('R') => {
-                                app.time_left = REFRESH_INTERVAL_SECS;
+                                app.time_left = app.refresh_interval_secs;
                             }
                             _ => {}
                         }
@@ -177,7 +178,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = ratatui::init();
 
     let (saved_mrs, saved_branches) = load_state_async().await;
-    let mut app = App::new(token, project_id, base_url, config);
+    let refresh_interval_secs = std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .or(config.refresh_interval_secs)
+        .unwrap_or(900);
+    let mut app = App::new(token, project_id, base_url, refresh_interval_secs, config);
 
     if saved_branches.is_empty() {
         app.branches = app.config.default_branches.clone();
@@ -318,7 +324,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if app.time_left > 0 {
                         app.time_left -= 1;
                     } else {
-                        app.time_left = REFRESH_INTERVAL_SECS;
+                        app.time_left = app.refresh_interval_secs;
 
                         let ctx = FetchContext {
                             base_url: app.base_url.clone(),
@@ -391,7 +397,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
 
                         KeyCode::Char('r') | KeyCode::Char('R') if app.input.is_empty() => {
-                            app.time_left = REFRESH_INTERVAL_SECS;
+                            app.time_left = app.refresh_interval_secs;
                             let ctx = FetchContext {
                                 base_url: app.base_url.clone(),
                                 token: app.token.clone(),

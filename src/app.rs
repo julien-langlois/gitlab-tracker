@@ -16,8 +16,6 @@ pub enum SortOrder {
     Descending,
 }
 
-pub const REFRESH_INTERVAL_SECS: u32 = 300;
-
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -25,7 +23,8 @@ pub struct App {
     pub token: String,
     pub project_id: String,
     pub base_url: String,
-    pub time_left: u32,
+    pub time_left: u64,
+    pub refresh_interval_secs: u64,
     pub table_state: TableState,
     pub config: AppConfig,
     pub sort_column: SortColumn,
@@ -33,7 +32,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(token: String, project_id: String, base_url: String, config: AppConfig) -> Self {
+    pub fn new(
+        token: String,
+        project_id: String,
+        base_url: String,
+        refresh_interval_secs: u64,
+        config: AppConfig,
+    ) -> Self {
         let mut table_state = TableState::default();
         table_state.select(None);
         Self {
@@ -43,7 +48,8 @@ impl App {
             token,
             project_id,
             base_url,
-            time_left: REFRESH_INTERVAL_SECS,
+            refresh_interval_secs,
+            time_left: refresh_interval_secs,
             table_state,
             config,
             sort_column: SortColumn::None,

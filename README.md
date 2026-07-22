@@ -23,6 +23,7 @@
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Desktop Notifications:** Receives native OS desktop notifications whenever an MR lands on a newly tracked environment branch.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state and UI configurations automatically to platform-standard configuration paths using `directories`.
+* **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 
 ---
 
@@ -122,6 +123,7 @@ You can edit this file to adjust default environment branches, label badge color
 {
   "project_id": "12345678",
   "gitlab_url": "[https://gitlab.my-company.com](https://gitlab.my-company.com)",
+  "refresh_interval_secs": 900,
   "default_branches": [
     "main"
   ],

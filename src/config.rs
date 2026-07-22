@@ -16,6 +16,7 @@ pub struct LabelColorConfig {
 pub struct AppConfig {
     pub project_id: Option<String>,
     pub gitlab_url: Option<String>,
+    pub refresh_interval_secs: Option<u64>,
     #[serde(default = "default_branches_val")]
     pub default_branches: Vec<String>,
     #[serde(default)]
@@ -73,6 +74,7 @@ impl Default for AppConfig {
         Self {
             project_id: None,
             gitlab_url: None,
+            refresh_interval_secs: Some(900),
             default_branches: default_branches_val(),
             table_label_prefixes: vec!["deploy::".to_string(), "review::".to_string()],
             label_colors,
