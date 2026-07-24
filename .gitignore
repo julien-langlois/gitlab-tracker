@@ -15,3 +15,8 @@
 # --- OS Specifics ---
 .DS_Store
 Thumbs.db
+
+# --- Local CI & Testing (act) ---
+/bin/
+.secrets
+event.json
