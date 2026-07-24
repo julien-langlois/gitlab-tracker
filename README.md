@@ -1,6 +1,8 @@
 # 🚀 GitLab MR Tracker
 
 [![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
+![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker)
+![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.80+-orange.svg)](https://www.rust-lang.org/)
 
