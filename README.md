@@ -20,6 +20,7 @@
   * **System 1 (Strict SHA):** Validates precise merge/squash commit SHAs on target branches (resistant to `git reset --hard`).
   * **System 2 (Intelligent Fuzzy Matcher):** Uses a keyword relevance matrix to verify cherry-picked commits deployed across branches.
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
+* 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
@@ -217,6 +218,8 @@ gitlab-tracker
 | `-staging` + `Enter` | Remove branch column `staging` |
 | `O` | Open selected MR in your default web browser |
 | `R` | Force immediate network refresh for all MRs |
+| `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
+| `S` | Toggle sort direction (ascending / descending) |
 | `Del` or `X` | Delete selected MR row |
 | `ESC` | Quit dashboard |
 

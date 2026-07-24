@@ -12,6 +12,13 @@ pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
 }
 
 pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
+    // Format ISO 8601 timestamp to a more readable form (date + time, drop sub-seconds).
+    let updated_at_display = mr
+        .updated_at
+        .as_deref()
+        .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+        .unwrap_or_else(|| "Unknown".to_string());
+
     let mut lines = vec![
         Line::from(vec![Span::styled(
             format!("MR ID    : !{}", mr.id),
@@ -38,6 +45,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             Span::styled(
                 mr.milestone.clone(),
                 Style::default().fg(ratatui::style::Color::Cyan),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("Updated  : "),
+            Span::styled(
+                updated_at_display,
+                Style::default().fg(ratatui::style::Color::Yellow),
             ),
         ]),
     ];

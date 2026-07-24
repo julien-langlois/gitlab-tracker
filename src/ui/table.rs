@@ -1,4 +1,4 @@
-use crate::app::App;
+use crate::app::{App, SortColumn, SortOrder};
 use crate::models::MrStatus;
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
@@ -81,9 +81,21 @@ pub fn render_table(app: &App) -> Table<'static> {
 
     let mins = app.time_left / 60;
     let secs = app.time_left % 60;
+
+    let sort_label = match app.sort_column {
+        SortColumn::UpdatedAt => "Updated ↕",
+        SortColumn::Id => "ID ↕",
+        SortColumn::Milestone => "Milestone ↕",
+        SortColumn::Title => "Title ↕",
+    };
+    let order_label = match app.sort_order {
+        SortOrder::Ascending => "↑",
+        SortOrder::Descending => "↓",
+    };
+
     let title_text = format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} ",
-        app.base_url, mins, secs
+        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ Sort: {} {} ",
+        app.base_url, mins, secs, sort_label, order_label
     );
 
     Table::new(rows, constraints)

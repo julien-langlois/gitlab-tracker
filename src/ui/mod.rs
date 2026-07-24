@@ -50,7 +50,8 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     };
 
     let sort_status = match (app.sort_column, app.sort_order) {
-        (SortColumn::None, _) => "Sort: Default",
+        (SortColumn::UpdatedAt, SortOrder::Ascending) => "Sort: Updated ▲",
+        (SortColumn::UpdatedAt, SortOrder::Descending) => "Sort: Updated ▼",
         (SortColumn::Id, SortOrder::Ascending) => "Sort: ID ▲",
         (SortColumn::Id, SortOrder::Descending) => "Sort: ID ▼",
         (SortColumn::Milestone, SortOrder::Ascending) => "Sort: Milestone ▲",

@@ -4,7 +4,7 @@ use ratatui::widgets::TableState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SortColumn {
-    None,
+    UpdatedAt,
     Id,
     Milestone,
     Title,
@@ -52,8 +52,8 @@ impl App {
             time_left: refresh_interval_secs,
             table_state,
             config,
-            sort_column: SortColumn::None,
-            sort_order: SortOrder::Ascending,
+            sort_column: SortColumn::UpdatedAt,
+            sort_order: SortOrder::Descending,
         }
     }
 
@@ -93,10 +93,15 @@ impl App {
 
     pub fn cycle_sort_column(&mut self) {
         self.sort_column = match self.sort_column {
-            SortColumn::None => SortColumn::Id,
+            SortColumn::UpdatedAt => SortColumn::Id,
             SortColumn::Id => SortColumn::Milestone,
             SortColumn::Milestone => SortColumn::Title,
-            SortColumn::Title => SortColumn::None,
+            SortColumn::Title => SortColumn::UpdatedAt,
+        };
+        // Reset to a sensible default order when switching columns.
+        self.sort_order = match self.sort_column {
+            SortColumn::UpdatedAt => SortOrder::Descending,
+            _ => SortOrder::Ascending,
         };
         self.sort_mrs();
     }
@@ -110,16 +115,20 @@ impl App {
     }
 
     pub fn sort_mrs(&mut self) {
-        if self.sort_column == SortColumn::None {
-            return;
-        }
-
         let order = self.sort_order;
         let col = self.sort_column;
 
         self.mrs.sort_by(|a, b| {
             let cmp = match col {
-                SortColumn::None => std::cmp::Ordering::Equal,
+                SortColumn::UpdatedAt => {
+                    // MRs without a timestamp are pushed to the bottom.
+                    match (&a.updated_at, &b.updated_at) {
+                        (Some(ta), Some(tb)) => ta.cmp(tb),
+                        (None, Some(_)) => std::cmp::Ordering::Less,
+                        (Some(_), None) => std::cmp::Ordering::Greater,
+                        (None, None) => std::cmp::Ordering::Equal,
+                    }
+                }
                 SortColumn::Id => {
                     let id_a = a.id.parse::<u64>().unwrap_or(0);
                     let id_b = b.id.parse::<u64>().unwrap_or(0);

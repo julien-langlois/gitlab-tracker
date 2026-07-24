@@ -108,6 +108,7 @@ pub async fn save_state_async(
                 milestone: Some(m.milestone.clone()),
                 web_url: Some(m.web_url.clone()),
                 labels: Some(m.labels.clone()),
+                updated_at: m.updated_at.clone(),
             })
             .collect(),
         branches: branches.to_vec(),

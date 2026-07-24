@@ -71,6 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "review::approved".into(),
                     "feature".into(),
                 ],
+                updated_at: Some("2024-05-01T10:00:00.000Z".into()),
             },
             TrackedMr {
                 id: "102".into(),
@@ -83,6 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 milestone: "v2.4.0".into(),
                 web_url: "https://gitlab.com/demo/project/-/merge_requests/102".into(),
                 labels: vec!["bug".into(), "deploy::prod_pending".into()],
+                updated_at: Some("2024-05-02T15:30:00.000Z".into()),
             },
             TrackedMr {
                 id: "103".into(),
@@ -95,6 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 milestone: "v2.5.0".into(),
                 web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
                 labels: vec!["performance".into(), "review::needs_work".into()],
+                updated_at: Some("2024-05-03T08:45:00.000Z".into()),
             },
         ];
 
@@ -232,6 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|| "None".to_string()),
             web_url: saved.web_url.clone().unwrap_or_default(),
             labels: saved.labels.clone().unwrap_or_default(),
+            updated_at: saved.updated_at.clone(),
         });
 
         if initial_status == MrStatus::Loading {
@@ -307,6 +311,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.milestone = data.milestone;
                         mr.web_url = data.web_url;
                         mr.labels = data.labels;
+                        mr.updated_at = data.updated_at;
 
                         app.sort_mrs();
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
@@ -496,6 +501,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             milestone: "Loading".to_string(),
                                             web_url: String::new(),
                                             labels: vec![],
+                                            updated_at: None,
                                         });
                                         app.table_state.select(Some(app.mrs.len() - 1));
                                         save_state_async(

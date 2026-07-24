@@ -22,6 +22,7 @@ pub struct GitLabMr {
     pub squash_commit_sha: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -41,6 +42,8 @@ pub struct SavedMr {
     pub milestone: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -70,6 +73,7 @@ pub struct TrackedMr {
     pub milestone: String,
     pub web_url: String,
     pub labels: Vec<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +88,7 @@ pub struct MrLoadedData {
     pub milestone: String,
     pub web_url: String,
     pub labels: Vec<String>,
+    pub updated_at: Option<String>,
 }
 
 pub enum AppEvent {

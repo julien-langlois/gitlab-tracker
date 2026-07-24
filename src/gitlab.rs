@@ -56,6 +56,30 @@ pub async fn fetch_gitlab_data(
 ) -> Result<MrLoadedData, String> {
     let client = reqwest::Client::new();
 
+    // updated_at is always fetched fresh — never served from cache — so we always
+    // know the real last-update timestamp regardless of the cache hit path.
+    let mr_url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let mr_res = client
+        .get(&mr_url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+        .map_err(|e| format!("MR network error: {}", e))?;
+
+    if !mr_res.status().is_success() {
+        return Err(format!("HTTP {} on MR", mr_res.status()));
+    }
+
+    let mr: GitLabMr = mr_res
+        .json()
+        .await
+        .map_err(|e| format!("Error reading MR JSON: {}", e))?;
+
+    let updated_at = mr.updated_at.clone();
+
     let (title, sha, description, author, assignee, milestone, web_url, labels) = match (
         cached.title,
         cached.sha,
@@ -72,26 +96,6 @@ pub async fn fetch_gitlab_data(
             (t, Some(s), d, a, asg, m, w, lbls)
         }
         _ => {
-            let mr_url = format!(
-                "{}/api/v4/projects/{}/merge_requests/{}",
-                ctx.base_url, ctx.project_id, mr_id
-            );
-            let mr_res = client
-                .get(&mr_url)
-                .header("PRIVATE-TOKEN", &ctx.token)
-                .send()
-                .await
-                .map_err(|e| format!("MR network error: {}", e))?;
-
-            if !mr_res.status().is_success() {
-                return Err(format!("HTTP {} on MR", mr_res.status()));
-            }
-
-            let mr: GitLabMr = mr_res
-                .json()
-                .await
-                .map_err(|e| format!("Error reading MR JSON: {}", e))?;
-
             let sha = mr.merge_commit_sha.or(mr.squash_commit_sha);
             let title = if sha.is_none() {
                 format!("[Open] {}", mr.title)
@@ -202,5 +206,6 @@ pub async fn fetch_gitlab_data(
         milestone,
         web_url,
         labels,
+        updated_at,
     })
 }
