@@ -6,6 +6,16 @@ fn default_branches_val() -> Vec<String> {
     vec!["main".to_string()]
 }
 
+/// Default threshold (in days) above which an MR is considered "stale" (red badge).
+fn default_activity_stale_days() -> u64 {
+    7
+}
+
+/// Default threshold (in days) below which an MR is considered "recent" (green badge).
+fn default_activity_recent_days() -> u64 {
+    2
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabelColorConfig {
     pub bg: String,
@@ -23,6 +33,12 @@ pub struct AppConfig {
     pub table_label_prefixes: Vec<String>,
     #[serde(default)]
     pub label_colors: HashMap<String, LabelColorConfig>,
+    /// Number of days of inactivity above which an MR badge turns red (stale).
+    #[serde(default = "default_activity_stale_days")]
+    pub activity_stale_days: u64,
+    /// Number of days of activity below which an MR badge turns green (recent).
+    #[serde(default = "default_activity_recent_days")]
+    pub activity_recent_days: u64,
 }
 
 impl Default for AppConfig {
@@ -78,6 +94,8 @@ impl Default for AppConfig {
             default_branches: default_branches_val(),
             table_label_prefixes: vec!["deploy::".to_string(), "review::".to_string()],
             label_colors,
+            activity_stale_days: default_activity_stale_days(),
+            activity_recent_days: default_activity_recent_days(),
         }
     }
 }
@@ -91,6 +109,35 @@ impl AppConfig {
         self.table_label_prefixes
             .iter()
             .any(|prefix| label_lower.starts_with(&prefix.to_lowercase()))
+    }
+
+    /// Computes the activity badge for a given ISO 8601 `updated_at` timestamp.
+    ///
+    /// Returns a `(icon, Color)` tuple based on the configured thresholds:
+    /// - Green  🟢 : updated within `activity_recent_days`
+    /// - Yellow 🟡 : updated between `activity_recent_days` and `activity_stale_days`
+    /// - Red    🔴 : not updated for more than `activity_stale_days`
+    /// - Gray      : timestamp unavailable or unparseable
+    pub fn activity_badge(&self, updated_at: Option<&str>) -> (&'static str, Color) {
+        use chrono::{DateTime, Utc};
+
+        let Some(ts) = updated_at else {
+            return ("⬛ Unknown", Color::DarkGray);
+        };
+
+        let Ok(parsed) = DateTime::parse_from_rfc3339(ts) else {
+            return ("⬛ Unknown", Color::DarkGray);
+        };
+
+        let elapsed_days = (Utc::now() - parsed.to_utc()).num_days();
+
+        if elapsed_days < self.activity_recent_days as i64 {
+            ("🟢 Active", Color::Green)
+        } else if elapsed_days < self.activity_stale_days as i64 {
+            ("🟡 Slowing", Color::Yellow)
+        } else {
+            ("🔴 Stale", Color::Red)
+        }
     }
 
     pub fn get_label_style(&self, label: &str) -> (Color, Color) {

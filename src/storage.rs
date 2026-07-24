@@ -60,6 +60,16 @@ pub async fn load_or_create_config_async() -> AppConfig {
                         .filter(|s| !s.is_empty())
                         .collect();
                 }
+                if let Ok(val) = std::env::var("ACTIVITY_RECENT_DAYS") {
+                    if let Ok(days) = val.trim().parse::<u64>() {
+                        config.activity_recent_days = days;
+                    }
+                }
+                if let Ok(val) = std::env::var("ACTIVITY_STALE_DAYS") {
+                    if let Ok(days) = val.trim().parse::<u64>() {
+                        config.activity_stale_days = days;
+                    }
+                }
                 return config;
             }
         }

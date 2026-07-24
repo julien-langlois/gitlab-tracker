@@ -25,6 +25,7 @@
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
+* 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
 
 ---
 
@@ -57,6 +58,10 @@ The application requires your GitLab Project configuration and an API Personal A
 
    # Optional: Filter table column tags by prefix (comma-separated)
    TABLE_LABEL_PREFIXES="deploy::,review::"
+
+   # Optional: Activity badge thresholds in the Context Inspector (in days)
+   ACTIVITY_RECENT_DAYS=2   # 🟢 Green if updated within N days (default: 2)
+   ACTIVITY_STALE_DAYS=7    # 🔴 Red if not updated for N days (default: 7)
    ```
 
 ---
@@ -118,12 +123,12 @@ On its first launch, the tool automatically generates a `config.json` file insid
 * **macOS:** `~/Library/Application Support/gitlab-tracker/config.json`
 * **Windows:** `C:\Users\<User>\AppData\Roaming\gitlab-tracker\config.json`
 
-You can edit this file to adjust default environment branches, label badge colors, and wildcard rules:
+You can edit this file to adjust default environment branches, label badge colors, wildcard rules, and activity badge thresholds:
 
 ```json
 {
   "project_id": "12345678",
-  "gitlab_url": "[https://gitlab.my-company.com](https://gitlab.my-company.com)",
+  "gitlab_url": "https://gitlab.my-company.com",
   "refresh_interval_secs": 900,
   "default_branches": [
     "main"
@@ -132,6 +137,8 @@ You can edit this file to adjust default environment branches, label badge color
     "deploy::",
     "review::"
   ],
+  "activity_recent_days": 2,
+  "activity_stale_days": 7,
   "label_colors": {
     "deploy::*": {
       "bg": "#2E7D32",
@@ -156,6 +163,14 @@ You can edit this file to adjust default environment branches, label badge color
   }
 }
 ```
+
+> **Activity badge thresholds** control the colored indicator displayed next to the `Updated` field in the Context Inspector:
+> | Badge | Meaning | Condition |
+> | :--- | :--- | :--- |
+> | 🟢 Active | Updated recently | `elapsed days < activity_recent_days` |
+> | 🟡 Slowing | Activity slowing down | between the two thresholds |
+> | 🔴 Stale | No recent activity | `elapsed days ≥ activity_stale_days` |
+> | ⬛ Unknown | Timestamp unavailable | — |
 
 #### 🔔 How Desktop Notifications Work:
 
@@ -231,7 +246,7 @@ gitlab-tracker
 src/
 ├── main.rs          # Event loop orchestrator & async channel setup
 ├── app.rs           # State machine & row navigation logic
-├── config.rs        # Label filtering, wildcard matching & HEX color parsing
+├── config.rs        # Label filtering, wildcard matching, HEX color parsing & activity badge
 ├── models.rs        # Strongly-typed API DTOs & runtime event types
 ├── gitlab.rs        # Async network handling & rate-limit semaphores
 ├── storage.rs       # OS Keyring interface & XDG state/config persistence

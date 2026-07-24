@@ -19,6 +19,9 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
         .unwrap_or_else(|| "Unknown".to_string());
 
+    // Compute the activity badge (icon + color) based on configurable thresholds.
+    let (badge_icon, badge_color) = config.activity_badge(mr.updated_at.as_deref());
+
     let mut lines = vec![
         Line::from(vec![Span::styled(
             format!("MR ID    : !{}", mr.id),
@@ -52,6 +55,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             Span::styled(
                 updated_at_display,
                 Style::default().fg(ratatui::style::Color::Yellow),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                badge_icon,
+                Style::default()
+                    .fg(badge_color)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
     ];
