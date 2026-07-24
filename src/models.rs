@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabUser {
@@ -47,6 +47,8 @@ pub struct SavedMr {
 pub struct SavedState {
     pub mrs: Vec<SavedMr>,
     pub branches: Vec<String>,
+    #[serde(default)]
+    pub last_known_branches: HashMap<String, HashSet<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

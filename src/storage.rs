@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::models::{MrStatus, SavedMr, SavedState, TrackedMr};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -74,19 +74,23 @@ pub async fn load_or_create_config_async() -> AppConfig {
     AppConfig::default()
 }
 
-pub async fn load_state_async() -> (Vec<SavedMr>, Vec<String>) {
+pub async fn load_state_async() -> (Vec<SavedMr>, Vec<String>, HashMap<String, HashSet<String>>) {
     if let Some(config_dir) = get_save_dir() {
         let path = config_dir.join("tracker_state.json");
         if let Ok(content) = tokio::fs::read_to_string(path).await {
             if let Ok(state) = serde_json::from_str::<SavedState>(&content) {
-                return (state.mrs, state.branches);
+                return (state.mrs, state.branches, state.last_known_branches);
             }
         }
     }
-    (vec![], vec![])
+    (vec![], vec![], HashMap::new())
 }
 
-pub async fn save_state_async(mrs: &[TrackedMr], branches: &[String]) {
+pub async fn save_state_async(
+    mrs: &[TrackedMr],
+    branches: &[String],
+    last_known_branches: &HashMap<String, HashSet<String>>,
+) {
     let state = SavedState {
         mrs: mrs
             .iter()
@@ -107,6 +111,7 @@ pub async fn save_state_async(mrs: &[TrackedMr], branches: &[String]) {
             })
             .collect(),
         branches: branches.to_vec(),
+        last_known_branches: last_known_branches.clone(),
     };
 
     if let Ok(json) = serde_json::to_string_pretty(&state) {

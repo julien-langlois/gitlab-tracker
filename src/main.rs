@@ -11,7 +11,6 @@ use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use gitlab::{spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS};
 use models::{AppEvent, MrStatus, TrackedMr};
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{
@@ -177,7 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = ratatui::init();
 
-    let (saved_mrs, saved_branches) = load_state_async().await;
+    let (saved_mrs, saved_branches, mut last_known_branches) = load_state_async().await;
     let refresh_interval_secs = std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
@@ -261,8 +260,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app.table_state.select(Some(0));
     }
 
-    let mut is_bootstrapped = false;
-
     let tx_timer = tx.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
@@ -278,24 +275,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // 💡 Adaptation pour la structure Box<MrLoadedData>
                 AppEvent::MrLoaded(data) => {
                     if let Some(mr) = app.mrs.find_mut(&data.id) {
-                        if is_bootstrapped {
-                            let old_branches = match &mr.status {
-                                MrStatus::MergedIn(set) => set.clone(),
-                                _ => HashSet::new(),
-                            };
-                            for b in &data.branches {
-                                if !old_branches.contains(b) {
-                                    let _ = notify_rust::Notification::new()
-                                        .summary("GitLab MR Tracker")
-                                        .body(&format!(
-                                            "MR !{} ({}) is now present on branch '{}'!",
-                                            data.id, data.title, b
-                                        ))
-                                        .icon("dialog-information")
-                                        .show();
-                                }
+                        // Compare new branches against the last persisted state to avoid
+                        // re-notifying on restart or in-memory state that hasn't changed on disk.
+                        let previously_known = last_known_branches
+                            .get(&data.id)
+                            .cloned()
+                            .unwrap_or_default();
+
+                        for b in &data.branches {
+                            if !previously_known.contains(b) {
+                                let _ = notify_rust::Notification::new()
+                                    .summary("GitLab MR Tracker")
+                                    .body(&format!(
+                                        "MR !{} ({}) is now present on branch '{}'!",
+                                        data.id, data.title, b
+                                    ))
+                                    .icon("dialog-information")
+                                    .show();
                             }
                         }
+
+                        // Update the persisted reference so subsequent refreshes won't re-notify.
+                        last_known_branches.insert(data.id.clone(), data.branches.clone());
 
                         mr.title = data.title;
                         mr.sha = data.sha;
@@ -308,19 +309,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.labels = data.labels;
 
                         app.sort_mrs();
-                        save_state_async(&app.mrs, &app.branches).await;
+                        save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
                     }
                 }
                 AppEvent::MrFailed { id, error } => {
                     if let Some(mr) = app.mrs.find_mut(&id) {
                         mr.title = format!("⚠️ ERROR: {}", error);
                         mr.status = MrStatus::Error;
-                        save_state_async(&app.mrs, &app.branches).await;
+                        save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
                     }
                 }
                 AppEvent::Tick => {
-                    is_bootstrapped = true;
-
                     if app.time_left > 0 {
                         app.time_left -= 1;
                     } else {
@@ -445,7 +444,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     } else if selected >= app.mrs.len() {
                                         app.table_state.select(Some(app.mrs.len() - 1));
                                     }
-                                    save_state_async(&app.mrs, &app.branches).await;
+                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
+                                        .await;
                                 }
                             }
                         }
@@ -458,7 +458,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     } else if selected >= app.mrs.len() {
                                         app.table_state.select(Some(app.mrs.len() - 1));
                                     }
-                                    save_state_async(&app.mrs, &app.branches).await;
+                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
+                                        .await;
                                 }
                             }
                         }
@@ -477,7 +478,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     } else {
                                         app.branches.retain(|b| b != &to_remove);
                                     }
-                                    save_state_async(&app.mrs, &app.branches).await;
+                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
+                                        .await;
                                     if app.mrs.is_empty() {
                                         app.table_state.select(None);
                                     }
@@ -496,7 +498,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             labels: vec![],
                                         });
                                         app.table_state.select(Some(app.mrs.len() - 1));
-                                        save_state_async(&app.mrs, &app.branches).await;
+                                        save_state_async(
+                                            &app.mrs,
+                                            &app.branches,
+                                            &last_known_branches,
+                                        )
+                                        .await;
 
                                         let ctx = FetchContext {
                                             base_url: app.base_url.clone(),
@@ -516,7 +523,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 } else {
                                     if !app.branches.contains(&value) {
                                         app.branches.push(value.clone());
-                                        save_state_async(&app.mrs, &app.branches).await;
+                                        save_state_async(
+                                            &app.mrs,
+                                            &app.branches,
+                                            &last_known_branches,
+                                        )
+                                        .await;
 
                                         let ctx = FetchContext {
                                             base_url: app.base_url.clone(),

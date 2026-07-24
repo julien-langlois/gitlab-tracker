@@ -21,8 +21,8 @@
   * **System 2 (Intelligent Fuzzy Matcher):** Uses a keyword relevance matrix to verify cherry-picked commits deployed across branches.
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
-* 🔔 **Desktop Notifications:** Receives native OS desktop notifications whenever an MR lands on a newly tracked environment branch.
-* 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state and UI configurations automatically to platform-standard configuration paths using `directories`.
+* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
+* 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 
 ---
@@ -45,8 +45,8 @@ The application requires your GitLab Project configuration and an API Personal A
    # Required: Your target GitLab Project ID
    GITLAB_PROJECT_ID=12345678
 
-   # Optional: Custom self-hosted GitLab instance (Defaults to [https://gitlab.com](https://gitlab.com) if omitted)
-   GITLAB_URL=[https://gitlab.my-company.com](https://gitlab.my-company.com)
+   # Optional: Custom self-hosted GitLab instance (Defaults to https://gitlab.com if omitted)
+   GITLAB_URL=https://gitlab.my-company.com
 
    # Optional: Override token via environment variable (Not recommended for disk storage)
    # GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
@@ -155,6 +155,20 @@ You can edit this file to adjust default environment branches, label badge color
   }
 }
 ```
+
+#### 🔔 How Desktop Notifications Work:
+
+Notifications are powered by `notify-rust` and rely on your system's native notification daemon (e.g., `libnotify` on Linux, `NSUserNotifications` on macOS).
+
+A notification is sent **only when a branch is newly detected** for a given MR — i.e., when the branch was not present in the last persisted state (`tracker_state.json`). This means:
+
+* ✅ **No duplicate alerts** when restarting the app with an unchanged state.
+* ✅ **No spam** during periodic background refreshes if nothing changed.
+* ✅ **Reliable detection** of new deployments across refreshes and restarts.
+
+The last-known branch state per MR is persisted in `tracker_state.json` under the `last_known_branches` key. On the very first launch (empty state), a single batch of notifications may be sent for all already-known branches — this is a one-time occurrence.
+
+---
 
 #### 🌿 How Branch Resolution Works:
 
