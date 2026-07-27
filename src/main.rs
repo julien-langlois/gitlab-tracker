@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod demo;
 mod gitlab;
 mod models;
 mod storage;
@@ -46,109 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = load_or_create_config_async().await;
 
     if args.demo {
-        let mut app = App::new(
-            "demo-token".into(),
-            "123456".into(),
-            "https://gitlab.com".into(),
-            900,
-            config,
-        );
-
-        app.branches = vec!["main".into(), "staging".into(), "production".into()];
-        app.mrs = vec![
-            TrackedMr {
-                id: "101".into(),
-                title: "feat(auth): Add OAuth2 PKCE flow for mobile clients".into(),
-                status: MrStatus::MergedIn(["main".into(), "staging".into()].into_iter().collect()),
-                sha: Some("a1b2c3d4".into()),
-                description: "Implemented PKCE challenge and verification flow.".into(),
-                author: "alex_dev".into(),
-                assignee: "sarah_code".into(),
-                milestone: "v2.4.0".into(),
-                web_url: "https://gitlab.com/demo/project/-/merge_requests/101".into(),
-                labels: vec![
-                    "deploy::staging".into(),
-                    "review::approved".into(),
-                    "feature".into(),
-                ],
-                updated_at: Some("2024-05-01T10:00:00.000Z".into()),
-            },
-            TrackedMr {
-                id: "102".into(),
-                title: "fix(db): Resolve connection pool deadlocks under heavy load".into(),
-                status: MrStatus::MergedIn(["main".into()].into_iter().collect()),
-                sha: Some("e5f6g7h8".into()),
-                description: "Adjusted max pool size and statement timeout.".into(),
-                author: "thomas_db".into(),
-                assignee: "alex_dev".into(),
-                milestone: "v2.4.0".into(),
-                web_url: "https://gitlab.com/demo/project/-/merge_requests/102".into(),
-                labels: vec!["bug".into(), "deploy::prod_pending".into()],
-                updated_at: Some("2024-05-02T15:30:00.000Z".into()),
-            },
-            TrackedMr {
-                id: "103".into(),
-                title: "refactor(ui): Optimize Ratatui render loop with double buffering".into(),
-                status: MrStatus::Loading,
-                sha: None,
-                description: "Reducing CPU usage during high-frequency ticks.".into(),
-                author: "julien_m".into(),
-                assignee: "julien_m".into(),
-                milestone: "v2.5.0".into(),
-                web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
-                labels: vec!["performance".into(), "review::needs_work".into()],
-                updated_at: Some("2024-05-03T08:45:00.000Z".into()),
-            },
-        ];
-
-        app.table_state.select(Some(0));
-
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
-        let tx_timer = tx.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(1));
-            loop {
-                interval.tick().await;
-                let _ = tx_timer.send(AppEvent::Tick);
-            }
-        });
-
-        let mut terminal = ratatui::init();
-
-        loop {
-            while let Ok(event) = rx.try_recv() {
-                if let AppEvent::Tick = event {
-                    if app.time_left > 0 {
-                        app.time_left -= 1;
-                    } else {
-                        app.time_left = app.refresh_interval_secs;
-                    }
-                }
-            }
-
-            terminal.draw(|f| ui::render_ui(f, &mut app))?;
-
-            if event::poll(Duration::from_millis(50))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat {
-                        match key.code {
-                            KeyCode::Esc => break,
-                            KeyCode::Down | KeyCode::Char('j') => app.next_row(),
-                            KeyCode::Up | KeyCode::Char('k') => app.prev_row(),
-                            KeyCode::Char('s') => app.cycle_sort_column(),
-                            KeyCode::Char('S') => app.toggle_sort_order(),
-                            KeyCode::Char('r') | KeyCode::Char('R') => {
-                                app.time_left = app.refresh_interval_secs;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
-
-        ratatui::restore();
-        return Ok(());
+        return demo::run_demo_mode(config).await;
     }
 
     if dotenvy::dotenv().is_err() {
