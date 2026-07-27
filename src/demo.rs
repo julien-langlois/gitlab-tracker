@@ -1,8 +1,9 @@
-use crate::app::{ActivePane, App};
+use crate::app::App;
 use crate::config::AppConfig;
+use crate::events::{handle_key_event_demo, handle_mouse_event};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::ui;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEventKind};
+use crossterm::event::{self, Event, KeyEventKind};
 use std::time::Duration;
 
 /// Runs the application in demo mode with pre-populated mock data.
@@ -217,70 +218,17 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
 
         if event::poll(Duration::from_millis(50))? {
             match event::read()? {
-                // --- Mouse events: hover switches focus, scroll is routed to the active pane ---
                 Event::Mouse(mouse) => {
                     let term_width = terminal.size()?.width;
-                    let inspector_start_col = term_width * 65 / 100;
-
-                    match mouse.kind {
-                        // Update active pane based on cursor position.
-                        MouseEventKind::Moved | MouseEventKind::Drag(_) => {
-                            if mouse.column >= inspector_start_col {
-                                app.active_pane = ActivePane::Inspector;
-                            } else {
-                                app.active_pane = ActivePane::Dashboard;
-                            }
-                        }
-                        // Route scroll events to the pane under the cursor.
-                        MouseEventKind::ScrollDown => {
-                            if mouse.column >= inspector_start_col {
-                                app.inspector_scroll_down(3);
-                            } else {
-                                app.next_row();
-                            }
-                        }
-                        MouseEventKind::ScrollUp => {
-                            if mouse.column >= inspector_start_col {
-                                app.inspector_scroll_up(3);
-                            } else {
-                                app.prev_row();
-                            }
-                        }
-                        _ => {}
-                    }
+                    handle_mouse_event(mouse, term_width, &mut app);
                 }
-
-                // --- Keyboard events ---
+                // Accept both Press and Repeat so held keys scroll smoothly in demo mode.
                 Event::Key(key)
-                    if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
+                    if (key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat)
+                        && handle_key_event_demo(key, &mut app) =>
                 {
-                    match key.code {
-                        KeyCode::Esc => break,
-
-                        // Tab cycles focus between Dashboard and Inspector panes.
-                        KeyCode::Tab => {
-                            app.active_pane = app.active_pane.next();
-                        }
-
-                        // Arrow keys / j-k are routed to the active pane.
-                        KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
-                            ActivePane::Inspector => app.inspector_scroll_down(1),
-                            ActivePane::Dashboard => app.next_row(),
-                        },
-                        KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
-                            ActivePane::Inspector => app.inspector_scroll_up(1),
-                            ActivePane::Dashboard => app.prev_row(),
-                        },
-
-                        KeyCode::Char('s') => app.cycle_sort_column(),
-                        KeyCode::Char('S') => app.toggle_sort_order(),
-                        KeyCode::Char('r') | KeyCode::Char('R') => {
-                            app.time_left = app.refresh_interval_secs;
-                        }
-                        _ => {}
-                    }
+                    break;
                 }
-
                 _ => {}
             }
         }

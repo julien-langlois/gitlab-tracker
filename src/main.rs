@@ -1,15 +1,17 @@
 mod app;
 mod config;
 mod demo;
+mod events;
 mod gitlab;
 mod models;
 mod storage;
 mod ui;
 mod utils;
 
-use app::{ActivePane, App, TrackedMrExt};
+use app::{App, TrackedMrExt};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEventKind};
+use crossterm::event::{self, Event, KeyEventKind};
+use events::{handle_key_event, handle_mouse_event};
 use gitlab::{spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS};
 use models::{AppEvent, MrStatus, TrackedMr};
 use std::sync::Arc;
@@ -278,258 +280,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if event::poll(Duration::from_millis(50))? {
             match event::read()? {
-                // --- Mouse events: switch active pane on hover, route scroll to focused pane ---
                 Event::Mouse(mouse) => {
-                    // The inspector occupies the right 35% of the terminal width.
                     let term_width = terminal.size()?.width;
-                    let inspector_start_col = term_width * 65 / 100;
-
-                    match mouse.kind {
-                        // Update focus based on where the cursor is.
-                        MouseEventKind::Moved | MouseEventKind::Drag(_) => {
-                            if mouse.column >= inspector_start_col {
-                                app.active_pane = ActivePane::Inspector;
-                            } else {
-                                app.active_pane = ActivePane::Dashboard;
-                            }
-                        }
-                        // Route scroll to the pane under the cursor.
-                        MouseEventKind::ScrollDown => {
-                            if mouse.column >= inspector_start_col {
-                                app.inspector_scroll_down(3);
-                            } else {
-                                app.next_row();
-                            }
-                        }
-                        MouseEventKind::ScrollUp => {
-                            if mouse.column >= inspector_start_col {
-                                app.inspector_scroll_up(3);
-                            } else {
-                                app.prev_row();
-                            }
-                        }
-                        _ => {}
-                    }
+                    handle_mouse_event(mouse, term_width, &mut app);
                 }
-
-                // --- Keyboard events ---
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    match key.code {
-                        KeyCode::Esc => break,
-
-                        // Tab cycles focus between panes without consuming arrow keys.
-                        KeyCode::Tab if app.input.is_empty() => {
-                            app.active_pane = app.active_pane.next();
-                        }
-
-                        // Arrow keys and j/k are routed based on the active pane.
-                        KeyCode::Down | KeyCode::Char('j') if app.input.is_empty() => {
-                            match app.active_pane {
-                                ActivePane::Inspector => app.inspector_scroll_down(1),
-                                ActivePane::Dashboard => app.next_row(),
-                            }
-                        }
-                        KeyCode::Up | KeyCode::Char('k') if app.input.is_empty() => {
-                            match app.active_pane {
-                                ActivePane::Inspector => app.inspector_scroll_up(1),
-                                ActivePane::Dashboard => app.prev_row(),
-                            }
-                        }
-
-                        KeyCode::Char('o') | KeyCode::Char('O') if app.input.is_empty() => {
-                            if let Some(selected) = app.table_state.selected() {
-                                if let Some(mr) = app.mrs.get(selected) {
-                                    let target_url = if !mr.web_url.is_empty() {
-                                        mr.web_url.clone()
-                                    } else {
-                                        format!(
-                                            "{}/projects/{}/merge_requests/{}",
-                                            app.base_url, app.project_id, mr.id
-                                        )
-                                    };
-                                    let _ = open::that(target_url);
-                                }
-                            }
-                        }
-
-                        KeyCode::Char('r') | KeyCode::Char('R') if app.input.is_empty() => {
-                            app.time_left = app.refresh_interval_secs;
-                            let ctx = FetchContext {
-                                base_url: app.base_url.clone(),
-                                token: app.token.clone(),
-                                project_id: app.project_id.clone(),
-                                branches: app.branches.clone(),
-                            };
-
-                            for mr in &mut app.mrs {
-                                mr.status = MrStatus::Loading;
-                                let cached = CachedMrData {
-                                    title: Some(mr.title.clone()),
-                                    sha: mr.sha.clone(),
-                                    description: Some(mr.description.clone()),
-                                    author: Some(mr.author.clone()),
-                                    assignee: Some(mr.assignee.clone()),
-                                    milestone: Some(mr.milestone.clone()),
-                                    web_url: Some(mr.web_url.clone()),
-                                    labels: Some(mr.labels.clone()),
-                                };
-
-                                spawn_mr_fetch(
-                                    ctx.clone(),
-                                    mr.id.clone(),
-                                    cached,
-                                    api_semaphore.clone(),
-                                    tx.clone(),
-                                );
-                            }
-                        }
-
-                        KeyCode::Char('s') if app.input.is_empty() => {
-                            app.cycle_sort_column();
-                        }
-
-                        KeyCode::Char('S') if app.input.is_empty() => {
-                            app.toggle_sort_order();
-                        }
-
-                        KeyCode::Delete => {
-                            if let Some(selected) = app.table_state.selected() {
-                                if selected < app.mrs.len() {
-                                    app.mrs.remove(selected);
-                                    if app.mrs.is_empty() {
-                                        app.table_state.select(None);
-                                    } else if selected >= app.mrs.len() {
-                                        app.table_state.select(Some(app.mrs.len() - 1));
-                                    }
-                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
-                                        .await;
-                                }
-                            }
-                        }
-
-                        KeyCode::Char('x') if app.input.is_empty() => {
-                            if let Some(selected) = app.table_state.selected() {
-                                if selected < app.mrs.len() {
-                                    app.mrs.remove(selected);
-                                    if app.mrs.is_empty() {
-                                        app.table_state.select(None);
-                                    } else if selected >= app.mrs.len() {
-                                        app.table_state.select(Some(app.mrs.len() - 1));
-                                    }
-                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
-                                        .await;
-                                }
-                            }
-                        }
-
-                        KeyCode::Char(c) => app.input.push(c),
-                        KeyCode::Backspace => {
-                            app.input.pop();
-                        }
-
-                        KeyCode::Enter => {
-                            let value = app.input.trim().to_string();
-                            if !value.is_empty() {
-                                if value.starts_with('-') {
-                                    let to_remove = value.trim_start_matches('-').to_string();
-                                    if to_remove.chars().all(|c| c.is_numeric()) {
-                                        app.mrs.retain(|m| m.id != to_remove);
-                                    } else {
-                                        app.branches.retain(|b| b != &to_remove);
-                                    }
-                                    save_state_async(&app.mrs, &app.branches, &last_known_branches)
-                                        .await;
-                                    if app.mrs.is_empty() {
-                                        app.table_state.select(None);
-                                    }
-                                } else if value.chars().all(|c| c.is_numeric()) {
-                                    if !app.mrs.iter().any(|m| m.id == value) {
-                                        app.mrs.push(TrackedMr {
-                                            id: value.clone(),
-                                            title: "Loading...".to_string(),
-                                            status: MrStatus::Loading,
-                                            sha: None,
-                                            description: String::new(),
-                                            author: "Loading".to_string(),
-                                            assignee: "Loading".to_string(),
-                                            milestone: "Loading".to_string(),
-                                            web_url: String::new(),
-                                            labels: vec![],
-                                            updated_at: None,
-                                        });
-                                        app.table_state.select(Some(app.mrs.len() - 1));
-                                        save_state_async(
-                                            &app.mrs,
-                                            &app.branches,
-                                            &last_known_branches,
-                                        )
-                                        .await;
-
-                                        let ctx = FetchContext {
-                                            base_url: app.base_url.clone(),
-                                            token: app.token.clone(),
-                                            project_id: app.project_id.clone(),
-                                            branches: app.branches.clone(),
-                                        };
-
-                                        spawn_mr_fetch(
-                                            ctx,
-                                            value,
-                                            CachedMrData::default(),
-                                            api_semaphore.clone(),
-                                            tx.clone(),
-                                        );
-                                    }
-                                } else {
-                                    if !app.branches.contains(&value) {
-                                        app.branches.push(value.clone());
-                                        save_state_async(
-                                            &app.mrs,
-                                            &app.branches,
-                                            &last_known_branches,
-                                        )
-                                        .await;
-
-                                        let ctx = FetchContext {
-                                            base_url: app.base_url.clone(),
-                                            token: app.token.clone(),
-                                            project_id: app.project_id.clone(),
-                                            branches: app.branches.clone(),
-                                        };
-
-                                        for mr in &mut app.mrs {
-                                            if mr.status != MrStatus::Loading {
-                                                mr.status = MrStatus::Loading;
-                                                let cached = CachedMrData {
-                                                    title: Some(mr.title.clone()),
-                                                    sha: mr.sha.clone(),
-                                                    description: Some(mr.description.clone()),
-                                                    author: Some(mr.author.clone()),
-                                                    assignee: Some(mr.assignee.clone()),
-                                                    milestone: Some(mr.milestone.clone()),
-                                                    web_url: Some(mr.web_url.clone()),
-                                                    labels: Some(mr.labels.clone()),
-                                                };
-
-                                                spawn_mr_fetch(
-                                                    ctx.clone(),
-                                                    mr.id.clone(),
-                                                    cached,
-                                                    api_semaphore.clone(),
-                                                    tx.clone(),
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                app.input.clear();
-                            }
-                        }
-
-                        _ => {}
-                    }
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press
+                        && handle_key_event(
+                            key,
+                            &mut app,
+                            &api_semaphore,
+                            &tx,
+                            &mut last_known_branches,
+                        )
+                        .await =>
+                {
+                    break;
                 }
-
                 _ => {}
             }
         }
