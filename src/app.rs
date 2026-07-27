@@ -56,6 +56,11 @@ pub struct App {
     pub active_pane: ActivePane,
     /// Vertical scroll offset for the Inspector pane (in lines).
     pub inspector_scroll: u16,
+    /// Total number of lines in the currently rendered Inspector content.
+    /// Updated at each render frame — used to clamp scroll and avoid blank space.
+    pub inspector_content_lines: u16,
+    /// Height (in rows) of the Inspector pane area, updated at each render frame.
+    pub inspector_pane_height: u16,
 }
 
 impl App {
@@ -83,12 +88,20 @@ impl App {
             sort_order: SortOrder::Descending,
             active_pane: ActivePane::default(),
             inspector_scroll: 0,
+            inspector_content_lines: 0,
+            inspector_pane_height: 0,
         }
     }
 
     /// Scrolls the Inspector pane down by the given number of lines.
+    ///
+    /// Clamps the scroll so the user cannot scroll past the last line of content,
+    /// preventing blank space from appearing at the bottom of the Inspector pane.
     pub fn inspector_scroll_down(&mut self, amount: u16) {
-        self.inspector_scroll = self.inspector_scroll.saturating_add(amount);
+        let max_scroll = self
+            .inspector_content_lines
+            .saturating_sub(self.inspector_pane_height);
+        self.inspector_scroll = self.inspector_scroll.saturating_add(amount).min(max_scroll);
     }
 
     /// Scrolls the Inspector pane up by the given number of lines.

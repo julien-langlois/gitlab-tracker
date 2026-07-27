@@ -50,6 +50,12 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     if let Some(selected) = app.table_state.selected() {
         if let Some(mr) = app.mrs.get(selected) {
             let rendered_text = inspector::render_safe_inspector_text(mr, &app.config);
+
+            // Update content/pane dimensions so scroll clamping in App is accurate.
+            // Inner height removes the 2 border rows (top + bottom).
+            app.inspector_content_lines = rendered_text.lines.len() as u16;
+            app.inspector_pane_height = main_chunks[1].height.saturating_sub(2);
+
             let inspector_paragraph = Paragraph::new(rendered_text)
                 .block(inspector_block)
                 .wrap(Wrap { trim: false })
