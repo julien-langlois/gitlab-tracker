@@ -245,9 +245,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         for mr in &mut app.mrs {
                             if let MrStatus::MergedIn(ref found) = mr.status {
+                                // Skip refresh for MRs that are fully merged into all branches —
+                                // state != Opened ensures we don't skip still-open MRs.
                                 if app.branches.iter().all(|b| found.contains(b))
                                     && mr.sha.is_some()
-                                    && !mr.title.starts_with("[Open]")
+                                    && mr.state != crate::models::GitlabMrState::Opened
                                 {
                                     continue;
                                 }

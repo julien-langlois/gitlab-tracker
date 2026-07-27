@@ -93,17 +93,13 @@ pub async fn fetch_gitlab_data(
         cached.labels,
     ) {
         (Some(t), Some(s), Some(d), Some(a), Some(asg), Some(m), Some(w), Some(lbls))
-            if !t.contains("⚠️ ERROR") && !t.starts_with("[Open]") && !w.is_empty() =>
+            if !t.contains("⚠️ ERROR") && !w.is_empty() =>
         {
             (t, Some(s), d, a, asg, m, w, lbls)
         }
         _ => {
             let sha = mr.merge_commit_sha.or(mr.squash_commit_sha);
-            let title = if sha.is_none() {
-                format!("[Open] {}", mr.title)
-            } else {
-                mr.title
-            };
+            let title = mr.title;
             let desc = mr.description.unwrap_or_default();
             let auth = mr
                 .author
