@@ -9,6 +9,7 @@ repository = "https://github.com/julien-langlois/gitlab-tracker"
 readme = "README.md"
 keywords = ["gitlab", "tui", "ratatui", "cli", "dashboard"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["assets/"]
 
 [dependencies]
 ratatui = { version = "0.30", features = ["crossterm_0_28"] }
