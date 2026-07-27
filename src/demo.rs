@@ -1,8 +1,8 @@
-use crate::app::App;
+use crate::app::{ActivePane, App};
 use crate::config::AppConfig;
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::ui;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEventKind};
 use std::time::Duration;
 
 /// Runs the application in demo mode with pre-populated mock data.
@@ -18,6 +18,83 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
 
     app.branches = vec!["main".into(), "staging".into(), "production".into()];
     app.mrs = vec![
+        // MR 104 is placed first so it is selected on startup for the Inspector scroll demo.
+        // The sort demo in demo.tape will reorder the list afterwards.
+        TrackedMr {
+            id: "104".into(),
+            title: "feat(api): Introduce GraphQL endpoint for MR metadata".into(),
+            status: MrStatus::MergedIn(
+                ["main".into(), "staging".into(), "production".into()]
+                    .into_iter()
+                    .collect(),
+            ),
+            sha: Some("c9d0e1f2".into()),
+            description: concat!(
+                "This MR introduces a fully typed GraphQL endpoint for Merge Request metadata,\n",
+                "built with **async-graphql** and exposed via **Axum**.\n",
+                "\n",
+                "## Motivation\n",
+                "\n",
+                "REST endpoints were becoming unwieldy for clients needing partial data.\n",
+                "GraphQL allows consumers to request only the fields they need, reducing\n",
+                "payload size and round-trips significantly.\n",
+                "\n",
+                "The existing `/api/v1/mrs` endpoint returns the full MR object (~4 KB) even\n",
+                "when the consumer only needs the `id` and `status` fields. At scale, this\n",
+                "adds up to hundreds of megabytes of unnecessary data transfer per day.\n",
+                "\n",
+                "## Implementation\n",
+                "\n",
+                "- Defined `MergeRequestType` and `BranchType` as GraphQL objects via `#[Object]`.\n",
+                "- Integrated `async-graphql-axum` for the HTTP transport layer.\n",
+                "- Added a `/graphql` route behind the existing JWT middleware.\n",
+                "- Exposed a `mergeRequests(ids: [ID!])` query for batch fetching.\n",
+                "- Added `mrById(id: ID!)` for single-item lookups.\n",
+                "- Wrote a custom scalar for ISO 8601 timestamps.\n",
+                "- Documented all fields with `#[graphql(description = \"...\")]`.\n",
+                "- Configured `introspection` disabled in production for security.\n",
+                "- Added `depth_limit` and `complexity_limit` guards to prevent abuse.\n",
+                "\n",
+                "## Schema (excerpt)\n",
+                "\n",
+                "- `type MergeRequest { id, title, status, author, assignee, labels }`\n",
+                "- `type Branch { name, protected, default }`\n",
+                "- `type Query { mrById(id: ID!): MergeRequest }`\n",
+                "- `type Query { mergeRequests(ids: [ID!]!): [MergeRequest!]! }`\n",
+                "\n",
+                "## Breaking Changes\n",
+                "\n",
+                "None. The REST API remains fully intact and is not deprecated.\n",
+                "Both endpoints coexist and share the same service layer.\n",
+                "\n",
+                "## Testing\n",
+                "\n",
+                "- Unit tests: 47 added, all passing on CI.\n",
+                "- Integration tests: 12 added against a live test Postgres instance.\n",
+                "- Fuzz tests: 3 added for input validation on scalar deserialisation.\n",
+                "- Manual QA: performed with GraphiQL playground against staging environment.\n",
+                "- Load test: 500 rps sustained for 60 s with p99 < 40 ms on staging.\n",
+                "\n",
+                "## Follow-up\n",
+                "\n",
+                "- Subscription support (live updates over WebSocket) is out of scope here\n",
+                "  and will be tracked in epic #88.\n",
+                "- Federation with the Notifications service is planned for v2.6.0.\n",
+                "- Persisted queries support will be evaluated once adoption grows.\n",
+            )
+            .into(),
+            author: "marina_gql".into(),
+            assignee: "thomas_db".into(),
+            milestone: "v2.4.0".into(),
+            web_url: "https://gitlab.com/demo/project/-/merge_requests/104".into(),
+            labels: vec![
+                "feature".into(),
+                "deploy::production".into(),
+                "review::approved".into(),
+                "size::L".into(),
+            ],
+            updated_at: Some("2024-05-04T09:15:00.000Z".into()),
+        },
         TrackedMr {
             id: "101".into(),
             title: "feat(auth): Add OAuth2 PKCE flow for mobile clients".into(),
@@ -60,28 +137,6 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
             labels: vec!["performance".into(), "review::needs_work".into()],
             updated_at: Some("2024-05-03T08:45:00.000Z".into()),
-        },
-        TrackedMr {
-            id: "104".into(),
-            title: "feat(api): Introduce GraphQL endpoint for MR metadata".into(),
-            status: MrStatus::MergedIn(
-                ["main".into(), "staging".into(), "production".into()]
-                    .into_iter()
-                    .collect(),
-            ),
-            sha: Some("c9d0e1f2".into()),
-            description: "Expose MR data via a typed GraphQL schema using async-graphql.".into(),
-            author: "marina_gql".into(),
-            assignee: "thomas_db".into(),
-            milestone: "v2.4.0".into(),
-            web_url: "https://gitlab.com/demo/project/-/merge_requests/104".into(),
-            labels: vec![
-                "feature".into(),
-                "deploy::production".into(),
-                "review::approved".into(),
-                "size::L".into(),
-            ],
-            updated_at: Some("2024-05-04T09:15:00.000Z".into()),
         },
         TrackedMr {
             id: "105".into(),
@@ -141,6 +196,9 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         }
     });
 
+    // Enable mouse capture so VHS scroll simulation works in demo mode.
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+
     let mut terminal = ratatui::init();
 
     loop {
@@ -158,12 +216,62 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         terminal.draw(|f| ui::render_ui(f, &mut app))?;
 
         if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat {
+            match event::read()? {
+                // --- Mouse events: hover switches focus, scroll is routed to the active pane ---
+                Event::Mouse(mouse) => {
+                    let term_width = terminal.size()?.width;
+                    let inspector_start_col = term_width * 65 / 100;
+
+                    match mouse.kind {
+                        // Update active pane based on cursor position.
+                        MouseEventKind::Moved | MouseEventKind::Drag(_) => {
+                            if mouse.column >= inspector_start_col {
+                                app.active_pane = ActivePane::Inspector;
+                            } else {
+                                app.active_pane = ActivePane::Dashboard;
+                            }
+                        }
+                        // Route scroll events to the pane under the cursor.
+                        MouseEventKind::ScrollDown => {
+                            if mouse.column >= inspector_start_col {
+                                app.inspector_scroll_down(3);
+                            } else {
+                                app.next_row();
+                            }
+                        }
+                        MouseEventKind::ScrollUp => {
+                            if mouse.column >= inspector_start_col {
+                                app.inspector_scroll_up(3);
+                            } else {
+                                app.prev_row();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                // --- Keyboard events ---
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
+                {
                     match key.code {
                         KeyCode::Esc => break,
-                        KeyCode::Down | KeyCode::Char('j') => app.next_row(),
-                        KeyCode::Up | KeyCode::Char('k') => app.prev_row(),
+
+                        // Tab cycles focus between Dashboard and Inspector panes.
+                        KeyCode::Tab => {
+                            app.active_pane = app.active_pane.next();
+                        }
+
+                        // Arrow keys / j-k are routed to the active pane.
+                        KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
+                            ActivePane::Inspector => app.inspector_scroll_down(1),
+                            ActivePane::Dashboard => app.next_row(),
+                        },
+                        KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
+                            ActivePane::Inspector => app.inspector_scroll_up(1),
+                            ActivePane::Dashboard => app.prev_row(),
+                        },
+
                         KeyCode::Char('s') => app.cycle_sort_column(),
                         KeyCode::Char('S') => app.toggle_sort_order(),
                         KeyCode::Char('r') | KeyCode::Char('R') => {
@@ -172,10 +280,14 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                         _ => {}
                     }
                 }
+
+                _ => {}
             }
         }
     }
 
+    // Disable mouse capture before restoring the terminal.
+    crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
     ratatui::restore();
     Ok(())
 }
