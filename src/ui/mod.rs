@@ -1,13 +1,24 @@
 pub mod inspector;
 pub mod table;
 
-use crate::app::{App, SortColumn, SortOrder};
+use crate::app::{ActivePane, App, SortColumn, SortOrder};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::Stylize,
+    style::{Color, Style, Stylize},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
+
+/// Returns the border style to apply to a pane based on whether it is active.
+///
+/// Active pane gets a highlighted (cyan) border so the user knows where focus is.
+fn pane_border_style(is_active: bool) -> Style {
+    if is_active {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default()
+    }
+}
 
 pub fn render_ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -20,20 +31,29 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         .split(chunks[0]);
 
     // --- Left Pane: Main Table ---
-    let table = table::render_table(app);
+    // The table block highlights its border when it is the active pane.
+    let table = table::render_table(app, main_chunks[0]);
     f.render_stateful_widget(table, main_chunks[0], &mut app.table_state);
 
     // --- Right Pane: Context Inspector Panel ---
+    let inspector_is_active = app.active_pane == ActivePane::Inspector;
+    let inspector_title = if inspector_is_active {
+        " MR Context Inspector [FOCUS] "
+    } else {
+        " MR Context Inspector "
+    };
     let inspector_block = Block::default()
         .borders(Borders::ALL)
-        .title(" MR Context Inspector ");
+        .border_style(pane_border_style(inspector_is_active))
+        .title(inspector_title);
 
     if let Some(selected) = app.table_state.selected() {
         if let Some(mr) = app.mrs.get(selected) {
             let rendered_text = inspector::render_safe_inspector_text(mr, &app.config);
             let inspector_paragraph = Paragraph::new(rendered_text)
                 .block(inspector_block)
-                .wrap(Wrap { trim: false });
+                .wrap(Wrap { trim: false })
+                .scroll((app.inspector_scroll, 0));
             f.render_widget(inspector_paragraph, main_chunks[1]);
         } else {
             let inspector_paragraph =
@@ -61,9 +81,13 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     };
 
     // --- Bottom Input Bar ---
+    let pane_hint = match app.active_pane {
+        ActivePane::Dashboard => "Pane: Dashboard",
+        ActivePane::Inspector => "Pane: Inspector",
+    };
     let input_help = format!(
-        "Input: '142' / 'develop' │ [S/s]: {} │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [ESC]: Quit",
-        sort_status
+        "Input: '142' / 'develop' │ [Tab]: {} │ [S/s]: {} │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [ESC]: Quit",
+        pane_hint, sort_status
     );
 
     let input_box = Paragraph::new(app.input.as_str())

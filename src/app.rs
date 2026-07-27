@@ -16,6 +16,29 @@ pub enum SortOrder {
     Descending,
 }
 
+/// Represents the currently focused pane in the TUI layout.
+///
+/// Adding a new pane only requires adding a variant here and handling it
+/// in the relevant input/render logic — no structural change needed.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ActivePane {
+    /// The main MR list table (left pane).
+    #[default]
+    Dashboard,
+    /// The MR detail side viewer (right pane).
+    Inspector,
+}
+
+impl ActivePane {
+    /// Cycles to the next pane in a round-robin fashion.
+    pub fn next(self) -> Self {
+        match self {
+            ActivePane::Dashboard => ActivePane::Inspector,
+            ActivePane::Inspector => ActivePane::Dashboard,
+        }
+    }
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -29,6 +52,10 @@ pub struct App {
     pub config: AppConfig,
     pub sort_column: SortColumn,
     pub sort_order: SortOrder,
+    /// Which pane currently holds focus (drives keyboard & scroll routing).
+    pub active_pane: ActivePane,
+    /// Vertical scroll offset for the Inspector pane (in lines).
+    pub inspector_scroll: u16,
 }
 
 impl App {
@@ -54,7 +81,24 @@ impl App {
             config,
             sort_column: SortColumn::UpdatedAt,
             sort_order: SortOrder::Descending,
+            active_pane: ActivePane::default(),
+            inspector_scroll: 0,
         }
+    }
+
+    /// Scrolls the Inspector pane down by the given number of lines.
+    pub fn inspector_scroll_down(&mut self, amount: u16) {
+        self.inspector_scroll = self.inspector_scroll.saturating_add(amount);
+    }
+
+    /// Scrolls the Inspector pane up by the given number of lines.
+    pub fn inspector_scroll_up(&mut self, amount: u16) {
+        self.inspector_scroll = self.inspector_scroll.saturating_sub(amount);
+    }
+
+    /// Resets the Inspector scroll to the top (e.g. when selecting a new MR).
+    pub fn reset_inspector_scroll(&mut self) {
+        self.inspector_scroll = 0;
     }
 
     pub fn next_row(&mut self) {
@@ -72,6 +116,8 @@ impl App {
             None => 0,
         };
         self.table_state.select(Some(i));
+        // Reset inspector scroll when the selected MR changes.
+        self.reset_inspector_scroll();
     }
 
     pub fn prev_row(&mut self) {
@@ -89,6 +135,8 @@ impl App {
             None => 0,
         };
         self.table_state.select(Some(i));
+        // Reset inspector scroll when the selected MR changes.
+        self.reset_inspector_scroll();
     }
 
     pub fn cycle_sort_column(&mut self) {

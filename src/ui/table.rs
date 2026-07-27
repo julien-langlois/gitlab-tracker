@@ -2,13 +2,14 @@ use crate::app::{App, SortColumn, SortOrder};
 use crate::models::MrStatus;
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
-    layout::Constraint,
+    layout::{Constraint, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::Line,
     widgets::{Cell, Row, Table},
 };
 
-pub fn render_table(app: &App) -> Table<'static> {
+pub fn render_table(app: &App, area: Rect) -> Table<'static> {
+    let _ = area; // Reserved for future use (e.g. dynamic column width)
     let mut header_cells = vec![
         Cell::from("MR ID"),
         Cell::from("Title / API Status"),

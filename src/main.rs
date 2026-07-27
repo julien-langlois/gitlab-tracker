@@ -7,9 +7,9 @@ mod storage;
 mod ui;
 mod utils;
 
-use app::{App, TrackedMrExt};
+use app::{ActivePane, App, TrackedMrExt};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEventKind};
 use gitlab::{spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS};
 use models::{AppEvent, MrStatus, TrackedMr};
 use std::sync::Arc;
@@ -75,6 +75,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base_url = base_url.trim_end_matches('/').to_string();
 
     let token = get_or_prompt_token();
+
+    // Enable mouse capture so we can detect hover and scroll events per pane.
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
     let mut terminal = ratatui::init();
 
@@ -274,14 +277,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| ui::render_ui(f, &mut app))?;
 
         if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+            match event::read()? {
+                // --- Mouse events: switch active pane on hover, route scroll to focused pane ---
+                Event::Mouse(mouse) => {
+                    // The inspector occupies the right 35% of the terminal width.
+                    let term_width = terminal.size()?.width;
+                    let inspector_start_col = term_width * 65 / 100;
+
+                    match mouse.kind {
+                        // Update focus based on where the cursor is.
+                        MouseEventKind::Moved | MouseEventKind::Drag(_) => {
+                            if mouse.column >= inspector_start_col {
+                                app.active_pane = ActivePane::Inspector;
+                            } else {
+                                app.active_pane = ActivePane::Dashboard;
+                            }
+                        }
+                        // Route scroll to the pane under the cursor.
+                        MouseEventKind::ScrollDown => {
+                            if mouse.column >= inspector_start_col {
+                                app.inspector_scroll_down(3);
+                            } else {
+                                app.next_row();
+                            }
+                        }
+                        MouseEventKind::ScrollUp => {
+                            if mouse.column >= inspector_start_col {
+                                app.inspector_scroll_up(3);
+                            } else {
+                                app.prev_row();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                // --- Keyboard events ---
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
                     match key.code {
                         KeyCode::Esc => break,
-                        KeyCode::Down => app.next_row(),
-                        KeyCode::Up => app.prev_row(),
-                        KeyCode::Char('j') if app.input.is_empty() => app.next_row(),
-                        KeyCode::Char('k') if app.input.is_empty() => app.prev_row(),
+
+                        // Tab cycles focus between panes without consuming arrow keys.
+                        KeyCode::Tab if app.input.is_empty() => {
+                            app.active_pane = app.active_pane.next();
+                        }
+
+                        // Arrow keys and j/k are routed based on the active pane.
+                        KeyCode::Down | KeyCode::Char('j') if app.input.is_empty() => {
+                            match app.active_pane {
+                                ActivePane::Inspector => app.inspector_scroll_down(1),
+                                ActivePane::Dashboard => app.next_row(),
+                            }
+                        }
+                        KeyCode::Up | KeyCode::Char('k') if app.input.is_empty() => {
+                            match app.active_pane {
+                                ActivePane::Inspector => app.inspector_scroll_up(1),
+                                ActivePane::Dashboard => app.prev_row(),
+                            }
+                        }
 
                         KeyCode::Char('o') | KeyCode::Char('O') if app.input.is_empty() => {
                             if let Some(selected) = app.table_state.selected() {
@@ -353,6 +406,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
+
                         KeyCode::Char('x') if app.input.is_empty() => {
                             if let Some(selected) = app.table_state.selected() {
                                 if selected < app.mrs.len() {
@@ -372,6 +426,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Backspace => {
                             app.input.pop();
                         }
+
                         KeyCode::Enter => {
                             let value = app.input.trim().to_string();
                             if !value.is_empty() {
@@ -470,13 +525,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 app.input.clear();
                             }
                         }
+
                         _ => {}
                     }
                 }
+
+                _ => {}
             }
         }
     }
 
+    // Disable mouse capture before restoring the terminal.
+    crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
     ratatui::restore();
     Ok(())
 }
