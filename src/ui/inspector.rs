@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::models::{GitlabMrState, TrackedMr};
+use crate::models::{GitlabMrState, MergeabilityStatus, TrackedMr};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -23,10 +23,36 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     let (badge_icon, badge_color) = config.activity_badge(mr.updated_at.as_deref());
 
     // Build the state badge using the same colour coding as the table column.
+    // All labels are padded to 9 chars to match the table badge width.
     let (state_label, state_fg, state_bg) = match mr.state {
-        GitlabMrState::Opened => ("  Open  ", Color::Black, Color::Green),
-        GitlabMrState::Merged => (" Merged ", Color::Black, Color::Magenta),
-        GitlabMrState::Closed => (" Closed ", Color::Black, Color::Red),
+        GitlabMrState::Opened => ("  Open   ", Color::Black, Color::Green),
+        GitlabMrState::Merged => (" Merged  ", Color::Black, Color::Magenta),
+        GitlabMrState::Closed => (" Closed  ", Color::Black, Color::Red),
+    };
+
+    // For open MRs, display the mergeability status directly — no animation
+    // needed here since the State field above already shows the MR lifecycle
+    // state.
+    let mergeability_line: Option<Line<'static>> = if mr.state == GitlabMrState::Opened {
+        // Each label is wrapped with a single space on each side via format!(" {text} ").
+        let (merge_text, merge_fg, merge_bg) = match mr.mergeability {
+            MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
+            MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
+            MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
+            MergeabilityStatus::Unknown => ("Unknown", Color::DarkGray, Color::Black),
+        };
+        Some(Line::from(vec![
+            Span::raw("Merge    : "),
+            Span::styled(
+                format!(" {merge_text} "),
+                Style::default()
+                    .fg(merge_fg)
+                    .bg(merge_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]))
+    } else {
+        None
     };
 
     let mut lines = vec![
@@ -46,42 +72,46 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
-        Line::from(vec![
-            Span::raw("Author   : "),
-            Span::styled(
-                format!("@{}", mr.author),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::raw("Assignee : "),
-            Span::styled(
-                format!("@{}", mr.assignee),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::raw("Milestone: "),
-            Span::styled(
-                mr.milestone.clone(),
-                Style::default().fg(ratatui::style::Color::Cyan),
-            ),
-        ]),
-        Line::from(vec![
-            Span::raw("Updated  : "),
-            Span::styled(
-                updated_at_display,
-                Style::default().fg(ratatui::style::Color::Yellow),
-            ),
-            Span::raw("  "),
-            Span::styled(
-                badge_icon,
-                Style::default()
-                    .fg(badge_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
     ];
+
+    if let Some(line) = mergeability_line {
+        lines.push(line);
+    }
+    lines.push(Line::from(vec![
+        Span::raw("Author   : "),
+        Span::styled(
+            format!("@{}", mr.author),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::raw("Assignee : "),
+        Span::styled(
+            format!("@{}", mr.assignee),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::raw("Milestone: "),
+        Span::styled(
+            mr.milestone.clone(),
+            Style::default().fg(ratatui::style::Color::Cyan),
+        ),
+    ]));
+    lines.push(Line::from(vec![
+        Span::raw("Updated  : "),
+        Span::styled(
+            updated_at_display,
+            Style::default().fg(ratatui::style::Color::Yellow),
+        ),
+        Span::raw("  "),
+        Span::styled(
+            badge_icon,
+            Style::default()
+                .fg(badge_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]));
 
     if !mr.labels.is_empty() {
         let mut label_spans = vec![Span::raw("Labels   : ")];

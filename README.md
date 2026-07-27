@@ -28,6 +28,14 @@
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
+* 🔀 **Animated Mergeability Badge:** For open MRs, the Status column alternates every second between the base `Open` badge and a live mergeability indicator sourced directly from the GitLab API:
+  | Badge | Color | Meaning |
+  | :--- | :--- | :--- |
+  | `Mergeable` | 🟩 Light green | MR can be merged cleanly |
+  | `Conflict` | 🟥 Red | Merge conflicts must be resolved |
+  | `Rebase` | 🟨 Yellow | Branch is behind target — rebase required |
+  
+  No extra column is added: the animation keeps the layout compact while surfacing critical merge-readiness at a glance.
 
 ---
 
@@ -197,13 +205,23 @@ The last-known branch state per MR is persisted in `tracker_state.json` under th
 
 ## 📦 Installation
 
+### Recommended — Install from crates.io
+
+The simplest way to install `gitlab-tracker` if you have Rust (1.80+) available:
+
+```bash
+cargo install gitlab-tracker
+```
+
+This downloads, compiles, and installs the latest published release directly from [crates.io](https://crates.io/crates/gitlab-tracker) into `~/.cargo/bin/`. No cloning required.
+
 ### Pre-built Binaries
 
-Download the latest pre-compiled binary for your architecture from the [Releases Page](https://github.com/julien-langlois/gitlab-tracker/releases).
+If you prefer not to compile, download the latest pre-compiled binary for your architecture from the [Releases Page](https://github.com/julien-langlois/gitlab-tracker/releases) and place it somewhere on your `$PATH`.
 
-### Building from Source & Global Installation
+### Building from Source
 
-Ensure you have Rust (1.80+) installed:
+For development or to test unreleased changes, clone the repository and build manually:
 
 ```bash
 git clone git@github.com:julien-langlois/gitlab-tracker.git
@@ -212,11 +230,11 @@ cd gitlab-tracker
 # Build optimized release executable
 cargo build --release
 
-# Optional: Install binary globally to ~/.cargo/bin/
+# Optional: install binary globally to ~/.cargo/bin/
 cargo install --path .
 ```
 
-Once installed globally, you can launch the dashboard from any terminal folder by running:
+Once installed via any of the methods above, launch the dashboard from any terminal folder:
 
 ```bash
 gitlab-tracker

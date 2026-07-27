@@ -1,5 +1,5 @@
 use crate::app::{App, SortColumn, SortOrder};
-use crate::models::{GitlabMrState, MrStatus};
+use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
     layout::{Constraint, Rect},
@@ -9,14 +9,55 @@ use ratatui::{
 };
 
 /// Returns a styled badge cell for the GitLab MR state.
-fn state_badge(state: &GitlabMrState) -> Cell<'static> {
-    let (label, fg, bg) = match state {
-        GitlabMrState::Opened => ("  Open  ", Color::Black, Color::Green),
-        GitlabMrState::Merged => (" Merged ", Color::Black, Color::Magenta),
-        GitlabMrState::Closed => (" Closed ", Color::Black, Color::Red),
+///
+/// For open MRs, `tick` (the current `time_left` value) drives an alternating animation
+/// between the base "Open" badge and a contextual mergeability badge:
+///   - even tick  → "  Open  " (green)
+///   - odd tick   → mergeability-specific badge (color varies)
+///
+/// This gives at-a-glance insight into whether an open MR can be merged, has conflicts,
+/// or needs a rebase, without adding a new column.
+fn state_badge(
+    state: &GitlabMrState,
+    mergeability: &MergeabilityStatus,
+    tick: u64,
+) -> Cell<'static> {
+    // Each label is wrapped with a single space on each side via format!(" {text} "),
+    // guaranteeing consistent visual padding regardless of text length.
+
+    // For non-open states the badge is static — mergeability is not meaningful.
+    if *state != GitlabMrState::Opened {
+        let (text, fg, bg) = match state {
+            GitlabMrState::Merged => ("Merged", Color::Black, Color::Magenta),
+            GitlabMrState::Closed => ("Closed", Color::Black, Color::Red),
+            GitlabMrState::Opened => unreachable!(),
+        };
+        return Cell::from(Line::from(Span::styled(
+            format!(" {text} "),
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+        )));
+    }
+
+    // Even tick: always show the base "Open" badge.
+    if tick.is_multiple_of(2) {
+        return Cell::from(Line::from(Span::styled(
+            " Open ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )));
+    }
+
+    // Odd tick: show the mergeability-specific badge.
+    let (text, fg, bg) = match mergeability {
+        MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
+        MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
+        MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
+        MergeabilityStatus::Unknown => ("Open", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
-        label,
+        format!(" {text} "),
         Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
     )))
 }
@@ -62,7 +103,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     MrStatus::Error => Color::Red,
                     _ => Color::White,
                 }),
-                state_badge(&mr.state),
+                state_badge(&mr.state, &mr.mergeability, app.time_left),
                 label_cell,
                 Cell::from(mr.milestone.clone()).fg(Color::Cyan),
             ];
@@ -87,7 +128,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let mut constraints = vec![
         Constraint::Length(8),  // ID
         Constraint::Fill(3),    // Title
-        Constraint::Length(10), // State badge
+        Constraint::Length(13), // State badge
         Constraint::Fill(2),    // Labels
         Constraint::Fill(2),    // Milestone
     ];

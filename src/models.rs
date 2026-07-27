@@ -21,6 +21,22 @@ pub enum GitlabMrState {
     Closed,
 }
 
+/// Represents the mergeability status of an open merge request as reported by GitLab.
+///
+/// Only meaningful for MRs in the `Opened` state — ignored for Merged/Closed.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub enum MergeabilityStatus {
+    /// GitLab reports the MR can be merged cleanly.
+    Mergeable,
+    /// The MR has conflicts that must be resolved before merging.
+    Conflict,
+    /// The MR branch is behind the target branch and needs a rebase.
+    NeedsRebase,
+    /// Status not yet fetched, not applicable, or an unrecognised value.
+    #[default]
+    Unknown,
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabMr {
     pub title: String,
@@ -34,6 +50,13 @@ pub struct GitLabMr {
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     pub updated_at: Option<String>,
+    /// Legacy mergeability field (GitLab < 15.6): `"can_be_merged"`, `"cannot_be_merged"`, …
+    pub merge_status: Option<String>,
+    /// Detailed mergeability field (GitLab ≥ 15.6): `"mergeable"`, `"need_rebase"`,
+    /// `"conflict"`, `"checking"`, `"not_open"`, etc. Takes priority over `merge_status`.
+    pub detailed_merge_status: Option<String>,
+    /// Whether the MR has unresolved merge conflicts (complementary signal from GitLab).
+    pub has_conflicts: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -88,6 +111,8 @@ pub struct TrackedMr {
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
     pub state: GitlabMrState,
+    /// Mergeability state for open MRs — drives the animated status badge.
+    pub mergeability: MergeabilityStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +129,8 @@ pub struct MrLoadedData {
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
     pub state: GitlabMrState,
+    /// Mergeability resolved from the GitLab API response.
+    pub mergeability: MergeabilityStatus,
 }
 
 pub enum AppEvent {

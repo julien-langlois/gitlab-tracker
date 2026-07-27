@@ -141,6 +141,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             labels: saved.labels.clone().unwrap_or_default(),
             updated_at: saved.updated_at.clone(),
             state: saved.state.clone(),
+            // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
+            mergeability: models::MergeabilityStatus::Unknown,
         });
 
         if initial_status == MrStatus::Loading {
@@ -218,6 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.labels = data.labels;
                         mr.updated_at = data.updated_at;
                         mr.state = data.state;
+                        mr.mergeability = data.mergeability;
 
                         app.sort_mrs();
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;

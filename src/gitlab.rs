@@ -1,4 +1,4 @@
-use crate::models::{AppEvent, GitLabMr, GitLabRef, MrLoadedData};
+use crate::models::{AppEvent, GitLabMr, GitLabRef, MergeabilityStatus, MrLoadedData};
 use crate::utils::{calculate_relevance, RELEVANCE_THRESHOLD};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -81,6 +81,31 @@ pub async fn fetch_gitlab_data(
     let updated_at = mr.updated_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.clone().unwrap_or_default();
+
+    // Resolve mergeability with the following priority:
+    //   1. `has_conflicts: true` always wins — manual intervention is required regardless
+    //      of what `detailed_merge_status` says. GitLab can return "need_rebase" AND
+    //      has_conflicts: true simultaneously when the rebase would produce conflicts.
+    //   2. `detailed_merge_status` (GitLab ≥ 15.6) for the remaining cases:
+    //        • "need_rebase"    → branch is behind target, rebase is conflict-free
+    //        • "merge_conflict" → conflicts detected, manual resolution required
+    //        • "mergeable"      → ready to merge cleanly
+    //   3. `merge_status` (legacy, GitLab < 15.6) — coarse-grained last resort.
+    let mergeability = if mr.has_conflicts == Some(true) {
+        MergeabilityStatus::Conflict
+    } else {
+        match mr.detailed_merge_status.as_deref() {
+            Some("mergeable") => MergeabilityStatus::Mergeable,
+            Some("need_rebase") => MergeabilityStatus::NeedsRebase,
+            Some("merge_conflict") | Some("conflict") => MergeabilityStatus::Conflict,
+            // "checking", "not_open", "jira_association_missing", "broken_status", etc.
+            _ => match mr.merge_status.as_deref() {
+                Some("can_be_merged") => MergeabilityStatus::Mergeable,
+                Some("cannot_be_merged") => MergeabilityStatus::Conflict,
+                _ => MergeabilityStatus::Unknown,
+            },
+        }
+    };
 
     let (title, sha, description, author, assignee, milestone, web_url, labels) = match (
         cached.title,
@@ -206,5 +231,6 @@ pub async fn fetch_gitlab_data(
         labels,
         updated_at,
         state,
+        mergeability,
     })
 }

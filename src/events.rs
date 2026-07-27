@@ -181,6 +181,8 @@ async fn handle_enter(
                 title: "Loading...".to_string(),
                 status: MrStatus::Loading,
                 state: crate::models::GitlabMrState::Opened,
+                // Mergeability is fetched live — start as Unknown until the first API response.
+                mergeability: crate::models::MergeabilityStatus::Unknown,
                 sha: None,
                 description: String::new(),
                 author: "Loading".to_string(),
