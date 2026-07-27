@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
-use crate::models::TrackedMr;
-use ratatui::style::{Modifier, Style};
+use crate::models::{GitlabMrState, TrackedMr};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
 pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
@@ -22,6 +22,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     // Compute the activity badge (icon + color) based on configurable thresholds.
     let (badge_icon, badge_color) = config.activity_badge(mr.updated_at.as_deref());
 
+    // Build the state badge using the same colour coding as the table column.
+    let (state_label, state_fg, state_bg) = match mr.state {
+        GitlabMrState::Opened => ("  Open  ", Color::Black, Color::Green),
+        GitlabMrState::Merged => (" Merged ", Color::Black, Color::Magenta),
+        GitlabMrState::Closed => (" Closed ", Color::Black, Color::Red),
+    };
+
     let mut lines = vec![
         Line::from(vec![Span::styled(
             format!("MR ID    : !{}", mr.id),
@@ -29,6 +36,16 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 .fg(ratatui::style::Color::Cyan)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         )]),
+        Line::from(vec![
+            Span::raw("State    : "),
+            Span::styled(
+                state_label,
+                Style::default()
+                    .fg(state_fg)
+                    .bg(state_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
         Line::from(vec![
             Span::raw("Author   : "),
             Span::styled(

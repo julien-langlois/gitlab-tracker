@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::config::AppConfig;
 use crate::events::{handle_key_event_demo, handle_mouse_event};
-use crate::models::{AppEvent, MrStatus, TrackedMr};
+use crate::models::{AppEvent, GitlabMrState, MrStatus, TrackedMr};
 use crate::ui;
 use crossterm::event::{self, Event, KeyEventKind};
 use std::time::Duration;
@@ -29,6 +29,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                     .into_iter()
                     .collect(),
             ),
+            state: GitlabMrState::Merged,
             sha: Some("c9d0e1f2".into()),
             description: concat!(
                 "This MR introduces a fully typed GraphQL endpoint for Merge Request metadata,\n",
@@ -100,6 +101,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "101".into(),
             title: "feat(auth): Add OAuth2 PKCE flow for mobile clients".into(),
             status: MrStatus::MergedIn(["main".into(), "staging".into()].into_iter().collect()),
+            state: GitlabMrState::Merged,
             sha: Some("a1b2c3d4".into()),
             description: "Implemented PKCE challenge and verification flow.".into(),
             author: "alex_dev".into(),
@@ -117,6 +119,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "102".into(),
             title: "fix(db): Resolve connection pool deadlocks under heavy load".into(),
             status: MrStatus::MergedIn(["main".into()].into_iter().collect()),
+            state: GitlabMrState::Opened,
             sha: Some("e5f6g7h8".into()),
             description: "Adjusted max pool size and statement timeout.".into(),
             author: "thomas_db".into(),
@@ -130,6 +133,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "103".into(),
             title: "refactor(ui): Optimize Ratatui render loop with double buffering".into(),
             status: MrStatus::Loading,
+            state: GitlabMrState::Opened,
             sha: None,
             description: "Reducing CPU usage during high-frequency ticks.".into(),
             author: "julien_m".into(),
@@ -143,6 +147,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "105".into(),
             title: "fix(ci): Repair flaky integration tests in pipeline stage 3".into(),
             status: MrStatus::MergedIn(["main".into()].into_iter().collect()),
+            state: GitlabMrState::Closed,
             sha: Some("3a4b5c6d".into()),
             description: "Isolated timing-dependent assertions and added retry logic.".into(),
             author: "sarah_code".into(),
@@ -156,6 +161,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "106".into(),
             title: "chore(deps): Bump tokio to 1.37 and update async ecosystem".into(),
             status: MrStatus::Error,
+            state: GitlabMrState::Opened,
             sha: Some("7e8f9a0b".into()),
             description: "Routine dependency upgrade; resolves two CVEs in hyper transitive deps."
                 .into(),
@@ -170,6 +176,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             id: "107".into(),
             title: "feat(notif): Add desktop notifications on branch status change".into(),
             status: MrStatus::Loading,
+            state: GitlabMrState::Opened,
             sha: None,
             description: "Uses notify-rust to surface MR merge events as OS notifications.".into(),
             author: "julien_m".into(),

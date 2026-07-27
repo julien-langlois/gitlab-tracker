@@ -180,6 +180,7 @@ async fn handle_enter(
                 id: value.clone(),
                 title: "Loading...".to_string(),
                 status: MrStatus::Loading,
+                state: crate::models::GitlabMrState::Opened,
                 sha: None,
                 description: String::new(),
                 author: "Loading".to_string(),

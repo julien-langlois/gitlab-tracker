@@ -1,18 +1,32 @@
 use crate::app::{App, SortColumn, SortOrder};
-use crate::models::MrStatus;
+use crate::models::{GitlabMrState, MrStatus};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::Line,
+    text::{Line, Span},
     widgets::{Cell, Row, Table},
 };
+
+/// Returns a styled badge cell for the GitLab MR state.
+fn state_badge(state: &GitlabMrState) -> Cell<'static> {
+    let (label, fg, bg) = match state {
+        GitlabMrState::Opened => ("  Open  ", Color::Black, Color::Green),
+        GitlabMrState::Merged => (" Merged ", Color::Black, Color::Magenta),
+        GitlabMrState::Closed => (" Closed ", Color::Black, Color::Red),
+    };
+    Cell::from(Line::from(Span::styled(
+        label,
+        Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+    )))
+}
 
 pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let _ = area; // Reserved for future use (e.g. dynamic column width)
     let mut header_cells = vec![
         Cell::from("MR ID"),
         Cell::from("Title / API Status"),
+        Cell::from("Status").bold(),
         Cell::from("Labels").bold(),
         Cell::from("Milestone").bold(),
     ];
@@ -48,6 +62,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     MrStatus::Error => Color::Red,
                     _ => Color::White,
                 }),
+                state_badge(&mr.state),
                 label_cell,
                 Cell::from(mr.milestone.clone()).fg(Color::Cyan),
             ];
@@ -70,10 +85,11 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         .collect();
 
     let mut constraints = vec![
-        Constraint::Length(8), // ID
-        Constraint::Fill(3),   // Title
-        Constraint::Fill(2),   // Labels
-        Constraint::Fill(2),   // Milestone
+        Constraint::Length(8),  // ID
+        Constraint::Fill(3),    // Title
+        Constraint::Length(10), // State badge
+        Constraint::Fill(2),    // Labels
+        Constraint::Fill(2),    // Milestone
     ];
 
     for _ in &app.branches {

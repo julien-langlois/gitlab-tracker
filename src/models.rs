@@ -11,9 +11,20 @@ pub struct GitLabMilestone {
     pub title: String,
 }
 
+/// Represents the GitLab-side lifecycle state of a merge request.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GitlabMrState {
+    #[default]
+    Opened,
+    Merged,
+    Closed,
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabMr {
     pub title: String,
+    pub state: Option<GitlabMrState>,
     pub description: Option<String>,
     pub author: Option<GitLabUser>,
     pub assignee: Option<GitLabUser>,
@@ -44,6 +55,8 @@ pub struct SavedMr {
     pub labels: Option<Vec<String>>,
     #[serde(default)]
     pub updated_at: Option<String>,
+    #[serde(default)]
+    pub state: GitlabMrState,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -74,6 +87,7 @@ pub struct TrackedMr {
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    pub state: GitlabMrState,
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +103,7 @@ pub struct MrLoadedData {
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    pub state: GitlabMrState,
 }
 
 pub enum AppEvent {

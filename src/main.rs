@@ -140,6 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             web_url: saved.web_url.clone().unwrap_or_default(),
             labels: saved.labels.clone().unwrap_or_default(),
             updated_at: saved.updated_at.clone(),
+            state: saved.state.clone(),
         });
 
         if initial_status == MrStatus::Loading {
@@ -216,6 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.web_url = data.web_url;
                         mr.labels = data.labels;
                         mr.updated_at = data.updated_at;
+                        mr.state = data.state;
 
                         app.sort_mrs();
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
