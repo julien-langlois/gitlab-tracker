@@ -1,7 +1,7 @@
 pub mod inspector;
 pub mod table;
 
-use crate::app::{ActivePane, App, InspectorView, SortColumn, SortOrder};
+use crate::app::{ActivePane, App, InputMode, InspectorView, SortColumn, SortOrder};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style, Stylize},
@@ -96,12 +96,26 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         ActivePane::Dashboard => "Pane: Dashboard",
         ActivePane::Inspector => "Pane: Inspector",
     };
-    let input_help = format!(
-        "Input: '142' / 'develop' │ [Tab]: {} │ [S/s]: {} │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [ESC]: Quit",
-        pane_hint, sort_status
-    );
+    // The input bar title and border change depending on whether the field has focus.
+    let (input_title, input_border_style) = match app.input_mode {
+        InputMode::Editing => (
+            " INSERT │ type MR ID or branch name │ [Enter]: Confirm │ [Esc]: Cancel ".to_string(),
+            Style::default().fg(Color::Yellow),
+        ),
+        InputMode::Normal => (
+            format!(
+                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [Esc]: Quit ",
+                pane_hint, sort_status
+            ),
+            Style::default(),
+        ),
+    };
 
-    let input_box = Paragraph::new(app.input.as_str())
-        .block(Block::default().borders(Borders::ALL).title(input_help));
+    let input_box = Paragraph::new(app.input.as_str()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(input_border_style)
+            .title(input_title),
+    );
     f.render_widget(input_box, chunks[1]);
 }

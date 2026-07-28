@@ -16,6 +16,20 @@ pub enum SortOrder {
     Descending,
 }
 
+/// Controls whether keyboard input is routed to the text field or to shortcut bindings.
+///
+/// - `Normal`: shortcut keys (S, O, P, R, …) are active; the input field is passive.
+/// - `Editing`: every printable key feeds the input field; shortcuts are suspended.
+///   Enter `/` or `i` to enter Editing mode; press `Esc` to leave it.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum InputMode {
+    /// Shortcut keys are active; the input field is passive.
+    #[default]
+    Normal,
+    /// The input field has exclusive focus; shortcuts are suspended.
+    Editing,
+}
+
 /// Represents the currently focused pane in the TUI layout.
 ///
 /// Adding a new pane only requires adding a variant here and handling it
@@ -56,6 +70,9 @@ pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
     pub input: String,
+    /// Whether the input field has exclusive keyboard focus.
+    /// In `Editing` mode all printable keys feed the field; shortcuts are suspended.
+    pub input_mode: InputMode,
     pub token: String,
     pub project_id: String,
     pub base_url: String,
@@ -92,6 +109,7 @@ impl App {
             mrs: Vec::new(),
             branches: Vec::new(),
             input: String::new(),
+            input_mode: InputMode::default(),
             token,
             project_id,
             base_url,

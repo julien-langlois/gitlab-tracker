@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{ActivePane, App, InspectorView};
+use crate::app::{ActivePane, App, InputMode, InspectorView};
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::save_state_async;
@@ -54,104 +54,125 @@ pub async fn handle_key_event(
     tx: &UnboundedSender<AppEvent>,
     last_known_branches: &mut HashMap<String, HashSet<String>>,
 ) -> bool {
-    match key.code {
-        KeyCode::Esc => return true,
-
-        // Tab cycles focus between panes without consuming arrow keys.
-        KeyCode::Tab if app.input.is_empty() => {
-            app.active_pane = app.active_pane.next();
-        }
-
-        // Arrow keys and j/k are routed based on the active pane.
-        KeyCode::Down | KeyCode::Char('j') if app.input.is_empty() => match app.active_pane {
-            ActivePane::Inspector => app.inspector_scroll_down(1),
-            ActivePane::Dashboard => app.next_row(),
-        },
-        KeyCode::Up | KeyCode::Char('k') if app.input.is_empty() => match app.active_pane {
-            ActivePane::Inspector => app.inspector_scroll_up(1),
-            ActivePane::Dashboard => app.prev_row(),
-        },
-
-        // Open the MR URL in the default browser.
-        KeyCode::Char('o') | KeyCode::Char('O') if app.input.is_empty() => {
-            if let Some(selected) = app.table_state.selected() {
-                if let Some(mr) = app.mrs.get(selected) {
-                    let target_url = if !mr.web_url.is_empty() {
-                        mr.web_url.clone()
-                    } else {
-                        format!(
-                            "{}/projects/{}/merge_requests/{}",
-                            app.base_url, app.project_id, mr.id
-                        )
-                    };
-                    let _ = open::that(target_url);
-                }
+    match app.input_mode {
+        // ------------------------------------------------------------------
+        // Editing mode: the input field has exclusive focus.
+        // Only Esc, Enter, Backspace and printable chars are handled here.
+        // ------------------------------------------------------------------
+        InputMode::Editing => match key.code {
+            // Esc leaves editing mode (clears input so it feels like a cancel).
+            KeyCode::Esc => {
+                app.input.clear();
+                app.input_mode = InputMode::Normal;
             }
-        }
 
-        // Force a full refresh of all MRs.
-        KeyCode::Char('r') | KeyCode::Char('R') if app.input.is_empty() => {
-            app.time_left = app.refresh_interval_secs;
-            let ctx = build_fetch_context(app);
-
-            for mr in &mut app.mrs {
-                mr.status = MrStatus::Loading;
-                let cached = cached_from_mr(mr);
-                spawn_mr_fetch(
-                    ctx.clone(),
-                    mr.id.clone(),
-                    cached,
-                    api_semaphore.clone(),
-                    tx.clone(),
-                );
+            KeyCode::Enter => {
+                handle_enter(app, api_semaphore, tx, last_known_branches).await;
+                // Return to Normal after submitting so shortcuts are available again.
+                app.input_mode = InputMode::Normal;
             }
-        }
 
-        // [P] toggles the Inspector between MR info and Pipeline view.
-        KeyCode::Char('p') | KeyCode::Char('P') if app.input.is_empty() => {
-            app.inspector_view = match app.inspector_view {
-                InspectorView::MrInfo => InspectorView::Pipelines,
-                InspectorView::Pipelines => InspectorView::MrInfo,
-            };
-            app.reset_inspector_scroll();
-        }
+            KeyCode::Backspace => {
+                app.input.pop();
+            }
 
-        KeyCode::Char('s') if app.input.is_empty() => {
-            app.cycle_sort_column();
-        }
+            KeyCode::Char(c) => app.input.push(c),
 
-        KeyCode::Char('S') if app.input.is_empty() => {
-            app.toggle_sort_order();
-        }
+            _ => {}
+        },
 
-        // Delete or 'x': remove the selected MR from the list.
-        KeyCode::Delete | KeyCode::Char('x')
-            if key.code == KeyCode::Delete || app.input.is_empty() =>
-        {
-            if let Some(selected) = app.table_state.selected() {
-                if selected < app.mrs.len() {
-                    app.mrs.remove(selected);
-                    if app.mrs.is_empty() {
-                        app.table_state.select(None);
-                    } else if selected >= app.mrs.len() {
-                        app.table_state.select(Some(app.mrs.len() - 1));
+        // ------------------------------------------------------------------
+        // Normal mode: shortcuts are active; input field is passive.
+        // '/' or 'i' enters Editing mode (vim-style focus).
+        // ------------------------------------------------------------------
+        InputMode::Normal => match key.code {
+            // Quit the application.
+            KeyCode::Esc => return true,
+
+            // Enter Editing mode — the input field now has exclusive focus.
+            KeyCode::Char('/') | KeyCode::Char('i') => {
+                app.input_mode = InputMode::Editing;
+            }
+
+            // Tab cycles focus between panes.
+            KeyCode::Tab => {
+                app.active_pane = app.active_pane.next();
+            }
+
+            // Arrow keys and j/k are routed based on the active pane.
+            KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
+                ActivePane::Inspector => app.inspector_scroll_down(1),
+                ActivePane::Dashboard => app.next_row(),
+            },
+            KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
+                ActivePane::Inspector => app.inspector_scroll_up(1),
+                ActivePane::Dashboard => app.prev_row(),
+            },
+
+            // Open the MR URL in the default browser.
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                if let Some(selected) = app.table_state.selected() {
+                    if let Some(mr) = app.mrs.get(selected) {
+                        let target_url = if !mr.web_url.is_empty() {
+                            mr.web_url.clone()
+                        } else {
+                            format!(
+                                "{}/projects/{}/merge_requests/{}",
+                                app.base_url, app.project_id, mr.id
+                            )
+                        };
+                        let _ = open::that(target_url);
                     }
-                    save_state_async(&app.mrs, &app.branches, last_known_branches).await;
                 }
             }
-        }
 
-        KeyCode::Char(c) => app.input.push(c),
+            // Force a full refresh of all MRs.
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                app.time_left = app.refresh_interval_secs;
+                let ctx = build_fetch_context(app);
 
-        KeyCode::Backspace => {
-            app.input.pop();
-        }
+                for mr in &mut app.mrs {
+                    mr.status = MrStatus::Loading;
+                    let cached = cached_from_mr(mr);
+                    spawn_mr_fetch(
+                        ctx.clone(),
+                        mr.id.clone(),
+                        cached,
+                        api_semaphore.clone(),
+                        tx.clone(),
+                    );
+                }
+            }
 
-        KeyCode::Enter => {
-            handle_enter(app, api_semaphore, tx, last_known_branches).await;
-        }
+            // [P] toggles the Inspector between MR info and Pipeline view.
+            KeyCode::Char('p') | KeyCode::Char('P') => {
+                app.inspector_view = match app.inspector_view {
+                    InspectorView::MrInfo => InspectorView::Pipelines,
+                    InspectorView::Pipelines => InspectorView::MrInfo,
+                };
+                app.reset_inspector_scroll();
+            }
 
-        _ => {}
+            KeyCode::Char('s') => app.cycle_sort_column(),
+            KeyCode::Char('S') => app.toggle_sort_order(),
+
+            // Delete or 'x': remove the selected MR from the list.
+            KeyCode::Delete | KeyCode::Char('x') => {
+                if let Some(selected) = app.table_state.selected() {
+                    if selected < app.mrs.len() {
+                        app.mrs.remove(selected);
+                        if app.mrs.is_empty() {
+                            app.table_state.select(None);
+                        } else if selected >= app.mrs.len() {
+                            app.table_state.select(Some(app.mrs.len() - 1));
+                        }
+                        save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+                    }
+                }
+            }
+
+            _ => {}
+        },
     }
 
     false

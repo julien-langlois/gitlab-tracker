@@ -256,21 +256,39 @@ gitlab-tracker
 
 ## ⌨️ Dashboard Navigation & Shortcuts
 
+The dashboard operates in two keyboard modes, inspired by vim:
+
+### 🟦 Normal Mode (default)
+
+Shortcut keys are active. The input field is passive.
+
 | Shortcut | Action |
 | :--- | :--- |
+| `i` or `/` | **Enter Insert mode** — focus the input field |
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
 | `Tab` | Cycle focus between Dashboard and Inspector panes |
 | `P` | Toggle Inspector between MR info and Pipeline view |
-| `142` + `Enter` | Add MR ID `!142` to tracking |
-| `staging` + `Enter` | Add branch `staging` to target columns |
-| `-142` + `Enter` | Remove MR ID `!142` from tracking |
-| `-staging` + `Enter` | Remove branch column `staging` |
 | `O` | Open selected MR in your default web browser |
 | `R` | Force immediate network refresh for all MRs |
 | `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
 | `S` | Toggle sort direction (ascending / descending) |
 | `Del` or `X` | Delete selected MR row |
-| `ESC` | Quit dashboard |
+| `Esc` | Quit dashboard |
+
+### 🟨 Insert Mode
+
+The input field has exclusive focus. All printable keys feed the field — shortcuts are suspended. The input bar turns **yellow** as a visual indicator.
+
+| Shortcut | Action |
+| :--- | :--- |
+| `142` + `Enter` | Add MR ID `!142` to tracking |
+| `staging` + `Enter` | Add branch `staging` to target columns |
+| `-142` + `Enter` | Remove MR ID `!142` from tracking |
+| `-staging` + `Enter` | Remove branch column `staging` |
+| `Enter` | Submit the current input |
+| `Esc` | Cancel and return to Normal mode |
+
+> **Why two modes?** Branch names starting with `s`, `S`, `p`, `P`, `o`, `O`, `r` or `R` would otherwise collide with shortcut keys. Insert mode guarantees the full branch name is captured without interference.
 
 ---
 
@@ -279,13 +297,18 @@ gitlab-tracker
 ```text
 src/
 ├── main.rs          # Event loop orchestrator & async channel setup
-├── app.rs           # State machine & row navigation logic
+├── app.rs           # State machine, InputMode, row navigation & sort logic
 ├── config.rs        # Label filtering, wildcard matching, HEX color parsing & activity badge
 ├── models.rs        # Strongly-typed API DTOs & runtime event types
 ├── gitlab.rs        # Async network handling & rate-limit semaphores
+├── events.rs        # Keyboard & mouse event dispatch (Normal / Insert mode routing)
 ├── storage.rs       # OS Keyring interface & XDG state/config persistence
 ├── utils.rs         # Fuzzy matching algorithmic utilities
-└── ui/              # Flexbox Renderers for Table & Context Inspector
+├── demo.rs          # Demo mode with pre-populated mock data (screenshots & CI)
+└── ui/
+    ├── mod.rs       # Root layout renderer & input bar (mode-aware)
+    ├── table.rs     # Main MR table widget
+    └── inspector.rs # Side panel: MR metadata & pipeline history views
 ```
 
 ---
