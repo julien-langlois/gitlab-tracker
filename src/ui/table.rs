@@ -8,23 +8,30 @@ use ratatui::{
     widgets::{Cell, Row, Table},
 };
 
+/// Fixed width (in chars) for all state badges, padding included.
+/// "Mergeable" is 9 chars — add 2 chars of padding (1 each side) → 11.
+const BADGE_WIDTH: usize = 11;
+
+/// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
+/// Excess space is distributed evenly left and right (left-biased on odd remainder).
+fn badge_label(text: &str) -> String {
+    // Use Rust's built-in centering formatter.
+    format!("{:^width$}", text, width = BADGE_WIDTH)
+}
+
 /// Returns a styled badge cell for the GitLab MR state.
 ///
 /// For open MRs, `tick` (the current `time_left` value) drives an alternating animation
 /// between the base "Open" badge and a contextual mergeability badge:
-///   - even tick  → "  Open  " (green)
-///   - odd tick   → mergeability-specific badge (color varies)
+///   - even tick  → "Open" centred in a fixed-width green badge
+///   - odd tick   → mergeability-specific badge (color varies), same fixed width
 ///
-/// This gives at-a-glance insight into whether an open MR can be merged, has conflicts,
-/// or needs a rebase, without adding a new column.
+/// All badges share the same `BADGE_WIDTH` so the column never shifts.
 fn state_badge(
     state: &GitlabMrState,
     mergeability: &MergeabilityStatus,
     tick: u64,
 ) -> Cell<'static> {
-    // Each label is wrapped with a single space on each side via format!(" {text} "),
-    // guaranteeing consistent visual padding regardless of text length.
-
     // For non-open states the badge is static — mergeability is not meaningful.
     if *state != GitlabMrState::Opened {
         let (text, fg, bg) = match state {
@@ -33,7 +40,7 @@ fn state_badge(
             GitlabMrState::Opened => unreachable!(),
         };
         return Cell::from(Line::from(Span::styled(
-            format!(" {text} "),
+            badge_label(text),
             Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
         )));
     }
@@ -41,7 +48,7 @@ fn state_badge(
     // Even tick: always show the base "Open" badge.
     if tick.is_multiple_of(2) {
         return Cell::from(Line::from(Span::styled(
-            " Open ",
+            badge_label("Open"),
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Green)
@@ -57,7 +64,7 @@ fn state_badge(
         MergeabilityStatus::Unknown => ("Open", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
-        format!(" {text} "),
+        badge_label(text),
         Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
     )))
 }
