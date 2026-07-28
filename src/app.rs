@@ -39,6 +39,19 @@ impl ActivePane {
     }
 }
 
+/// Controls which view is rendered inside the Inspector side panel.
+///
+/// Toggled with [P] — switches between the MR metadata view and the
+/// pipeline list view without changing pane focus.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum InspectorView {
+    /// Default: MR metadata, description, labels (existing behaviour).
+    #[default]
+    MrInfo,
+    /// Pipeline list for the selected MR.
+    Pipelines,
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -54,6 +67,8 @@ pub struct App {
     pub sort_order: SortOrder,
     /// Which pane currently holds focus (drives keyboard & scroll routing).
     pub active_pane: ActivePane,
+    /// Which view is rendered inside the Inspector panel ([P] toggles).
+    pub inspector_view: InspectorView,
     /// Vertical scroll offset for the Inspector pane (in lines).
     pub inspector_scroll: u16,
     /// Total number of lines in the currently rendered Inspector content.
@@ -87,6 +102,7 @@ impl App {
             sort_column: SortColumn::UpdatedAt,
             sort_order: SortOrder::Descending,
             active_pane: ActivePane::default(),
+            inspector_view: InspectorView::default(),
             inspector_scroll: 0,
             inspector_content_lines: 0,
             inspector_pane_height: 0,

@@ -36,6 +36,18 @@
   | `Rebase` | 🟨 Yellow | Branch is behind target — rebase required |
   
   No extra column is added: the animation keeps the layout compact while surfacing critical merge-readiness at a glance.
+* 🔬 **Pipeline Inspector (`P`):** Press `P` on any selected MR to toggle the side panel between MR metadata and its pipeline history. The last 5 pipeline runs are displayed with per-stage job breakdown, status icons, and execution durations:
+  ```
+  #9981  ✔ passed
+    ▸ test
+      ✔ lint        (18s)
+      ✔ unit-tests  (74s)
+    ▸ build
+      ✔ build       (42s)
+    ▸ deploy
+      ✔ deploy-staging (31s)
+  ```
+  Pipeline data is fetched **alongside MR metadata** in the same refresh cycle and **persisted to disk** — so it is immediately available on restart without an extra network call. Re-fetching only occurs when GitLab reports a new `updated_at` timestamp, keeping API usage minimal.
 
 ---
 
@@ -247,6 +259,8 @@ gitlab-tracker
 | Shortcut | Action |
 | :--- | :--- |
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
+| `Tab` | Cycle focus between Dashboard and Inspector panes |
+| `P` | Toggle Inspector between MR info and Pipeline view |
 | `142` + `Enter` | Add MR ID `!142` to tracking |
 | `staging` + `Enter` | Add branch `staging` to target columns |
 | `-142` + `Enter` | Remove MR ID `!142` from tracking |

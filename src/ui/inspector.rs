@@ -1,7 +1,121 @@
 use crate::config::AppConfig;
-use crate::models::{GitlabMrState, MergeabilityStatus, TrackedMr};
+use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
+
+/// Renders the pipeline list view for the Inspector panel.
+///
+/// Shows the last fetched pipelines for the selected MR with their jobs,
+/// grouped by pipeline run. Displayed when the user presses [P].
+pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            format!("Pipelines — MR !{}", mr.id),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        )]),
+        Line::from(vec![Span::raw("")]),
+    ];
+
+    if mr.pipelines.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            "No pipelines found for this MR.",
+            Style::default().fg(Color::DarkGray),
+        )]));
+    } else {
+        for pipeline in &mr.pipelines {
+            lines.extend(render_pipeline_block(pipeline));
+            lines.push(Line::from(vec![Span::raw("")]));
+        }
+    }
+
+    Text::from(lines)
+}
+
+/// Renders a single pipeline block with its status header and job list.
+fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
+    let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
+
+    let mut lines = vec![Line::from(vec![
+        Span::styled(
+            format!("#{} ", pipeline.id),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            status_icon,
+            Style::default()
+                .fg(status_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ])];
+
+    if pipeline.jobs.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            "  No jobs.",
+            Style::default().fg(Color::DarkGray),
+        )]));
+        return lines;
+    }
+
+    // Group jobs by stage for readability.
+    let mut current_stage = String::new();
+    for job in &pipeline.jobs {
+        if job.stage != current_stage {
+            current_stage = job.stage.clone();
+            lines.push(Line::from(vec![Span::styled(
+                format!("  ▸ {}", current_stage),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]));
+        }
+
+        let (job_icon, job_color) = job_status_style(&job.status);
+        let duration = job
+            .duration
+            .map(|d| format!(" ({:.0}s)", d))
+            .unwrap_or_default();
+
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled(job_icon, Style::default().fg(job_color)),
+            Span::raw(format!(" {}{}", job.name, duration)),
+        ]));
+    }
+
+    lines
+}
+
+/// Maps a `PipelineState` to a display icon and its colour.
+fn pipeline_status_style(state: &PipelineState) -> (&'static str, Color) {
+    match state {
+        PipelineState::Success => ("✔ passed", Color::Green),
+        PipelineState::Failed => ("✘ failed", Color::Red),
+        PipelineState::Running => ("⟳ running", Color::Cyan),
+        PipelineState::Pending => ("◔ pending", Color::Yellow),
+        PipelineState::Canceled => ("⊘ canceled", Color::DarkGray),
+        PipelineState::Skipped => ("⊝ skipped", Color::DarkGray),
+        PipelineState::Created => ("○ created", Color::White),
+        PipelineState::Unknown => ("? unknown", Color::DarkGray),
+    }
+}
+
+/// Maps a job status string (as returned by the GitLab API) to icon + colour.
+fn job_status_style(status: &str) -> (&'static str, Color) {
+    match status {
+        "success" => ("✔", Color::Green),
+        "failed" => ("✘", Color::Red),
+        "running" => ("⟳", Color::Cyan),
+        "pending" => ("◔", Color::Yellow),
+        "canceled" => ("⊘", Color::DarkGray),
+        "skipped" => ("⊝", Color::DarkGray),
+        "created" => ("○", Color::White),
+        _ => ("?", Color::DarkGray),
+    }
+}
 
 pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
     let (bg, fg) = config.get_label_style(label);

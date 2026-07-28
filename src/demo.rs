@@ -1,7 +1,10 @@
 use crate::app::App;
 use crate::config::AppConfig;
 use crate::events::{handle_key_event_demo, handle_mouse_event};
-use crate::models::{AppEvent, GitlabMrState, MergeabilityStatus, MrStatus, TrackedMr};
+use crate::models::{
+    AppEvent, GitlabMrState, MergeabilityStatus, MrStatus, Pipeline, PipelineJob, PipelineState,
+    TrackedMr,
+};
 use crate::ui;
 use crossterm::event::{self, Event, KeyEventKind};
 use std::time::Duration;
@@ -32,6 +35,29 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             state: GitlabMrState::Merged,
             mergeability: MergeabilityStatus::Unknown,
             sha: Some("c9d0e1f2".into()),
+            // Pre-populate mock pipelines for the demo so [P] shows data instantly.
+            pipelines: vec![
+                Pipeline {
+                    id: 9981,
+                    status: PipelineState::Success,
+                    jobs: vec![
+                        PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
+                        PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
+                        PipelineJob { name: "build".into(),          stage: "build".into(),  status: "success".into(), duration: Some(42.0) },
+                        PipelineJob { name: "deploy-staging".into(), stage: "deploy".into(), status: "success".into(), duration: Some(31.0) },
+                    ],
+                },
+                Pipeline {
+                    id: 9942,
+                    status: PipelineState::Failed,
+                    jobs: vec![
+                        PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
+                        PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },
+                        PipelineJob { name: "build".into(),          stage: "build".into(),  status: "skipped".into(), duration: None },
+                        PipelineJob { name: "deploy-staging".into(), stage: "deploy".into(), status: "skipped".into(), duration: None },
+                    ],
+                },
+            ],
             description: concat!(
                 "This MR introduces a fully typed GraphQL endpoint for Merge Request metadata,\n",
                 "built with **async-graphql** and exposed via **Axum**.\n",
@@ -116,6 +142,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "feature".into(),
             ],
             updated_at: Some("2024-05-01T10:00:00.000Z".into()),
+            pipelines: vec![],
         },
         TrackedMr {
             id: "102".into(),
@@ -132,6 +159,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/102".into(),
             labels: vec!["bug".into(), "deploy::prod_pending".into()],
             updated_at: Some("2024-05-02T15:30:00.000Z".into()),
+            pipelines: vec![],
         },
         TrackedMr {
             id: "103".into(),
@@ -148,6 +176,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
             labels: vec!["performance".into(), "review::needs_work".into()],
             updated_at: Some("2024-05-03T08:45:00.000Z".into()),
+            pipelines: vec![],
         },
         TrackedMr {
             id: "105".into(),
@@ -163,6 +192,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/105".into(),
             labels: vec!["bug".into(), "review::approved".into(), "size::S".into()],
             updated_at: Some("2024-04-28T14:00:00.000Z".into()),
+            pipelines: vec![],
         },
         TrackedMr {
             id: "106".into(),
@@ -180,6 +210,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/106".into(),
             labels: vec!["dependencies".into(), "review::needs_work".into()],
             updated_at: Some("2024-04-15T07:30:00.000Z".into()),
+            pipelines: vec![],
         },
         TrackedMr {
             id: "107".into(),
@@ -200,6 +231,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "size::M".into(),
             ],
             updated_at: Some("2024-05-05T11:20:00.000Z".into()),
+            pipelines: vec![],
         },
     ];
 

@@ -143,8 +143,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             state: saved.state.clone(),
             // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
             mergeability: models::MergeabilityStatus::Unknown,
+            // Restore persisted pipelines — refreshed on each MR fetch.
+            pipelines: saved.pipelines.clone(),
         });
-
         if initial_status == MrStatus::Loading {
             let cached = CachedMrData {
                 title: Some(saved.title),
@@ -155,6 +156,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 milestone: saved.milestone,
                 web_url: saved.web_url,
                 labels: saved.labels,
+                updated_at: saved.updated_at,
+                pipelines: saved.pipelines,
             };
 
             spawn_mr_fetch(
@@ -221,6 +224,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.updated_at = data.updated_at;
                         mr.state = data.state;
                         mr.mergeability = data.mergeability;
+                        mr.pipelines = data.pipelines;
 
                         app.sort_mrs();
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
@@ -268,6 +272,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 milestone: Some(mr.milestone.clone()),
                                 web_url: Some(mr.web_url.clone()),
                                 labels: Some(mr.labels.clone()),
+                                updated_at: mr.updated_at.clone(),
+                                pipelines: mr.pipelines.clone(),
                             };
 
                             spawn_mr_fetch(

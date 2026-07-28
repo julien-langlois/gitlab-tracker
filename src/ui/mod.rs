@@ -1,7 +1,7 @@
 pub mod inspector;
 pub mod table;
 
-use crate::app::{ActivePane, App, SortColumn, SortOrder};
+use crate::app::{ActivePane, App, InspectorView, SortColumn, SortOrder};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style, Stylize},
@@ -37,10 +37,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 
     // --- Right Pane: Context Inspector Panel ---
     let inspector_is_active = app.active_pane == ActivePane::Inspector;
-    let inspector_title = if inspector_is_active {
-        " MR Context Inspector [FOCUS] "
-    } else {
-        " MR Context Inspector "
+    let inspector_title = match (inspector_is_active, app.inspector_view) {
+        (true, InspectorView::MrInfo) => " MR Inspector [FOCUS] │ [P]: Pipelines ",
+        (false, InspectorView::MrInfo) => " MR Inspector │ [P]: Pipelines ",
+        (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: MR Info ",
+        (false, InspectorView::Pipelines) => " Pipelines │ [P]: MR Info ",
     };
     let inspector_block = Block::default()
         .borders(Borders::ALL)
@@ -49,7 +50,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 
     if let Some(selected) = app.table_state.selected() {
         if let Some(mr) = app.mrs.get(selected) {
-            let rendered_text = inspector::render_safe_inspector_text(mr, &app.config);
+            // Dispatch to the correct inspector view based on the current toggle state.
+            let rendered_text = match app.inspector_view {
+                InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
+                InspectorView::Pipelines => inspector::render_pipelines_text(mr),
+            };
 
             // Update content/pane dimensions so scroll clamping in App is accurate.
             // Inner height removes the 2 border rows (top + bottom).

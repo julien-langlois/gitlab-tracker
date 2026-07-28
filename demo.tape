@@ -68,6 +68,24 @@ Sleep 200ms
 
 Sleep 800ms
 
+# --- Switch to Pipeline view with [P] ---
+Type "p"
+Sleep 1.5s
+
+# --- Scroll through the pipeline jobs list ---
+Down
+Sleep 300ms
+Down
+Sleep 300ms
+Down
+Sleep 300ms
+
+Sleep 1s
+
+# --- Switch back to MR Info view with [P] ---
+Type "p"
+Sleep 1s
+
 # --- Switch back to Dashboard pane ---
 Tab
 Sleep 800ms

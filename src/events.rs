@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{ActivePane, App};
+use crate::app::{ActivePane, App, InspectorView};
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::save_state_async;
@@ -107,6 +107,15 @@ pub async fn handle_key_event(
             }
         }
 
+        // [P] toggles the Inspector between MR info and Pipeline view.
+        KeyCode::Char('p') | KeyCode::Char('P') if app.input.is_empty() => {
+            app.inspector_view = match app.inspector_view {
+                InspectorView::MrInfo => InspectorView::Pipelines,
+                InspectorView::Pipelines => InspectorView::MrInfo,
+            };
+            app.reset_inspector_scroll();
+        }
+
         KeyCode::Char('s') if app.input.is_empty() => {
             app.cycle_sort_column();
         }
@@ -191,6 +200,8 @@ async fn handle_enter(
                 web_url: String::new(),
                 labels: vec![],
                 updated_at: None,
+                // Pipelines are fetched on demand when the user presses [P].
+                pipelines: vec![],
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;
@@ -276,6 +287,15 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('s') => app.cycle_sort_column(),
         KeyCode::Char('S') => app.toggle_sort_order(),
 
+        // [P] toggles the Inspector between MR info and Pipeline view (no fetch in demo mode).
+        KeyCode::Char('p') | KeyCode::Char('P') => {
+            app.inspector_view = match app.inspector_view {
+                InspectorView::MrInfo => InspectorView::Pipelines,
+                InspectorView::Pipelines => InspectorView::MrInfo,
+            };
+            app.reset_inspector_scroll();
+        }
+
         _ => {}
     }
 
@@ -293,6 +313,9 @@ fn build_fetch_context(app: &App) -> FetchContext {
 }
 
 /// Builds a `CachedMrData` snapshot from a `TrackedMr` for use in fetch requests.
+///
+/// Includes `updated_at` and the current `pipelines` so the fetcher can skip
+/// pipeline re-fetching when the MR has not changed since the last cycle.
 fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
     CachedMrData {
         title: Some(mr.title.clone()),
@@ -303,5 +326,7 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         milestone: Some(mr.milestone.clone()),
         web_url: Some(mr.web_url.clone()),
         labels: Some(mr.labels.clone()),
+        updated_at: mr.updated_at.clone(),
+        pipelines: mr.pipelines.clone(),
     }
 }

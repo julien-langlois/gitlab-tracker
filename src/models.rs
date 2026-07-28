@@ -80,6 +80,9 @@ pub struct SavedMr {
     pub updated_at: Option<String>,
     #[serde(default)]
     pub state: GitlabMrState,
+    /// Persisted pipeline snapshots — restored on startup, refreshed on each MR fetch.
+    #[serde(default)]
+    pub pipelines: Vec<Pipeline>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -113,6 +116,8 @@ pub struct TrackedMr {
     pub state: GitlabMrState,
     /// Mergeability state for open MRs — drives the animated status badge.
     pub mergeability: MergeabilityStatus,
+    /// Pipelines fetched alongside the MR data and persisted across restarts.
+    pub pipelines: Vec<Pipeline>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +136,45 @@ pub struct MrLoadedData {
     pub state: GitlabMrState,
     /// Mergeability resolved from the GitLab API response.
     pub mergeability: MergeabilityStatus,
+    /// Pipelines fetched in the same request batch as the MR data.
+    pub pipelines: Vec<Pipeline>,
+}
+
+/// Lifecycle state of a GitLab pipeline run.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PipelineState {
+    Created,
+    Pending,
+    Running,
+    Success,
+    Failed,
+    Canceled,
+    Skipped,
+    #[serde(other)]
+    #[default]
+    Unknown,
+}
+
+/// A single job within a pipeline, as returned by the GitLab API.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PipelineJob {
+    pub name: String,
+    pub stage: String,
+    pub status: String,
+    /// Duration in seconds, null while running.
+    pub duration: Option<f64>,
+}
+
+/// A GitLab pipeline attached to a merge request.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Pipeline {
+    pub id: u64,
+    #[serde(default)]
+    pub status: PipelineState,
+    /// Jobs are fetched lazily in a second request — empty until loaded.
+    #[serde(skip)]
+    pub jobs: Vec<PipelineJob>,
 }
 
 pub enum AppEvent {
