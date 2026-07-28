@@ -300,6 +300,8 @@ pub async fn fetch_gitlab_data(
         fetch_pipelines(ctx, mr_id).await
     };
 
+    let target_branch = mr.target_branch.unwrap_or_else(|| "unknown".to_string());
+
     Ok(MrLoadedData {
         id: mr_id.to_string(),
         title,
@@ -312,6 +314,7 @@ pub async fn fetch_gitlab_data(
         web_url,
         labels,
         updated_at,
+        target_branch,
         state,
         mergeability,
         pipelines,

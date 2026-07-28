@@ -34,8 +34,17 @@
   | `Mergeable` | 🟩 Light green | MR can be merged cleanly |
   | `Conflict` | 🟥 Red | Merge conflicts must be resolved |
   | `Rebase` | 🟨 Yellow | Branch is behind target — rebase required |
-  
+
   No extra column is added: the animation keeps the layout compact while surfacing critical merge-readiness at a glance.
+* 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `config.json` and persisted across restarts — no manual file editing required. Available optional columns:
+  | Column | Description |
+  | :--- | :--- |
+  | **Target** | The branch the MR is intended to merge into |
+  | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
+  | **Milestone** | The associated milestone title |
+
+  All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
+
 * 🔬 **Pipeline Inspector (`P`):** Press `P` on any selected MR to toggle the side panel between MR metadata and its pipeline history. The last 5 pipeline runs are displayed with per-stage job breakdown, status icons, and execution durations:
   ```
   #9981  ✔ passed
@@ -161,6 +170,11 @@ You can edit this file to adjust default environment branches, label badge color
   ],
   "activity_recent_days": 2,
   "activity_stale_days": 7,
+  "visible_columns": {
+    "target_branch": false,
+    "labels": false,
+    "milestone": false
+  },
   "label_colors": {
     "deploy::*": {
       "bg": "#2E7D32",
@@ -185,6 +199,23 @@ You can edit this file to adjust default environment branches, label badge color
   }
 }
 ```
+
+> **Optional table columns** — By default the table only shows the fixed columns (ID, Title, Status) plus your tracked branches, keeping the layout compact. Enable any optional column individually in `config.json` under `visible_columns`:
+>
+> | Key | Default | Column shown |
+> | :--- | :--- | :--- |
+> | `target_branch` | `false` | **Target** — the branch the MR merges into |
+> | `labels` | `false` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
+> | `milestone` | `false` | **Milestone** — the associated milestone title |
+>
+> Example — enable Target and Labels only:
+> ```json
+> "visible_columns": {
+>   "target_branch": true,
+>   "labels": true,
+>   "milestone": false
+> }
+> ```
 
 > **Activity badge thresholds** control the colored indicator displayed next to the `Updated` field in the Context Inspector:
 > | Badge | Meaning | Condition |
@@ -268,12 +299,23 @@ Shortcut keys are active. The input field is passive.
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
 | `Tab` | Cycle focus between Dashboard and Inspector panes |
 | `P` | Toggle Inspector between MR info and Pipeline view |
+| `C` | **Open column picker** — toggle optional columns on/off |
 | `O` | Open selected MR in your default web browser |
 | `R` | Force immediate network refresh for all MRs |
 | `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
 | `S` | Toggle sort direction (ascending / descending) |
 | `Del` or `X` | Delete selected MR row |
 | `Esc` | Quit dashboard |
+
+### 🟩 Column Picker Mode
+
+Opened with `C`. The table border turns **cyan** as a visual indicator.
+
+| Shortcut | Action |
+| :--- | :--- |
+| `▲` / `▼` or `k` / `j` | Navigate the column list |
+| `Space` | Toggle the highlighted column on/off |
+| `Enter` or `Esc` | Close the picker — changes are saved immediately to `config.json` |
 
 ### 🟨 Insert Mode
 

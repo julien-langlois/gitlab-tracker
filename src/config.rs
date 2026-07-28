@@ -6,6 +6,23 @@ fn default_branches_val() -> Vec<String> {
     vec!["main".to_string()]
 }
 
+/// Controls which optional columns are rendered in the MR table.
+///
+/// All columns default to `false` (hidden) so the table stays compact
+/// out of the box. Each field can be toggled individually in `config.json`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VisibleColumns {
+    /// Show the "Target" column (target branch the MR merges into).
+    #[serde(default)]
+    pub target_branch: bool,
+    /// Show the "Labels" column (filtered label chips).
+    #[serde(default)]
+    pub labels: bool,
+    /// Show the "Milestone" column.
+    #[serde(default)]
+    pub milestone: bool,
+}
+
 /// Default threshold (in days) above which an MR is considered "stale" (red badge).
 fn default_activity_stale_days() -> u64 {
     7
@@ -39,6 +56,10 @@ pub struct AppConfig {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(default = "default_activity_recent_days")]
     pub activity_recent_days: u64,
+    /// Controls which optional columns are visible in the MR table.
+    /// All columns are hidden by default — enable them individually in config.json.
+    #[serde(default)]
+    pub visible_columns: VisibleColumns,
 }
 
 impl Default for AppConfig {
@@ -96,6 +117,7 @@ impl Default for AppConfig {
             label_colors,
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
+            visible_columns: VisibleColumns::default(),
         }
     }
 }

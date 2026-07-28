@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, VisibleColumns};
 use crate::events::{handle_key_event_demo, handle_mouse_event};
 use crate::models::{
     AppEvent, GitlabMrState, MergeabilityStatus, MrStatus, Pipeline, PipelineJob, PipelineState,
@@ -12,12 +12,23 @@ use std::time::Duration;
 /// Runs the application in demo mode with pre-populated mock data.
 /// This mode is intended for screenshots, testing, and demonstrations.
 pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::Error>> {
+    // In demo mode optional columns start hidden — the demo.tape scenario uses [C]
+    // to open the column picker and enable them live, showcasing the feature.
+    let demo_config = AppConfig {
+        visible_columns: VisibleColumns {
+            target_branch: false,
+            labels: false,
+            milestone: false,
+        },
+        ..config
+    };
+
     let mut app = App::new(
         "demo-token".into(),
         "123456".into(),
         "https://gitlab.com".into(),
         900,
-        config,
+        demo_config,
     );
 
     app.branches = vec!["main".into(), "staging".into(), "production".into()];
@@ -122,7 +133,10 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "review::approved".into(),
                 "size::L".into(),
             ],
-            updated_at: Some("2024-05-04T09:15:00.000Z".into()),
+            // Most recent timestamp so MR 104 lands at row 0 after the default sort
+            // (UpdatedAt Descending) — required for the pipeline demo in demo.tape.
+            updated_at: Some("2024-05-06T09:15:00.000Z".into()),
+            target_branch: "main".into(),
         },
         TrackedMr {
             id: "101".into(),
@@ -142,6 +156,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "feature".into(),
             ],
             updated_at: Some("2024-05-01T10:00:00.000Z".into()),
+            target_branch: "main".into(),
             pipelines: vec![],
         },
         TrackedMr {
@@ -159,6 +174,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/102".into(),
             labels: vec!["bug".into(), "deploy::prod_pending".into()],
             updated_at: Some("2024-05-02T15:30:00.000Z".into()),
+            target_branch: "main".into(),
             pipelines: vec![],
         },
         TrackedMr {
@@ -176,6 +192,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
             labels: vec!["performance".into(), "review::needs_work".into()],
             updated_at: Some("2024-05-03T08:45:00.000Z".into()),
+            target_branch: "develop".into(),
             pipelines: vec![],
         },
         TrackedMr {
@@ -192,6 +209,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/105".into(),
             labels: vec!["bug".into(), "review::approved".into(), "size::S".into()],
             updated_at: Some("2024-04-28T14:00:00.000Z".into()),
+            target_branch: "main".into(),
             pipelines: vec![],
         },
         TrackedMr {
@@ -210,6 +228,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             web_url: "https://gitlab.com/demo/project/-/merge_requests/106".into(),
             labels: vec!["dependencies".into(), "review::needs_work".into()],
             updated_at: Some("2024-04-15T07:30:00.000Z".into()),
+            target_branch: "develop".into(),
             pipelines: vec![],
         },
         TrackedMr {
@@ -231,10 +250,15 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "size::M".into(),
             ],
             updated_at: Some("2024-05-05T11:20:00.000Z".into()),
+            target_branch: "main".into(),
             pipelines: vec![],
         },
     ];
 
+    // Apply the default sort (UpdatedAt Descending) so the table order at startup
+    // matches exactly what the user sees — MR 104 is given the most recent timestamp
+    // so it lands at row 0 after sorting.
+    app.sort_mrs();
     app.table_state.select(Some(0));
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();

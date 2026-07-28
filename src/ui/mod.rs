@@ -3,9 +3,10 @@ pub mod table;
 
 use crate::app::{ActivePane, App, InputMode, InspectorView, SortColumn, SortOrder};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style, Stylize},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 
@@ -102,9 +103,13 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             " INSERT │ type MR ID or branch name │ [Enter]: Confirm │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Yellow),
         ),
+        InputMode::ColumnPicker => (
+            " COLUMNS │ [↑/↓]: Navigate │ [Space]: Toggle │ [Esc]: Close & Save ".to_string(),
+            Style::default().fg(Color::Cyan),
+        ),
         InputMode::Normal => (
             format!(
-                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [Esc]: Quit ",
+                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del/X]: Delete │ [Esc]: Quit ",
                 pane_hint, sort_status
             ),
             Style::default(),
@@ -118,4 +123,66 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             .title(input_title),
     );
     f.render_widget(input_box, chunks[1]);
+
+    // Render the column-picker popup on top of the UI when active.
+    if app.input_mode == InputMode::ColumnPicker {
+        render_column_picker(f, app, f.area());
+    }
+}
+
+/// Renders the column-picker popup centred over the terminal area.
+///
+/// The popup is overlaid via [`Clear`] so it erases whatever is beneath it.
+/// Arrow keys move the cursor; Space toggles the highlighted entry.
+fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
+    // The popup entries mirror the fields of `VisibleColumns` in declaration order.
+    let entries: &[(&str, bool)] = &[
+        ("Target branch", app.config.visible_columns.target_branch),
+        ("Labels", app.config.visible_columns.labels),
+        ("Milestone", app.config.visible_columns.milestone),
+    ];
+
+    // Fixed popup size: wide enough for the longest label + checkbox, tall enough for all rows.
+    let popup_width: u16 = 36;
+    let popup_height: u16 = entries.len() as u16 + 2; // +2 for top/bottom borders
+
+    // Centre the popup within the terminal area.
+    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Erase the background behind the popup.
+    f.render_widget(Clear, popup_area);
+
+    let items: Vec<ListItem> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, (label, enabled))| {
+            let checkbox = if *enabled { "☑" } else { "☐" };
+            let is_selected = i == app.column_picker_cursor;
+            let style = if is_selected {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("  {} ", checkbox), style),
+                Span::styled(label.to_string(), style),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" Columns "),
+    );
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(app.column_picker_cursor));
+    f.render_stateful_widget(list, popup_area, &mut list_state);
 }

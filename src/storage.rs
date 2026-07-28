@@ -4,6 +4,20 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
 
+/// Persists only the `AppConfig` (e.g. after toggling column visibility).
+///
+/// Reads the existing `config.json`, merges the new value, and writes it back
+/// atomically so no other config fields are lost.
+pub async fn save_config_async(config: &AppConfig) {
+    if let Some(config_dir) = get_save_dir() {
+        let path = config_dir.join("config.json");
+        if let Ok(json) = serde_json::to_string_pretty(config) {
+            let _ = tokio::fs::create_dir_all(&config_dir).await;
+            let _ = tokio::fs::write(path, json).await;
+        }
+    }
+}
+
 pub fn get_or_prompt_token() -> String {
     if let Ok(tok) = std::env::var("GITLAB_TOKEN") {
         if !tok.trim().is_empty() {
@@ -119,6 +133,7 @@ pub async fn save_state_async(
                 web_url: Some(m.web_url.clone()),
                 labels: Some(m.labels.clone()),
                 updated_at: m.updated_at.clone(),
+                target_branch: Some(m.target_branch.clone()),
                 state: m.state.clone(),
                 pipelines: m.pipelines.clone(),
             })

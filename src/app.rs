@@ -21,6 +21,7 @@ pub enum SortOrder {
 /// - `Normal`: shortcut keys (S, O, P, R, …) are active; the input field is passive.
 /// - `Editing`: every printable key feeds the input field; shortcuts are suspended.
 ///   Enter `/` or `i` to enter Editing mode; press `Esc` to leave it.
+/// - `ColumnPicker`: the column visibility popup is open; arrow keys and Space navigate/toggle.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InputMode {
     /// Shortcut keys are active; the input field is passive.
@@ -28,6 +29,8 @@ pub enum InputMode {
     Normal,
     /// The input field has exclusive focus; shortcuts are suspended.
     Editing,
+    /// The column-picker popup is open — arrow keys and Space toggle columns.
+    ColumnPicker,
 }
 
 /// Represents the currently focused pane in the TUI layout.
@@ -93,6 +96,8 @@ pub struct App {
     pub inspector_content_lines: u16,
     /// Height (in rows) of the Inspector pane area, updated at each render frame.
     pub inspector_pane_height: u16,
+    /// Index of the currently highlighted row in the column-picker popup (0-based).
+    pub column_picker_cursor: usize,
 }
 
 impl App {
@@ -124,6 +129,7 @@ impl App {
             inspector_scroll: 0,
             inspector_content_lines: 0,
             inspector_pane_height: 0,
+            column_picker_cursor: 0,
         }
     }
 

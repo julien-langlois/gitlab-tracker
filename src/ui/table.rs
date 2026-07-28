@@ -71,13 +71,23 @@ fn state_badge(
 
 pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let _ = area; // Reserved for future use (e.g. dynamic column width)
+    let cols = &app.config.visible_columns;
+
+    // Build the header dynamically based on enabled optional columns.
     let mut header_cells = vec![
         Cell::from("MR ID"),
         Cell::from("Title / API Status"),
         Cell::from("Status").bold(),
-        Cell::from("Labels").bold(),
-        Cell::from("Milestone").bold(),
     ];
+    if cols.target_branch {
+        header_cells.push(Cell::from("Target").bold());
+    }
+    if cols.labels {
+        header_cells.push(Cell::from("Labels").bold());
+    }
+    if cols.milestone {
+        header_cells.push(Cell::from("Milestone").bold());
+    }
     for b in &app.branches {
         header_cells.push(Cell::from(b.clone()).bold());
     }
@@ -87,6 +97,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         .mrs
         .iter()
         .map(|mr| {
+            // Always compute the label cell — used only when the column is enabled.
             let filtered_labels: Vec<&String> = mr
                 .labels
                 .iter()
@@ -104,6 +115,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 Cell::from(Line::from(spans))
             };
 
+            // Fixed columns — always present.
             let mut cells = vec![
                 Cell::from(format!("!{}", mr.id)),
                 Cell::from(mr.title.clone()).fg(match mr.status {
@@ -111,9 +123,19 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     _ => Color::White,
                 }),
                 state_badge(&mr.state, &mr.mergeability, app.time_left),
-                label_cell,
-                Cell::from(mr.milestone.clone()).fg(Color::Cyan),
             ];
+
+            // Optional columns — inserted only when enabled in config.
+            if cols.target_branch {
+                cells.push(Cell::from(mr.target_branch.clone()).fg(Color::LightBlue));
+            }
+            if cols.labels {
+                cells.push(label_cell);
+            }
+            if cols.milestone {
+                cells.push(Cell::from(mr.milestone.clone()).fg(Color::Cyan));
+            }
+
             for b in &app.branches {
                 let cell = match &mr.status {
                     MrStatus::Loading => Cell::from("⏳ Loading...").yellow(),
@@ -132,13 +154,21 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         })
         .collect();
 
+    // Build constraints in lockstep with the header/row cells.
     let mut constraints = vec![
         Constraint::Length(8),  // ID
         Constraint::Fill(3),    // Title
         Constraint::Length(13), // State badge
-        Constraint::Fill(2),    // Labels
-        Constraint::Fill(2),    // Milestone
     ];
+    if cols.target_branch {
+        constraints.push(Constraint::Fill(2)); // Target branch
+    }
+    if cols.labels {
+        constraints.push(Constraint::Fill(2)); // Labels
+    }
+    if cols.milestone {
+        constraints.push(Constraint::Fill(2)); // Milestone
+    }
 
     for _ in &app.branches {
         constraints.push(Constraint::Fill(1));

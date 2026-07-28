@@ -7,7 +7,7 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 use crate::app::{ActivePane, App, InputMode, InspectorView};
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
-use crate::storage::save_state_async;
+use crate::storage::{save_config_async, save_state_async};
 
 /// Handles a mouse event and updates the application state accordingly.
 ///
@@ -80,6 +80,47 @@ pub async fn handle_key_event(
 
             _ => {}
         },
+
+        // ------------------------------------------------------------------
+        // Column-picker mode: the popup is open.
+        // Up/Down move the cursor; Space toggles; Esc closes and persists.
+        // ------------------------------------------------------------------
+        InputMode::ColumnPicker => {
+            const COLUMN_COUNT: usize = 3;
+            match key.code {
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if app.column_picker_cursor > 0 {
+                        app.column_picker_cursor -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if app.column_picker_cursor < COLUMN_COUNT - 1 {
+                        app.column_picker_cursor += 1;
+                    }
+                }
+                KeyCode::Char(' ') => {
+                    // Toggle the column at the current cursor position.
+                    match app.column_picker_cursor {
+                        0 => {
+                            app.config.visible_columns.target_branch =
+                                !app.config.visible_columns.target_branch
+                        }
+                        1 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
+                        2 => {
+                            app.config.visible_columns.milestone =
+                                !app.config.visible_columns.milestone
+                        }
+                        _ => {}
+                    }
+                }
+                KeyCode::Esc | KeyCode::Enter => {
+                    // Close the popup and persist the new column visibility to config.json.
+                    app.input_mode = InputMode::Normal;
+                    save_config_async(&app.config).await;
+                }
+                _ => {}
+            }
+        }
 
         // ------------------------------------------------------------------
         // Normal mode: shortcuts are active; input field is passive.
@@ -156,6 +197,12 @@ pub async fn handle_key_event(
             KeyCode::Char('s') => app.cycle_sort_column(),
             KeyCode::Char('S') => app.toggle_sort_order(),
 
+            // [C] opens the column-picker popup.
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                app.column_picker_cursor = 0;
+                app.input_mode = InputMode::ColumnPicker;
+            }
+
             // Delete or 'x': remove the selected MR from the list.
             KeyCode::Delete | KeyCode::Char('x') => {
                 if let Some(selected) = app.table_state.selected() {
@@ -221,6 +268,8 @@ async fn handle_enter(
                 web_url: String::new(),
                 labels: vec![],
                 updated_at: None,
+                // target_branch is unknown until the first API response.
+                target_branch: "unknown".to_string(),
                 // Pipelines are fetched on demand when the user presses [P].
                 pipelines: vec![],
             });
@@ -267,6 +316,41 @@ async fn handle_enter(
 /// Accepts both `Press` and `Repeat` kinds so held keys scroll smoothly.
 /// Returns `true` if the main loop should exit (Esc was pressed).
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
+    // Column-picker popup intercepts all keys when open.
+    if app.input_mode == InputMode::ColumnPicker {
+        const COLUMN_COUNT: usize = 3;
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.column_picker_cursor > 0 {
+                    app.column_picker_cursor -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if app.column_picker_cursor < COLUMN_COUNT - 1 {
+                    app.column_picker_cursor += 1;
+                }
+            }
+            KeyCode::Char(' ') => match app.column_picker_cursor {
+                0 => {
+                    app.config.visible_columns.target_branch =
+                        !app.config.visible_columns.target_branch
+                }
+                1 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
+                2 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
+                _ => {}
+            },
+            // Close the popup — no disk write in demo mode.
+            // Enter is used in the demo tape instead of Esc because VHS may fire
+            // the Escape sequence before the column picker frame is rendered, causing
+            // it to be received in Normal mode and quitting the app instead.
+            KeyCode::Enter => {
+                app.input_mode = InputMode::Normal;
+            }
+            _ => {}
+        }
+        return false;
+    }
+
     match key.code {
         KeyCode::Esc => return true,
 

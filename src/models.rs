@@ -50,6 +50,8 @@ pub struct GitLabMr {
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     pub updated_at: Option<String>,
+    /// Target branch that this MR is intended to be merged into.
+    pub target_branch: Option<String>,
     /// Legacy mergeability field (GitLab < 15.6): `"can_be_merged"`, `"cannot_be_merged"`, …
     pub merge_status: Option<String>,
     /// Detailed mergeability field (GitLab ≥ 15.6): `"mergeable"`, `"need_rebase"`,
@@ -78,6 +80,9 @@ pub struct SavedMr {
     pub labels: Option<Vec<String>>,
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Target branch that this MR is intended to be merged into — persisted across restarts.
+    #[serde(default)]
+    pub target_branch: Option<String>,
     #[serde(default)]
     pub state: GitlabMrState,
     /// Persisted pipeline snapshots — restored on startup, refreshed on each MR fetch.
@@ -113,6 +118,7 @@ pub struct TrackedMr {
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    pub target_branch: String,
     pub state: GitlabMrState,
     /// Mergeability state for open MRs — drives the animated status badge.
     pub mergeability: MergeabilityStatus,
@@ -133,6 +139,7 @@ pub struct MrLoadedData {
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    pub target_branch: String,
     pub state: GitlabMrState,
     /// Mergeability resolved from the GitLab API response.
     pub mergeability: MergeabilityStatus,

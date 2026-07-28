@@ -192,6 +192,15 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         lines.push(line);
     }
     lines.push(Line::from(vec![
+        Span::raw("Target   : "),
+        Span::styled(
+            mr.target_branch.clone(),
+            Style::default()
+                .fg(Color::LightBlue)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]));
+    lines.push(Line::from(vec![
         Span::raw("Author   : "),
         Span::styled(
             format!("@{}", mr.author),

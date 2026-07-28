@@ -140,6 +140,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             web_url: saved.web_url.clone().unwrap_or_default(),
             labels: saved.labels.clone().unwrap_or_default(),
             updated_at: saved.updated_at.clone(),
+            target_branch: saved
+                .target_branch
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string()),
             state: saved.state.clone(),
             // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
             mergeability: models::MergeabilityStatus::Unknown,
@@ -222,6 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.web_url = data.web_url;
                         mr.labels = data.labels;
                         mr.updated_at = data.updated_at;
+                        mr.target_branch = data.target_branch;
                         mr.state = data.state;
                         mr.mergeability = data.mergeability;
                         mr.pipelines = data.pipelines;
