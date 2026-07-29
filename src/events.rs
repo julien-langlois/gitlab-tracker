@@ -86,7 +86,7 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            const COLUMN_COUNT: usize = 4;
+            const COLUMN_COUNT: usize = 5;
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.column_picker_cursor > 0 {
@@ -115,6 +115,7 @@ pub async fn handle_key_event(
                             app.config.visible_columns.milestone =
                                 !app.config.visible_columns.milestone
                         }
+                        4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
                         _ => {}
                     }
                 }
@@ -279,6 +280,8 @@ async fn handle_enter(
                 pipelines: vec![],
                 // New MRs are not highlighted on first load.
                 recently_updated: false,
+                // Notes count is unknown until the first API response.
+                user_notes_count: 0,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;
@@ -325,7 +328,7 @@ async fn handle_enter(
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     // Column-picker popup intercepts all keys when open.
     if app.input_mode == InputMode::ColumnPicker {
-        const COLUMN_COUNT: usize = 4;
+        const COLUMN_COUNT: usize = 5;
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 if app.column_picker_cursor > 0 {
@@ -345,6 +348,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 }
                 2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
                 3 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
+                4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
                 _ => {}
             },
             // Close the popup — no disk write in demo mode.

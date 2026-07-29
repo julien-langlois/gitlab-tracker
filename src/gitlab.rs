@@ -151,6 +151,8 @@ pub async fn fetch_gitlab_data(
     let updated_at = mr.updated_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.clone().unwrap_or_default();
+    // Always read the notes count fresh — it reflects live discussion activity.
+    let user_notes_count = mr.user_notes_count.unwrap_or(0);
 
     // Resolve mergeability with the following priority:
     //   1. `has_conflicts: true` always wins — manual intervention is required regardless
@@ -318,5 +320,6 @@ pub async fn fetch_gitlab_data(
         state,
         mergeability,
         pipelines,
+        user_notes_count,
     })
 }

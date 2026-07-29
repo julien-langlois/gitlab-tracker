@@ -141,6 +141,7 @@ fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
         ("Target branch", app.config.visible_columns.target_branch),
         ("Labels", app.config.visible_columns.labels),
         ("Milestone", app.config.visible_columns.milestone),
+        ("Notes", app.config.visible_columns.notes),
     ];
 
     // Fixed popup size: wide enough for the longest label + checkbox, tall enough for all rows.

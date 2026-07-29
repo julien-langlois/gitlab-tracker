@@ -91,6 +91,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     if cols.milestone {
         header_cells.push(Cell::from("Milestone").bold());
     }
+    if cols.notes {
+        header_cells.push(Cell::from("Notes").bold());
+    }
     for b in &app.branches {
         header_cells.push(Cell::from(b.clone()).bold());
     }
@@ -169,6 +172,17 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     highlight,
                 ));
             }
+            if cols.notes {
+                let (notes_text, notes_color) = if mr.user_notes_count == 0 {
+                    ("✔ 0".to_string(), Color::DarkGray)
+                } else {
+                    (format!("💬 {}", mr.user_notes_count), Color::Yellow)
+                };
+                cells.push(maybe_highlight(
+                    Cell::from(notes_text).fg(notes_color),
+                    highlight,
+                ));
+            }
 
             for b in &app.branches {
                 let cell = match &mr.status {
@@ -206,6 +220,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     }
     if cols.milestone {
         constraints.push(Constraint::Fill(2)); // Milestone
+    }
+    if cols.notes {
+        constraints.push(Constraint::Length(10)); // Notes badge
     }
 
     for _ in &app.branches {

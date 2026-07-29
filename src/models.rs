@@ -59,6 +59,9 @@ pub struct GitLabMr {
     pub detailed_merge_status: Option<String>,
     /// Whether the MR has unresolved merge conflicts (complementary signal from GitLab).
     pub has_conflicts: Option<bool>,
+    /// Total number of user notes (comments + discussion threads) on this MR.
+    /// Returned natively by the GitLab API — no extra request needed.
+    pub user_notes_count: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -88,6 +91,9 @@ pub struct SavedMr {
     /// Persisted pipeline snapshots — restored on startup, refreshed on each MR fetch.
     #[serde(default)]
     pub pipelines: Vec<Pipeline>,
+    /// Total number of user notes (comments + threads) — persisted across restarts.
+    #[serde(default)]
+    pub user_notes_count: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -127,6 +133,8 @@ pub struct TrackedMr {
     /// Set to `true` when `updated_at` changed during the last refresh cycle.
     /// Drives the row highlight animation in the table. Reset after the fade window expires.
     pub recently_updated: bool,
+    /// Total number of user notes (comments + discussion threads) on this MR.
+    pub user_notes_count: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +156,8 @@ pub struct MrLoadedData {
     pub mergeability: MergeabilityStatus,
     /// Pipelines fetched in the same request batch as the MR data.
     pub pipelines: Vec<Pipeline>,
+    /// Total number of user notes (comments + discussion threads) on this MR.
+    pub user_notes_count: u32,
 }
 
 /// Lifecycle state of a GitLab pipeline run.

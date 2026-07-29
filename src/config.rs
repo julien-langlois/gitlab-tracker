@@ -24,6 +24,9 @@ pub struct VisibleColumns {
     /// Show the "Milestone" column.
     #[serde(default)]
     pub milestone: bool,
+    /// Show the "Notes" column (total number of comments and discussion threads).
+    #[serde(default)]
+    pub notes: bool,
 }
 
 /// Default threshold (in days) above which an MR is considered "stale" (red badge).

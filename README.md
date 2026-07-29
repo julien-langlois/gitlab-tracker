@@ -29,6 +29,7 @@
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
+* 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🔀 **Animated Mergeability Badge:** For open MRs, the Status column alternates every second between the base `Open` badge and a live mergeability indicator sourced directly from the GitLab API:
   | Badge | Color | Meaning |
   | :--- | :--- | :--- |
@@ -44,6 +45,7 @@
   | **Target** | The branch the MR is intended to merge into |
   | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
   | **Milestone** | The associated milestone title |
+  | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
 
   All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
 
@@ -210,6 +212,7 @@ You can edit this file to adjust default environment branches, label badge color
 > | `target_branch` | `false` | **Target** — the branch the MR merges into |
 > | `labels` | `false` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | `false` | **Milestone** — the associated milestone title |
+> | `notes` | `false` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
 >
 > Example — enable Activity and Target only:
 > ```json
@@ -217,7 +220,8 @@ You can edit this file to adjust default environment branches, label badge color
 >   "activity": true,
 >   "target_branch": true,
 >   "labels": false,
->   "milestone": false
+>   "milestone": false,
+>   "notes": false
 > }
 > ```
 

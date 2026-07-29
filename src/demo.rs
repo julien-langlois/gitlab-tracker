@@ -20,6 +20,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: false,
             labels: false,
             milestone: false,
+            notes: false,
         },
         ..config
     };
@@ -139,6 +140,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-05-06T09:15:00.000Z".into()),
             target_branch: "main".into(),
             recently_updated: false,
+            // Demo: simulate a MR with several comments awaiting review.
+            user_notes_count: 5,
         },
         TrackedMr {
             id: "101".into(),
@@ -161,6 +164,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "main".into(),
             pipelines: vec![],
             recently_updated: false,
+            user_notes_count: 0,
         },
         TrackedMr {
             id: "102".into(),
@@ -180,6 +184,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "main".into(),
             pipelines: vec![],
             recently_updated: false,
+            // Demo: simulate a MR with unread comments from reviewers.
+            user_notes_count: 3,
         },
         TrackedMr {
             id: "103".into(),
@@ -199,6 +205,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "develop".into(),
             pipelines: vec![],
             recently_updated: false,
+            user_notes_count: 0,
         },
         TrackedMr {
             id: "105".into(),
@@ -217,6 +224,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "main".into(),
             pipelines: vec![],
             recently_updated: false,
+            user_notes_count: 0,
         },
         TrackedMr {
             id: "106".into(),
@@ -237,6 +245,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "develop".into(),
             pipelines: vec![],
             recently_updated: false,
+            user_notes_count: 0,
         },
         TrackedMr {
             id: "107".into(),
@@ -260,6 +269,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             target_branch: "main".into(),
             pipelines: vec![],
             recently_updated: false,
+            // Demo: simulate a MR with one comment to address.
+            user_notes_count: 1,
         },
     ];
 

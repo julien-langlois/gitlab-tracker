@@ -151,6 +151,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             pipelines: saved.pipelines.clone(),
             // On startup, no MR is considered recently updated.
             recently_updated: false,
+            // Restore persisted notes count — refreshed on each MR fetch.
+            user_notes_count: saved.user_notes_count,
         });
         if initial_status == MrStatus::Loading {
             let cached = CachedMrData {
@@ -238,6 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.mergeability = data.mergeability;
                         mr.pipelines = data.pipelines;
                         mr.recently_updated = was_updated;
+                        mr.user_notes_count = data.user_notes_count;
 
                         // Arm (or re-arm) the global fade countdown.
                         if was_updated {

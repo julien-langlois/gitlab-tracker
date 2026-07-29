@@ -136,6 +136,7 @@ pub async fn save_state_async(
                 target_branch: Some(m.target_branch.clone()),
                 state: m.state.clone(),
                 pipelines: m.pipelines.clone(),
+                user_notes_count: m.user_notes_count,
             })
             .collect(),
         branches: branches.to_vec(),

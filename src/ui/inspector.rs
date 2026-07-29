@@ -236,6 +236,31 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         ),
     ]));
 
+    // Notes / comments indicator — always shown, highlights when non-zero.
+    let (notes_text, notes_fg, notes_bg) = if mr.user_notes_count == 0 {
+        (
+            "  ✔ No comments  ".to_string(),
+            Color::DarkGray,
+            Color::Black,
+        )
+    } else {
+        (
+            format!("  💬 {} comment(s) — review pending  ", mr.user_notes_count),
+            Color::Black,
+            Color::Yellow,
+        )
+    };
+    lines.push(Line::from(vec![
+        Span::raw("Notes    : "),
+        Span::styled(
+            notes_text,
+            Style::default()
+                .fg(notes_fg)
+                .bg(notes_bg)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]));
+
     if !mr.labels.is_empty() {
         let mut label_spans = vec![Span::raw("Labels   : ")];
         for label in &mr.labels {
