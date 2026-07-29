@@ -124,6 +124,9 @@ pub struct TrackedMr {
     pub mergeability: MergeabilityStatus,
     /// Pipelines fetched alongside the MR data and persisted across restarts.
     pub pipelines: Vec<Pipeline>,
+    /// Set to `true` when `updated_at` changed during the last refresh cycle.
+    /// Drives the row highlight animation in the table. Reset after the fade window expires.
+    pub recently_updated: bool,
 }
 
 #[derive(Debug, Clone)]

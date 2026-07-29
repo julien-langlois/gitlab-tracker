@@ -138,6 +138,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // (UpdatedAt Descending) — required for the pipeline demo in demo.tape.
             updated_at: Some("2024-05-06T09:15:00.000Z".into()),
             target_branch: "main".into(),
+            recently_updated: false,
         },
         TrackedMr {
             id: "101".into(),
@@ -159,6 +160,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-05-01T10:00:00.000Z".into()),
             target_branch: "main".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
         TrackedMr {
             id: "102".into(),
@@ -177,6 +179,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-05-02T15:30:00.000Z".into()),
             target_branch: "main".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
         TrackedMr {
             id: "103".into(),
@@ -195,6 +198,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-05-03T08:45:00.000Z".into()),
             target_branch: "develop".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
         TrackedMr {
             id: "105".into(),
@@ -212,6 +216,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-04-28T14:00:00.000Z".into()),
             target_branch: "main".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
         TrackedMr {
             id: "106".into(),
@@ -231,6 +236,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-04-15T07:30:00.000Z".into()),
             target_branch: "develop".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
         TrackedMr {
             id: "107".into(),
@@ -253,6 +259,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             updated_at: Some("2024-05-05T11:20:00.000Z".into()),
             target_branch: "main".into(),
             pipelines: vec![],
+            recently_updated: false,
         },
     ];
 

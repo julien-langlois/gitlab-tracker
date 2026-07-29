@@ -118,29 +118,56 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 Cell::from(Line::from(spans))
             };
 
+            // Whether this row should receive the "recently updated" highlight.
+            // Cells must be individually coloured because a Row-level bg is overridden
+            // by any Cell that sets its own fg/bg style.
+            let highlight = mr.recently_updated && app.update_highlight_ticks > 0;
+
+            /// Applies the update-highlight background to a cell when active.
+            /// The foreground is left untouched so each cell keeps its own colour.
+            fn maybe_highlight(cell: Cell<'static>, highlight: bool) -> Cell<'static> {
+                if highlight {
+                    cell.bg(Color::Rgb(0, 90, 40))
+                } else {
+                    cell
+                }
+            }
+
             // Fixed columns — always present.
             let mut cells = vec![
-                Cell::from(format!("!{}", mr.id)),
-                Cell::from(mr.title.clone()).fg(match mr.status {
-                    MrStatus::Error => Color::Red,
-                    _ => Color::White,
-                }),
-                state_badge(&mr.state, &mr.mergeability, app.time_left),
+                maybe_highlight(Cell::from(format!("!{}", mr.id)), highlight),
+                maybe_highlight(
+                    Cell::from(mr.title.clone()).fg(match mr.status {
+                        MrStatus::Error => Color::Red,
+                        _ => Color::White,
+                    }),
+                    highlight,
+                ),
+                maybe_highlight(
+                    state_badge(&mr.state, &mr.mergeability, app.time_left),
+                    highlight,
+                ),
             ];
 
             // Optional columns — inserted only when enabled in config.
             if cols.activity {
                 let (icon, color) = app.config.activity_badge(mr.updated_at.as_deref());
-                cells.push(Cell::from(icon).fg(color));
+                cells.push(maybe_highlight(Cell::from(icon).fg(color), highlight));
             }
             if cols.target_branch {
-                cells.push(Cell::from(mr.target_branch.clone()).fg(Color::LightBlue));
+                cells.push(maybe_highlight(
+                    Cell::from(mr.target_branch.clone()).fg(Color::LightBlue),
+                    highlight,
+                ));
             }
             if cols.labels {
-                cells.push(label_cell);
+                cells.push(maybe_highlight(label_cell, highlight));
             }
             if cols.milestone {
-                cells.push(Cell::from(mr.milestone.clone()).fg(Color::Cyan));
+                cells.push(maybe_highlight(
+                    Cell::from(mr.milestone.clone()).fg(Color::Cyan),
+                    highlight,
+                ));
             }
 
             for b in &app.branches {
@@ -155,8 +182,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                         }
                     }
                 };
-                cells.push(cell);
+                cells.push(maybe_highlight(cell, highlight));
             }
+
             Row::new(cells)
         })
         .collect();

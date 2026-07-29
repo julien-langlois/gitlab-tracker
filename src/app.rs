@@ -98,7 +98,14 @@ pub struct App {
     pub inspector_pane_height: u16,
     /// Index of the currently highlighted row in the column-picker popup (0-based).
     pub column_picker_cursor: usize,
+    /// Countdown (in ticks ~= seconds) during which recently-updated rows stay highlighted.
+    /// Reset to `RECENT_UPDATE_FADE_TICKS` each time a MR update is detected.
+    /// Decremented on every Tick; rows are highlighted while this is > 0.
+    pub update_highlight_ticks: u64,
 }
+
+/// Duration (in seconds) of the green highlight fade after a MR is updated.
+pub const RECENT_UPDATE_FADE_TICKS: u64 = 10;
 
 impl App {
     pub fn new(
@@ -130,6 +137,7 @@ impl App {
             inspector_content_lines: 0,
             inspector_pane_height: 0,
             column_picker_cursor: 0,
+            update_highlight_ticks: 0,
         }
     }
 

@@ -277,6 +277,8 @@ async fn handle_enter(
                 target_branch: "unknown".to_string(),
                 // Pipelines are fetched on demand when the user presses [P].
                 pipelines: vec![],
+                // New MRs are not highlighted on first load.
+                recently_updated: false,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;

@@ -25,6 +25,7 @@
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
+* ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
@@ -39,6 +40,7 @@
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `config.json` and persisted across restarts — no manual file editing required. Available optional columns:
   | Column | Description |
   | :--- | :--- |
+  | **Activity** | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector) |
   | **Target** | The branch the MR is intended to merge into |
   | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
   | **Milestone** | The associated milestone title |
@@ -204,15 +206,17 @@ You can edit this file to adjust default environment branches, label badge color
 >
 > | Key | Default | Column shown |
 > | :--- | :--- | :--- |
+> | `activity` | `false` | **Activity** — 🟢 Active / 🟡 Slowing / 🔴 Stale badge |
 > | `target_branch` | `false` | **Target** — the branch the MR merges into |
 > | `labels` | `false` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | `false` | **Milestone** — the associated milestone title |
 >
-> Example — enable Target and Labels only:
+> Example — enable Activity and Target only:
 > ```json
 > "visible_columns": {
+>   "activity": true,
 >   "target_branch": true,
->   "labels": true,
+>   "labels": false,
 >   "milestone": false
 > }
 > ```

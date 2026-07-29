@@ -8,7 +8,7 @@ mod storage;
 mod ui;
 mod utils;
 
-use app::{App, TrackedMrExt};
+use app::{App, TrackedMrExt, RECENT_UPDATE_FADE_TICKS};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyEventKind};
 use events::{handle_key_event, handle_mouse_event};
@@ -149,6 +149,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             mergeability: models::MergeabilityStatus::Unknown,
             // Restore persisted pipelines — refreshed on each MR fetch.
             pipelines: saved.pipelines.clone(),
+            // On startup, no MR is considered recently updated.
+            recently_updated: false,
         });
         if initial_status == MrStatus::Loading {
             let cached = CachedMrData {
@@ -216,6 +218,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Update the persisted reference so subsequent refreshes won't re-notify.
                         last_known_branches.insert(data.id.clone(), data.branches.clone());
 
+                        // Detect whether this MR was actually updated since the last refresh.
+                        // We compare the old `updated_at` before overwriting it.
+                        let was_updated =
+                            mr.updated_at.is_some() && mr.updated_at != data.updated_at;
+
                         mr.title = data.title;
                         mr.sha = data.sha;
                         mr.status = MrStatus::MergedIn(data.branches);
@@ -230,6 +237,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.state = data.state;
                         mr.mergeability = data.mergeability;
                         mr.pipelines = data.pipelines;
+                        mr.recently_updated = was_updated;
+
+                        // Arm (or re-arm) the global fade countdown.
+                        if was_updated {
+                            app.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
+                        }
 
                         app.sort_mrs();
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
@@ -243,6 +256,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 AppEvent::Tick => {
+                    // Decrement the highlight fade countdown and clear flags when expired.
+                    if app.update_highlight_ticks > 0 {
+                        app.update_highlight_ticks -= 1;
+                        if app.update_highlight_ticks == 0 {
+                            for mr in &mut app.mrs {
+                                mr.recently_updated = false;
+                            }
+                        }
+                    }
                     if app.time_left > 0 {
                         app.time_left -= 1;
                     } else {
