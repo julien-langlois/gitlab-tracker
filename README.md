@@ -312,7 +312,7 @@ Shortcut keys are active. The input field is passive.
 | `R` | Force immediate network refresh for all MRs |
 | `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
 | `S` | Toggle sort direction (ascending / descending) |
-| `Del` or `X` | Delete selected MR row |
+| `Del` | Delete selected MR row |
 | `Esc` | Quit dashboard |
 
 ### 🟩 Column Picker Mode

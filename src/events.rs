@@ -209,8 +209,8 @@ pub async fn handle_key_event(
                 app.input_mode = InputMode::ColumnPicker;
             }
 
-            // Delete or 'x': remove the selected MR from the list.
-            KeyCode::Delete | KeyCode::Char('x') => {
+            // Delete: remove the selected MR from the list.
+            KeyCode::Delete => {
                 if let Some(selected) = app.table_state.selected() {
                     if selected < app.mrs.len() {
                         app.mrs.remove(selected);
