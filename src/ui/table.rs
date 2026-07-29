@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 /// Fixed width (in chars) for all state badges, padding included.
-/// "Mergeable" is 9 chars — add 2 chars of padding (1 each side) → 11.
+/// "MERGEABLE" is 9 chars — add 2 chars of padding (1 each side) → 11.
 const BADGE_WIDTH: usize = 11;
 
 /// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
@@ -35,8 +35,8 @@ fn state_badge(
     // For non-open states the badge is static — mergeability is not meaningful.
     if *state != GitlabMrState::Opened {
         let (text, fg, bg) = match state {
-            GitlabMrState::Merged => ("Merged", Color::Black, Color::Magenta),
-            GitlabMrState::Closed => ("Closed", Color::Black, Color::Red),
+            GitlabMrState::Merged => ("MERGED", Color::Black, Color::Magenta),
+            GitlabMrState::Closed => ("CLOSED", Color::Black, Color::Red),
             GitlabMrState::Opened => unreachable!(),
         };
         return Cell::from(Line::from(Span::styled(
@@ -45,10 +45,10 @@ fn state_badge(
         )));
     }
 
-    // Even tick: always show the base "Open" badge.
+    // Even tick: always show the base "OPEN" badge.
     if tick.is_multiple_of(2) {
         return Cell::from(Line::from(Span::styled(
-            badge_label("Open"),
+            badge_label("OPEN"),
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Green)
@@ -58,10 +58,10 @@ fn state_badge(
 
     // Odd tick: show the mergeability-specific badge.
     let (text, fg, bg) = match mergeability {
-        MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
-        MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
-        MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
-        MergeabilityStatus::Unknown => ("Open", Color::Black, Color::Green),
+        MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
+        MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
+        MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
+        MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
         badge_label(text),
@@ -79,6 +79,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         Cell::from("Title / API Status"),
         Cell::from("Status").bold(),
     ];
+    if cols.activity {
+        header_cells.push(Cell::from("Activity").bold());
+    }
     if cols.target_branch {
         header_cells.push(Cell::from("Target").bold());
     }
@@ -126,6 +129,10 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             ];
 
             // Optional columns — inserted only when enabled in config.
+            if cols.activity {
+                let (icon, color) = app.config.activity_badge(mr.updated_at.as_deref());
+                cells.push(Cell::from(icon).fg(color));
+            }
             if cols.target_branch {
                 cells.push(Cell::from(mr.target_branch.clone()).fg(Color::LightBlue));
             }
@@ -138,13 +145,13 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
 
             for b in &app.branches {
                 let cell = match &mr.status {
-                    MrStatus::Loading => Cell::from("⏳ Loading...").yellow(),
-                    MrStatus::Error => Cell::from("❌ Failed").red(),
+                    MrStatus::Loading => Cell::from("⏳ LOADING...").yellow(),
+                    MrStatus::Error => Cell::from("❌ FAILED").red(),
                     MrStatus::MergedIn(set) => {
                         if set.contains(b) {
-                            Cell::from("🟢 Present").green()
+                            Cell::from("🟢 PRESENT").green()
                         } else {
-                            Cell::from("🔴 Absent").red()
+                            Cell::from("🔴 ABSENT").red()
                         }
                     }
                 };
@@ -160,6 +167,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         Constraint::Fill(3),    // Title
         Constraint::Length(13), // State badge
     ];
+    if cols.activity {
+        constraints.push(Constraint::Length(12)); // Activity badge
+    }
     if cols.target_branch {
         constraints.push(Constraint::Fill(2)); // Target branch
     }

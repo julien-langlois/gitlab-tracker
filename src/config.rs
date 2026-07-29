@@ -12,6 +12,9 @@ fn default_branches_val() -> Vec<String> {
 /// out of the box. Each field can be toggled individually in `config.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VisibleColumns {
+    /// Show the "Activity" column (Stale / Slowing / Active badge).
+    #[serde(default)]
+    pub activity: bool,
     /// Show the "Target" column (target branch the MR merges into).
     #[serde(default)]
     pub target_branch: bool,

@@ -137,6 +137,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     // The popup entries mirror the fields of `VisibleColumns` in declaration order.
     let entries: &[(&str, bool)] = &[
+        ("Activity", app.config.visible_columns.activity),
         ("Target branch", app.config.visible_columns.target_branch),
         ("Labels", app.config.visible_columns.labels),
         ("Milestone", app.config.visible_columns.milestone),

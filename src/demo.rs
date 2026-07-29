@@ -16,6 +16,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     // to open the column picker and enable them live, showcasing the feature.
     let demo_config = AppConfig {
         visible_columns: VisibleColumns {
+            activity: false,
             target_branch: false,
             labels: false,
             milestone: false,

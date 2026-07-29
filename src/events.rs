@@ -86,7 +86,7 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            const COLUMN_COUNT: usize = 3;
+            const COLUMN_COUNT: usize = 4;
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.column_picker_cursor > 0 {
@@ -100,13 +100,18 @@ pub async fn handle_key_event(
                 }
                 KeyCode::Char(' ') => {
                     // Toggle the column at the current cursor position.
+                    // Order must mirror `VisibleColumns` field declaration order.
                     match app.column_picker_cursor {
                         0 => {
+                            app.config.visible_columns.activity =
+                                !app.config.visible_columns.activity
+                        }
+                        1 => {
                             app.config.visible_columns.target_branch =
                                 !app.config.visible_columns.target_branch
                         }
-                        1 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
-                        2 => {
+                        2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
+                        3 => {
                             app.config.visible_columns.milestone =
                                 !app.config.visible_columns.milestone
                         }
@@ -318,7 +323,7 @@ async fn handle_enter(
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     // Column-picker popup intercepts all keys when open.
     if app.input_mode == InputMode::ColumnPicker {
-        const COLUMN_COUNT: usize = 3;
+        const COLUMN_COUNT: usize = 4;
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 if app.column_picker_cursor > 0 {
@@ -331,12 +336,13 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 }
             }
             KeyCode::Char(' ') => match app.column_picker_cursor {
-                0 => {
+                0 => app.config.visible_columns.activity = !app.config.visible_columns.activity,
+                1 => {
                     app.config.visible_columns.target_branch =
                         !app.config.visible_columns.target_branch
                 }
-                1 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
-                2 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
+                2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
+                3 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
                 _ => {}
             },
             // Close the popup — no disk write in demo mode.
