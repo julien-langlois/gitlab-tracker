@@ -179,8 +179,11 @@ pub enum PipelineState {
 /// A single job within a pipeline, as returned by the GitLab API.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PipelineJob {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub stage: String,
+    #[serde(default)]
     pub status: String,
     /// Duration in seconds, null while running.
     pub duration: Option<f64>,
@@ -192,8 +195,8 @@ pub struct Pipeline {
     pub id: u64,
     #[serde(default)]
     pub status: PipelineState,
-    /// Jobs are fetched lazily in a second request — empty until loaded.
-    #[serde(skip)]
+    /// Jobs are fetched alongside the pipeline and persisted across restarts.
+    #[serde(default)]
     pub jobs: Vec<PipelineJob>,
 }
 

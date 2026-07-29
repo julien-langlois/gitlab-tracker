@@ -79,8 +79,15 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
                     .await
                     .ok()?;
                 if res.status().is_success() {
-                    res.json::<Vec<PipelineJob>>().await.ok()
+                    match res.json::<Vec<PipelineJob>>().await {
+                        Ok(jobs) => Some(jobs),
+                        Err(e) => {
+                            eprintln!("[gitlab] Failed to deserialize jobs: {e}");
+                            None
+                        }
+                    }
                 } else {
+                    eprintln!("[gitlab] Jobs endpoint returned non-2xx: {}", res.status());
                     None
                 }
             }
@@ -293,9 +300,13 @@ pub async fn fetch_gitlab_data(
     // Only re-fetch pipelines if the MR has been updated since the last cycle.
     // If `updated_at` is unchanged, reuse the cached pipeline data to avoid
     // hammering the GitLab API with redundant requests (rate-limit friendly).
+    // Also re-fetch if cached pipelines exist but none have jobs — this handles
+    // stale cache entries written before jobs were persisted.
+    let cached_has_jobs = cached.pipelines.iter().any(|p| !p.jobs.is_empty());
     let pipelines = if updated_at.is_some()
         && updated_at == cached.updated_at
         && !cached.pipelines.is_empty()
+        && cached_has_jobs
     {
         cached.pipelines
     } else {
