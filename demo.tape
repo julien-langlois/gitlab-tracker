@@ -15,7 +15,7 @@ Enter
 Sleep 3s
 Show
 
-# --- MR 104 is row 0 at startup: switch to Inspector immediately ---
+# --- MR 104 is row 0 at startup (flagged ★): open the Inspector ---
 Tab
 Sleep 800ms
 
@@ -44,7 +44,7 @@ Sleep 250ms
 # --- Pause so the viewer can read the bottom of the description ---
 Sleep 1.5s
 
-# --- Scroll back to top ---
+# --- Scroll back to top to show State / Merge status badges ---
 Up
 Sleep 200ms
 Up
@@ -66,7 +66,7 @@ Sleep 200ms
 Up
 Sleep 200ms
 
-Sleep 800ms
+Sleep 1s
 
 # --- Switch to Pipeline view with [P] ---
 Type "p"
@@ -98,7 +98,7 @@ Sleep 500ms
 Down
 Sleep 500ms
 
-# --- Sort demo: cycle columns then toggle order ---
+# --- Sort demo: cycle sort column then toggle order ---
 Type "s"
 Sleep 1s
 Type "s"
@@ -107,5 +107,39 @@ Type "s"
 Sleep 1s
 Type "S"
 Sleep 1.5s
+
+Sleep 800ms
+
+# --- Flag / unflag demo: Space toggles the flag on the selected MR ---
+Space
+Sleep 800ms
+Space
+Sleep 800ms
+
+# --- Navigate to another MR and flag it ---
+Down
+Sleep 400ms
+Space
+Sleep 800ms
+
+# --- Filter demo: [F] cycles All → Flagged ★ → All ---
+Type "f"
+Sleep 1.5s
+Type "f"
+Sleep 1s
+
+# --- Column picker demo: [C] opens the picker, toggle target_branch and labels ---
+Type "c"
+Sleep 1s
+Down
+Sleep 400ms
+Enter
+Sleep 600ms
+Down
+Sleep 400ms
+Enter
+Sleep 600ms
+Type "c"
+Sleep 1s
 
 Sleep 2s
