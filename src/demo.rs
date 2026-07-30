@@ -16,11 +16,11 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     // to open the column picker and enable them live, showcasing the feature.
     let demo_config = AppConfig {
         visible_columns: VisibleColumns {
-            activity: false,
+            activity: true,
             target_branch: false,
             labels: false,
-            milestone: false,
-            notes: false,
+            milestone: true,
+            notes: true,
         },
         ..config
     };
@@ -152,6 +152,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             // Demo: simulate a MR with several comments awaiting review.
             user_notes_count: 5,
+            flagged: true,
         },
         TrackedMr {
             id: "101".into(),
@@ -180,6 +181,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             pipelines: vec![],
             recently_updated: false,
             user_notes_count: 0,
+            flagged: false,
         },
         TrackedMr {
             id: "102".into(),
@@ -206,6 +208,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             // Demo: simulate a MR with unread comments from reviewers.
             user_notes_count: 3,
+            flagged: false,
         },
         TrackedMr {
             id: "103".into(),
@@ -231,6 +234,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             pipelines: vec![],
             recently_updated: false,
             user_notes_count: 0,
+            flagged: false,
         },
         TrackedMr {
             id: "105".into(),
@@ -255,6 +259,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             pipelines: vec![],
             recently_updated: false,
             user_notes_count: 0,
+            flagged: false,
         },
         TrackedMr {
             id: "106".into(),
@@ -281,6 +286,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             pipelines: vec![],
             recently_updated: false,
             user_notes_count: 0,
+            flagged: false,
         },
         TrackedMr {
             id: "107".into(),
@@ -311,6 +317,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             // Demo: simulate a MR with one comment to address.
             user_notes_count: 1,
+            flagged: true,
         },
     ];
 

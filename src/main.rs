@@ -203,6 +203,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             recently_updated: false,
             // Restore persisted notes count — refreshed on each MR fetch.
             user_notes_count: saved.user_notes_count,
+            // Restore persisted flagged state.
+            flagged: saved.flagged,
         });
         if initial_status == MrStatus::Loading {
             let cached = CachedMrData {
@@ -357,6 +359,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             pipelines: vec![],
                             recently_updated: false,
                             user_notes_count: 0,
+                            // New MRs start unflagged.
+                            flagged: false,
                         });
                         spawn_mr_fetch(
                             ctx.clone(),

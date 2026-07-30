@@ -69,6 +69,38 @@ pub enum InspectorView {
     Pipelines,
 }
 
+/// Controls which MRs are displayed in the table.
+///
+/// Cycles with the [F] key in Normal mode:
+///   - `All`     → all tracked MRs are shown (default)
+///   - `Flagged` → only manually flagged MRs are shown
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum FilterMode {
+    /// Show all tracked MRs (no filtering).
+    #[default]
+    All,
+    /// Show only MRs that have been manually flagged with Space.
+    Flagged,
+}
+
+impl FilterMode {
+    /// Cycles to the next filter mode in a round-robin fashion.
+    pub fn next(self) -> Self {
+        match self {
+            FilterMode::All => FilterMode::Flagged,
+            FilterMode::Flagged => FilterMode::All,
+        }
+    }
+
+    /// Returns the display label shown in the header.
+    pub fn label(self) -> &'static str {
+        match self {
+            FilterMode::All => "All",
+            FilterMode::Flagged => "Flagged ★",
+        }
+    }
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -111,6 +143,8 @@ pub struct App {
     pub milestone_suggestions: Vec<String>,
     /// Index of the currently highlighted suggestion in the autocomplete popup.
     pub milestone_suggestion_cursor: usize,
+    /// Active filter applied to the MR table — toggled with [F] in Normal mode.
+    pub filter_mode: FilterMode,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -150,7 +184,51 @@ impl App {
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
+            filter_mode: FilterMode::default(),
         }
+    }
+
+    /// Toggles the flagged state of the currently selected MR.
+    ///
+    /// Returns the MR id if a MR was toggled, `None` if no MR is selected.
+    pub fn toggle_flag_selected(&mut self) -> Option<String> {
+        let selected = self.table_state.selected()?;
+        // When a filter is active the visible index differs from `self.mrs` index.
+        let mr = self.visible_mrs_mut().nth(selected)?;
+        mr.flagged = !mr.flagged;
+        Some(mr.id.clone())
+    }
+
+    /// Cycles the active filter to the next mode.
+    ///
+    /// Resets the table selection to the first row to avoid out-of-bounds access
+    /// when the filtered list is shorter than the current selection index.
+    pub fn cycle_filter(&mut self) {
+        self.filter_mode = self.filter_mode.next();
+        // Reset selection so we never point past the end of the filtered list.
+        if self.visible_mrs().next().is_some() {
+            self.table_state.select(Some(0));
+        } else {
+            self.table_state.select(None);
+        }
+        self.reset_inspector_scroll();
+    }
+
+    /// Returns an iterator over the MRs that pass the current filter.
+    pub fn visible_mrs(&self) -> impl Iterator<Item = &TrackedMr> {
+        self.mrs.iter().filter(move |mr| match self.filter_mode {
+            FilterMode::All => true,
+            FilterMode::Flagged => mr.flagged,
+        })
+    }
+
+    /// Returns a mutable iterator over the MRs that pass the current filter.
+    fn visible_mrs_mut(&mut self) -> impl Iterator<Item = &mut TrackedMr> {
+        let filter = self.filter_mode;
+        self.mrs.iter_mut().filter(move |mr| match filter {
+            FilterMode::All => true,
+            FilterMode::Flagged => mr.flagged,
+        })
     }
 
     /// Updates `milestone_suggestions` based on the current input query after `@`.
@@ -226,12 +304,13 @@ impl App {
     }
 
     pub fn next_row(&mut self) {
-        if self.mrs.is_empty() {
+        let count = self.visible_mrs().count();
+        if count == 0 {
             return;
         }
         let i = match self.table_state.selected() {
             Some(i) => {
-                if i >= self.mrs.len() - 1 {
+                if i >= count - 1 {
                     0
                 } else {
                     i + 1
@@ -245,13 +324,14 @@ impl App {
     }
 
     pub fn prev_row(&mut self) {
-        if self.mrs.is_empty() {
+        let count = self.visible_mrs().count();
+        if count == 0 {
             return;
         }
         let i = match self.table_state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.mrs.len() - 1
+                    count - 1
                 } else {
                     i - 1
                 }

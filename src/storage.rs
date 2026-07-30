@@ -340,6 +340,7 @@ pub async fn save_state_async(
                 merged_at: m.merged_at.clone(),
                 pipelines: m.pipelines.clone(),
                 user_notes_count: m.user_notes_count,
+                flagged: m.flagged,
             })
             .collect(),
         branches: branches.to_vec(),

@@ -113,7 +113,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         ),
         InputMode::Normal => (
             format!(
-                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [Esc]: Quit ",
+                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [Esc]: Quit ",
                 pane_hint, sort_status
             ),
             Style::default(),

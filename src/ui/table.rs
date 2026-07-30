@@ -10,11 +10,11 @@ use ratatui::{
 
 /// Fixed width (in chars) for all state badges, padding included.
 /// "MERGEABLE" is 9 chars — add 2 chars of padding (1 each side) → 11.
-const BADGE_WIDTH: usize = 11;
+pub const BADGE_WIDTH: usize = 11;
 
 /// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
 /// Excess space is distributed evenly left and right (left-biased on odd remainder).
-fn badge_label(text: &str) -> String {
+pub fn badge_label(text: &str) -> String {
     // Use Rust's built-in centering formatter.
     format!("{:^width$}", text, width = BADGE_WIDTH)
 }
@@ -100,8 +100,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let header = Row::new(header_cells).bottom_margin(1).underlined();
 
     let rows: Vec<Row> = app
-        .mrs
-        .iter()
+        .visible_mrs()
         .map(|mr| {
             // Always compute the label cell — used only when the column is enabled.
             let filtered_labels: Vec<&String> = mr
@@ -136,16 +135,32 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 }
             }
 
+            // Build the title cell — prepend a coloured flag chevron for flagged MRs.
+            let title_cell = if mr.flagged {
+                let title_color = match mr.status {
+                    MrStatus::Error => Color::Red,
+                    _ => Color::White,
+                };
+                Cell::from(Line::from(vec![
+                    Span::styled(
+                        "★ ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(mr.title.clone(), Style::default().fg(title_color)),
+                ]))
+            } else {
+                Cell::from(mr.title.clone()).fg(match mr.status {
+                    MrStatus::Error => Color::Red,
+                    _ => Color::White,
+                })
+            };
+
             // Fixed columns — always present.
             let mut cells = vec![
                 maybe_highlight(Cell::from(format!("!{}", mr.id)), highlight),
-                maybe_highlight(
-                    Cell::from(mr.title.clone()).fg(match mr.status {
-                        MrStatus::Error => Color::Red,
-                        _ => Color::White,
-                    }),
-                    highlight,
-                ),
+                maybe_highlight(title_cell, highlight),
                 maybe_highlight(
                     state_badge(&mr.state, &mr.mergeability, app.time_left),
                     highlight,
@@ -243,9 +258,11 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         SortOrder::Descending => "↓",
     };
 
+    let filter_label = app.filter_mode.label();
+
     let title_text = format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ Sort: {} {} ",
-        app.base_url, mins, secs, sort_label, order_label
+        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ Sort: {} {} │ Filter: {} ",
+        app.base_url, mins, secs, sort_label, order_label, filter_label
     );
 
     Table::new(rows, constraints)

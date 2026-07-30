@@ -121,6 +121,9 @@ pub struct SavedMr {
     /// Total number of user notes (comments + threads) — persisted across restarts.
     #[serde(default)]
     pub user_notes_count: u32,
+    /// Whether the MR has been manually flagged by the user — persisted across restarts.
+    #[serde(default)]
+    pub flagged: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -172,6 +175,9 @@ pub struct TrackedMr {
     pub recently_updated: bool,
     /// Total number of user notes (comments + discussion threads) on this MR.
     pub user_notes_count: u32,
+    /// Manually flagged by the user (Space key) — persisted across restarts.
+    /// Flagged MRs display a coloured chevron and can be isolated via the Flagged filter.
+    pub flagged: bool,
 }
 
 #[derive(Debug, Clone)]

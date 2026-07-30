@@ -267,6 +267,18 @@ pub async fn handle_key_event(
             KeyCode::Char('s') => app.cycle_sort_column(),
             KeyCode::Char('S') => app.toggle_sort_order(),
 
+            // [F] cycles the active filter (All → Flagged → All → …).
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                app.cycle_filter();
+            }
+
+            // Space toggles the flagged state of the selected MR and persists immediately.
+            KeyCode::Char(' ') => {
+                if app.toggle_flag_selected().is_some() {
+                    save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+                }
+            }
+
             // [C] opens the column-picker popup.
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 app.column_picker_cursor = 0;
@@ -350,6 +362,8 @@ async fn handle_enter(
                 recently_updated: false,
                 // Notes count is unknown until the first API response.
                 user_notes_count: 0,
+                // New MRs start unflagged.
+                flagged: false,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;
@@ -490,6 +504,16 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
 
         KeyCode::Char('s') => app.cycle_sort_column(),
         KeyCode::Char('S') => app.toggle_sort_order(),
+
+        // [F] cycles the active filter in demo mode.
+        KeyCode::Char('f') | KeyCode::Char('F') => {
+            app.cycle_filter();
+        }
+
+        // Space toggles the flagged state of the selected MR in demo mode (no persistence).
+        KeyCode::Char(' ') => {
+            app.toggle_flag_selected();
+        }
 
         // [P] toggles the Inspector between MR info and Pipeline view (no fetch in demo mode).
         KeyCode::Char('p') | KeyCode::Char('P') => {
