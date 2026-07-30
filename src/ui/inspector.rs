@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr};
+use crate::ui::table::badge_label;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -165,12 +166,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     let (badge_icon, badge_color) = config.activity_badge(mr.updated_at.as_deref());
 
     // Build the state badge using the same colour coding as the table column.
-    // All labels are padded to 9 chars to match the table badge width.
-    let (state_label, state_fg, state_bg) = match mr.state {
-        GitlabMrState::Opened => ("  Open   ", Color::Black, Color::Green),
-        GitlabMrState::Merged => (" Merged  ", Color::Black, Color::Magenta),
-        GitlabMrState::Closed => (" Closed  ", Color::Black, Color::Red),
+    // badge_label() centers the text to BADGE_WIDTH chars — no manual padding needed.
+    let (state_text, state_fg, state_bg) = match mr.state {
+        GitlabMrState::Opened => ("OPEN", Color::Black, Color::Green),
+        GitlabMrState::Merged => ("MERGED", Color::Black, Color::Magenta),
+        GitlabMrState::Closed => ("CLOSED", Color::Black, Color::Red),
     };
+    let state_label = badge_label(state_text);
 
     // Build the git clone command for the source branch — used in the [Y]ank hint.
     // Derives the SSH clone URL from the web URL: replaces the HTTPS scheme and host
@@ -344,17 +346,18 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     lines.push(section_header("Status"));
 
     // Mergeability — only meaningful for open MRs.
+    // badge_label() centers the text to BADGE_WIDTH, matching the State badge width.
     if mr.state == GitlabMrState::Opened {
         let (merge_text, merge_fg, merge_bg) = match mr.mergeability {
-            MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
-            MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
-            MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
-            MergeabilityStatus::Unknown => ("Unknown", Color::DarkGray, Color::Black),
+            MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
+            MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
+            MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
+            MergeabilityStatus::Unknown => ("UNKNOWN", Color::DarkGray, Color::Black),
         };
         lines.push(Line::from(vec![
             Span::raw("Merge    : "),
             Span::styled(
-                format!(" {merge_text} "),
+                badge_label(merge_text),
                 Style::default()
                     .fg(merge_fg)
                     .bg(merge_bg)
