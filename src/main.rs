@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use storage::{
     ensure_gitlab_config, get_or_prompt_token, load_or_create_config_async, load_state_async,
-    save_state_async,
+    migrate_legacy_keyring_entry, save_state_async,
 };
 use tokio::sync::Semaphore;
 
@@ -83,7 +83,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "https://gitlab.com".to_string());
     let base_url = base_url.trim_end_matches('/').to_string();
 
-    let token = get_or_prompt_token();
+    // One-time silent migration: move any token stored under the legacy keyring
+    // service name ("gitlab_tracker") to the canonical one ("gitlab-tracker"),
+    // then delete the orphaned legacy entry.
+    migrate_legacy_keyring_entry();
+
+    // `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
+    // from memory when dropped. We extract the inner `String` here so the rest
+    // of the program is unaffected; the Zeroizing wrapper is immediately dropped.
+    let token = get_or_prompt_token().to_string();
 
     // Initialise file-based logging before ratatui takes over the terminal.
     // Writes to ~/.config/gitlab-tracker/gitlab-tracker.log (rolling daily).

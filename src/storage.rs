@@ -3,6 +3,7 @@ use crate::models::{MrStatus, SavedMr, SavedState, TrackedMr};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
+use zeroize::Zeroizing;
 
 /// Persists only the `AppConfig` (e.g. after toggling column visibility).
 ///
@@ -12,8 +13,13 @@ pub async fn save_config_async(config: &AppConfig) {
     if let Some(config_dir) = get_save_dir() {
         let path = config_dir.join("config.json");
         if let Ok(json) = serde_json::to_string_pretty(config) {
-            let _ = tokio::fs::create_dir_all(&config_dir).await;
-            let _ = tokio::fs::write(path, json).await;
+            if let Err(e) = tokio::fs::create_dir_all(&config_dir).await {
+                tracing::error!(error = %e, path = ?config_dir, "Failed to create config directory");
+                return;
+            }
+            if let Err(e) = tokio::fs::write(&path, json).await {
+                tracing::error!(error = %e, path = ?path, "Failed to write config.json");
+            }
         }
     }
 }
@@ -86,35 +92,159 @@ pub async fn ensure_gitlab_config(config: &mut crate::config::AppConfig) {
     }
 }
 
-pub fn get_or_prompt_token() -> String {
+/// Service name used consistently for all keyring read/write operations.
+const KEYRING_SERVICE: &str = "gitlab-tracker";
+/// Account name used consistently for all keyring read/write operations.
+const KEYRING_ACCOUNT: &str = "gitlab_token";
+/// Legacy service name used before the naming was unified (underscore variant).
+/// Only used during the one-time migration in `migrate_legacy_keyring_entry`.
+const KEYRING_SERVICE_LEGACY: &str = "gitlab_tracker";
+
+/// Migrates a token stored under the legacy keyring service name (`gitlab_tracker`)
+/// to the canonical one (`gitlab-tracker`), then deletes the legacy entry.
+///
+/// This is a silent, one-time operation: if the canonical entry already exists,
+/// or if no legacy entry is found, nothing happens.
+pub fn migrate_legacy_keyring_entry() {
+    // Skip migration if the canonical entry already holds a token.
+    if let Ok(canonical) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+        if let Ok(existing) = canonical.get_password() {
+            if !existing.trim().is_empty() {
+                tracing::debug!(
+                    "Canonical keyring entry already populated — skipping legacy migration"
+                );
+                return;
+            }
+        }
+    }
+
+    // Attempt to read from the legacy entry.
+    let legacy_token = match keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT) {
+        Ok(entry) => match entry.get_password() {
+            Ok(pwd) if !pwd.trim().is_empty() => Zeroizing::new(pwd.trim().to_string()),
+            _ => return,
+        },
+        Err(_) => return,
+    };
+
+    tracing::info!(
+        from = KEYRING_SERVICE_LEGACY,
+        to = KEYRING_SERVICE,
+        "Migrating token from legacy keyring entry to canonical entry"
+    );
+
+    // Write to the canonical entry.
+    match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+        Ok(entry) => {
+            if let Err(e) = entry.set_password(&legacy_token) {
+                tracing::error!(error = %e, "Failed to write token to canonical keyring entry during migration");
+                return;
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to open canonical keyring entry during migration");
+            return;
+        }
+    }
+
+    // Delete the legacy entry now that the token is safely copied.
+    match keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT) {
+        Ok(entry) => {
+            if let Err(e) = entry.delete_password() {
+                tracing::warn!(error = %e, "Token migrated but failed to delete legacy keyring entry");
+            } else {
+                tracing::info!("Legacy keyring entry deleted successfully");
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "Token migrated but could not open legacy keyring entry for deletion");
+        }
+    }
+}
+
+/// Resolves the GitLab PAT using the following priority chain:
+///   1. `GITLAB_TOKEN` environment variable
+///   2. OS keyring (via the `keyring` crate)
+///   3. Interactive prompt (hidden input via `rpassword`, no terminal echo)
+///
+/// The returned value is wrapped in `Zeroizing<String>` so the secret bytes
+/// are overwritten in memory as soon as the caller drops the value.
+///
+/// # Panics
+/// Panics if no token is provided — the program cannot function without one.
+pub fn get_or_prompt_token() -> Zeroizing<String> {
+    // 1. Environment variable takes priority (CI / dotenv workflows).
     if let Ok(tok) = std::env::var("GITLAB_TOKEN") {
+        let tok = Zeroizing::new(tok);
         if !tok.trim().is_empty() {
-            return tok.trim().to_string();
+            tracing::info!("GITLAB_TOKEN loaded from environment variable");
+            return Zeroizing::new(tok.trim().to_string());
         }
     }
 
-    if let Ok(entry) = keyring::Entry::new("gitlab_tracker", "gitlab_token") {
-        if let Ok(password) = entry.get_password() {
-            if !password.trim().is_empty() {
-                return password.trim().to_string();
+    // 2. Try the OS keyring.
+    tracing::debug!(
+        service = KEYRING_SERVICE,
+        account = KEYRING_ACCOUNT,
+        "Attempting to read token from OS keyring"
+    );
+    match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+        Ok(entry) => match entry.get_password() {
+            Ok(password) => {
+                let password = Zeroizing::new(password);
+                if !password.trim().is_empty() {
+                    tracing::info!("GITLAB_TOKEN loaded from OS keyring");
+                    return Zeroizing::new(password.trim().to_string());
+                }
+                tracing::warn!("Keyring entry found but token is empty — falling back to prompt");
             }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to read token from OS keyring — falling back to prompt");
+            }
+        },
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to open keyring entry — falling back to prompt");
         }
     }
 
+    // 3. Interactive prompt as a last resort.
+    // `rpassword` disables terminal echo so the PAT never appears on screen
+    // and cannot end up in shell history, screen recordings or logs.
     println!("🔑 No GITLAB_TOKEN found in environment or system Keyring.");
-    print!("Please enter your GitLab Personal Access Token: ");
-    let _ = std::io::stdout().flush();
-    let mut input = String::new();
-    if std::io::stdin().read_line(&mut input).is_ok() {
-        let token = input.trim().to_string();
-        if !token.is_empty() {
-            if let Ok(entry) = keyring::Entry::new("gitlab-tracker", "gitlab_token") {
-                let _ = entry.set_password(&token);
-                println!("✅ Token securely saved to OS Keyring!\n");
+    match rpassword::prompt_password("Please enter your GitLab Personal Access Token: ") {
+        Ok(raw) => {
+            let token = Zeroizing::new(raw);
+            if !token.trim().is_empty() {
+                let token = Zeroizing::new(token.trim().to_string());
+                tracing::debug!(
+                    service = KEYRING_SERVICE,
+                    account = KEYRING_ACCOUNT,
+                    "Saving token to OS keyring"
+                );
+                match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+                    Ok(entry) => match entry.set_password(&token) {
+                        Ok(_) => {
+                            tracing::info!("Token successfully saved to OS keyring");
+                            println!("✅ Token securely saved to OS Keyring!\n");
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "Failed to save token to OS keyring");
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to open keyring entry for writing");
+                    }
+                }
+                return token;
             }
-            return token;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to read token from prompt");
         }
     }
+
+    // Panic is intentional here: without a token the program cannot function.
+    // In a future refactor this should become a Result<String, TokenError>.
     panic!("Error: Personal Access Token is required to run gitlab_tracker.");
 }
 
