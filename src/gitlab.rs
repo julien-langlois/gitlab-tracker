@@ -1,5 +1,6 @@
 use crate::models::{
-    AppEvent, GitLabMr, GitLabRef, MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
+    AppEvent, GitLabMilestone, GitLabMr, GitLabRef, MergeabilityStatus, MrLoadedData, Pipeline,
+    PipelineJob,
 };
 use crate::utils::{calculate_relevance, RELEVANCE_THRESHOLD};
 use std::collections::HashSet;
@@ -23,7 +24,7 @@ pub struct CachedMrData {
     pub description: Option<String>,
     pub author: Option<String>,
     pub assignee: Option<String>,
-    pub milestone: Option<String>,
+
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     /// Last known `updated_at` timestamp — used to skip pipeline re-fetch when
@@ -82,12 +83,12 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
                     match res.json::<Vec<PipelineJob>>().await {
                         Ok(jobs) => Some(jobs),
                         Err(e) => {
-                            eprintln!("[gitlab] Failed to deserialize jobs: {e}");
+                            tracing::warn!("Failed to deserialize jobs: {e}");
                             None
                         }
                     }
                 } else {
-                    eprintln!("[gitlab] Jobs endpoint returned non-2xx: {}", res.status());
+                    tracing::warn!("Jobs endpoint returned non-2xx: {}", res.status());
                     None
                 }
             }
@@ -101,6 +102,100 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     }
 
     pipelines
+}
+
+/// Fetches all open or upcoming milestones for the project from the GitLab API.
+///
+/// Uses `state=active` which returns both currently active and upcoming milestones.
+/// Results are sorted by title for display in the autocomplete widget.
+/// Returns an empty vec on any error — milestones are best-effort.
+pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/v4/projects/{}/milestones?state=active&per_page=100",
+        ctx.base_url, ctx.project_id
+    );
+    let res = match client
+        .get(&url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return vec![],
+    };
+    let mut milestones: Vec<GitLabMilestone> = match res.json().await {
+        Ok(m) => m,
+        Err(_) => return vec![],
+    };
+    milestones.sort_by(|a, b| a.title.cmp(&b.title));
+    milestones
+}
+
+/// Spawns an async task that fetches all open milestones and sends them via `tx`.
+pub fn spawn_milestones_fetch(ctx: FetchContext, tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
+    tokio::spawn(async move {
+        let milestones = fetch_milestones(&ctx).await;
+        let _ = tx.send(AppEvent::MilestonesLoaded(milestones));
+    });
+}
+
+/// Fetches all MR IIDs (internal project IDs) attached to a given milestone,
+/// regardless of their state (opened, merged, closed).
+///
+/// A release manager needs full visibility over all MRs in a release to verify
+/// that every change has been correctly ported to the target branches.
+///
+/// The `iid` field (not `id`) is used because it is the project-scoped identifier
+/// that matches what users type in the input field.
+///
+/// The GitLab MRs API filters by milestone **title** (not numeric ID) via the
+/// `milestone` query parameter — hence we URL-encode the title.
+pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -> Vec<String> {
+    let client = reqwest::Client::new();
+    // No `state` filter — a release manager needs to track all MRs regardless of
+    // their state (opened, merged, closed) to verify full branch coverage for a release.
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests?milestone={}&per_page=100",
+        ctx.base_url,
+        ctx.project_id,
+        urlencoding::encode(milestone_title)
+    );
+    let res = match client
+        .get(&url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return vec![],
+    };
+
+    let mrs: Vec<serde_json::Value> = match res.json().await {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+
+    mrs.iter()
+        .filter_map(|v| v.get("iid").and_then(|id| id.as_u64()))
+        .map(|id| id.to_string())
+        .collect()
+}
+
+/// Spawns an async task that fetches all open MR IIDs for the given milestone
+/// and sends them via `tx` as a `MilestoneMrsLoaded` event.
+pub fn spawn_milestone_mrs_fetch(
+    ctx: FetchContext,
+    milestone_title: String,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    tokio::spawn(async move {
+        let mr_ids = fetch_milestone_mr_ids(&ctx, &milestone_title).await;
+        let _ = tx.send(AppEvent::MilestoneMrsLoaded {
+            milestone_title,
+            mr_ids,
+        });
+    });
 }
 
 pub fn spawn_mr_fetch(
@@ -186,20 +281,27 @@ pub async fn fetch_gitlab_data(
         }
     };
 
-    let (title, sha, description, author, assignee, milestone, web_url, labels) = match (
+    // Milestone is always read fresh from the GitLab API response — never served from cache.
+    // This is the authoritative source: a MR may be attached or detached from a milestone
+    // at any time, and the cache would silently hold a stale value.
+    let milestone = mr
+        .milestone
+        .map(|m| m.title)
+        .unwrap_or_else(|| "None".to_string());
+
+    let (title, sha, description, author, assignee, web_url, labels) = match (
         cached.title,
         cached.sha,
         cached.description,
         cached.author,
         cached.assignee,
-        cached.milestone,
         cached.web_url,
         cached.labels,
     ) {
-        (Some(t), Some(s), Some(d), Some(a), Some(asg), Some(m), Some(w), Some(lbls))
+        (Some(t), Some(s), Some(d), Some(a), Some(asg), Some(w), Some(lbls))
             if !t.contains("⚠️ ERROR") && !w.is_empty() =>
         {
-            (t, Some(s), d, a, asg, m, w, lbls)
+            (t, Some(s), d, a, asg, w, lbls)
         }
         _ => {
             let sha = mr.merge_commit_sha.or(mr.squash_commit_sha);
@@ -213,14 +315,10 @@ pub async fn fetch_gitlab_data(
                 .assignee
                 .map(|u| u.username)
                 .unwrap_or_else(|| "none".to_string());
-            let mile = mr
-                .milestone
-                .map(|m| m.title)
-                .unwrap_or_else(|| "None".to_string());
             let web_url = mr.web_url.unwrap_or_default();
             let labels = mr.labels.unwrap_or_default();
 
-            (title, sha, desc, auth, asg, mile, web_url, labels)
+            (title, sha, desc, auth, asg, web_url, labels)
         }
     };
 

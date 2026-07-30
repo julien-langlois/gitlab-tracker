@@ -6,6 +6,7 @@ pub struct GitLabUser {
     pub username: String,
 }
 
+/// A GitLab milestone as returned by the milestones API endpoint.
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabMilestone {
     pub title: String,
@@ -202,6 +203,16 @@ pub struct Pipeline {
 
 pub enum AppEvent {
     MrLoaded(Box<MrLoadedData>),
-    MrFailed { id: String, error: String },
+    MrFailed {
+        id: String,
+        error: String,
+    },
+    /// Fired when the milestone list has been fetched from GitLab.
+    MilestonesLoaded(Vec<GitLabMilestone>),
+    /// Fired when the MR IDs linked to a milestone have been resolved.
+    MilestoneMrsLoaded {
+        milestone_title: String,
+        mr_ids: Vec<String>,
+    },
     Tick,
 }

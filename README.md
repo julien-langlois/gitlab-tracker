@@ -1,8 +1,8 @@
 # 🚀 GitLab MR Tracker
 
 [![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
-![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker)
-![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker)
+[![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.80+-orange.svg)](https://www.rust-lang.org/)
 
@@ -31,6 +31,7 @@
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🔀 **Animated Mergeability Badge:** For open MRs, the Status column alternates every second between the base `Open` badge and a live mergeability indicator sourced directly from the GitLab API:
+
   | Badge | Color | Meaning |
   | :--- | :--- | :--- |
   | `Mergeable` | 🟩 Light green | MR can be merged cleanly |
@@ -39,6 +40,7 @@
 
   No extra column is added: the animation keeps the layout compact while surfacing critical merge-readiness at a glance.
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `config.json` and persisted across restarts — no manual file editing required. Available optional columns:
+
   | Column | Description |
   | :--- | :--- |
   | **Activity** | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector) |
@@ -48,9 +50,19 @@
   | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
 
   All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
+* 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all open MRs attached to that milestone** in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
+
+  ```text
+  i             → Enter Insert mode
+  @5.2          → filters milestones containing "5.2"
+  ↓ / Tab       → navigate suggestions
+  Enter         → bulk-add all open MRs from the selected milestone
+  Esc           → close dropdown without selecting
+  ```
 
 * 🔬 **Pipeline Inspector (`P`):** Press `P` on any selected MR to toggle the side panel between MR metadata and its pipeline history. The last 5 pipeline runs are displayed with per-stage job breakdown, status icons, and execution durations:
-  ```
+
+  ```text
   #9981  ✔ passed
     ▸ test
       ✔ lint        (18s)
@@ -60,6 +72,7 @@
     ▸ deploy
       ✔ deploy-staging (31s)
   ```
+
   Pipeline data is fetched **alongside MR metadata** in the same refresh cycle and **persisted to disk** — so it is immediately available on restart without an extra network call. Re-fetching only occurs when GitLab reports a new `updated_at` timestamp, keeping API usage minimal.
 
 ---
@@ -215,6 +228,7 @@ You can edit this file to adjust default environment branches, label badge color
 > | `notes` | `false` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
 >
 > Example — enable Activity and Target only:
+>
 > ```json
 > "visible_columns": {
 >   "activity": true,
@@ -226,6 +240,7 @@ You can edit this file to adjust default environment branches, label badge color
 > ```
 
 > **Activity badge thresholds** control the colored indicator displayed next to the `Updated` field in the Context Inspector:
+>
 > | Badge | Meaning | Condition |
 > | :--- | :--- | :--- |
 > | 🟢 Active | Updated recently | `elapsed days < activity_recent_days` |
@@ -335,8 +350,19 @@ The input field has exclusive focus. All printable keys feed the field — short
 | `staging` + `Enter` | Add branch `staging` to target columns |
 | `-142` + `Enter` | Remove MR ID `!142` from tracking |
 | `-staging` + `Enter` | Remove branch column `staging` |
-| `Enter` | Submit the current input |
-| `Esc` | Cancel and return to Normal mode |
+| `@name` | Filter milestones matching `name` — opens autocomplete dropdown |
+| `Enter` | Submit input, or confirm highlighted milestone suggestion |
+| `Esc` | Close autocomplete dropdown, or cancel and return to Normal mode |
+
+#### 🏁 Milestone Autocomplete (Insert Mode)
+
+When the input starts with `@`, a dropdown appears above the input bar listing all active/upcoming milestones fetched from GitLab. The list is filtered in real time as you type.
+
+| Shortcut | Action |
+| :--- | :--- |
+| `↑` / `↓` or `Shift+Tab` / `Tab` | Navigate suggestions |
+| `Enter` | Confirm selection — bulk-adds all open MRs from the milestone |
+| `Esc` | Close dropdown without selecting |
 
 > **Why two modes?** Branch names starting with `s`, `S`, `p`, `P`, `o`, `O`, `r` or `R` would otherwise collide with shortcut keys. Insert mode guarantees the full branch name is captured without interference.
 

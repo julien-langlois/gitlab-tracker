@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use crate::app::{ActivePane, App, InputMode, InspectorView};
-use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
+use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_config_async, save_state_async};
 
@@ -60,23 +60,68 @@ pub async fn handle_key_event(
         // Only Esc, Enter, Backspace and printable chars are handled here.
         // ------------------------------------------------------------------
         InputMode::Editing => match key.code {
-            // Esc leaves editing mode (clears input so it feels like a cancel).
+            // Esc closes autocomplete if open, otherwise cancels editing.
             KeyCode::Esc => {
-                app.input.clear();
-                app.input_mode = InputMode::Normal;
+                if !app.milestone_suggestions.is_empty() {
+                    app.milestone_suggestions.clear();
+                } else {
+                    app.input.clear();
+                    app.input_mode = InputMode::Normal;
+                }
             }
 
             KeyCode::Enter => {
-                handle_enter(app, api_semaphore, tx, last_known_branches).await;
-                // Return to Normal after submitting so shortcuts are available again.
-                app.input_mode = InputMode::Normal;
+                // If an autocomplete suggestion is highlighted, confirm it and
+                // immediately dispatch a bulk-add fetch for that milestone's MRs.
+                if !app.milestone_suggestions.is_empty() {
+                    if let Some(title) = app.confirm_milestone_suggestion() {
+                        let ctx = build_fetch_context(app);
+                        // Filter by milestone title — the GitLab MRs API uses the title,
+                        // not the numeric milestone ID, for the `milestone` query parameter.
+                        spawn_milestone_mrs_fetch(ctx, title, tx.clone());
+                        app.input.clear();
+                        app.input_mode = InputMode::Normal;
+                    }
+                } else {
+                    handle_enter(app, api_semaphore, tx, last_known_branches).await;
+                    // Return to Normal after submitting so shortcuts are available again.
+                    app.input_mode = InputMode::Normal;
+                }
+            }
+
+            // Navigate autocomplete suggestions with Tab / Shift+Tab.
+            KeyCode::Tab => {
+                if !app.milestone_suggestions.is_empty() {
+                    app.milestone_suggestion_next();
+                }
+            }
+            KeyCode::BackTab => {
+                if !app.milestone_suggestions.is_empty() {
+                    app.milestone_suggestion_prev();
+                }
+            }
+
+            // Up/Down also navigate autocomplete when it is open.
+            KeyCode::Down => {
+                if !app.milestone_suggestions.is_empty() {
+                    app.milestone_suggestion_next();
+                }
+            }
+            KeyCode::Up => {
+                if !app.milestone_suggestions.is_empty() {
+                    app.milestone_suggestion_prev();
+                }
             }
 
             KeyCode::Backspace => {
                 app.input.pop();
+                app.update_milestone_suggestions();
             }
 
-            KeyCode::Char(c) => app.input.push(c),
+            KeyCode::Char(c) => {
+                app.input.push(c);
+                app.update_milestone_suggestions();
+            }
 
             _ => {}
         },
@@ -440,7 +485,6 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         description: Some(mr.description.clone()),
         author: Some(mr.author.clone()),
         assignee: Some(mr.assignee.clone()),
-        milestone: Some(mr.milestone.clone()),
         web_url: Some(mr.web_url.clone()),
         labels: Some(mr.labels.clone()),
         updated_at: mr.updated_at.clone(),

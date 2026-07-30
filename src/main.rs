@@ -12,7 +12,9 @@ use app::{App, TrackedMrExt, RECENT_UPDATE_FADE_TICKS};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyEventKind};
 use events::{handle_key_event, handle_mouse_event};
-use gitlab::{spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS};
+use gitlab::{
+    spawn_milestones_fetch, spawn_mr_fetch, CachedMrData, FetchContext, MAX_CONCURRENT_REQUESTS,
+};
 use models::{AppEvent, MrStatus, TrackedMr};
 use std::sync::Arc;
 use std::time::Duration;
@@ -77,6 +79,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base_url = base_url.trim_end_matches('/').to_string();
 
     let token = get_or_prompt_token();
+
+    // Initialise file-based logging before ratatui takes over the terminal.
+    // Writes to ~/.config/gitlab-tracker/gitlab-tracker.log (rolling daily).
+    // Level is controlled by the RUST_LOG env var (default: warn).
+    // Using a non-blocking writer so log I/O never stalls the event loop.
+    let _log_guard = if let Some(log_dir) = storage::get_save_dir() {
+        std::fs::create_dir_all(&log_dir).ok();
+        let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+            .rotation(tracing_appender::rolling::Rotation::DAILY)
+            .filename_prefix("gitlab-tracker")
+            .filename_suffix("log")
+            .max_log_files(10)
+            .build(&log_dir)
+            .expect("Failed to initialise log file appender");
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
+            )
+            .with_writer(non_blocking)
+            .with_ansi(false)
+            .init();
+        Some(guard)
+    } else {
+        None
+    };
 
     // Enable mouse capture so we can detect hover and scroll events per pane.
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
@@ -161,7 +190,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 description: saved.description,
                 author: saved.author,
                 assignee: saved.assignee,
-                milestone: saved.milestone,
                 web_url: saved.web_url,
                 labels: saved.labels,
                 updated_at: saved.updated_at,
@@ -181,6 +209,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !app.mrs.is_empty() {
         app.table_state.select(Some(0));
     }
+
+    // Fetch active milestones on startup so the autocomplete is ready immediately.
+    spawn_milestones_fetch(fetch_ctx.clone(), tx.clone());
 
     let tx_timer = tx.clone();
     tokio::spawn(async move {
@@ -258,6 +289,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
                     }
                 }
+                AppEvent::MilestonesLoaded(milestones) => {
+                    app.milestones = milestones;
+                }
+                AppEvent::MilestoneMrsLoaded {
+                    milestone_title,
+                    mr_ids,
+                } => {
+                    let ctx = FetchContext {
+                        base_url: app.base_url.clone(),
+                        token: app.token.clone(),
+                        project_id: app.project_id.clone(),
+                        branches: app.branches.clone(),
+                    };
+                    let mut added = 0u32;
+                    for mr_id in mr_ids {
+                        // Skip MRs already tracked to avoid duplicates.
+                        if app.mrs.iter().any(|m| m.id == mr_id) {
+                            continue;
+                        }
+                        app.mrs.push(TrackedMr {
+                            id: mr_id.clone(),
+                            title: format!("Loading… ({})", milestone_title),
+                            status: MrStatus::Loading,
+                            state: models::GitlabMrState::Opened,
+                            mergeability: models::MergeabilityStatus::Unknown,
+                            sha: None,
+                            description: String::new(),
+                            author: "Loading".to_string(),
+                            assignee: "Loading".to_string(),
+                            milestone: milestone_title.clone(),
+                            web_url: String::new(),
+                            labels: vec![],
+                            updated_at: None,
+                            target_branch: "unknown".to_string(),
+                            pipelines: vec![],
+                            recently_updated: false,
+                            user_notes_count: 0,
+                        });
+                        spawn_mr_fetch(
+                            ctx.clone(),
+                            mr_id,
+                            CachedMrData::default(),
+                            api_semaphore.clone(),
+                            tx.clone(),
+                        );
+                        added += 1;
+                    }
+                    if added > 0 {
+                        app.table_state.select(Some(0));
+                        save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
+                    }
+                }
                 AppEvent::Tick => {
                     // Decrement the highlight fade countdown and clear flags when expired.
                     if app.update_highlight_ticks > 0 {
@@ -299,7 +382,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 description: Some(mr.description.clone()),
                                 author: Some(mr.author.clone()),
                                 assignee: Some(mr.assignee.clone()),
-                                milestone: Some(mr.milestone.clone()),
                                 web_url: Some(mr.web_url.clone()),
                                 labels: Some(mr.labels.clone()),
                                 updated_at: mr.updated_at.clone(),

@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::models::TrackedMr;
+use crate::models::{GitLabMilestone, TrackedMr};
 use ratatui::widgets::TableState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -102,6 +102,15 @@ pub struct App {
     /// Reset to `RECENT_UPDATE_FADE_TICKS` each time a MR update is detected.
     /// Decremented on every Tick; rows are highlighted while this is > 0.
     pub update_highlight_ticks: u64,
+    /// List of active/upcoming milestones fetched from GitLab on startup.
+    /// Used to power the milestone autocomplete in the input field.
+    pub milestones: Vec<GitLabMilestone>,
+    /// When the user types `@` followed by text in Editing mode, this holds the
+    /// filtered list of milestone titles matching the current query.
+    /// Empty when autocomplete is not active.
+    pub milestone_suggestions: Vec<String>,
+    /// Index of the currently highlighted suggestion in the autocomplete popup.
+    pub milestone_suggestion_cursor: usize,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -138,7 +147,61 @@ impl App {
             inspector_pane_height: 0,
             column_picker_cursor: 0,
             update_highlight_ticks: 0,
+            milestones: Vec::new(),
+            milestone_suggestions: Vec::new(),
+            milestone_suggestion_cursor: 0,
         }
+    }
+
+    /// Updates `milestone_suggestions` based on the current input query after `@`.
+    ///
+    /// Call this whenever the input changes in Editing mode. If the input does not
+    /// contain `@`, suggestions are cleared. The query is case-insensitive.
+    pub fn update_milestone_suggestions(&mut self) {
+        if let Some(query) = self.input.strip_prefix('@') {
+            let query_lower = query.to_lowercase();
+            self.milestone_suggestions = self
+                .milestones
+                .iter()
+                .map(|m| m.title.clone())
+                .filter(|title| title.to_lowercase().contains(&query_lower))
+                .collect();
+            // Reset cursor to avoid out-of-bounds after list changes.
+            self.milestone_suggestion_cursor = 0;
+        } else {
+            self.milestone_suggestions.clear();
+            self.milestone_suggestion_cursor = 0;
+        }
+    }
+
+    /// Moves the autocomplete cursor down (wraps around).
+    pub fn milestone_suggestion_next(&mut self) {
+        if !self.milestone_suggestions.is_empty() {
+            self.milestone_suggestion_cursor =
+                (self.milestone_suggestion_cursor + 1) % self.milestone_suggestions.len();
+        }
+    }
+
+    /// Moves the autocomplete cursor up (wraps around).
+    pub fn milestone_suggestion_prev(&mut self) {
+        if !self.milestone_suggestions.is_empty() {
+            let len = self.milestone_suggestions.len();
+            self.milestone_suggestion_cursor = (self.milestone_suggestion_cursor + len - 1) % len;
+        }
+    }
+
+    /// Confirms the currently highlighted suggestion, replacing the `@query` in the input.
+    ///
+    /// Returns the selected milestone title so the caller can trigger the bulk-add fetch.
+    pub fn confirm_milestone_suggestion(&mut self) -> Option<String> {
+        let selected = self
+            .milestone_suggestions
+            .get(self.milestone_suggestion_cursor)
+            .cloned()?;
+        // Replace the `@...` prefix with the confirmed milestone title (prefixed with `@`).
+        self.input = format!("@{}", selected);
+        self.milestone_suggestions.clear();
+        Some(selected)
     }
 
     /// Scrolls the Inspector pane down by the given number of lines.

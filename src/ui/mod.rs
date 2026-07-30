@@ -99,8 +99,12 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     };
     // The input bar title and border change depending on whether the field has focus.
     let (input_title, input_border_style) = match app.input_mode {
+        InputMode::Editing if !app.milestone_suggestions.is_empty() => (
+            " MILESTONE │ [↑/↓ Tab]: Navigate │ [Enter]: Bulk-add MRs │ [Esc]: Close ".to_string(),
+            Style::default().fg(Color::Yellow),
+        ),
         InputMode::Editing => (
-            " INSERT │ type MR ID or branch name │ [Enter]: Confirm │ [Esc]: Cancel ".to_string(),
+            " INSERT │ MR ID, branch name, or @milestone │ [Enter]: Confirm │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Yellow),
         ),
         InputMode::ColumnPicker => (
@@ -128,6 +132,75 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     if app.input_mode == InputMode::ColumnPicker {
         render_column_picker(f, app, f.area());
     }
+
+    // Render the milestone autocomplete dropdown above the input bar when suggestions exist.
+    if app.input_mode == InputMode::Editing && !app.milestone_suggestions.is_empty() {
+        render_milestone_autocomplete(f, app, chunks[1]);
+    }
+}
+
+/// Renders the milestone autocomplete dropdown just above the input bar.
+///
+/// The popup lists all matching milestone suggestions and highlights the currently
+/// selected one. It is anchored to the left edge of the input bar and grows upward
+/// so it never overlaps the input field itself.
+fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
+    let suggestions = &app.milestone_suggestions;
+    if suggestions.is_empty() {
+        return;
+    }
+
+    // Cap visible rows to avoid overflowing the screen.
+    let max_visible: u16 = 8;
+    let visible_count = (suggestions.len() as u16).min(max_visible);
+    // +2 for top/bottom borders.
+    let popup_height = visible_count + 2;
+    let popup_width = (input_area.width / 2).max(40);
+
+    // Anchor to the left of the input bar and grow upward.
+    let popup_x = input_area.x;
+    let popup_y = input_area.y.saturating_sub(popup_height);
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    f.render_widget(Clear, popup_area);
+
+    // Determine the scroll offset so the selected item is always visible.
+    let cursor = app.milestone_suggestion_cursor;
+    let scroll_offset = if cursor >= max_visible as usize {
+        cursor + 1 - max_visible as usize
+    } else {
+        0
+    };
+
+    let items: Vec<ListItem> = suggestions
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(max_visible as usize)
+        .map(|(i, title)| {
+            let is_selected = i == cursor;
+            let style = if is_selected {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(Line::from(Span::styled(format!("  {} ", title), style)))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow))
+            .title(" Milestones │ [↑/↓ Tab]: Navigate │ [Enter]: Select "),
+    );
+
+    let mut list_state = ListState::default();
+    list_state.select(Some(cursor.saturating_sub(scroll_offset)));
+    f.render_stateful_widget(list, popup_area, &mut list_state);
 }
 
 /// Renders the column-picker popup centred over the terminal area.
