@@ -196,6 +196,9 @@ pub struct Pipeline {
     pub id: u64,
     #[serde(default)]
     pub status: PipelineState,
+    /// ISO 8601 timestamp when the pipeline was created (i.e. triggered).
+    /// Populated directly from the GitLab API — `None` when not provided.
+    pub created_at: Option<String>,
     /// Jobs are fetched alongside the pipeline and persisted across restarts.
     #[serde(default)]
     pub jobs: Vec<PipelineJob>,

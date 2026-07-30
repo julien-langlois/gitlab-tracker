@@ -37,6 +37,13 @@ pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
 fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
     let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
 
+    // Format the creation timestamp to a compact readable form (drop sub-seconds and timezone).
+    let date_display = pipeline
+        .created_at
+        .as_deref()
+        .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+        .unwrap_or_else(|| "unknown date".to_string());
+
     let mut lines = vec![Line::from(vec![
         Span::styled(
             format!("#{} ", pipeline.id),
@@ -49,6 +56,10 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
             Style::default()
                 .fg(status_color)
                 .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("  {}", date_display),
+            Style::default().fg(Color::DarkGray),
         ),
     ])];
 

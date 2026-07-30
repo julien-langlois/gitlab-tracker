@@ -53,6 +53,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 Pipeline {
                     id: 9981,
                     status: PipelineState::Success,
+                    created_at: Some("2024-11-14T10:23:05Z".into()),
                     jobs: vec![
                         PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
                         PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
@@ -63,6 +64,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 Pipeline {
                     id: 9942,
                     status: PipelineState::Failed,
+                    created_at: Some("2024-11-13T17:08:42Z".into()),
                     jobs: vec![
                         PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
                         PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },

@@ -400,11 +400,15 @@ pub async fn fetch_gitlab_data(
     // hammering the GitLab API with redundant requests (rate-limit friendly).
     // Also re-fetch if cached pipelines exist but none have jobs — this handles
     // stale cache entries written before jobs were persisted.
+    // Also re-fetch if any cached pipeline is missing `created_at` — this
+    // transparently enriches state files written before that field was added.
     let cached_has_jobs = cached.pipelines.iter().any(|p| !p.jobs.is_empty());
+    let cached_has_dates = cached.pipelines.iter().all(|p| p.created_at.is_some());
     let pipelines = if updated_at.is_some()
         && updated_at == cached.updated_at
         && !cached.pipelines.is_empty()
         && cached_has_jobs
+        && cached_has_dates
     {
         cached.pipelines
     } else {
