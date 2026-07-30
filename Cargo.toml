@@ -1,7 +1,7 @@
 [package]
 name = "gitlab-tracker"
 authors = ["Julien Langlois <julien@julienlanglois.fr>"]
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 description = "A fast terminal TUI dashboard for tracking GitLab Merge Requests across branches"
 license = "MIT"
@@ -23,10 +23,14 @@ urlencoding = "2.1"
 directories = "5.0"
 keyring = "2"
 open = "5"
+arboard = { version = "3", default-features = false }
 notify-rust = "4"
 clap = { version = "4.6.3", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 futures = "0.3"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # The profile that 'dist' will build with
 [profile.dist]
