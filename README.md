@@ -81,7 +81,21 @@
 
 The application requires your GitLab Project configuration and an API Personal Access Token.
 
-### Step 1: Set up environment variables
+### Step 1: Set up environment variables (optional)
+
+> **✨ Zero-config first run:** If no `.env` file or `config.json` is present, `gitlab-tracker` will interactively prompt you for the required values on first launch and persist them automatically to `config.json`. No manual file setup is needed.
+
+```text
+ ┌──────────────────────────────────────────────────────────┐
+ │              FIRST-RUN INTERACTIVE ONBOARDING            │
+ ├──────────────────────────────────────────────────────────┤
+ │ 🌐 GitLab URL [https://gitlab.com]: _                    │
+ │ 🔢 GitLab Project ID: _                                  │
+ │ 🔑 GitLab Personal Access Token: _                       │
+ └──────────────────────────────────────────────────────────┘
+```
+
+For teams and CI pipelines, you can still pre-configure everything via a `.env` file to skip the prompts entirely:
 
 1. Copy the provided template to create your local `.env` file:
 
@@ -125,28 +139,39 @@ Settings are resolved in the following order (highest to lowest priority):
 
 ---
 
-### Step 2: Keyring PAT Security Layer
+### Step 2: First-Run Interactive Onboarding & Keyring PAT Security Layer
 
 Your GitLab personal access token is **never stored in plain text**.
 
-Upon first launch, if no token is found, `gitlab-tracker` will securely prompt
-you for your token and store it in your operating system's native secure
-keyring (GNOME Keyring, macOS Keychain, or Windows Credential Manager).
+On first launch, `gitlab-tracker` resolves each required value using the following priority order — prompting interactively only as a last resort:
 
 ```text
- ┌────────────────────────────────────────────────────────┐
- │                   TOKEN LOOKUP ORDER                   │
- ├────────────────────────────────────────────────────────┤
- │ 1. GITLAB_TOKEN environment variable (if set)          │
- │ 2. Native OS Keyring (GNOME Keyring / macOS Keychain)  │
- │ 3. Interactive CLI Prompt (First run fallback)         │
- └────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────┐
+ │                    SETTINGS LOOKUP ORDER                     │
+ ├──────────────────────────────────────────────────────────────┤
+ │ GITLAB_PROJECT_ID & GITLAB_URL                               │
+ │   1. Environment variable / .env file                        │
+ │   2. ~/.config/gitlab-tracker/config.json                    │
+ │   3. Interactive CLI prompt → saved to config.json           │
+ ├──────────────────────────────────────────────────────────────┤
+ │ GITLAB_TOKEN                                                 │
+ │   1. GITLAB_TOKEN environment variable (if set)              │
+ │   2. Native OS Keyring (GNOME Keyring / macOS Keychain)      │
+ │   3. Interactive CLI prompt → saved to OS Keyring            │
+ └──────────────────────────────────────────────────────────────┘
 ```
 
 1. **First-Run Onboarding:**
    If no `GITLAB_TOKEN` is found in your `.env` or environment, the application will prompt you interactively in the terminal on its initial launch:
 
    ```text
+   🌐 No GitLab URL found in config or environment.
+      Leave empty to use the default (https://gitlab.com)
+   GitLab URL [https://gitlab.com]: https://gitlab.my-company.com
+   🔢 No GitLab Project ID found in config or environment.
+   Please enter your GitLab Project ID: 12345678
+   ✅ Config saved to config.json!
+
    🔑 No GITLAB_TOKEN found in environment or system Keyring.
    Please enter your GitLab Personal Access Token: glpat-xxxxxxxxxxxx
    ✅ Token securely saved to OS Keyring!

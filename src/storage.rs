@@ -18,6 +18,74 @@ pub async fn save_config_async(config: &AppConfig) {
     }
 }
 
+/// Prompts the user interactively for a required config value (read from stdin).
+fn prompt_required(label: &str) -> String {
+    loop {
+        print!("{}: ", label);
+        let _ = std::io::stdout().flush();
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_ok() {
+            let value = input.trim().to_string();
+            if !value.is_empty() {
+                return value;
+            }
+        }
+        println!("  ⚠️  This field is required, please enter a value.");
+    }
+}
+
+/// Ensures `gitlab_url` and `project_id` are present, either from env vars,
+/// the loaded config, or an interactive prompt.
+///
+/// Env vars (`GITLAB_URL`, `GITLAB_PROJECT_ID`) are always checked first so
+/// that CI / dotenv workflows are never interrupted by prompts.
+/// Any value obtained via prompt is persisted back to `config.json` so the
+/// user is only asked once.
+pub async fn ensure_gitlab_config(config: &mut crate::config::AppConfig) {
+    let mut changed = false;
+
+    // --- gitlab_url ---
+    let url_from_env = std::env::var("GITLAB_URL")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let url_in_config = config.gitlab_url.as_deref().unwrap_or("").trim().is_empty();
+
+    if url_from_env.is_none() && url_in_config {
+        println!("🌐 No GitLab URL found in config or environment.");
+        println!("   Leave empty to use the default (https://gitlab.com)");
+        print!("GitLab URL [https://gitlab.com]: ");
+        let _ = std::io::stdout().flush();
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_ok() {
+            let value = input.trim().to_string();
+            config.gitlab_url = if value.is_empty() {
+                Some("https://gitlab.com".to_string())
+            } else {
+                Some(value)
+            };
+            changed = true;
+        }
+    }
+
+    // --- project_id ---
+    let id_from_env = std::env::var("GITLAB_PROJECT_ID")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
+    let id_in_config = config.project_id.as_deref().unwrap_or("").trim().is_empty();
+
+    if id_from_env.is_none() && id_in_config {
+        println!("🔢 No GitLab Project ID found in config or environment.");
+        let value = prompt_required("Please enter your GitLab Project ID");
+        config.project_id = Some(value);
+        changed = true;
+    }
+
+    if changed {
+        save_config_async(config).await;
+        println!("✅ Config saved to config.json!\n");
+    }
+}
+
 pub fn get_or_prompt_token() -> String {
     if let Ok(tok) = std::env::var("GITLAB_TOKEN") {
         if !tok.trim().is_empty() {

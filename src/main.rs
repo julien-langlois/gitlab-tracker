@@ -19,7 +19,8 @@ use models::{AppEvent, MrStatus, TrackedMr};
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{
-    get_or_prompt_token, load_or_create_config_async, load_state_async, save_state_async,
+    ensure_gitlab_config, get_or_prompt_token, load_or_create_config_async, load_state_async,
+    save_state_async,
 };
 use tokio::sync::Semaphore;
 
@@ -48,12 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         default_panic(info);
     }));
 
-    let config = load_or_create_config_async().await;
-
-    if args.demo {
-        return demo::run_demo_mode(config).await;
-    }
-
+    // Load .env before anything else so that all std::env::var() calls below
+    // (including inside load_or_create_config_async) already see the env vars.
     if dotenvy::dotenv().is_err() {
         if let Some(config_dir) = storage::get_save_dir() {
             let global_env = config_dir.join(".env");
@@ -61,18 +58,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    let mut config = load_or_create_config_async().await;
+
+    if args.demo {
+        return demo::run_demo_mode(config).await;
+    }
+
+    // Ensure gitlab_url and project_id are available (env var > config > prompt).
+    // ensure_gitlab_config is idempotent: it only prompts when a value is truly missing.
+    ensure_gitlab_config(&mut config).await;
+
     let project_id = std::env::var("GITLAB_PROJECT_ID")
         .ok()
+        .filter(|v| !v.trim().is_empty())
         .or_else(|| config.project_id.clone())
         .filter(|id| !id.trim().is_empty())
-        .unwrap_or_else(|| {
-            eprintln!("❌ Error: GITLAB_PROJECT_ID is missing.");
-            eprintln!("Please set it in your .env, in ~/.config/gitlab-tracker/config.json, or as an environment variable.");
-            std::process::exit(1);
-    });
+        .expect("GITLAB_PROJECT_ID must be set");
 
     let base_url = std::env::var("GITLAB_URL")
         .ok()
+        .filter(|v| !v.trim().is_empty())
         .or_else(|| config.gitlab_url.clone())
         .filter(|url| !url.trim().is_empty())
         .unwrap_or_else(|| "https://gitlab.com".to_string());
