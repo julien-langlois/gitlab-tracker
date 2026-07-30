@@ -218,6 +218,25 @@ pub async fn handle_key_event(
                 }
             }
 
+            // [Y]ank — copy the git clone command for the MR source branch to clipboard.
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                if let Some(selected) = app.table_state.selected() {
+                    if let Some(mr) = app.mrs.get(selected) {
+                        let ssh_url = mr
+                            .web_url
+                            .split("/-/")
+                            .next()
+                            .unwrap_or("")
+                            .replacen("https://", "git@", 1)
+                            .replacen('/', ":", 1);
+                        let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
+                        if let Ok(mut ctx) = arboard::Clipboard::new() {
+                            let _ = ctx.set_text(cmd);
+                        }
+                    }
+                }
+            }
+
             // Force a full refresh of all MRs.
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 app.time_left = app.refresh_interval_secs;
@@ -315,12 +334,16 @@ async fn handle_enter(
                 description: String::new(),
                 author: "Loading".to_string(),
                 assignee: "Loading".to_string(),
+                reviewers: vec![],
                 milestone: "Loading".to_string(),
+                milestone_due_date: None,
                 web_url: String::new(),
                 labels: vec![],
                 updated_at: None,
-                // target_branch is unknown until the first API response.
+                source_branch: "unknown".to_string(),
                 target_branch: "unknown".to_string(),
+                merged_by: None,
+                merged_at: None,
                 // Pipelines are fetched on demand when the user presses [P].
                 pipelines: vec![],
                 // New MRs are not highlighted on first load.
@@ -437,6 +460,25 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                         )
                     };
                     let _ = open::that(target_url);
+                }
+            }
+        }
+
+        // [Y]ank — copy the git clone command for the MR source branch to clipboard.
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            if let Some(selected) = app.table_state.selected() {
+                if let Some(mr) = app.mrs.get(selected) {
+                    let ssh_url = mr
+                        .web_url
+                        .split("/-/")
+                        .next()
+                        .unwrap_or("")
+                        .replacen("https://", "git@", 1)
+                        .replacen('/', ":", 1);
+                    let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
+                    if let Ok(mut ctx) = arboard::Clipboard::new() {
+                        let _ = ctx.set_text(cmd);
+                    }
                 }
             }
         }

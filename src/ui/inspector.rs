@@ -136,6 +136,23 @@ pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
     )
 }
 
+/// Renders a section header separator with a coloured title.
+fn section_header(title: &'static str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled("── ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            " ──────────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        ),
+    ])
+}
+
 pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
     // Format ISO 8601 timestamp to a more readable form (date + time, drop sub-seconds).
     let updated_at_display = mr
@@ -155,36 +172,29 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         GitlabMrState::Closed => (" Closed  ", Color::Black, Color::Red),
     };
 
-    // For open MRs, display the mergeability status directly — no animation
-    // needed here since the State field above already shows the MR lifecycle
-    // state.
-    let mergeability_line: Option<Line<'static>> = if mr.state == GitlabMrState::Opened {
-        // Each label is wrapped with a single space on each side via format!(" {text} ").
-        let (merge_text, merge_fg, merge_bg) = match mr.mergeability {
-            MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
-            MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
-            MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
-            MergeabilityStatus::Unknown => ("Unknown", Color::DarkGray, Color::Black),
-        };
-        Some(Line::from(vec![
-            Span::raw("Merge    : "),
-            Span::styled(
-                format!(" {merge_text} "),
-                Style::default()
-                    .fg(merge_fg)
-                    .bg(merge_bg)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]))
-    } else {
-        None
+    // Build the git clone command for the source branch — used in the [Y]ank hint.
+    // Derives the SSH clone URL from the web URL: replaces the HTTPS scheme and host
+    // with the git@ SSH equivalent (standard GitLab convention).
+    let git_clone_cmd = {
+        // e.g. "https://gitlab.com/org/project/-/merge_requests/42"
+        //   -> "git clone -b feat/my-branch git@gitlab.com:org/project.git"
+        let ssh_url = mr
+            .web_url
+            .split("/-/")
+            .next()
+            .unwrap_or("")
+            .replacen("https://", "git@", 1)
+            .replacen('/', ":", 1);
+        format!("git clone -b {} {}.git", mr.source_branch, ssh_url)
     };
 
+    // ── SECTION 1: Identity ──────────────────────────────────────────────────
     let mut lines = vec![
+        section_header("Identity"),
         Line::from(vec![Span::styled(
             format!("MR ID    : !{}", mr.id),
             Style::default()
-                .fg(ratatui::style::Color::Cyan)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         )]),
         Line::from(vec![
@@ -197,55 +207,75 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
+        Line::from(vec![
+            Span::raw("Branch   : "),
+            Span::styled(
+                mr.source_branch.clone(),
+                Style::default()
+                    .fg(Color::LightBlue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  →  "),
+            Span::styled(
+                mr.target_branch.clone(),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("Clone    : "),
+            Span::styled(git_clone_cmd.clone(), Style::default().fg(Color::DarkGray)),
+            Span::raw("  "),
+            Span::styled(
+                "[Y] copy",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("URL      : "),
+            Span::styled(mr.web_url.clone(), Style::default().fg(Color::DarkGray)),
+        ]),
     ];
 
-    if let Some(line) = mergeability_line {
-        lines.push(line);
-    }
-    lines.push(Line::from(vec![
-        Span::raw("Target   : "),
-        Span::styled(
-            mr.target_branch.clone(),
-            Style::default()
-                .fg(Color::LightBlue)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]));
+    // ── SECTION 2: People ────────────────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("People"));
     lines.push(Line::from(vec![
         Span::raw("Author   : "),
         Span::styled(
-            format!("@{}", mr.author),
+            mr.author.clone(),
             Style::default().add_modifier(Modifier::BOLD),
         ),
     ]));
     lines.push(Line::from(vec![
         Span::raw("Assignee : "),
         Span::styled(
-            format!("@{}", mr.assignee),
+            mr.assignee.clone(),
             Style::default().add_modifier(Modifier::BOLD),
         ),
     ]));
-    lines.push(Line::from(vec![
-        Span::raw("Milestone: "),
-        Span::styled(
-            mr.milestone.clone(),
-            Style::default().fg(ratatui::style::Color::Cyan),
-        ),
-    ]));
-    lines.push(Line::from(vec![
-        Span::raw("Updated  : "),
-        Span::styled(
-            updated_at_display,
-            Style::default().fg(ratatui::style::Color::Yellow),
-        ),
-        Span::raw("  "),
-        Span::styled(
-            badge_icon,
-            Style::default()
-                .fg(badge_color)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]));
+
+    // Reviewers: listed inline, or dimmed "None" if empty.
+    if mr.reviewers.is_empty() {
+        lines.push(Line::from(vec![
+            Span::raw("Reviewers: "),
+            Span::styled("None", Style::default().fg(Color::DarkGray)),
+        ]));
+    } else {
+        for (i, reviewer) in mr.reviewers.iter().enumerate() {
+            let label = if i == 0 { "Reviewers: " } else { "           " };
+            lines.push(Line::from(vec![
+                Span::raw(label),
+                Span::styled(
+                    reviewer.clone(),
+                    Style::default()
+                        .fg(Color::LightBlue)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
+    }
 
     // Notes / comments indicator — always shown, highlights when non-zero.
     let (notes_text, notes_fg, notes_bg) = if mr.user_notes_count == 0 {
@@ -272,30 +302,123 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         ),
     ]));
 
+    // ── SECTION 3: Planning ──────────────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("Planning"));
+    lines.push(Line::from(vec![
+        Span::raw("Milestone: "),
+        Span::styled(mr.milestone.clone(), Style::default().fg(Color::Cyan)),
+    ]));
+
+    // Milestone due date — show with urgency colouring when set.
+    let (due_text, due_color) = match mr.milestone_due_date.as_deref() {
+        None | Some("") => ("Not set".to_string(), Color::DarkGray),
+        Some(date) => {
+            // Colour the date based on proximity: red if past, yellow if within 7 days,
+            // green otherwise. We do a simple lexicographic comparison against today's date
+            // (YYYY-MM-DD format sorts correctly without parsing).
+            let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+            let in_7_days = (chrono::Utc::now() + chrono::Duration::days(7))
+                .format("%Y-%m-%d")
+                .to_string();
+            let color = if date < today.as_str() {
+                Color::Red
+            } else if date <= in_7_days.as_str() {
+                Color::Yellow
+            } else {
+                Color::Green
+            };
+            (date.to_string(), color)
+        }
+    };
+    lines.push(Line::from(vec![
+        Span::raw("Due date : "),
+        Span::styled(
+            due_text,
+            Style::default().fg(due_color).add_modifier(Modifier::BOLD),
+        ),
+    ]));
+
+    // ── SECTION 4: Status ────────────────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("Status"));
+
+    // Mergeability — only meaningful for open MRs.
+    if mr.state == GitlabMrState::Opened {
+        let (merge_text, merge_fg, merge_bg) = match mr.mergeability {
+            MergeabilityStatus::Mergeable => ("Mergeable", Color::Black, Color::LightGreen),
+            MergeabilityStatus::Conflict => ("Conflict", Color::White, Color::Red),
+            MergeabilityStatus::NeedsRebase => ("Rebase", Color::Black, Color::Yellow),
+            MergeabilityStatus::Unknown => ("Unknown", Color::DarkGray, Color::Black),
+        };
+        lines.push(Line::from(vec![
+            Span::raw("Merge    : "),
+            Span::styled(
+                format!(" {merge_text} "),
+                Style::default()
+                    .fg(merge_fg)
+                    .bg(merge_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
+
+    // merged_by / merged_at — only shown for merged MRs.
+    if mr.state == GitlabMrState::Merged {
+        let merged_by_display = mr.merged_by.as_deref().unwrap_or("Unknown");
+        let merged_at_display = mr
+            .merged_at
+            .as_deref()
+            .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+            .unwrap_or_else(|| "Unknown".to_string());
+        lines.push(Line::from(vec![
+            Span::raw("Merged by: "),
+            Span::styled(
+                merged_by_display.to_string(),
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("Merged at: "),
+            Span::styled(merged_at_display, Style::default().fg(Color::Magenta)),
+        ]));
+    }
+
+    lines.push(Line::from(vec![
+        Span::raw("Updated  : "),
+        Span::styled(updated_at_display, Style::default().fg(Color::Yellow)),
+        Span::raw("  "),
+        Span::styled(
+            badge_icon,
+            Style::default()
+                .fg(badge_color)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]));
+
+    // ── SECTION 5: Labels ────────────────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("Labels"));
+
     if !mr.labels.is_empty() {
-        let mut label_spans = vec![Span::raw("Labels   : ")];
+        let mut label_spans: Vec<Span<'static>> = vec![];
         for label in &mr.labels {
             label_spans.push(create_chip_span(label, config));
             label_spans.push(Span::raw(" "));
         }
         lines.push(Line::from(label_spans));
     } else {
-        lines.push(Line::from(vec![
-            Span::raw("Labels   : "),
-            Span::styled("None", Style::default().dark_gray()),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "None",
+            Style::default().dark_gray(),
+        )]));
     }
 
-    lines.push(Line::from(vec![Span::styled(
-        "───────────────────────────────────",
-        Style::default().fg(ratatui::style::Color::DarkGray),
-    )]));
-    lines.push(Line::from(vec![Span::styled(
-        "Description:",
-        Style::default()
-            .fg(ratatui::style::Color::Yellow)
-            .add_modifier(Modifier::BOLD),
-    )]));
+    // ── Description ──────────────────────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("Description"));
     lines.push(Line::from(vec![Span::raw("")]));
 
     if mr.description.trim().is_empty() {

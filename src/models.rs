@@ -4,12 +4,15 @@ use std::collections::{HashMap, HashSet};
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabUser {
     pub username: String,
+    pub name: String,
 }
 
 /// A GitLab milestone as returned by the milestones API endpoint.
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabMilestone {
     pub title: String,
+    /// Due date in `YYYY-MM-DD` format, or `None` when not set.
+    pub due_date: Option<String>,
 }
 
 /// Represents the GitLab-side lifecycle state of a merge request.
@@ -45,12 +48,20 @@ pub struct GitLabMr {
     pub description: Option<String>,
     pub author: Option<GitLabUser>,
     pub assignee: Option<GitLabUser>,
+    /// List of reviewers assigned to this MR (GitLab returns an array).
+    pub reviewers: Option<Vec<GitLabUser>>,
+    /// User who merged the MR — populated by GitLab only when `state == merged`.
+    pub merged_by: Option<GitLabUser>,
+    /// ISO 8601 timestamp when the MR was merged — `None` for open/closed MRs.
+    pub merged_at: Option<String>,
     pub milestone: Option<GitLabMilestone>,
     pub merge_commit_sha: Option<String>,
     pub squash_commit_sha: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     pub updated_at: Option<String>,
+    /// Source branch of the MR (the feature branch).
+    pub source_branch: Option<String>,
     /// Target branch that this MR is intended to be merged into.
     pub target_branch: Option<String>,
     /// Legacy mergeability field (GitLab < 15.6): `"can_be_merged"`, `"cannot_be_merged"`, …
@@ -79,16 +90,31 @@ pub struct SavedMr {
     pub description: Option<String>,
     pub author: Option<String>,
     pub assignee: Option<String>,
+    /// Reviewer display strings — persisted across restarts.
+    #[serde(default)]
+    pub reviewers: Vec<String>,
     pub milestone: Option<String>,
+    /// Milestone due date in `YYYY-MM-DD` format — persisted across restarts.
+    #[serde(default)]
+    pub milestone_due_date: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     #[serde(default)]
     pub updated_at: Option<String>,
+    /// Source branch of the MR (the feature branch) — persisted across restarts.
+    #[serde(default)]
+    pub source_branch: Option<String>,
     /// Target branch that this MR is intended to be merged into — persisted across restarts.
     #[serde(default)]
     pub target_branch: Option<String>,
     #[serde(default)]
     pub state: GitlabMrState,
+    /// User who merged the MR — `None` for open/closed MRs. Persisted across restarts.
+    #[serde(default)]
+    pub merged_by: Option<String>,
+    /// ISO 8601 timestamp when the MR was merged — `None` for open/closed MRs.
+    #[serde(default)]
+    pub merged_at: Option<String>,
     /// Persisted pipeline snapshots — restored on startup, refreshed on each MR fetch.
     #[serde(default)]
     pub pipelines: Vec<Pipeline>,
@@ -121,12 +147,22 @@ pub struct TrackedMr {
     pub description: String,
     pub author: String,
     pub assignee: String,
+    /// Reviewer display strings — may be empty when no reviewer is assigned.
+    pub reviewers: Vec<String>,
     pub milestone: String,
+    /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
+    pub milestone_due_date: Option<String>,
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    /// Source branch of the MR (the feature branch).
+    pub source_branch: String,
     pub target_branch: String,
     pub state: GitlabMrState,
+    /// User who merged the MR — None for open/closed MRs.
+    pub merged_by: Option<String>,
+    /// ISO 8601 timestamp when the MR was merged — None for open/closed MRs.
+    pub merged_at: Option<String>,
     /// Mergeability state for open MRs — drives the animated status badge.
     pub mergeability: MergeabilityStatus,
     /// Pipelines fetched alongside the MR data and persisted across restarts.
@@ -147,12 +183,22 @@ pub struct MrLoadedData {
     pub description: String,
     pub author: String,
     pub assignee: String,
+    /// Reviewer display strings resolved from the GitLab API response.
+    pub reviewers: Vec<String>,
     pub milestone: String,
+    /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
+    pub milestone_due_date: Option<String>,
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
+    /// Source branch of the MR (the feature branch).
+    pub source_branch: String,
     pub target_branch: String,
     pub state: GitlabMrState,
+    /// User who merged the MR — None for open/closed MRs.
+    pub merged_by: Option<String>,
+    /// ISO 8601 timestamp when the MR was merged — None for open/closed MRs.
+    pub merged_at: Option<String>,
     /// Mergeability resolved from the GitLab API response.
     pub mergeability: MergeabilityStatus,
     /// Pipelines fetched in the same request batch as the MR data.

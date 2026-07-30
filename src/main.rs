@@ -167,18 +167,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .clone()
                 .unwrap_or_else(|| "Unknown".to_string()),
             assignee: saved.assignee.clone().unwrap_or_else(|| "None".to_string()),
+            reviewers: saved.reviewers.clone(),
             milestone: saved
                 .milestone
                 .clone()
                 .unwrap_or_else(|| "None".to_string()),
+            milestone_due_date: saved.milestone_due_date.clone(),
             web_url: saved.web_url.clone().unwrap_or_default(),
             labels: saved.labels.clone().unwrap_or_default(),
             updated_at: saved.updated_at.clone(),
+            source_branch: saved
+                .source_branch
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string()),
             target_branch: saved
                 .target_branch
                 .clone()
                 .unwrap_or_else(|| "unknown".to_string()),
             state: saved.state.clone(),
+            merged_by: saved.merged_by.clone(),
+            merged_at: saved.merged_at.clone(),
             // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
             mergeability: models::MergeabilityStatus::Unknown,
             // Restore persisted pipelines — refreshed on each MR fetch.
@@ -267,12 +275,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         mr.description = data.description;
                         mr.author = data.author;
                         mr.assignee = data.assignee;
+                        mr.reviewers = data.reviewers;
                         mr.milestone = data.milestone;
+                        mr.milestone_due_date = data.milestone_due_date;
                         mr.web_url = data.web_url;
                         mr.labels = data.labels;
                         mr.updated_at = data.updated_at;
+                        mr.source_branch = data.source_branch;
                         mr.target_branch = data.target_branch;
                         mr.state = data.state;
+                        mr.merged_by = data.merged_by;
+                        mr.merged_at = data.merged_at;
                         mr.mergeability = data.mergeability;
                         mr.pipelines = data.pipelines;
                         mr.recently_updated = was_updated;
@@ -323,11 +336,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             description: String::new(),
                             author: "Loading".to_string(),
                             assignee: "Loading".to_string(),
+                            reviewers: vec![],
                             milestone: milestone_title.clone(),
+                            milestone_due_date: None,
                             web_url: String::new(),
                             labels: vec![],
                             updated_at: None,
+                            source_branch: "unknown".to_string(),
                             target_branch: "unknown".to_string(),
+                            merged_by: None,
+                            merged_at: None,
                             pipelines: vec![],
                             recently_updated: false,
                             user_notes_count: 0,

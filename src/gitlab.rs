@@ -284,10 +284,31 @@ pub async fn fetch_gitlab_data(
     // Milestone is always read fresh from the GitLab API response — never served from cache.
     // This is the authoritative source: a MR may be attached or detached from a milestone
     // at any time, and the cache would silently hold a stale value.
+    let milestone_due_date = mr.milestone.as_ref().and_then(|m| m.due_date.clone());
     let milestone = mr
         .milestone
         .map(|m| m.title)
         .unwrap_or_else(|| "None".to_string());
+
+    // Reviewers are always read fresh — they can be added or removed at any time.
+    // Format: "Full Name (username)" — mirrors the author/assignee display convention.
+    let reviewers = mr
+        .reviewers
+        .unwrap_or_default()
+        .into_iter()
+        .map(|u| format!("{} (@{})", u.name, u.username))
+        .collect::<Vec<_>>();
+
+    // merged_by and merged_at are only populated for merged MRs.
+    let merged_by = mr
+        .merged_by
+        .map(|u| format!("{} (@{})", u.name, u.username));
+    let merged_at = mr.merged_at.clone();
+
+    let source_branch = mr
+        .source_branch
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
 
     let (title, sha, description, author, assignee, web_url, labels) = match (
         cached.title,
@@ -309,11 +330,11 @@ pub async fn fetch_gitlab_data(
             let desc = mr.description.unwrap_or_default();
             let auth = mr
                 .author
-                .map(|u| u.username)
+                .map(|u| format!("{} (@{})", u.name, u.username))
                 .unwrap_or_else(|| "unknown".to_string());
             let asg = mr
                 .assignee
-                .map(|u| u.username)
+                .map(|u| format!("{} (@{})", u.name, u.username))
                 .unwrap_or_else(|| "none".to_string());
             let web_url = mr.web_url.unwrap_or_default();
             let labels = mr.labels.unwrap_or_default();
@@ -425,12 +446,17 @@ pub async fn fetch_gitlab_data(
         description,
         author,
         assignee,
+        reviewers,
         milestone,
+        milestone_due_date,
         web_url,
         labels,
         updated_at,
+        source_branch,
         target_branch,
         state,
+        merged_by,
+        merged_at,
         mergeability,
         pipelines,
         user_notes_count,
