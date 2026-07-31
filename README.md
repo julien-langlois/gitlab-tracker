@@ -279,13 +279,22 @@ You can edit this file to adjust default environment branches, label badge color
 
 Notifications are powered by `notify-rust` and rely on your system's native notification daemon (e.g., `libnotify` on Linux, `NSUserNotifications` on macOS).
 
-A notification is sent **only when a branch is newly detected** for a given MR — i.e., when the branch was not present in the last persisted state (`tracker_state.json`). This means:
+Four events trigger a desktop notification:
+
+| Event | Trigger condition |
+| :--- | :--- |
+| 🌿 **New branch detected** | An MR's commit SHA was found on a branch not present in the last persisted state |
+| 🕐 **MR updated** | `updated_at` from GitLab differs from the previously stored value |
+| 🔀 **Mergeability changed** | The mergeability status transitioned (e.g. `Mergeable → Conflict`) |
+| 🏁 **Milestone changed** | The milestone attached to the MR changed (e.g. `v2.4.0 → v2.5.0`) |
+
+**Anti-spam on startup:** change notifications (`updated_at`, mergeability, milestone) are **suppressed during the initial sync** — the first fetch cycle after launch. This prevents a flood of toasts when the app starts and reconciles its in-memory state with the GitLab API. Only genuine changes detected during subsequent background refreshes (or a manual `R` refresh) will produce notifications.
 
 * ✅ **No duplicate alerts** when restarting the app with an unchanged state.
-* ✅ **No spam** during periodic background refreshes if nothing changed.
-* ✅ **Reliable detection** of new deployments across refreshes and restarts.
+* ✅ **No spam** during the initial sync or redundant refresh cycles.
+* ✅ **Reliable detection** of real changes across refreshes and restarts.
 
-The last-known branch state per MR is persisted in `tracker_state.json` under the `last_known_branches` key. On the very first launch (empty state), a single batch of notifications may be sent for all already-known branches — this is a one-time occurrence.
+The last-known branch state per MR is persisted in `tracker_state.json` under the `last_known_branches` key.
 
 ---
 

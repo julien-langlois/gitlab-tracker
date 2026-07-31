@@ -219,6 +219,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 pipelines: saved.pipelines,
             };
 
+            // Count each pending fetch so we can suppress change notifications
+            // until the initial sync is complete (avoids spurious toasts on launch).
+            app.pending_initial_fetches += 1;
+
             spawn_mr_fetch(
                 fetch_ctx.clone(),
                 saved.id,
@@ -274,10 +278,75 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Update the persisted reference so subsequent refreshes won't re-notify.
                         last_known_branches.insert(data.id.clone(), data.branches.clone());
 
+                        // Decrement the startup fence: notifications are suppressed until
+                        // all MRs from the saved state have received their first API response.
+                        let notify_allowed = app.pending_initial_fetches == 0;
+                        if app.pending_initial_fetches > 0 {
+                            app.pending_initial_fetches -= 1;
+                        }
+
                         // Detect whether this MR was actually updated since the last refresh.
                         // We compare the old `updated_at` before overwriting it.
                         let was_updated =
                             mr.updated_at.is_some() && mr.updated_at != data.updated_at;
+
+                        // Trace field-level changes so they are visible in the log file.
+                        // All comparisons happen before the fields are overwritten below.
+                        if was_updated {
+                            tracing::info!(
+                                mr_id = %data.id,
+                                old = %mr.updated_at.as_deref().unwrap_or("none"),
+                                new = %data.updated_at.as_deref().unwrap_or("none"),
+                                "MR updated_at changed",
+                            );
+                            if notify_allowed {
+                                let _ = notify_rust::Notification::new()
+                                    .summary(&format!("MR !{} updated", data.id))
+                                    .body(&format!(
+                                        "{}\n{}",
+                                        data.title,
+                                        data.updated_at.as_deref().unwrap_or("unknown date"),
+                                    ))
+                                    .icon("dialog-information")
+                                    .show();
+                            }
+                        }
+                        if mr.mergeability != data.mergeability {
+                            tracing::info!(
+                                mr_id = %data.id,
+                                old = ?mr.mergeability,
+                                new = ?data.mergeability,
+                                "MR mergeability changed",
+                            );
+                            if notify_allowed {
+                                let _ = notify_rust::Notification::new()
+                                    .summary(&format!("MR !{} — mergeability changed", data.id))
+                                    .body(&format!(
+                                        "{}\n{:?} → {:?}",
+                                        data.title, mr.mergeability, data.mergeability,
+                                    ))
+                                    .icon("dialog-warning")
+                                    .show();
+                            }
+                        }
+                        if mr.milestone != data.milestone {
+                            tracing::info!(
+                                mr_id = %data.id,
+                                old = %mr.milestone,
+                                new = %data.milestone,
+                                "MR milestone changed",
+                            );
+                            if notify_allowed {
+                                let _ = notify_rust::Notification::new()
+                                    .summary(&format!("MR !{} — milestone changed", data.id))
+                                    .body(&format!(
+                                        "{}\n{} → {}",
+                                        data.title, mr.milestone, data.milestone,
+                                    ))
+                                    .icon("dialog-information")
+                                    .show();
+                            }
+                        }
 
                         mr.title = data.title;
                         mr.sha = data.sha;

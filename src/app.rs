@@ -145,6 +145,10 @@ pub struct App {
     pub milestone_suggestion_cursor: usize,
     /// Active filter applied to the MR table — toggled with [F] in Normal mode.
     pub filter_mode: FilterMode,
+    /// Number of MR fetches still pending from the initial startup load.
+    /// Change notifications (updated_at, mergeability, milestone) are suppressed
+    /// until this reaches zero, preventing spurious toasts on first launch.
+    pub pending_initial_fetches: usize,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -185,6 +189,9 @@ impl App {
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
             filter_mode: FilterMode::default(),
+            // Initialised to 0 — main.rs sets this to the number of MRs loaded from state
+            // before the first fetch cycle begins, then decrements it on each MrLoaded event.
+            pending_initial_fetches: 0,
         }
     }
 
