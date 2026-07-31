@@ -260,19 +260,73 @@ pub async fn fetch_gitlab_data(
     //   1. `has_conflicts: true` always wins — manual intervention is required regardless
     //      of what `detailed_merge_status` says. GitLab can return "need_rebase" AND
     //      has_conflicts: true simultaneously when the rebase would produce conflicts.
-    //   2. `detailed_merge_status` (GitLab ≥ 15.6) for the remaining cases:
-    //        • "need_rebase"    → branch is behind target, rebase is conflict-free
-    //        • "merge_conflict" → conflicts detected, manual resolution required
-    //        • "mergeable"      → ready to merge cleanly
+    //   2. `detailed_merge_status` (GitLab ≥ 15.6) — exhaustive mapping of all known values.
     //   3. `merge_status` (legacy, GitLab < 15.6) — coarse-grained last resort.
     let mergeability = if mr.has_conflicts == Some(true) {
         MergeabilityStatus::Conflict
     } else {
         match mr.detailed_merge_status.as_deref() {
+            // ── Mergeable ────────────────────────────────────────────────────────────────
+            // The MR can be merged cleanly with no further action required.
             Some("mergeable") => MergeabilityStatus::Mergeable,
-            Some("need_rebase") => MergeabilityStatus::NeedsRebase,
+
+            // ── NeedsRebase ──────────────────────────────────────────────────────────────
+            // The source branch is behind the target branch but there are no conflicts;
+            // a simple rebase (or merge commit) is sufficient.
+            // "need_rebase" is the canonical value; "behind_target_branch" is its alias
+            // returned by some GitLab versions.
+            Some("need_rebase") | Some("behind_target_branch") => MergeabilityStatus::NeedsRebase,
+
+            // ── Conflict ─────────────────────────────────────────────────────────────────
+            // Merge conflicts that require manual resolution before the MR can progress.
             Some("merge_conflict") | Some("conflict") => MergeabilityStatus::Conflict,
-            // "checking", "not_open", "jira_association_missing", "broken_status", etc.
+            // GitLab was unable to compute the merge status — treat as a blocking conflict
+            // to avoid falsely showing the MR as ready.
+            Some("broken_status") => MergeabilityStatus::Conflict,
+            // A security policy is violated — blocks merge, treat as conflict-level blocker.
+            Some("security_policy_violations") => MergeabilityStatus::Conflict,
+
+            // ── NotOpen ──────────────────────────────────────────────────────────────────
+            // The MR is not open (already merged or closed in GitLab).
+            Some("not_open") => MergeabilityStatus::NotOpen,
+
+            // ── Draft ────────────────────────────────────────────────────────────────────
+            // The MR is a draft — intentionally not ready to merge.
+            Some("draft_status") => MergeabilityStatus::Draft,
+
+            // ── DiscussionsNotResolved ────────────────────────────────────────────────────
+            // There are unresolved discussion threads that must be resolved before merging.
+            Some("discussions_not_resolved") => MergeabilityStatus::DiscussionsNotResolved,
+
+            // ── CiMustPass ───────────────────────────────────────────────────────────────
+            // A required CI pipeline must pass before this MR can be merged.
+            Some("ci_must_pass") => MergeabilityStatus::CiMustPass,
+
+            // ── CiStillRunning ───────────────────────────────────────────────────────────
+            // A CI pipeline is currently running — outcome not yet known.
+            Some("ci_still_running") => MergeabilityStatus::CiStillRunning,
+
+            // ── NotApproved ──────────────────────────────────────────────────────────────
+            // Required approval rules are not yet satisfied.
+            // "approvals_syncing" is a transient state while GitLab recomputes approvals.
+            Some("not_approved") | Some("approvals_syncing") => MergeabilityStatus::NotApproved,
+
+            // ── RequestedChanges ─────────────────────────────────────────────────────────
+            // A reviewer has explicitly requested changes on the MR.
+            Some("requested_changes") => MergeabilityStatus::RequestedChanges,
+
+            // ── Unknown (transient / unactionable states) ────────────────────────────────
+            // GitLab is currently computing the merge status — not yet actionable.
+            Some("checking") | Some("unchecked") | Some("preparing") => MergeabilityStatus::Unknown,
+            // External status checks (e.g. deployment gates) have not yet passed.
+            Some("external_status_checks") => MergeabilityStatus::Unknown,
+            // A required Jira issue association is missing.
+            Some("jira_association_missing") => MergeabilityStatus::Unknown,
+            // Commit message format or signature requirements are not met.
+            Some("commits_status") => MergeabilityStatus::Unknown,
+
+            // ── Fallback ─────────────────────────────────────────────────────────────────
+            // Unknown or future detailed_merge_status values: fall back to the legacy field.
             _ => match mr.merge_status.as_deref() {
                 Some("can_be_merged") => MergeabilityStatus::Mergeable,
                 Some("cannot_be_merged") => MergeabilityStatus::Conflict,

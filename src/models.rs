@@ -36,6 +36,20 @@ pub enum MergeabilityStatus {
     Conflict,
     /// The MR branch is behind the target branch and needs a rebase.
     NeedsRebase,
+    /// The MR is not open (already merged or closed in GitLab).
+    NotOpen,
+    /// The MR is a draft — intentionally not ready to merge.
+    Draft,
+    /// There are unresolved discussion threads on the MR.
+    DiscussionsNotResolved,
+    /// A CI pipeline is required before this MR can be merged.
+    CiMustPass,
+    /// A CI pipeline is currently running.
+    CiStillRunning,
+    /// Required approvals are missing.
+    NotApproved,
+    /// A reviewer has explicitly requested changes before the MR can be merged.
+    RequestedChanges,
     /// Status not yet fetched, not applicable, or an unrecognised value.
     #[default]
     Unknown,

@@ -9,6 +9,69 @@ use crate::ui;
 use crossterm::event::{self, Event, KeyEventKind};
 use std::time::Duration;
 
+/// Returns an ISO 8601 UTC timestamp offset by `days_ago` days from now.
+/// Used to produce realistic, relative `updated_at` values in demo mode
+/// so that the Activity badge (🟢 / 🟡 / 🔴) reflects the configured thresholds.
+fn demo_updated_at(days_ago: i64) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let ts = now - days_ago * 86_400;
+    // Format as a minimal ISO 8601 UTC string understood by the activity_badge parser.
+    let secs = ts % 60;
+    let mins = (ts / 60) % 60;
+    let hours = (ts / 3600) % 24;
+    let days_since_epoch = ts / 86_400;
+    // Compute calendar date from days since Unix epoch (1970-01-01).
+    let (year, month, day) = days_since_epoch_to_ymd(days_since_epoch);
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
+        year, month, day, hours, mins, secs
+    )
+}
+
+/// Converts days since Unix epoch to a (year, month, day) tuple.
+fn days_since_epoch_to_ymd(mut days: i64) -> (i64, u8, u8) {
+    let mut year = 1970i64;
+    loop {
+        let days_in_year = if is_leap(year) { 366 } else { 365 };
+        if days < days_in_year {
+            break;
+        }
+        days -= days_in_year;
+        year += 1;
+    }
+    let months = [
+        31,
+        if is_leap(year) { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month = 1u8;
+    for &m in &months {
+        if days < m {
+            break;
+        }
+        days -= m;
+        month += 1;
+    }
+    (year, month, (days + 1) as u8)
+}
+
+fn is_leap(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
 /// Runs the application in demo mode with pre-populated mock data.
 /// This mode is intended for screenshots, testing, and demonstrations.
 pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +109,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                     .collect(),
             ),
             state: GitlabMrState::Merged,
-            mergeability: MergeabilityStatus::Unknown,
+            mergeability: MergeabilityStatus::NotApproved,
             sha: Some("c9d0e1f2".into()),
             // Pre-populate mock pipelines for the demo so [P] shows data instantly.
             pipelines: vec![
@@ -144,7 +207,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             ],
             // Most recent timestamp so MR 104 lands at row 0 after the default sort
             // (UpdatedAt Descending) — required for the pipeline demo in demo.tape.
-            updated_at: Some("2024-05-06T09:15:00.000Z".into()),
+            updated_at: Some(demo_updated_at(1)),
             source_branch: "feat/graphql-mr-metadata".into(),
             target_branch: "main".into(),
             merged_by: Some("Thomas Dubosc (@thomas_db)".into()),
@@ -173,7 +236,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "review::approved".into(),
                 "feature".into(),
             ],
-            updated_at: Some("2024-05-01T10:00:00.000Z".into()),
+            updated_at: Some(demo_updated_at(4)),
             source_branch: "feat/oauth2-pkce".into(),
             target_branch: "main".into(),
             merged_by: Some("Sarah Codewyn (@sarah_code)".into()),
@@ -199,7 +262,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             milestone_due_date: Some("2024-05-31".into()),
             web_url: "https://gitlab.com/demo/project/-/merge_requests/102".into(),
             labels: vec!["bug".into(), "deploy::prod_pending".into()],
-            updated_at: Some("2024-05-02T15:30:00.000Z".into()),
+            updated_at: Some(demo_updated_at(14)),
             source_branch: "fix/db-pool-deadlock".into(),
             target_branch: "main".into(),
             merged_by: None,
@@ -226,7 +289,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             milestone_due_date: None,
             web_url: "https://gitlab.com/demo/project/-/merge_requests/103".into(),
             labels: vec!["performance".into(), "review::needs_work".into()],
-            updated_at: Some("2024-05-03T08:45:00.000Z".into()),
+            updated_at: Some(demo_updated_at(1)),
             source_branch: "refactor/ui-double-buffer".into(),
             target_branch: "develop".into(),
             merged_by: None,
@@ -241,7 +304,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             title: "fix(ci): Repair flaky integration tests in pipeline stage 3".into(),
             status: MrStatus::MergedIn(["main".into()].into_iter().collect()),
             state: GitlabMrState::Closed,
-            mergeability: MergeabilityStatus::Unknown,
+            mergeability: MergeabilityStatus::DiscussionsNotResolved,
             sha: Some("3a4b5c6d".into()),
             description: "Isolated timing-dependent assertions and added retry logic.".into(),
             author: "Sarah Codewyn (@sarah_code)".into(),
@@ -251,14 +314,14 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             milestone_due_date: Some("2024-05-31".into()),
             web_url: "https://gitlab.com/demo/project/-/merge_requests/105".into(),
             labels: vec!["bug".into(), "review::approved".into(), "size::S".into()],
-            updated_at: Some("2024-04-28T14:00:00.000Z".into()),
+            updated_at: Some(demo_updated_at(30)),
             source_branch: "fix/ci-flaky-tests".into(),
             target_branch: "main".into(),
             merged_by: None,
             merged_at: None,
             pipelines: vec![],
             recently_updated: false,
-            user_notes_count: 0,
+            user_notes_count: 6,
             flagged: false,
         },
         TrackedMr {
@@ -278,7 +341,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             milestone_due_date: None,
             web_url: "https://gitlab.com/demo/project/-/merge_requests/106".into(),
             labels: vec!["dependencies".into(), "review::needs_work".into()],
-            updated_at: Some("2024-04-15T07:30:00.000Z".into()),
+            updated_at: Some(demo_updated_at(5)),
             source_branch: "chore/bump-tokio-1.37".into(),
             target_branch: "develop".into(),
             merged_by: None,
@@ -294,7 +357,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             status: MrStatus::Loading,
             state: GitlabMrState::Opened,
             // Demo: simulate a cleanly mergeable MR.
-            mergeability: MergeabilityStatus::Mergeable,
+            mergeability: MergeabilityStatus::RequestedChanges,
             sha: None,
             description: "Uses notify-rust to surface MR merge events as OS notifications.".into(),
             author: "Julien Morel (@julien_m)".into(),
@@ -308,7 +371,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 "review::needs_work".into(),
                 "size::M".into(),
             ],
-            updated_at: Some("2024-05-05T11:20:00.000Z".into()),
+            updated_at: Some(demo_updated_at(18)),
             source_branch: "feat/desktop-notifications".into(),
             target_branch: "main".into(),
             merged_by: None,

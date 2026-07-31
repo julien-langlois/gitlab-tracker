@@ -352,6 +352,15 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
             MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
             MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
+            MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
+            MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
+            MergeabilityStatus::DiscussionsNotResolved => {
+                ("DISCUSSIONS", Color::Black, Color::LightMagenta)
+            }
+            MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
+            MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
+            MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
+            MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
             MergeabilityStatus::Unknown => ("UNKNOWN", Color::DarkGray, Color::Black),
         };
         lines.push(Line::from(vec![

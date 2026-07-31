@@ -9,8 +9,8 @@ use ratatui::{
 };
 
 /// Fixed width (in chars) for all state badges, padding included.
-/// "MERGEABLE" is 9 chars — add 2 chars of padding (1 each side) → 11.
-pub const BADGE_WIDTH: usize = 11;
+/// "CI STILL RUNNING" is 16 chars — add 2 chars of padding (1 each side) → 18.
+pub const BADGE_WIDTH: usize = 18;
 
 /// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
 /// Excess space is distributed evenly left and right (left-biased on odd remainder).
@@ -61,6 +61,15 @@ fn state_badge(
         MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
         MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
         MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
+        MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
+        MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
+        MergeabilityStatus::DiscussionsNotResolved => {
+            ("DISCUSSIONS", Color::Black, Color::LightMagenta)
+        }
+        MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
+        MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
+        MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
+        MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
         MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
@@ -219,10 +228,11 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         .collect();
 
     // Build constraints in lockstep with the header/row cells.
+    // State badge column width must match BADGE_WIDTH exactly so the text is centred.
     let mut constraints = vec![
-        Constraint::Length(8),  // ID
-        Constraint::Fill(3),    // Title
-        Constraint::Length(13), // State badge
+        Constraint::Length(8),                      // ID
+        Constraint::Fill(3),                        // Title
+        Constraint::Length(BADGE_WIDTH as u16 + 2), // State badge
     ];
     if cols.activity {
         constraints.push(Constraint::Length(12)); // Activity badge
