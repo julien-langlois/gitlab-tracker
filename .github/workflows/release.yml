@@ -16,7 +16,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to Crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --package gitlab-tracker --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   build-release:
     name: Build (${{ matrix.target }})
