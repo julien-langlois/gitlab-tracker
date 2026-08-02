@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "gitlab-tracker",
     "gitlab-tracker-notify",
+    "gitlab-tracker-core",
+    "gitlab-tracker-redmine",
 ]
 
 [workspace.package]

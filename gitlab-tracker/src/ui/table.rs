@@ -103,6 +103,10 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     if cols.notes {
         header_cells.push(Cell::from("Notes").bold());
     }
+    #[cfg(feature = "redmine")]
+    if cols.tracker_ticket {
+        header_cells.push(Cell::from("Redmine").bold());
+    }
     for b in &app.branches {
         header_cells.push(Cell::from(b.clone()).bold());
     }
@@ -208,6 +212,76 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 ));
             }
 
+            // Optional Redmine ticket column — compiled only with the `redmine` feature.
+            #[cfg(feature = "redmine")]
+            if cols.tracker_ticket {
+                let ticket_cell = match &mr.linked_ticket {
+                    Some(t) => {
+                        // Format time tracking as "Xh Ym" — reused from inspector logic.
+                        let fmt_duration = |secs: u32| -> String {
+                            if secs == 0 {
+                                return "—".to_string();
+                            }
+                            let h = secs / 3600;
+                            let m = (secs % 3600) / 60;
+                            match (h, m) {
+                                (0, m) => format!("{}m", m),
+                                (h, 0) => format!("{}h", h),
+                                (h, m) => format!("{}h {}m", h, m),
+                            }
+                        };
+
+                        let has_tracking = t.time_estimate.map(|v| v > 0).unwrap_or(false)
+                            || t.time_spent.map(|v| v > 0).unwrap_or(false);
+
+                        if has_tracking {
+                            let spent = t
+                                .time_spent
+                                .map(fmt_duration)
+                                .unwrap_or_else(|| "—".to_string());
+                            let estimate = t
+                                .time_estimate
+                                .map(fmt_duration)
+                                .unwrap_or_else(|| "—".to_string());
+
+                            // Colour the tracking ratio: green < 80 %, yellow 80–100 %, red over budget.
+                            let ratio_color = match (t.time_estimate, t.time_spent) {
+                                (Some(est), Some(sp)) if est > 0 => {
+                                    let ratio = sp as f32 / est as f32;
+                                    if ratio >= 1.0 {
+                                        Color::Red
+                                    } else if ratio >= 0.8 {
+                                        Color::Yellow
+                                    } else {
+                                        Color::Green
+                                    }
+                                }
+                                _ => Color::DarkGray,
+                            };
+
+                            let spans = vec![
+                                Span::styled(
+                                    format!("#{} {} ", t.id, t.status),
+                                    Style::default()
+                                        .fg(Color::LightMagenta)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(
+                                    format!("{}/{}", spent, estimate),
+                                    Style::default().fg(ratio_color),
+                                ),
+                            ];
+                            Cell::from(Line::from(spans))
+                        } else {
+                            let text = format!("#{} {}", t.id, t.status);
+                            Cell::from(text).fg(Color::LightMagenta)
+                        }
+                    }
+                    None => Cell::from("—").fg(Color::DarkGray),
+                };
+                cells.push(maybe_highlight(ticket_cell, highlight));
+            }
+
             for b in &app.branches {
                 let cell = match &mr.status {
                     MrStatus::Loading => Cell::from("⏳ LOADING...").yellow(),
@@ -244,10 +318,20 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         constraints.push(Constraint::Fill(2)); // Labels
     }
     if cols.milestone {
-        constraints.push(Constraint::Fill(2)); // Milestone
+        // Milestone gets a smaller share when the Redmine column is also visible,
+        // to give more room to the ticket subject which is typically longer.
+        #[cfg(feature = "redmine")]
+        let milestone_fill = if cols.tracker_ticket { 1 } else { 2 };
+        #[cfg(not(feature = "redmine"))]
+        let milestone_fill = 2;
+        constraints.push(Constraint::Fill(milestone_fill)); // Milestone
     }
     if cols.notes {
         constraints.push(Constraint::Length(10)); // Notes badge
+    }
+    #[cfg(feature = "redmine")]
+    if cols.tracker_ticket {
+        constraints.push(Constraint::Fill(2)); // Tracker ticket
     }
 
     for _ in &app.branches {

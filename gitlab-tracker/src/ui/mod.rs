@@ -1,6 +1,8 @@
 pub mod inspector;
 pub mod table;
 
+#[cfg(feature = "redmine")]
+use crate::app::LogTimeField;
 use crate::app::{ActivePane, App, InputMode, InspectorView, SortColumn, SortOrder};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -41,8 +43,12 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     let inspector_title = match (inspector_is_active, app.inspector_view) {
         (true, InspectorView::MrInfo) => " MR Inspector [FOCUS] │ [P]: Pipelines ",
         (false, InspectorView::MrInfo) => " MR Inspector │ [P]: Pipelines ",
-        (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: MR Info ",
-        (false, InspectorView::Pipelines) => " Pipelines │ [P]: MR Info ",
+        (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: Time Log ",
+        (false, InspectorView::Pipelines) => " Pipelines │ [P]: Time Log ",
+        #[cfg(feature = "redmine")]
+        (true, InspectorView::TimeLog) => " Time Log [FOCUS] │ [P]: MR Info │ [L]: Log Time ",
+        #[cfg(feature = "redmine")]
+        (false, InspectorView::TimeLog) => " Time Log │ [P]: MR Info │ [L]: Log Time ",
     };
     let inspector_block = Block::default()
         .borders(Borders::ALL)
@@ -55,6 +61,8 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             let rendered_text = match app.inspector_view {
                 InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr),
+                #[cfg(feature = "redmine")]
+                InspectorView::TimeLog => inspector::render_time_log_text(mr, &app.time_entries),
             };
 
             // Update content/pane dimensions so scroll clamping in App is accurate.
@@ -118,6 +126,13 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             ),
             Style::default(),
         ),
+        // The Log Time popup handles its own rendering — the input bar is hidden behind it.
+        // We still need to cover this arm to satisfy exhaustiveness.
+        #[cfg(feature = "redmine")]
+        InputMode::LogTime => (
+            " LOG TIME │ [Tab]: Next field │ [Enter]: Submit │ [Esc]: Cancel ".to_string(),
+            Style::default().fg(Color::Magenta),
+        ),
     };
 
     let input_box = Paragraph::new(app.input.as_str()).block(
@@ -132,11 +147,197 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     if app.input_mode == InputMode::ColumnPicker {
         render_column_picker(f, app, f.area());
     }
+    // Update the Normal-mode hint bar to mention [T] when Redmine is compiled in.
+    // (The hint string is built above — this comment is a marker for future integrations.)
 
     // Render the milestone autocomplete dropdown above the input bar when suggestions exist.
     if app.input_mode == InputMode::Editing && !app.milestone_suggestions.is_empty() {
         render_milestone_autocomplete(f, app, chunks[1]);
     }
+
+    // Render the Log Time popup on top of everything when active.
+    #[cfg(feature = "redmine")]
+    if app.input_mode == InputMode::LogTime {
+        render_log_time_popup(f, app, f.area());
+    }
+}
+
+/// Renders the Log Time popup centred over the terminal.
+///
+/// The popup is a modal overlay using [`Clear`] so it erases whatever is beneath.
+/// Layout (top→bottom):
+///   1. Duration text field
+///   2. Activity selector list (scrollable)
+///   3. Comment text field
+///   4. Error line (when present) + shortcut hint
+#[cfg(feature = "redmine")]
+fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
+    use ratatui::widgets::List;
+
+    // Ticket context for the popup title.
+    let ticket_label = app
+        .table_state
+        .selected()
+        .and_then(|i| app.visible_mrs().nth(i))
+        .and_then(|mr| mr.linked_ticket.as_ref())
+        .map(|t| format!(" ⏱  Log Time — #{} ", t.id))
+        .unwrap_or_else(|| " ⏱  Log Time ".to_string());
+
+    // Fixed popup dimensions.
+    let popup_width: u16 = 60;
+    // Base height: title(1) + duration(3) + activity list (up to 6 visible) + comment(3) +
+    // error/hint(2) + borders(2) = 17 rows max
+    let activity_rows = (app.activities.len() as u16).min(6).max(2);
+    let popup_height: u16 = 3 + activity_rows + 3 + 2 + 2;
+
+    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    f.render_widget(Clear, popup_area);
+
+    // Outer border block.
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Magenta))
+        .title(Span::styled(
+            ticket_label,
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ));
+    f.render_widget(outer_block, popup_area);
+
+    // Inner layout: split vertically into 4 zones inside the border.
+    let inner = Rect::new(
+        popup_area.x + 1,
+        popup_area.y + 1,
+        popup_area.width.saturating_sub(2),
+        popup_area.height.saturating_sub(2),
+    );
+
+    let zones = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),             // Duration field
+            Constraint::Length(activity_rows), // Activity selector
+            Constraint::Length(3),             // Comment field
+            Constraint::Min(1),                // Error / hint line
+        ])
+        .split(inner);
+
+    // Helper: border colour based on whether the field is focused.
+    let field_style = |focused: bool| -> Style {
+        if focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        }
+    };
+
+    // ── Duration field ────────────────────────────────────────────────────────
+    let duration_focused = app.log_time_form.focused_field == LogTimeField::Duration;
+    let duration_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(duration_focused))
+        .title(Span::styled(
+            " Duration (e.g. 1h30, 90m, 1.5h) ",
+            Style::default().fg(Color::White),
+        ));
+    let duration_widget = Paragraph::new(app.log_time_form.duration_input.as_str())
+        .block(duration_block)
+        .style(Style::default().fg(Color::White));
+    f.render_widget(duration_widget, zones[0]);
+
+    // ── Activity selector ─────────────────────────────────────────────────────
+    let activity_focused = app.log_time_form.focused_field == LogTimeField::Activity;
+    let activity_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(activity_focused))
+        .title(Span::styled(
+            " Activity [↑/↓] ",
+            Style::default().fg(Color::White),
+        ));
+
+    if app.activities.is_empty() {
+        let loading = Paragraph::new("Loading activities…")
+            .block(activity_block)
+            .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(loading, zones[1]);
+    } else {
+        let cursor = app.log_time_form.selected_activity_idx;
+        let visible = activity_rows as usize;
+        let scroll_offset = if cursor >= visible {
+            cursor + 1 - visible
+        } else {
+            0
+        };
+
+        let items: Vec<ListItem> = app
+            .activities
+            .iter()
+            .enumerate()
+            .skip(scroll_offset)
+            .take(visible)
+            .map(|(i, act)| {
+                let selected = i == cursor;
+                let style = if selected {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                ListItem::new(Line::from(Span::styled(format!("  {} ", act.name), style)))
+            })
+            .collect();
+
+        let list = List::new(items).block(activity_block);
+        let mut list_state = ratatui::widgets::ListState::default();
+        list_state.select(Some(cursor.saturating_sub(scroll_offset)));
+        f.render_stateful_widget(list, zones[1], &mut list_state);
+    }
+
+    // ── Comment field ─────────────────────────────────────────────────────────
+    let comment_focused = app.log_time_form.focused_field == LogTimeField::Comment;
+    let comment_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(field_style(comment_focused))
+        .title(Span::styled(
+            " Comment (optional) ",
+            Style::default().fg(Color::White),
+        ));
+    let comment_widget = Paragraph::new(app.log_time_form.comment_input.as_str())
+        .block(comment_block)
+        .style(Style::default().fg(Color::White));
+    f.render_widget(comment_widget, zones[2]);
+
+    // ── Error / hint line ─────────────────────────────────────────────────────
+    let bottom_line = if let Some(err) = &app.log_time_form.error {
+        Line::from(vec![
+            Span::styled(
+                " ✘ ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(err.clone(), Style::default().fg(Color::Red)),
+        ])
+    } else if app.log_time_form.submitting {
+        Line::from(vec![Span::styled(
+            " ⟳ Submitting…",
+            Style::default().fg(Color::Yellow),
+        )])
+    } else {
+        Line::from(vec![
+            Span::styled(" [Tab] ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Next field  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Enter] ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Submit  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Esc] ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Cancel", Style::default().fg(Color::DarkGray)),
+        ])
+    };
+    f.render_widget(Paragraph::new(bottom_line), zones[3]);
 }
 
 /// Renders the milestone autocomplete dropdown just above the input bar.
@@ -209,12 +410,23 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
 /// Arrow keys move the cursor; Space toggles the highlighted entry.
 fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     // The popup entries mirror the fields of `VisibleColumns` in declaration order.
+    // The "Ticket" entry is appended only when the `redmine` feature is compiled in.
+    #[cfg(not(feature = "redmine"))]
     let entries: &[(&str, bool)] = &[
         ("Activity", app.config.visible_columns.activity),
         ("Target branch", app.config.visible_columns.target_branch),
         ("Labels", app.config.visible_columns.labels),
         ("Milestone", app.config.visible_columns.milestone),
         ("Notes", app.config.visible_columns.notes),
+    ];
+    #[cfg(feature = "redmine")]
+    let entries: &[(&str, bool)] = &[
+        ("Activity", app.config.visible_columns.activity),
+        ("Target branch", app.config.visible_columns.target_branch),
+        ("Labels", app.config.visible_columns.labels),
+        ("Milestone", app.config.visible_columns.milestone),
+        ("Notes", app.config.visible_columns.notes),
+        ("Redmine", app.config.visible_columns.tracker_ticket),
     ];
 
     // Fixed popup size: wide enough for the longest label + checkbox, tall enough for all rows.

@@ -1,0 +1,15 @@
+[package]
+name = "gitlab-tracker-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared contracts and domain types for gitlab-tracker plugins"
+keywords = ["gitlab", "tracker", "plugin", "tui"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"

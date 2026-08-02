@@ -16,12 +16,14 @@ name = "gitlab-tracker"
 path = "src/main.rs"
 
 [features]
-# Propagates the `desktop` feature of gitlab-tracker-notify.
 default = ["notifications"]
 notifications = ["gitlab-tracker-notify/desktop"]
+redmine = ["dep:gitlab-tracker-redmine", "dep:gitlab-tracker-core"]
 
 [dependencies]
 gitlab-tracker-notify = { version = "0.2.10", path = "../gitlab-tracker-notify" }
+gitlab-tracker-core    = { version = "0.2.10", path = "../gitlab-tracker-core",    optional = true }
+gitlab-tracker-redmine = { version = "0.2.10", path = "../gitlab-tracker-redmine", optional = true }
 
 ratatui = { version = "0.30", features = ["crossterm_0_28"] }
 crossterm = "0.28"

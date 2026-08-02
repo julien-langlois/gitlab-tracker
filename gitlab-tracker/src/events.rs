@@ -4,10 +4,16 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{ActivePane, App, InputMode, InspectorView};
+#[cfg(feature = "redmine")]
+use crate::app::InspectorView;
+use crate::app::{ActivePane, App, InputMode};
+#[cfg(feature = "redmine")]
+use crate::app::{LogTimeField, LogTimeForm};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_config_async, save_state_async};
+#[cfg(feature = "redmine")]
+use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
 ///
@@ -131,7 +137,12 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
+            // Column count depends on whether the `redmine` feature is compiled in.
+            #[cfg(not(feature = "redmine"))]
             const COLUMN_COUNT: usize = 5;
+            #[cfg(feature = "redmine")]
+            const COLUMN_COUNT: usize = 6;
+
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if app.column_picker_cursor > 0 {
@@ -145,7 +156,8 @@ pub async fn handle_key_event(
                 }
                 KeyCode::Char(' ') => {
                     // Toggle the column at the current cursor position.
-                    // Order must mirror `VisibleColumns` field declaration order.
+                    // Order must mirror `VisibleColumns` field declaration order
+                    // and the entries array in `render_column_picker`.
                     match app.column_picker_cursor {
                         0 => {
                             app.config.visible_columns.activity =
@@ -161,6 +173,12 @@ pub async fn handle_key_event(
                                 !app.config.visible_columns.milestone
                         }
                         4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
+                        // Entry 5 — only reachable when `redmine` feature is compiled in.
+                        #[cfg(feature = "redmine")]
+                        5 => {
+                            app.config.visible_columns.tracker_ticket =
+                                !app.config.visible_columns.tracker_ticket
+                        }
                         _ => {}
                     }
                 }
@@ -169,6 +187,176 @@ pub async fn handle_key_event(
                     app.input_mode = InputMode::Normal;
                     save_config_async(&app.config).await;
                 }
+                _ => {}
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Log Time popup mode (redmine feature only).
+        // Tab/Shift+Tab cycle fields; Up/Down navigate activities; Enter submits.
+        // ------------------------------------------------------------------
+        #[cfg(feature = "redmine")]
+        InputMode::LogTime => {
+            match key.code {
+                KeyCode::Esc => {
+                    // Close popup without submitting — reset the form.
+                    app.input_mode = InputMode::Normal;
+                    app.log_time_form = LogTimeForm::default();
+                }
+
+                // Tab / Shift+Tab cycle through fields: Duration → Activity → Comment → wrap.
+                KeyCode::Tab => {
+                    app.log_time_form.focused_field = match app.log_time_form.focused_field {
+                        LogTimeField::Duration => LogTimeField::Activity,
+                        LogTimeField::Activity => LogTimeField::Comment,
+                        LogTimeField::Comment => LogTimeField::Duration,
+                    };
+                    app.log_time_form.error = None;
+                }
+                KeyCode::BackTab => {
+                    app.log_time_form.focused_field = match app.log_time_form.focused_field {
+                        LogTimeField::Duration => LogTimeField::Comment,
+                        LogTimeField::Activity => LogTimeField::Duration,
+                        LogTimeField::Comment => LogTimeField::Activity,
+                    };
+                    app.log_time_form.error = None;
+                }
+
+                // Up/Down navigate the activity list when that field is focused.
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if app.log_time_form.focused_field == LogTimeField::Activity
+                        && !app.activities.is_empty()
+                    {
+                        let len = app.activities.len();
+                        app.log_time_form.selected_activity_idx =
+                            (app.log_time_form.selected_activity_idx + len - 1) % len;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if app.log_time_form.focused_field == LogTimeField::Activity
+                        && !app.activities.is_empty()
+                    {
+                        let len = app.activities.len();
+                        app.log_time_form.selected_activity_idx =
+                            (app.log_time_form.selected_activity_idx + 1) % len;
+                    }
+                }
+
+                // Enter: validate and submit when on Comment field, else advance field.
+                KeyCode::Enter => {
+                    match app.log_time_form.focused_field {
+                        LogTimeField::Duration | LogTimeField::Activity => {
+                            app.log_time_form.focused_field = match app.log_time_form.focused_field
+                            {
+                                LogTimeField::Duration => LogTimeField::Activity,
+                                _ => LogTimeField::Comment,
+                            };
+                            app.log_time_form.error = None;
+                        }
+                        LogTimeField::Comment => {
+                            // Validate duration before submitting.
+                            let hours = parse_duration_to_hours(&app.log_time_form.duration_input);
+                            match hours {
+                                Err(e) => {
+                                    app.log_time_form.error = Some(e);
+                                    app.log_time_form.focused_field = LogTimeField::Duration;
+                                }
+                                Ok(h) => {
+                                    if app.activities.is_empty() {
+                                        app.log_time_form.error =
+                                            Some("No activities loaded".into());
+                                    } else if app.log_time_form.submitting {
+                                        // Already in flight — ignore double-Enter.
+                                    } else {
+                                        // Resolve the selected activity, the Redmine ticket id,
+                                        // and the parent MR id (needed to route the refresh).
+                                        let activity = app
+                                            .activities
+                                            .get(app.log_time_form.selected_activity_idx)
+                                            .cloned();
+                                        let selected_mr = app
+                                            .table_state
+                                            .selected()
+                                            .and_then(|i| app.visible_mrs().nth(i));
+                                        let mr_id = selected_mr.map(|mr| mr.id.clone());
+                                        let ticket_id = selected_mr
+                                            .and_then(|mr| mr.linked_ticket.as_ref())
+                                            .map(|t| t.id.clone());
+
+                                        if let (Some(activity), Some(mr_id), Some(ticket_id)) =
+                                            (activity, mr_id, ticket_id)
+                                        {
+                                            app.log_time_form.submitting = true;
+                                            app.log_time_form.error = None;
+
+                                            let provider = app.tracker.as_ref().map(Arc::clone);
+                                            let comment = app.log_time_form.comment_input.clone();
+                                            let spent_on =
+                                                chrono::Utc::now().format("%Y-%m-%d").to_string();
+                                            let tx2 = tx.clone();
+                                            let tid = ticket_id.clone();
+
+                                            if let Some(provider) = provider {
+                                                tokio::spawn(async move {
+                                                    let entry =
+                                                        gitlab_tracker_core::TimeEntryRequest {
+                                                            hours: h,
+                                                            activity_id: activity.id,
+                                                            comment,
+                                                            spent_on,
+                                                        };
+                                                    match provider.log_time(&tid, entry).await {
+                                                        Ok(()) => {
+                                                            let _ = tx2.send(
+                                                                crate::models::AppEvent::TimeLogSubmitted {
+                                                                    mr_id,
+                                                                    ticket_id: tid,
+                                                                },
+                                                            );
+                                                        }
+                                                        Err(e) => {
+                                                            let _ = tx2.send(
+                                                                crate::models::AppEvent::TimeLogFailed {
+                                                                    error: e,
+                                                                },
+                                                            );
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            app.log_time_form.error =
+                                                Some("No linked ticket selected".into());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Backspace edits the focused text field.
+                KeyCode::Backspace => match app.log_time_form.focused_field {
+                    LogTimeField::Duration => {
+                        app.log_time_form.duration_input.pop();
+                    }
+                    LogTimeField::Comment => {
+                        app.log_time_form.comment_input.pop();
+                    }
+                    LogTimeField::Activity => {}
+                },
+
+                // Printable chars feed the focused text field.
+                KeyCode::Char(c) => match app.log_time_form.focused_field {
+                    LogTimeField::Duration => {
+                        app.log_time_form.duration_input.push(c);
+                    }
+                    LogTimeField::Comment => {
+                        app.log_time_form.comment_input.push(c);
+                    }
+                    LogTimeField::Activity => {}
+                },
+
                 _ => {}
             }
         }
@@ -194,11 +382,61 @@ pub async fn handle_key_event(
             // Arrow keys and j/k are routed based on the active pane.
             KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
                 ActivePane::Inspector => app.inspector_scroll_down(1),
-                ActivePane::Dashboard => app.next_row(),
+                ActivePane::Dashboard => {
+                    app.next_row();
+                    // When navigating rows while the TimeLog view is active, re-fetch
+                    // time entries for the newly selected MR's linked ticket.
+                    #[cfg(feature = "redmine")]
+                    if app.inspector_view == InspectorView::TimeLog {
+                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                            let ticket_id = app
+                                .table_state
+                                .selected()
+                                .and_then(|i| app.visible_mrs().nth(i))
+                                .and_then(|mr| mr.linked_ticket.as_ref())
+                                .map(|t| t.id.clone());
+
+                            if let Some(tid) = ticket_id {
+                                let tx2 = tx.clone();
+                                tokio::spawn(async move {
+                                    let entries = provider.fetch_time_entries(&tid).await;
+                                    let _ = tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
+                                        entries,
+                                    });
+                                });
+                            }
+                        }
+                    }
+                }
             },
             KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
                 ActivePane::Inspector => app.inspector_scroll_up(1),
-                ActivePane::Dashboard => app.prev_row(),
+                ActivePane::Dashboard => {
+                    app.prev_row();
+                    // When navigating rows while the TimeLog view is active, re-fetch
+                    // time entries for the newly selected MR's linked ticket.
+                    #[cfg(feature = "redmine")]
+                    if app.inspector_view == InspectorView::TimeLog {
+                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                            let ticket_id = app
+                                .table_state
+                                .selected()
+                                .and_then(|i| app.visible_mrs().nth(i))
+                                .and_then(|mr| mr.linked_ticket.as_ref())
+                                .map(|t| t.id.clone());
+
+                            if let Some(tid) = ticket_id {
+                                let tx2 = tx.clone();
+                                tokio::spawn(async move {
+                                    let entries = provider.fetch_time_entries(&tid).await;
+                                    let _ = tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
+                                        entries,
+                                    });
+                                });
+                            }
+                        }
+                    }
+                }
             },
 
             // Open the MR URL in the default browser.
@@ -237,7 +475,7 @@ pub async fn handle_key_event(
                 }
             }
 
-            // Force a full refresh of all MRs.
+            // Force a full refresh of all MRs (GitLab + Redmine tickets).
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 app.time_left = app.refresh_interval_secs;
                 let ctx = build_fetch_context(app);
@@ -252,16 +490,97 @@ pub async fn handle_key_event(
                         api_semaphore.clone(),
                         tx.clone(),
                     );
+
+                    // Unconditionally re-fetch the Redmine ticket so that spent_hours
+                    // and time entries reflect any change logged since the last refresh,
+                    // regardless of whether the GitLab MR itself was updated.
+                    #[cfg(feature = "redmine")]
+                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                        if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
+                            let mr_id = mr.id.clone();
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
+                                    let _ =
+                                        tx2.send(crate::models::AppEvent::TrackerTicketLoaded {
+                                            mr_id,
+                                            ticket,
+                                        });
+                                }
+                            });
+                        }
+                    }
                 }
             }
 
-            // [P] toggles the Inspector between MR info and Pipeline view.
+            // [P] cycles the Inspector view: MrInfo → Pipelines → TimeLog (redmine) → MrInfo.
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                app.inspector_view = match app.inspector_view {
-                    InspectorView::MrInfo => InspectorView::Pipelines,
-                    InspectorView::Pipelines => InspectorView::MrInfo,
-                };
+                let next = app.inspector_view.next();
+                app.inspector_view = next;
                 app.reset_inspector_scroll();
+
+                // When entering the TimeLog view, fetch time entries for the selected ticket.
+                #[cfg(feature = "redmine")]
+                if app.inspector_view == InspectorView::TimeLog {
+                    let has_provider = app.tracker.is_some();
+                    let selected_idx = app.table_state.selected();
+                    let ticket_id = selected_idx
+                        .and_then(|i| app.visible_mrs().nth(i))
+                        .and_then(|mr| mr.linked_ticket.as_ref())
+                        .map(|t| t.id.clone());
+
+                    tracing::debug!(
+                        has_provider,
+                        selected_idx = ?selected_idx,
+                        ticket_id = ?ticket_id,
+                        "TimeLog view entered — attempting time entries fetch"
+                    );
+
+                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                        if let Some(tid) = ticket_id {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                tracing::debug!(ticket_id = %tid, "Spawning fetch_time_entries");
+                                let entries = provider.fetch_time_entries(&tid).await;
+                                tracing::debug!(
+                                    count = entries.len(),
+                                    "fetch_time_entries returned"
+                                );
+                                let _ = tx2
+                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
+                            });
+                        }
+                    }
+                }
+            }
+
+            // [L] opens the Log Time popup for the selected MR's linked Redmine ticket.
+            // Only active when a ticket is linked and the redmine feature is compiled in.
+            #[cfg(feature = "redmine")]
+            KeyCode::Char('l') | KeyCode::Char('L') => {
+                let has_ticket = app
+                    .table_state
+                    .selected()
+                    .and_then(|i| app.visible_mrs().nth(i))
+                    .and_then(|mr| mr.linked_ticket.as_ref())
+                    .is_some();
+
+                if has_ticket {
+                    app.log_time_form = LogTimeForm::default();
+                    app.input_mode = InputMode::LogTime;
+
+                    // Fetch activities lazily if not yet loaded.
+                    if app.activities.is_empty() {
+                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let activities = provider.fetch_activities().await;
+                                let _ =
+                                    tx2.send(crate::models::AppEvent::ActivitiesLoaded(activities));
+                            });
+                        }
+                    }
+                }
             }
 
             KeyCode::Char('s') => app.cycle_sort_column(),
@@ -283,6 +602,19 @@ pub async fn handle_key_event(
             KeyCode::Char('c') | KeyCode::Char('C') => {
                 app.column_picker_cursor = 0;
                 app.input_mode = InputMode::ColumnPicker;
+            }
+
+            // [T] opens the tracker ticket linked to the selected MR in the browser.
+            // Only compiled when the `redmine` feature is enabled.
+            #[cfg(feature = "redmine")]
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                if let Some(selected) = app.table_state.selected() {
+                    if let Some(mr) = app.visible_mrs().nth(selected) {
+                        if let Some(ticket) = &mr.linked_ticket {
+                            let _ = open::that(&ticket.url);
+                        }
+                    }
+                }
             }
 
             // Delete: remove the selected MR from the list.
@@ -364,6 +696,9 @@ async fn handle_enter(
                 user_notes_count: 0,
                 // New MRs start unflagged.
                 flagged: false,
+                // Ticket resolved live after the first MR fetch — not pre-populated.
+                #[cfg(feature = "redmine")]
+                linked_ticket: None,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;
@@ -515,12 +850,9 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
             app.toggle_flag_selected();
         }
 
-        // [P] toggles the Inspector between MR info and Pipeline view (no fetch in demo mode).
+        // [P] cycles the Inspector view in demo mode (no network fetch).
         KeyCode::Char('p') | KeyCode::Char('P') => {
-            app.inspector_view = match app.inspector_view {
-                InspectorView::MrInfo => InspectorView::Pipelines,
-                InspectorView::Pipelines => InspectorView::MrInfo,
-            };
+            app.inspector_view = app.inspector_view.next();
             app.reset_inspector_scroll();
         }
 

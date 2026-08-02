@@ -341,6 +341,8 @@ pub async fn save_state_async(
                 pipelines: m.pipelines.clone(),
                 user_notes_count: m.user_notes_count,
                 flagged: m.flagged,
+                #[cfg(feature = "redmine")]
+                linked_ticket: m.linked_ticket.clone(),
             })
             .collect(),
         branches: branches.to_vec(),

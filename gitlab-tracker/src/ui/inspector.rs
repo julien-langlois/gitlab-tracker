@@ -8,6 +8,174 @@ use ratatui::text::{Line, Span, Text};
 ///
 /// Shows the last fetched pipelines for the selected MR with their jobs,
 /// grouped by pipeline run. Displayed when the user presses [P].
+/// Renders the Time Log view for the Inspector panel (redmine feature only).
+///
+/// Shows a progress bar (spent vs estimate), then the list of time entries
+/// fetched from Redmine for the linked ticket.
+#[cfg(feature = "redmine")]
+pub fn render_time_log_text(
+    mr: &TrackedMr,
+    entries: &[gitlab_tracker_core::TimeEntry],
+) -> ratatui::text::Text<'static> {
+    /// Formats hours (f32) as "Xh Ym" for display.
+    fn fmt_hours(hours: f32) -> String {
+        let total_mins = (hours * 60.0).round() as u32;
+        let h = total_mins / 60;
+        let m = total_mins % 60;
+        match (h, m) {
+            (0, m) => format!("{}m", m),
+            (h, 0) => format!("{}h", h),
+            (h, m) => format!("{}h {}m", h, m),
+        }
+    }
+
+    /// Formats seconds (u32) as "Xh Ym" for display.
+    fn fmt_secs(secs: u32) -> String {
+        fmt_hours(secs as f32 / 3600.0)
+    }
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            format!("Time Log — MR !{}", mr.id),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        )]),
+        Line::from(vec![Span::raw("")]),
+    ];
+
+    // ── Progress bar (estimate vs spent) ─────────────────────────────────────
+    if let Some(ticket) = &mr.linked_ticket {
+        let estimate_secs = ticket.time_estimate.unwrap_or(0);
+        let spent_secs = ticket.time_spent.unwrap_or(0);
+
+        if estimate_secs > 0 {
+            let ratio = (spent_secs as f32 / estimate_secs as f32).min(1.0);
+            let bar_width: usize = 30;
+            let filled = (ratio * bar_width as f32).round() as usize;
+            let empty = bar_width.saturating_sub(filled);
+            let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+
+            let pct = (spent_secs as f32 / estimate_secs as f32 * 100.0).round() as u32;
+            let bar_color = if spent_secs > estimate_secs {
+                Color::Red
+            } else if pct >= 80 {
+                Color::Yellow
+            } else {
+                Color::Green
+            };
+
+            lines.push(Line::from(vec![
+                Span::raw("Estimate : "),
+                Span::styled(
+                    fmt_secs(estimate_secs),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(Line::from(vec![
+                Span::raw("Spent    : "),
+                Span::styled(
+                    fmt_secs(spent_secs),
+                    Style::default().fg(bar_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(bar, Style::default().fg(bar_color)),
+                Span::raw(format!("  {}%", pct)),
+            ]));
+        } else {
+            // No estimate — just show total spent.
+            let total_hours: f32 = entries.iter().map(|e| e.hours).sum();
+            lines.push(Line::from(vec![
+                Span::raw("Total    : "),
+                Span::styled(
+                    fmt_hours(total_hours),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
+        lines.push(Line::from(vec![Span::raw("")]));
+    }
+
+    // ── Entries list ──────────────────────────────────────────────────────────
+    lines.push(Line::from(vec![
+        Span::styled("── ", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "Entries",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            " ──────────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+
+    if entries.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            "No time entries recorded yet.",
+            Style::default().fg(Color::DarkGray),
+        )]));
+    } else {
+        for entry in entries {
+            // Line 1: date | duration | activity | user
+            lines.push(Line::from(vec![
+                Span::styled(entry.spent_on.clone(), Style::default().fg(Color::DarkGray)),
+                Span::raw("  "),
+                Span::styled(
+                    fmt_hours(entry.hours),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    entry.activity.name.clone(),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("  "),
+                Span::styled(entry.user.clone(), Style::default().fg(Color::White)),
+            ]));
+            // Line 2: comment (indented), shown only when non-empty.
+            if !entry.comment.is_empty() {
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(
+                        format!("\"{}\"", entry.comment),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
+        }
+
+        // Summary footer.
+        let total_hours: f32 = entries.iter().map(|e| e.hours).sum();
+        lines.push(Line::from(vec![Span::raw("")]));
+        lines.push(Line::from(vec![Span::styled(
+            "─────────────────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        )]));
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "Total: {} entries — {} logged",
+                entries.len(),
+                fmt_hours(total_hours)
+            ),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )]));
+    }
+
+    ratatui::text::Text::from(lines)
+}
+
 pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
     let mut lines = vec![
         Line::from(vec![Span::styled(
@@ -426,6 +594,140 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             "None",
             Style::default().dark_gray(),
         )]));
+    }
+
+    // ── Tracker ticket (Redmine) ─────────────────────────────────────────────
+    #[cfg(feature = "redmine")]
+    {
+        /// Formats a duration in seconds as "Xh Ym" for display.
+        fn format_duration(secs: u32) -> String {
+            if secs == 0 {
+                return "—".to_string();
+            }
+            let h = secs / 3600;
+            let m = (secs % 3600) / 60;
+            match (h, m) {
+                (0, m) => format!("{}m", m),
+                (h, 0) => format!("{}h", h),
+                (h, m) => format!("{}h {}m", h, m),
+            }
+        }
+
+        lines.push(Line::from(vec![Span::raw("")]));
+        lines.push(section_header("Tracker"));
+        match &mr.linked_ticket {
+            Some(ticket) => {
+                lines.push(Line::from(vec![
+                    Span::raw("Ticket   : "),
+                    Span::styled(
+                        format!("#{}", ticket.id),
+                        Style::default()
+                            .fg(Color::LightMagenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(ticket.subject.clone(), Style::default().fg(Color::White)),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("Status   : "),
+                    Span::styled(
+                        ticket.status.clone(),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("Author   : "),
+                    Span::styled(
+                        ticket
+                            .author
+                            .clone()
+                            .unwrap_or_else(|| "Unknown".to_string()),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("Assignee : "),
+                    Span::styled(
+                        ticket
+                            .assignee
+                            .clone()
+                            .unwrap_or_else(|| "Unassigned".to_string()),
+                        Style::default()
+                            .fg(Color::LightBlue)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+
+                // Time tracking — shown only when at least one value is set by Redmine.
+                let has_estimate = ticket.time_estimate.map(|v| v > 0).unwrap_or(false);
+                let has_spent = ticket.time_spent.map(|v| v > 0).unwrap_or(false);
+                if has_estimate || has_spent {
+                    let estimate_str = ticket
+                        .time_estimate
+                        .map(format_duration)
+                        .unwrap_or_else(|| "—".to_string());
+                    let spent_str = ticket
+                        .time_spent
+                        .map(format_duration)
+                        .unwrap_or_else(|| "—".to_string());
+
+                    // Colour the spent value relative to the estimate:
+                    // green < 80 %, yellow 80–100 %, red when over budget.
+                    let spent_color = match (ticket.time_estimate, ticket.time_spent) {
+                        (Some(est), Some(spent)) if est > 0 => {
+                            let ratio = spent as f32 / est as f32;
+                            if ratio >= 1.0 {
+                                Color::Red
+                            } else if ratio >= 0.8 {
+                                Color::Yellow
+                            } else {
+                                Color::Green
+                            }
+                        }
+                        _ => Color::DarkGray,
+                    };
+
+                    lines.push(Line::from(vec![
+                        Span::raw("Estimate : "),
+                        Span::styled(
+                            estimate_str,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                    lines.push(Line::from(vec![
+                        Span::raw("Spent    : "),
+                        Span::styled(
+                            spent_str,
+                            Style::default()
+                                .fg(spent_color)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+
+                lines.push(Line::from(vec![
+                    Span::raw("URL      : "),
+                    Span::styled(ticket.url.clone(), Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled(
+                        "[T] open",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+            }
+            None => {
+                lines.push(Line::from(vec![Span::styled(
+                    "No linked ticket detected.",
+                    Style::default().fg(Color::DarkGray),
+                )]));
+            }
+        }
     }
 
     // ── Description ──────────────────────────────────────────────────────────

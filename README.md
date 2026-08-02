@@ -360,7 +360,8 @@ Shortcut keys are active. The input field is passive.
 | `i` or `/` | **Enter Insert mode** — focus the input field |
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
 | `Tab` | Cycle focus between Dashboard and Inspector panes |
-| `P` | Toggle Inspector between MR info and Pipeline view |
+| `P` | Cycle Inspector view: **MR Info → Pipelines → Time Log** (redmine) → MR Info |
+| `L` | **Log time** on the linked Redmine ticket *(redmine feature only)* |
 | `C` | **Open column picker** — toggle optional columns on/off |
 | `O` | Open selected MR in your default web browser |
 | `R` | Force immediate network refresh for all MRs |
@@ -411,7 +412,7 @@ When the input starts with `@`, a dropdown appears above the input bar listing a
 
 ## 🏗️ Project Architecture
 
-This project is structured as a **Cargo workspace** with two crates:
+This project is structured as a **Cargo workspace** with four crates:
 
 ```text
 gitlab-tracker/                  # Binary crate — TUI orchestrator
@@ -430,16 +431,113 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
         ├── table.rs     # Main MR table widget
         └── inspector.rs # Side panel: MR metadata & pipeline history views
 
+gitlab-tracker-core/             # Library crate — shared trait contracts (TrackerProvider, LinkedTicket)
 gitlab-tracker-notify/           # Library crate — optional desktop notification plugin
 └── src/
     └── lib.rs           # notify-rust integration (no-op stubs when feature `desktop` is disabled)
+
+gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
+└── src/
+    ├── lib.rs           # RedmineProvider: implements TrackerProvider
+    ├── client.rs        # Async Redmine REST API client
+    ├── config.rs        # RedmineConfig: YAML config load/save & interactive onboarding
+    ├── detector.rs      # Regex-based ticket ID detector (title & description)
+    └── keyring.rs       # Secure token retrieval via OS Keyring
 ```
 
-The `desktop` feature of `gitlab-tracker-notify` is enabled by default. Build without it for headless or CI environments:
+### Optional Feature Flags
+
+| Feature flag | Default | Effect |
+| :--- | :--- | :--- |
+| `notifications` | ✅ enabled | Desktop notifications via `notify-rust` |
+| `redmine` | ❌ disabled | Redmine ticket integration |
+
+---
+
+## 🔴 Redmine Integration (Optional)
+
+The Redmine integration is an **opt-in** feature. It is **not compiled or active by default** — the application works fully without it.
+
+When enabled, `gitlab-tracker` detects Redmine ticket IDs in MR titles and descriptions (via configurable regex patterns) and enriches the Context Inspector panel with ticket information and time tracking data.
+
+### Features
+
+* **Linked ticket display:** subject, status, author, and assignee are shown in the Inspector's MR Info view.
+* **Time Log view (`P`):** press `P` twice to reach the **Time Log** view. It displays:
+  * A progress bar comparing time spent vs. the ticket's estimate.
+  * The full list of time entries (date, user, activity, duration, comment) fetched live from Redmine via `GET /time_entries.json?issue_id={id}`.
+  * Navigating between MRs with `↑`/`↓` while on this view automatically refreshes the entries for the newly selected ticket.
+* **Log time (`L`):** press `L` from any view to open a popup and submit a new time entry directly to Redmine. Select the activity category, enter the duration (e.g. `1h30`, `0.5`), optionally add a comment, and confirm with `Enter`.
+
+### Enabling Redmine at Build Time
+
+You must explicitly enable the `redmine` feature flag when building or installing:
 
 ```bash
-cargo build --release --no-default-features
+# Build from source with Redmine support
+cargo build --release --features redmine
+
+# Install from source with Redmine support
+cargo install --path gitlab-tracker --features redmine
+
+# Install from crates.io with Redmine support
+cargo install gitlab-tracker --features redmine
 ```
+
+> **Note:** The `redmine` feature pulls in `gitlab-tracker-redmine` and `gitlab-tracker-core` as additional dependencies (HTTP client, YAML config, OS Keyring). Without the flag, neither crate is compiled and there is zero runtime overhead.
+
+### Redmine Configuration
+
+On first launch with the `redmine` feature enabled, the app interactively prompts for your Redmine URL if none is found:
+
+```text
+🌐 No Redmine URL found in config or environment.
+   Leave empty to disable Redmine integration.
+Redmine URL: https://redmine.my-company.com
+```
+
+Leaving the prompt **empty** silently disables the integration — no error, no impact on the rest of the dashboard.
+
+The configuration is persisted as a YAML file:
+
+* **Linux:** `~/.config/gitlab-tracker/gitlab-tracker/redmine.yaml`
+* **macOS:** `~/Library/Application Support/gitlab-tracker/gitlab-tracker/redmine.yaml`
+* **Windows:** `C:\Users\<User>\AppData\Roaming\gitlab-tracker\gitlab-tracker\redmine.yaml`
+
+You can also set the URL via environment variable to skip the prompt entirely:
+
+```env
+REDMINE_URL=https://redmine.my-company.com
+```
+
+The generated `redmine.yaml` file looks like this (edit it to customise the ticket detection patterns):
+
+```yaml
+redmine_url: "https://redmine.my-company.com"
+ticket_patterns:
+  - "#(\\d+)"
+  - "(?i)(?:refs|fixes|closes|resolves)\\s+#(\\d+)"
+  - "/issues/(\\d+)"
+```
+
+| Field | Description |
+| :--- | :--- |
+| `redmine_url` | Base URL of your Redmine instance (no trailing slash) |
+| `ticket_patterns` | Regex patterns to detect ticket IDs — capture group 1 must match the numeric ID |
+
+### Redmine API Token
+
+The Redmine personal API token follows the same secure lookup chain as the GitLab token:
+
+```text
+1. REDMINE_TOKEN environment variable (if set)
+2. Native OS Keyring (GNOME Keyring / macOS Keychain / Windows Credential Manager)
+3. Interactive CLI prompt → saved to OS Keyring
+```
+
+The token is **never stored in plain text** on disk.
+
+---
 
 ---
 

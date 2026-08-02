@@ -136,6 +136,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // of the program is unaffected; the Zeroizing wrapper is immediately dropped.
     let token = get_or_prompt_token().to_string();
 
+    // ── Optional Redmine integration ─────────────────────────────────────────
+    // Loads config + prompts for the API token only when the `redmine` feature
+    // is compiled in. The provider is `None` when the user skips the token prompt,
+    // keeping the integration fully inactive without affecting the rest of the app.
+    #[cfg(feature = "redmine")]
+    let redmine_provider: Option<app::TrackerHandle> = {
+        use std::sync::Arc;
+        let mut redmine_cfg = gitlab_tracker_redmine::config::load_or_create_config().await;
+        // Prompt for the Redmine URL if it is missing (first run or unconfigured).
+        gitlab_tracker_redmine::config::ensure_redmine_config(&mut redmine_cfg).await;
+        // Skip integration silently if no Redmine URL is configured yet.
+        if redmine_cfg.redmine_url.trim().is_empty() {
+            tracing::info!("Redmine URL not configured — integration disabled");
+            None
+        } else {
+            gitlab_tracker_redmine::keyring::get_or_prompt_token().map(|tok| {
+                let provider =
+                    gitlab_tracker_redmine::RedmineProvider::new(redmine_cfg, tok.to_string());
+                Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
+            })
+        }
+    };
+
     // Initialise logging before ratatui takes over the terminal.
     // The guard must stay alive for the duration of the program.
     let _log_guard = init_logging();
@@ -156,6 +179,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+
+    // Inject the Redmine provider if it was successfully initialised above.
+    #[cfg(feature = "redmine")]
+    {
+        app.tracker = redmine_provider;
+    }
 
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
     app.restore_from_saved(saved_mrs, api_semaphore.clone(), tx.clone());

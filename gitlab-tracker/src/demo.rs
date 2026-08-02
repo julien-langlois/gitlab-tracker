@@ -84,6 +84,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             labels: false,
             milestone: true,
             notes: true,
+            #[cfg(feature = "redmine")]
+            tracker_ticket: false,
         },
         ..config
     };
@@ -216,6 +218,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with several comments awaiting review.
             user_notes_count: 5,
             flagged: true,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "101".into(),
@@ -245,6 +249,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 0,
             flagged: false,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "102".into(),
@@ -272,6 +278,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with unread comments from reviewers.
             user_notes_count: 3,
             flagged: false,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "103".into(),
@@ -298,6 +306,9 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 0,
             flagged: false,
+            // MR 103
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "105".into(),
@@ -323,6 +334,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 6,
             flagged: false,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "106".into(),
@@ -350,6 +363,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 0,
             flagged: false,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
         TrackedMr {
             id: "107".into(),
@@ -381,6 +396,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with one comment to address.
             user_notes_count: 1,
             flagged: true,
+            #[cfg(feature = "redmine")]
+            linked_ticket: None,
         },
     ];
 

@@ -27,6 +27,11 @@ pub struct VisibleColumns {
     /// Show the "Notes" column (total number of comments and discussion threads).
     #[serde(default)]
     pub notes: bool,
+    /// Show the "Ticket" column with the linked tracker ticket ID + status.
+    /// Only meaningful when the `redmine` feature is enabled; ignored otherwise.
+    #[cfg(feature = "redmine")]
+    #[serde(default)]
+    pub tracker_ticket: bool,
 }
 
 /// Default threshold (in days) above which an MR is considered "stale" (red badge).
