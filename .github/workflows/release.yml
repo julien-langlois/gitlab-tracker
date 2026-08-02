@@ -15,8 +15,31 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish to Crates.io
-        run: cargo publish --package gitlab-tracker --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish gitlab-tracker-core
+        run: cargo publish --package gitlab-tracker-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish gitlab-tracker-notify
+        run: cargo publish --package gitlab-tracker-notify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish gitlab-tracker-redmine
+        run: cargo publish --package gitlab-tracker-redmine
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for crates.io index propagation
+        run: sleep 30
+
+      - name: Publish gitlab-tracker
+        run: cargo publish --package gitlab-tracker
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   build-release:
     name: Build (${{ matrix.target }})
