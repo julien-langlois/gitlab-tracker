@@ -1,0 +1,4 @@
+shared-version = true
+tag-name = "v{{version}}"
+push = true
+publish = false
