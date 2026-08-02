@@ -1,6 +1,14 @@
 use crate::config::AppConfig;
-use crate::models::{GitLabMilestone, TrackedMr};
+use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
+use crate::models::{
+    AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
+};
+use gitlab_tracker_notify as notify;
 use ratatui::widgets::TableState;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Semaphore;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SortColumn {
@@ -421,5 +429,368 @@ pub trait TrackedMrExt {
 impl TrackedMrExt for Vec<TrackedMr> {
     fn find_mut(&mut self, id: &str) -> Option<&mut TrackedMr> {
         self.iter_mut().find(|m| m.id == id)
+    }
+}
+
+impl App {
+    /// Builds a `FetchContext` from the current application state.
+    ///
+    /// Centralises the repeated construction of `FetchContext` that was
+    /// previously scattered across `main.rs` and `events.rs`.
+    pub fn fetch_context(&self) -> FetchContext {
+        FetchContext {
+            base_url: self.base_url.clone(),
+            token: self.token.clone(),
+            project_id: self.project_id.clone(),
+            branches: self.branches.clone(),
+        }
+    }
+
+    /// Restores tracked MRs from persisted state on startup.
+    ///
+    /// For each saved MR:
+    /// - Reconstructs a `TrackedMr` with cached data (mergeability reset to Unknown).
+    /// - If the MR is not already fully merged into all branches, spawns a background
+    ///   fetch and increments `pending_initial_fetches` to suppress spurious notifications.
+    pub fn restore_from_saved(
+        &mut self,
+        saved_mrs: Vec<SavedMr>,
+        semaphore: Arc<Semaphore>,
+        tx: UnboundedSender<AppEvent>,
+    ) {
+        let ctx = self.fetch_context();
+
+        for saved in saved_mrs {
+            let initial_status = if !saved.found_branches.is_empty()
+                && self
+                    .branches
+                    .iter()
+                    .all(|b| saved.found_branches.contains(b))
+            {
+                MrStatus::MergedIn(saved.found_branches.clone())
+            } else {
+                MrStatus::Loading
+            };
+
+            self.mrs.push(TrackedMr {
+                id: saved.id.clone(),
+                title: saved.title.clone(),
+                status: initial_status.clone(),
+                sha: saved.sha.clone(),
+                description: saved
+                    .description
+                    .clone()
+                    .unwrap_or_else(|| "No description cached.".to_string()),
+                author: saved
+                    .author
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                assignee: saved.assignee.clone().unwrap_or_else(|| "None".to_string()),
+                reviewers: saved.reviewers.clone(),
+                milestone: saved
+                    .milestone
+                    .clone()
+                    .unwrap_or_else(|| "None".to_string()),
+                milestone_due_date: saved.milestone_due_date.clone(),
+                web_url: saved.web_url.clone().unwrap_or_default(),
+                labels: saved.labels.clone().unwrap_or_default(),
+                updated_at: saved.updated_at.clone(),
+                source_branch: saved
+                    .source_branch
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                target_branch: saved
+                    .target_branch
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                state: saved.state.clone(),
+                merged_by: saved.merged_by.clone(),
+                merged_at: saved.merged_at.clone(),
+                // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
+                mergeability: MergeabilityStatus::Unknown,
+                // Restore persisted pipelines — refreshed on each MR fetch.
+                pipelines: saved.pipelines.clone(),
+                // On startup, no MR is considered recently updated.
+                recently_updated: false,
+                // Restore persisted notes count — refreshed on each MR fetch.
+                user_notes_count: saved.user_notes_count,
+                // Restore persisted flagged state.
+                flagged: saved.flagged,
+            });
+
+            if initial_status == MrStatus::Loading {
+                let cached = CachedMrData {
+                    title: Some(saved.title),
+                    sha: saved.sha,
+                    description: saved.description,
+                    author: saved.author,
+                    assignee: saved.assignee,
+                    web_url: saved.web_url,
+                    labels: saved.labels,
+                    updated_at: saved.updated_at,
+                    pipelines: saved.pipelines,
+                };
+
+                // Count each pending fetch so we can suppress change notifications
+                // until the initial sync is complete (avoids spurious toasts on launch).
+                self.pending_initial_fetches += 1;
+
+                spawn_mr_fetch(ctx.clone(), saved.id, cached, semaphore.clone(), tx.clone());
+            }
+        }
+
+        if !self.mrs.is_empty() {
+            self.table_state.select(Some(0));
+        }
+    }
+
+    /// Applies a single `AppEvent` to the application state.
+    ///
+    /// This is the central event dispatch extracted from `main.rs` to keep the
+    /// event loop thin. Returns `true` if the state was mutated in a way that
+    /// requires persisting (caller must then call `save_state_async`).
+    pub async fn apply_event(
+        &mut self,
+        event: AppEvent,
+        semaphore: Arc<Semaphore>,
+        tx: &UnboundedSender<AppEvent>,
+        last_known_branches: &mut HashMap<String, HashSet<String>>,
+    ) -> bool {
+        match event {
+            AppEvent::MrLoaded(data) => {
+                let Some(mr) = self.mrs.find_mut(&data.id) else {
+                    return false;
+                };
+
+                // Compare new branches against the last persisted state to avoid
+                // re-notifying on restart or in-memory state that hasn't changed on disk.
+                let previously_known = last_known_branches
+                    .get(&data.id)
+                    .cloned()
+                    .unwrap_or_default();
+
+                for b in &data.branches {
+                    if !previously_known.contains(b) {
+                        notify::mr_on_new_branch(&data.id, &data.title, b);
+                    }
+                }
+
+                // Update the persisted reference so subsequent refreshes won't re-notify.
+                last_known_branches.insert(data.id.clone(), data.branches.clone());
+
+                // Decrement the startup fence: notifications are suppressed until
+                // all MRs from the saved state have received their first API response.
+                let notify_allowed = self.pending_initial_fetches == 0;
+                if self.pending_initial_fetches > 0 {
+                    self.pending_initial_fetches -= 1;
+                }
+
+                // Detect whether this MR was actually updated since the last refresh.
+                // We compare the old `updated_at` before overwriting it.
+                let was_updated = mr.updated_at.is_some() && mr.updated_at != data.updated_at;
+
+                // Trace field-level changes so they are visible in the log file.
+                // All comparisons happen before the fields are overwritten below.
+                if was_updated {
+                    tracing::info!(
+                        mr_id = %data.id,
+                        old = %mr.updated_at.as_deref().unwrap_or("none"),
+                        new = %data.updated_at.as_deref().unwrap_or("none"),
+                        "MR updated_at changed",
+                    );
+                    if notify_allowed {
+                        notify::mr_updated(&data.id, &data.title, data.updated_at.as_deref());
+                    }
+                }
+                if mr.mergeability != data.mergeability {
+                    tracing::info!(
+                        mr_id = %data.id,
+                        old = ?mr.mergeability,
+                        new = ?data.mergeability,
+                        "MR mergeability changed",
+                    );
+                    if notify_allowed {
+                        notify::mr_mergeability_changed(
+                            &data.id,
+                            &data.title,
+                            &format!("{:?}", mr.mergeability),
+                            &format!("{:?}", data.mergeability),
+                        );
+                    }
+                }
+                if mr.milestone != data.milestone {
+                    tracing::info!(
+                        mr_id = %data.id,
+                        old = %mr.milestone,
+                        new = %data.milestone,
+                        "MR milestone changed",
+                    );
+                    if notify_allowed {
+                        notify::mr_milestone_changed(
+                            &data.id,
+                            &data.title,
+                            &mr.milestone,
+                            &data.milestone,
+                        );
+                    }
+                }
+
+                mr.title = data.title;
+                mr.sha = data.sha;
+                mr.status = MrStatus::MergedIn(data.branches);
+                mr.description = data.description;
+                mr.author = data.author;
+                mr.assignee = data.assignee;
+                mr.reviewers = data.reviewers;
+                mr.milestone = data.milestone;
+                mr.milestone_due_date = data.milestone_due_date;
+                mr.web_url = data.web_url;
+                mr.labels = data.labels;
+                mr.updated_at = data.updated_at;
+                mr.source_branch = data.source_branch;
+                mr.target_branch = data.target_branch;
+                mr.state = data.state;
+                mr.merged_by = data.merged_by;
+                mr.merged_at = data.merged_at;
+                mr.mergeability = data.mergeability;
+                mr.pipelines = data.pipelines;
+                mr.recently_updated = was_updated;
+                mr.user_notes_count = data.user_notes_count;
+
+                // Arm (or re-arm) the global fade countdown.
+                if was_updated {
+                    self.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
+                }
+
+                self.sort_mrs();
+                true
+            }
+
+            AppEvent::MrFailed { id, error } => {
+                let Some(mr) = self.mrs.find_mut(&id) else {
+                    return false;
+                };
+                mr.title = format!("⚠️ ERROR: {}", error);
+                mr.status = MrStatus::Error;
+                true
+            }
+
+            AppEvent::MilestonesLoaded(milestones) => {
+                self.milestones = milestones;
+                false
+            }
+
+            AppEvent::MilestoneMrsLoaded {
+                milestone_title,
+                mr_ids,
+            } => {
+                let ctx = self.fetch_context();
+                let mut added = 0u32;
+
+                for mr_id in mr_ids {
+                    // Skip MRs already tracked to avoid duplicates.
+                    if self.mrs.iter().any(|m| m.id == mr_id) {
+                        continue;
+                    }
+                    self.mrs.push(TrackedMr {
+                        id: mr_id.clone(),
+                        title: format!("Loading… ({})", milestone_title),
+                        status: MrStatus::Loading,
+                        state: GitlabMrState::Opened,
+                        mergeability: MergeabilityStatus::Unknown,
+                        sha: None,
+                        description: String::new(),
+                        author: "Loading".to_string(),
+                        assignee: "Loading".to_string(),
+                        reviewers: vec![],
+                        milestone: milestone_title.clone(),
+                        milestone_due_date: None,
+                        web_url: String::new(),
+                        labels: vec![],
+                        updated_at: None,
+                        source_branch: "unknown".to_string(),
+                        target_branch: "unknown".to_string(),
+                        merged_by: None,
+                        merged_at: None,
+                        pipelines: vec![],
+                        recently_updated: false,
+                        user_notes_count: 0,
+                        // New MRs start unflagged.
+                        flagged: false,
+                    });
+                    spawn_mr_fetch(
+                        ctx.clone(),
+                        mr_id,
+                        CachedMrData::default(),
+                        semaphore.clone(),
+                        tx.clone(),
+                    );
+                    added += 1;
+                }
+
+                if added > 0 {
+                    self.table_state.select(Some(0));
+                    true
+                } else {
+                    false
+                }
+            }
+
+            AppEvent::Tick => {
+                // Decrement the highlight fade countdown and clear flags when expired.
+                if self.update_highlight_ticks > 0 {
+                    self.update_highlight_ticks -= 1;
+                    if self.update_highlight_ticks == 0 {
+                        for mr in &mut self.mrs {
+                            mr.recently_updated = false;
+                        }
+                    }
+                }
+
+                if self.time_left > 0 {
+                    self.time_left -= 1;
+                    return false;
+                }
+
+                // Timer elapsed — trigger a full refresh of all MRs.
+                self.time_left = self.refresh_interval_secs;
+                let ctx = self.fetch_context();
+
+                for mr in &mut self.mrs {
+                    if let MrStatus::MergedIn(ref found) = mr.status {
+                        // Skip refresh for MRs that are fully merged into all branches —
+                        // state != Opened ensures we don't skip still-open MRs.
+                        if self.branches.iter().all(|b| found.contains(b))
+                            && mr.sha.is_some()
+                            && mr.state != GitlabMrState::Opened
+                        {
+                            continue;
+                        }
+                    }
+
+                    mr.status = MrStatus::Loading;
+                    let cached = CachedMrData {
+                        title: Some(mr.title.clone()),
+                        sha: mr.sha.clone(),
+                        description: Some(mr.description.clone()),
+                        author: Some(mr.author.clone()),
+                        assignee: Some(mr.assignee.clone()),
+                        web_url: Some(mr.web_url.clone()),
+                        labels: Some(mr.labels.clone()),
+                        updated_at: mr.updated_at.clone(),
+                        pipelines: mr.pipelines.clone(),
+                    };
+                    spawn_mr_fetch(
+                        ctx.clone(),
+                        mr.id.clone(),
+                        cached,
+                        semaphore.clone(),
+                        tx.clone(),
+                    );
+                }
+
+                false
+            }
+        }
     }
 }
