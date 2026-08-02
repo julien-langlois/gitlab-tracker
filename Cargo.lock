@@ -1244,8 +1244,8 @@ dependencies = [
  "directories",
  "dotenvy",
  "futures",
+ "gitlab-tracker-notify",
  "keyring",
- "notify-rust",
  "open",
  "ratatui",
  "reqwest",
@@ -1258,6 +1258,13 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "zeroize",
+]
+
+[[package]]
+name = "gitlab-tracker-notify"
+version = "0.2.10"
+dependencies = [
+ "notify-rust",
 ]
 
 [[package]]

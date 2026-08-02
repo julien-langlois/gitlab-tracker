@@ -1,38 +1,16 @@
-[package]
-name = "gitlab-tracker"
-authors = ["Julien Langlois <julien@julienlanglois.fr>"]
+[workspace]
+resolver = "3"
+members = [
+    "gitlab-tracker",
+    "gitlab-tracker-notify",
+]
+
+[workspace.package]
 version = "0.2.10"
+authors = ["Julien Langlois <julien@julienlanglois.fr>"]
 edition = "2021"
-description = "A fast terminal TUI dashboard for tracking GitLab Merge Requests across branches"
 license = "MIT"
 repository = "https://github.com/julien-langlois/gitlab-tracker"
-readme = "README.md"
-keywords = ["gitlab", "tui", "ratatui", "cli", "dashboard"]
-categories = ["command-line-utilities", "development-tools"]
-exclude = ["assets/"]
-
-[dependencies]
-ratatui = { version = "0.30", features = ["crossterm_0_28"] }
-crossterm = "0.28"
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "native-tls-vendored"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-dotenvy = "0.15"
-urlencoding = "2.1"
-directories = "5.0"
-keyring = "2"
-open = "5"
-arboard = { version = "3", default-features = false }
-notify-rust = "4"
-clap = { version = "4.6.3", features = ["derive"] }
-chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
-futures = "0.3"
-tracing = "0.1"
-tracing-appender = "0.2"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zeroize = { version = "1", features = ["derive"] }
-rpassword = "7"
 
 # The profile that 'dist' will build with
 [profile.dist]
