@@ -1,0 +1,18 @@
+[package]
+name = "gitlab-tracker-notify"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Optional desktop notification plugin for gitlab-tracker"
+keywords = ["gitlab", "notifications", "desktop"]
+categories = ["command-line-utilities"]
+
+[features]
+# Enabled by default; disable with --no-default-features to build without libdbus.
+default = ["desktop"]
+desktop = ["dep:notify-rust"]
+
+[dependencies]
+notify-rust = { version = "4", optional = true }
