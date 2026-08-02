@@ -329,11 +329,14 @@ For development or to test unreleased changes, clone the repository and build ma
 git clone git@github.com:julien-langlois/gitlab-tracker.git
 cd gitlab-tracker
 
-# Build optimized release executable
+# Build optimized release executable (builds all workspace members)
 cargo build --release
 
 # Optional: install binary globally to ~/.cargo/bin/
-cargo install --path .
+cargo install --path gitlab-tracker
+
+# Build without desktop notifications (headless / CI environments)
+cargo install --path gitlab-tracker --no-default-features
 ```
 
 Once installed via any of the methods above, launch the dashboard from any terminal folder:
@@ -408,21 +411,34 @@ When the input starts with `@`, a dropdown appears above the input bar listing a
 
 ## 🏗️ Project Architecture
 
+This project is structured as a **Cargo workspace** with two crates:
+
 ```text
-src/
-├── main.rs          # Event loop orchestrator & async channel setup
-├── app.rs           # State machine, InputMode, row navigation & sort logic
-├── config.rs        # Label filtering, wildcard matching, HEX color parsing & activity badge
-├── models.rs        # Strongly-typed API DTOs & runtime event types
-├── gitlab.rs        # Async network handling & rate-limit semaphores
-├── events.rs        # Keyboard & mouse event dispatch (Normal / Insert mode routing)
-├── storage.rs       # OS Keyring interface & XDG state/config persistence
-├── utils.rs         # Fuzzy matching algorithmic utilities
-├── demo.rs          # Demo mode with pre-populated mock data (screenshots & CI)
-└── ui/
-    ├── mod.rs       # Root layout renderer & input bar (mode-aware)
-    ├── table.rs     # Main MR table widget
-    └── inspector.rs # Side panel: MR metadata & pipeline history views
+gitlab-tracker/                  # Binary crate — TUI orchestrator
+└── src/
+    ├── main.rs          # Event loop orchestrator & async channel setup
+    ├── app.rs           # State machine, InputMode, row navigation & sort logic
+    ├── config.rs        # Label filtering, wildcard matching, HEX color parsing & activity badge
+    ├── models.rs        # Strongly-typed API DTOs & runtime event types
+    ├── gitlab.rs        # Async network handling & rate-limit semaphores
+    ├── events.rs        # Keyboard & mouse event dispatch (Normal / Insert mode routing)
+    ├── storage.rs       # OS Keyring interface & XDG state/config persistence
+    ├── utils.rs         # Fuzzy matching algorithmic utilities
+    ├── demo.rs          # Demo mode with pre-populated mock data (screenshots & CI)
+    └── ui/
+        ├── mod.rs       # Root layout renderer & input bar (mode-aware)
+        ├── table.rs     # Main MR table widget
+        └── inspector.rs # Side panel: MR metadata & pipeline history views
+
+gitlab-tracker-notify/           # Library crate — optional desktop notification plugin
+└── src/
+    └── lib.rs           # notify-rust integration (no-op stubs when feature `desktop` is disabled)
+```
+
+The `desktop` feature of `gitlab-tracker-notify` is enabled by default. Build without it for headless or CI environments:
+
+```bash
+cargo build --release --no-default-features
 ```
 
 ---
