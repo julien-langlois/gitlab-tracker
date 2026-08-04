@@ -220,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match event::read()? {
                 Event::Mouse(mouse) => {
                     let term_width = terminal.size()?.width;
-                    handle_mouse_event(mouse, term_width, &mut app);
+                    handle_mouse_event(mouse, term_width, &mut app, &tx);
                 }
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press

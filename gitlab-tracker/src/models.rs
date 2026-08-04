@@ -138,9 +138,9 @@ pub struct SavedMr {
     /// Whether the MR has been manually flagged by the user — persisted across restarts.
     #[serde(default)]
     pub flagged: bool,
-    /// Last resolved tracker ticket — persisted to avoid re-fetching Redmine on every restart.
+    /// Last resolved tracker ticket — persisted to avoid re-fetching the tracker on every restart.
     /// Re-fetched only when the detected ticket ID changes (title/description update).
-    #[cfg(feature = "redmine")]
+    /// `None` when no tracker provider is configured or no ticket reference was found.
     #[serde(default)]
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
 }
@@ -197,8 +197,7 @@ pub struct TrackedMr {
     /// Flagged MRs display a coloured chevron and can be isolated via the Flagged filter.
     pub flagged: bool,
     /// Ticket linked to this MR, resolved by the active [`TrackerProvider`].
-    /// `None` when no tracker plugin is enabled or when no ticket reference was found.
-    #[cfg(feature = "redmine")]
+    /// `None` when no tracker provider is configured or no ticket reference was found.
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
 }
 
@@ -292,34 +291,29 @@ pub enum AppEvent {
         mr_ids: Vec<String>,
     },
     /// Fired when a tracker plugin has resolved the ticket linked to a MR.
-    /// Only emitted when the `redmine` feature (or any future tracker feature) is enabled.
-    #[cfg(feature = "redmine")]
+    /// Emitted by any active tracker provider (Redmine, Jira, Trello, …).
     TrackerTicketLoaded {
         mr_id: String,
         ticket: gitlab_tracker_core::LinkedTicket,
     },
     /// Fired when the list of time-tracking activity categories has been fetched.
     /// Stored in `App` for use in the Log Time popup selector.
-    #[cfg(feature = "redmine")]
     ActivitiesLoaded(Vec<gitlab_tracker_core::Activity>),
     /// Fired when time entries for a ticket have been fetched from the tracker.
-    #[cfg(feature = "redmine")]
     TimeEntriesLoaded {
         entries: Vec<gitlab_tracker_core::TimeEntry>,
     },
     /// Fired when a time entry has been successfully submitted to the tracker.
     /// Carries both the MR id (to update the right `linked_ticket` in memory) and the
-    /// raw Redmine ticket id (to re-fetch time entries and the updated spent total).
-    #[cfg(feature = "redmine")]
+    /// raw ticket id (to re-fetch time entries and the updated spent total).
     TimeLogSubmitted {
         /// The GitLab MR id that owns the ticket (used to route `TrackerTicketLoaded`).
         mr_id: String,
-        /// The Redmine ticket id that received the new time entry.
+        /// The tracker ticket id that received the new time entry.
         ticket_id: String,
     },
     /// Fired when a time entry submission failed.
     /// The error string is shown inline in the popup.
-    #[cfg(feature = "redmine")]
     TimeLogFailed {
         error: String,
     },

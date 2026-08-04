@@ -33,7 +33,6 @@ pub fn calculate_relevance(mr_title: &str, commit_msg: &str) -> f64 {
 ///
 /// Returns `Err` with a human-readable message when the format is not recognised
 /// or when the result is zero / negative.
-#[cfg(feature = "redmine")]
 pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
     let s = input.trim().to_lowercase().replace(',', ".");
 

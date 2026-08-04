@@ -12,7 +12,6 @@ use ratatui::text::{Line, Span, Text};
 ///
 /// Shows a progress bar (spent vs estimate), then the list of time entries
 /// fetched from Redmine for the linked ticket.
-#[cfg(feature = "redmine")]
 pub fn render_time_log_text(
     mr: &TrackedMr,
     entries: &[gitlab_tracker_core::TimeEntry],
@@ -596,8 +595,8 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         )]));
     }
 
-    // ── Tracker ticket (Redmine) ─────────────────────────────────────────────
-    #[cfg(feature = "redmine")]
+    // ── Tracker ticket ───────────────────────────────────────────────────────
+    // Rendered for any active tracker provider — field is None when none is configured.
     {
         /// Formats a duration in seconds as "Xh Ym" for display.
         fn format_duration(secs: u32) -> String {

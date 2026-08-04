@@ -28,8 +28,7 @@ pub struct VisibleColumns {
     #[serde(default)]
     pub notes: bool,
     /// Show the "Ticket" column with the linked tracker ticket ID + status.
-    /// Only meaningful when the `redmine` feature is enabled; ignored otherwise.
-    #[cfg(feature = "redmine")]
+    /// Only visible when a tracker provider is configured at runtime.
     #[serde(default)]
     pub tracker_ticket: bool,
 }

@@ -10,12 +10,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Semaphore;
 
-/// Shared handle to the active tracker provider (e.g. Redmine).
+/// Shared handle to the active tracker provider (Redmine, Jira, Trello, …).
 ///
 /// Wrapped in `Arc` so it can be cloned cheaply into spawned async tasks.
-/// Only present when the `redmine` feature (or any future tracker feature) is compiled in
-/// AND the user has supplied a valid token + config.
-#[cfg(feature = "redmine")]
+/// `None` when no provider is configured or the user skipped the token prompt.
 pub type TrackerHandle = Arc<dyn gitlab_tracker_core::TrackerProvider>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -39,6 +37,7 @@ pub enum SortOrder {
 ///   Enter `/` or `i` to enter Editing mode; press `Esc` to leave it.
 /// - `ColumnPicker`: the column visibility popup is open; arrow keys and Space navigate/toggle.
 /// - `LogTime`: the Log Time popup is open — Tab navigates fields, Enter submits.
+///   Only reachable when a tracker provider is configured (`app.tracker.is_some()`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InputMode {
     /// Shortcut keys are active; the input field is passive.
@@ -48,15 +47,14 @@ pub enum InputMode {
     Editing,
     /// The column-picker popup is open — arrow keys and Space toggle columns.
     ColumnPicker,
-    /// The Log Time popup is open — Tab cycles fields, Enter submits. Redmine only.
-    #[cfg(feature = "redmine")]
+    /// The Log Time popup is open — Tab cycles fields, Enter submits.
+    /// Only reachable when `app.tracker.is_some()`.
     LogTime,
 }
 
 /// Which field is focused inside the Log Time popup.
 ///
 /// Cycling order: Duration → Activity → Comment → (submit on Enter).
-#[cfg(feature = "redmine")]
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum LogTimeField {
     #[default]
@@ -68,7 +66,6 @@ pub enum LogTimeField {
 /// State held by the Log Time popup while it is open.
 ///
 /// Reset every time the popup is opened so the user starts with a clean form.
-#[cfg(feature = "redmine")]
 #[derive(Debug, Clone, Default)]
 pub struct LogTimeForm {
     /// Raw text typed by the user in the Duration field.
@@ -111,8 +108,8 @@ impl ActivePane {
 
 /// Controls which view is rendered inside the Inspector side panel.
 ///
-/// Cycled with [P] — rotates between MrInfo, Pipelines, and (when Redmine is
-/// enabled) the TimeLog view.
+/// Cycled with [P] — rotates between MrInfo, Pipelines, and (when a tracker
+/// provider is configured) the TimeLog view.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InspectorView {
     /// Default: MR metadata, description, labels (existing behaviour).
@@ -120,25 +117,27 @@ pub enum InspectorView {
     MrInfo,
     /// Pipeline list for the selected MR.
     Pipelines,
-    /// Time entries logged on the linked Redmine ticket.
-    #[cfg(feature = "redmine")]
+    /// Time entries logged on the linked tracker ticket.
+    /// Only reachable at runtime when `app.tracker.is_some()`.
     TimeLog,
 }
 
 impl InspectorView {
     /// Cycles to the next view in a round-robin fashion.
     ///
-    /// Without the `redmine` feature: MrInfo ↔ Pipelines.
-    /// With the `redmine` feature: MrInfo → Pipelines → TimeLog → MrInfo.
-    pub fn next(self) -> Self {
+    /// When a tracker provider is configured: MrInfo → Pipelines → TimeLog → MrInfo.
+    /// Otherwise: MrInfo ↔ Pipelines.
+    pub fn next_for(self, has_tracker: bool) -> Self {
         match self {
             InspectorView::MrInfo => InspectorView::Pipelines,
-            #[cfg(feature = "redmine")]
-            InspectorView::Pipelines => InspectorView::TimeLog,
-            #[cfg(feature = "redmine")]
+            InspectorView::Pipelines => {
+                if has_tracker {
+                    InspectorView::TimeLog
+                } else {
+                    InspectorView::MrInfo
+                }
+            }
             InspectorView::TimeLog => InspectorView::MrInfo,
-            #[cfg(not(feature = "redmine"))]
-            InspectorView::Pipelines => InspectorView::MrInfo,
         }
     }
 }
@@ -223,19 +222,15 @@ pub struct App {
     /// Change notifications (updated_at, mergeability, milestone) are suppressed
     /// until this reaches zero, preventing spurious toasts on first launch.
     pub pending_initial_fetches: usize,
-    /// Active tracker provider (e.g. Redmine), shared across async tasks via Arc.
-    /// `None` when the feature is not compiled in, or when no token was supplied.
-    #[cfg(feature = "redmine")]
+    /// Active tracker provider (Redmine, Jira, Trello, …), shared across async tasks via Arc.
+    /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
-    /// Activity categories fetched from Redmine at startup.
+    /// Activity categories fetched from the tracker at startup.
     /// Populated by `AppEvent::ActivitiesLoaded` and used to fill the Log Time popup.
-    #[cfg(feature = "redmine")]
     pub activities: Vec<gitlab_tracker_core::Activity>,
     /// Time entries for the currently selected ticket, fetched when the TimeLog view opens.
-    #[cfg(feature = "redmine")]
     pub time_entries: Vec<gitlab_tracker_core::TimeEntry>,
     /// State of the Log Time popup form. Reset each time the popup is opened.
-    #[cfg(feature = "redmine")]
     pub log_time_form: LogTimeForm,
 }
 
@@ -281,13 +276,9 @@ impl App {
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
             pending_initial_fetches: 0,
             // Initialised to None — main.rs injects the provider after keyring lookup.
-            #[cfg(feature = "redmine")]
             tracker: None,
-            #[cfg(feature = "redmine")]
             activities: Vec::new(),
-            #[cfg(feature = "redmine")]
             time_entries: Vec::new(),
-            #[cfg(feature = "redmine")]
             log_time_form: LogTimeForm::default(),
         }
     }
@@ -605,8 +596,7 @@ impl App {
                 user_notes_count: saved.user_notes_count,
                 // Restore persisted flagged state.
                 flagged: saved.flagged,
-                // Restore persisted ticket — avoids a Redmine request on every restart.
-                #[cfg(feature = "redmine")]
+                // Restore persisted ticket — avoids a tracker request on every restart.
                 linked_ticket: saved.linked_ticket,
             });
 
@@ -649,32 +639,28 @@ impl App {
         last_known_branches: &mut HashMap<String, HashSet<String>>,
     ) -> bool {
         match event {
-            // ── Tracker ticket resolved (feature = "redmine") ────────────────
-            #[cfg(feature = "redmine")]
+            // ── Tracker ticket resolved ───────────────────────────────────────
             AppEvent::TrackerTicketLoaded { mr_id, ticket } => {
                 if let Some(mr) = self.mrs.find_mut(&mr_id) {
                     mr.linked_ticket = Some(ticket);
                 }
                 // Ticket data is display-only — no state persist needed.
-                return false;
+                false
             }
 
             // ── Activity categories loaded ────────────────────────────────────
-            #[cfg(feature = "redmine")]
             AppEvent::ActivitiesLoaded(activities) => {
                 self.activities = activities;
-                return false;
+                false
             }
 
             // ── Time entries loaded for a ticket ─────────────────────────────
-            #[cfg(feature = "redmine")]
             AppEvent::TimeEntriesLoaded { entries } => {
                 self.time_entries = entries;
-                return false;
+                false
             }
 
             // ── Time log submitted successfully ───────────────────────────────
-            #[cfg(feature = "redmine")]
             AppEvent::TimeLogSubmitted { mr_id, ticket_id } => {
                 // Re-fetch both time entries (for the TimeLog view) and the full ticket
                 // (so that spent_hours updates in the Inspector header and table column).
@@ -698,15 +684,14 @@ impl App {
                 // Close the popup and reset the form.
                 self.input_mode = InputMode::Normal;
                 self.log_time_form = LogTimeForm::default();
-                return false;
+                false
             }
 
             // ── Time log submission failed ────────────────────────────────────
-            #[cfg(feature = "redmine")]
             AppEvent::TimeLogFailed { error } => {
                 self.log_time_form.submitting = false;
                 self.log_time_form.error = Some(error);
-                return false;
+                false
             }
 
             AppEvent::MrLoaded(data) => {
@@ -813,13 +798,11 @@ impl App {
                 if was_updated {
                     self.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
                 }
-
                 // If a tracker provider is active, re-fetch the linked ticket when:
                 //   • the detected ticket ID is new or has changed (ID mismatch), OR
                 //   • the MR was updated since the last refresh (was_updated), which
                 //     implies that time entries or status may have changed on the
                 //     tracker side (e.g. after a manual [R] refresh).
-                #[cfg(feature = "redmine")]
                 if let Some(provider) = &self.tracker {
                     let detected_id = provider.detect_ticket_id(&mr.title, &mr.description);
                     let cached_id = mr.linked_ticket.as_ref().map(|t| t.id.clone());
@@ -910,7 +893,6 @@ impl App {
                         // New MRs start unflagged.
                         flagged: false,
                         // Ticket resolved live after each MR fetch — never pre-populated.
-                        #[cfg(feature = "redmine")]
                         linked_ticket: None,
                     });
                     spawn_mr_fetch(

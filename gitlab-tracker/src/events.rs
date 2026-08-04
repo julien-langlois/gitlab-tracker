@@ -4,21 +4,22 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-#[cfg(feature = "redmine")]
-use crate::app::InspectorView;
-use crate::app::{ActivePane, App, InputMode};
-#[cfg(feature = "redmine")]
-use crate::app::{LogTimeField, LogTimeForm};
+use crate::app::{ActivePane, App, InputMode, InspectorView, LogTimeField, LogTimeForm};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_config_async, save_state_async};
-#[cfg(feature = "redmine")]
 use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
 ///
-/// Returns nothing — all mutations are applied directly on `app`.
-pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, app: &mut App) {
+/// Returns `true` when the selected dashboard row changed (scroll in the table pane),
+/// so the caller can trigger a time-entries re-fetch when the TimeLog view is active.
+pub fn handle_mouse_event(
+    mouse: MouseEvent,
+    term_width: u16,
+    app: &mut App,
+    tx: &UnboundedSender<AppEvent>,
+) {
     // The inspector occupies the right 35% of the terminal width.
     let inspector_start_col = term_width * 65 / 100;
 
@@ -37,6 +38,27 @@ pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, app: &mut App) {
                 app.inspector_scroll_down(3);
             } else {
                 app.next_row();
+                // When the TimeLog view is active, re-fetch time entries for the newly
+                // selected MR's linked ticket — mirrors the keyboard ↓ / j handler.
+                if app.inspector_view == InspectorView::TimeLog {
+                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                        let ticket_id = app
+                            .table_state
+                            .selected()
+                            .and_then(|i| app.visible_mrs().nth(i))
+                            .and_then(|mr| mr.linked_ticket.as_ref())
+                            .map(|t| t.id.clone());
+
+                        if let Some(tid) = ticket_id {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let entries = provider.fetch_time_entries(&tid).await;
+                                let _ = tx2
+                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
+                            });
+                        }
+                    }
+                }
             }
         }
         MouseEventKind::ScrollUp => {
@@ -44,6 +66,27 @@ pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, app: &mut App) {
                 app.inspector_scroll_up(3);
             } else {
                 app.prev_row();
+                // When the TimeLog view is active, re-fetch time entries for the newly
+                // selected MR's linked ticket — mirrors the keyboard ↑ / k handler.
+                if app.inspector_view == InspectorView::TimeLog {
+                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                        let ticket_id = app
+                            .table_state
+                            .selected()
+                            .and_then(|i| app.visible_mrs().nth(i))
+                            .and_then(|mr| mr.linked_ticket.as_ref())
+                            .map(|t| t.id.clone());
+
+                        if let Some(tid) = ticket_id {
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                let entries = provider.fetch_time_entries(&tid).await;
+                                let _ = tx2
+                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
+                            });
+                        }
+                    }
+                }
             }
         }
         _ => {}
@@ -137,11 +180,8 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            // Column count depends on whether the `redmine` feature is compiled in.
-            #[cfg(not(feature = "redmine"))]
-            const COLUMN_COUNT: usize = 5;
-            #[cfg(feature = "redmine")]
-            const COLUMN_COUNT: usize = 6;
+            // Column count: 5 fixed columns + 1 tracker column when a provider is configured.
+            let column_count = if app.tracker.is_some() { 6 } else { 5 };
 
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
@@ -150,7 +190,7 @@ pub async fn handle_key_event(
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if app.column_picker_cursor < COLUMN_COUNT - 1 {
+                    if app.column_picker_cursor < column_count - 1 {
                         app.column_picker_cursor += 1;
                     }
                 }
@@ -173,8 +213,7 @@ pub async fn handle_key_event(
                                 !app.config.visible_columns.milestone
                         }
                         4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
-                        // Entry 5 — only reachable when `redmine` feature is compiled in.
-                        #[cfg(feature = "redmine")]
+                        // Entry 5 — only reachable when a tracker provider is configured.
                         5 => {
                             app.config.visible_columns.tracker_ticket =
                                 !app.config.visible_columns.tracker_ticket
@@ -192,10 +231,9 @@ pub async fn handle_key_event(
         }
 
         // ------------------------------------------------------------------
-        // Log Time popup mode (redmine feature only).
+        // Log Time popup mode — only reachable when a tracker provider is configured.
         // Tab/Shift+Tab cycle fields; Up/Down navigate activities; Enter submits.
         // ------------------------------------------------------------------
-        #[cfg(feature = "redmine")]
         InputMode::LogTime => {
             match key.code {
                 KeyCode::Esc => {
@@ -386,7 +424,6 @@ pub async fn handle_key_event(
                     app.next_row();
                     // When navigating rows while the TimeLog view is active, re-fetch
                     // time entries for the newly selected MR's linked ticket.
-                    #[cfg(feature = "redmine")]
                     if app.inspector_view == InspectorView::TimeLog {
                         if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                             let ticket_id = app
@@ -415,7 +452,6 @@ pub async fn handle_key_event(
                     app.prev_row();
                     // When navigating rows while the TimeLog view is active, re-fetch
                     // time entries for the newly selected MR's linked ticket.
-                    #[cfg(feature = "redmine")]
                     if app.inspector_view == InspectorView::TimeLog {
                         if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                             let ticket_id = app
@@ -491,10 +527,9 @@ pub async fn handle_key_event(
                         tx.clone(),
                     );
 
-                    // Unconditionally re-fetch the Redmine ticket so that spent_hours
-                    // and time entries reflect any change logged since the last refresh,
-                    // regardless of whether the GitLab MR itself was updated.
-                    #[cfg(feature = "redmine")]
+                    // Re-fetch the tracker ticket so that spent_hours and time entries
+                    // reflect any change logged since the last refresh, regardless of
+                    // whether the GitLab MR itself was updated.
                     if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                         if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
                             let mr_id = mr.id.clone();
@@ -513,14 +548,14 @@ pub async fn handle_key_event(
                 }
             }
 
-            // [P] cycles the Inspector view: MrInfo → Pipelines → TimeLog (redmine) → MrInfo.
+            // [P] cycles the Inspector view: MrInfo → Pipelines → TimeLog → MrInfo.
+            // TimeLog is skipped when no tracker provider is configured.
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                let next = app.inspector_view.next();
+                let next = app.inspector_view.next_for(app.tracker.is_some());
                 app.inspector_view = next;
                 app.reset_inspector_scroll();
 
                 // When entering the TimeLog view, fetch time entries for the selected ticket.
-                #[cfg(feature = "redmine")]
                 if app.inspector_view == InspectorView::TimeLog {
                     let has_provider = app.tracker.is_some();
                     let selected_idx = app.table_state.selected();
@@ -554,9 +589,8 @@ pub async fn handle_key_event(
                 }
             }
 
-            // [L] opens the Log Time popup for the selected MR's linked Redmine ticket.
-            // Only active when a ticket is linked and the redmine feature is compiled in.
-            #[cfg(feature = "redmine")]
+            // [L] opens the Log Time popup for the selected MR's linked tracker ticket.
+            // Only active when a tracker provider is configured and a ticket is linked.
             KeyCode::Char('l') | KeyCode::Char('L') => {
                 let has_ticket = app
                     .table_state
@@ -605,8 +639,7 @@ pub async fn handle_key_event(
             }
 
             // [T] opens the tracker ticket linked to the selected MR in the browser.
-            // Only compiled when the `redmine` feature is enabled.
-            #[cfg(feature = "redmine")]
+            // Only active when a tracker provider is configured and a ticket is linked.
             KeyCode::Char('t') | KeyCode::Char('T') => {
                 if let Some(selected) = app.table_state.selected() {
                     if let Some(mr) = app.visible_mrs().nth(selected) {
@@ -697,7 +730,6 @@ async fn handle_enter(
                 // New MRs start unflagged.
                 flagged: false,
                 // Ticket resolved live after the first MR fetch — not pre-populated.
-                #[cfg(feature = "redmine")]
                 linked_ticket: None,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
@@ -852,7 +884,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
 
         // [P] cycles the Inspector view in demo mode (no network fetch).
         KeyCode::Char('p') | KeyCode::Char('P') => {
-            app.inspector_view = app.inspector_view.next();
+            app.inspector_view = app.inspector_view.next_for(app.tracker.is_some());
             app.reset_inspector_scroll();
         }
 

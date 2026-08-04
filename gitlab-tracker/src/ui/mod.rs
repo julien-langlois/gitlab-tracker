@@ -1,9 +1,7 @@
 pub mod inspector;
 pub mod table;
 
-#[cfg(feature = "redmine")]
-use crate::app::LogTimeField;
-use crate::app::{ActivePane, App, InputMode, InspectorView, SortColumn, SortOrder};
+use crate::app::{ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
@@ -45,9 +43,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         (false, InspectorView::MrInfo) => " MR Inspector │ [P]: Pipelines ",
         (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: Time Log ",
         (false, InspectorView::Pipelines) => " Pipelines │ [P]: Time Log ",
-        #[cfg(feature = "redmine")]
         (true, InspectorView::TimeLog) => " Time Log [FOCUS] │ [P]: MR Info │ [L]: Log Time ",
-        #[cfg(feature = "redmine")]
         (false, InspectorView::TimeLog) => " Time Log │ [P]: MR Info │ [L]: Log Time ",
     };
     let inspector_block = Block::default()
@@ -61,7 +57,6 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             let rendered_text = match app.inspector_view {
                 InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr),
-                #[cfg(feature = "redmine")]
                 InspectorView::TimeLog => inspector::render_time_log_text(mr, &app.time_entries),
             };
 
@@ -128,7 +123,6 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         ),
         // The Log Time popup handles its own rendering — the input bar is hidden behind it.
         // We still need to cover this arm to satisfy exhaustiveness.
-        #[cfg(feature = "redmine")]
         InputMode::LogTime => (
             " LOG TIME │ [Tab]: Next field │ [Enter]: Submit │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Magenta),
@@ -147,8 +141,6 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     if app.input_mode == InputMode::ColumnPicker {
         render_column_picker(f, app, f.area());
     }
-    // Update the Normal-mode hint bar to mention [T] when Redmine is compiled in.
-    // (The hint string is built above — this comment is a marker for future integrations.)
 
     // Render the milestone autocomplete dropdown above the input bar when suggestions exist.
     if app.input_mode == InputMode::Editing && !app.milestone_suggestions.is_empty() {
@@ -156,7 +148,6 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     }
 
     // Render the Log Time popup on top of everything when active.
-    #[cfg(feature = "redmine")]
     if app.input_mode == InputMode::LogTime {
         render_log_time_popup(f, app, f.area());
     }
@@ -170,7 +161,6 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 ///   2. Activity selector list (scrollable)
 ///   3. Comment text field
 ///   4. Error line (when present) + shortcut hint
-#[cfg(feature = "redmine")]
 fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
     use ratatui::widgets::List;
 
@@ -187,7 +177,7 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
     let popup_width: u16 = 60;
     // Base height: title(1) + duration(3) + activity list (up to 6 visible) + comment(3) +
     // error/hint(2) + borders(2) = 17 rows max
-    let activity_rows = (app.activities.len() as u16).min(6).max(2);
+    let activity_rows = (app.activities.len() as u16).clamp(2, 6);
     let popup_height: u16 = 3 + activity_rows + 3 + 2 + 2;
 
     let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
@@ -410,24 +400,18 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
 /// Arrow keys move the cursor; Space toggles the highlighted entry.
 fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     // The popup entries mirror the fields of `VisibleColumns` in declaration order.
-    // The "Ticket" entry is appended only when the `redmine` feature is compiled in.
-    #[cfg(not(feature = "redmine"))]
-    let entries: &[(&str, bool)] = &[
+    // The "Tracker" entry is appended only when a tracker provider is configured at runtime.
+    let mut entries_vec: Vec<(&str, bool)> = vec![
         ("Activity", app.config.visible_columns.activity),
         ("Target branch", app.config.visible_columns.target_branch),
         ("Labels", app.config.visible_columns.labels),
         ("Milestone", app.config.visible_columns.milestone),
         ("Notes", app.config.visible_columns.notes),
     ];
-    #[cfg(feature = "redmine")]
-    let entries: &[(&str, bool)] = &[
-        ("Activity", app.config.visible_columns.activity),
-        ("Target branch", app.config.visible_columns.target_branch),
-        ("Labels", app.config.visible_columns.labels),
-        ("Milestone", app.config.visible_columns.milestone),
-        ("Notes", app.config.visible_columns.notes),
-        ("Redmine", app.config.visible_columns.tracker_ticket),
-    ];
+    if app.tracker.is_some() {
+        entries_vec.push(("Tracker", app.config.visible_columns.tracker_ticket));
+    }
+    let entries: &[(&str, bool)] = &entries_vec;
 
     // Fixed popup size: wide enough for the longest label + checkbox, tall enough for all rows.
     let popup_width: u16 = 36;

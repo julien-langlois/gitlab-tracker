@@ -103,9 +103,8 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     if cols.notes {
         header_cells.push(Cell::from("Notes").bold());
     }
-    #[cfg(feature = "redmine")]
     if cols.tracker_ticket {
-        header_cells.push(Cell::from("Redmine").bold());
+        header_cells.push(Cell::from("Tracker").bold());
     }
     for b in &app.branches {
         header_cells.push(Cell::from(b.clone()).bold());
@@ -212,8 +211,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 ));
             }
 
-            // Optional Redmine ticket column — compiled only with the `redmine` feature.
-            #[cfg(feature = "redmine")]
+            // Optional tracker ticket column — visible when a provider is configured.
             if cols.tracker_ticket {
                 let ticket_cell = match &mr.linked_ticket {
                     Some(t) => {
@@ -318,18 +316,14 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         constraints.push(Constraint::Fill(2)); // Labels
     }
     if cols.milestone {
-        // Milestone gets a smaller share when the Redmine column is also visible,
+        // Milestone gets a smaller share when the tracker column is also visible,
         // to give more room to the ticket subject which is typically longer.
-        #[cfg(feature = "redmine")]
         let milestone_fill = if cols.tracker_ticket { 1 } else { 2 };
-        #[cfg(not(feature = "redmine"))]
-        let milestone_fill = 2;
         constraints.push(Constraint::Fill(milestone_fill)); // Milestone
     }
     if cols.notes {
         constraints.push(Constraint::Length(10)); // Notes badge
     }
-    #[cfg(feature = "redmine")]
     if cols.tracker_ticket {
         constraints.push(Constraint::Fill(2)); // Tracker ticket
     }
