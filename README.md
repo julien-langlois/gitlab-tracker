@@ -50,7 +50,15 @@
   | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
 
   All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
-* ⭐ **MR Flagging & Focused Filter:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to cycle the active filter between `All` and `Flagged ★`, instantly narrowing the table to only your flagged MRs. Flagged state is **persisted across restarts** via `tracker_state.json` — your watchlist survives application restarts and background refreshes.
+* ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
+  * `Flagged ★` — only your manually flagged MRs
+  * **GitLab state** — `Opened`, `Merged`, or `Closed`
+  * **Mergeability** — `Mergeable`, `Conflict`, `Needs Rebase`, `Not Approved`, `Requested Changes`, `Draft`, `Discussions`
+  * **Has comments** — MRs with at least one note or discussion thread
+  * **Milestone** — free-text search on the milestone title (case-insensitive)
+  * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
+
+  The active filter is shown in the table header. Flagged state is **persisted across restarts** via `tracker_state.json`.
 
 * 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all open MRs attached to that milestone** in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
 
@@ -369,7 +377,7 @@ Shortcut keys are active. The input field is passive.
 | `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
 | `S` | Toggle sort direction (ascending / descending) |
 | `Space` | **Toggle flag ★** on the selected MR — persisted across restarts |
-| `F` | Cycle filter (`All → Flagged ★ → All`) |
+| `F` | Open filter picker (state, mergeability, notes, milestone, assignee…) |
 | `Del` | Delete selected MR row |
 | `Esc` | Quit dashboard |
 

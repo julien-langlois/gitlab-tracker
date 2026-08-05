@@ -4,7 +4,10 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{ActivePane, App, InputMode, LogTimeField, LogTimeForm, TrackerView};
+use crate::app::{
+    ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm, TrackerView,
+    FILTER_PICKER_ENTRIES,
+};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_config_async, save_state_async};
@@ -189,6 +192,66 @@ pub async fn handle_key_event(
 
             _ => {}
         },
+
+        // ------------------------------------------------------------------
+        // Filter picker mode: the popup is open.
+        // Up/Down move the cursor; Enter confirms; Backspace/chars edit text input
+        // for Milestone and Assignee entries; Esc cancels without applying.
+        // ------------------------------------------------------------------
+        InputMode::FilterPicker => {
+            const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
+            // Entries that require a text input (Milestone=13, Assignee=14).
+            let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+
+            match key.code {
+                KeyCode::Esc => {
+                    // Cancel: close popup without changing the active filter.
+                    app.input_mode = InputMode::Normal;
+                    app.filter_picker = FilterPickerState::default();
+                }
+
+                KeyCode::Enter => {
+                    app.apply_filter_picker();
+                }
+
+                KeyCode::Up | KeyCode::Char('k') if !needs_text_input => {
+                    if app.filter_picker.cursor > 0 {
+                        app.filter_picker.cursor -= 1;
+                        app.filter_picker.input.clear();
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') if !needs_text_input => {
+                    if app.filter_picker.cursor < LAST_IDX {
+                        app.filter_picker.cursor += 1;
+                        app.filter_picker.input.clear();
+                    }
+                }
+                // Allow navigating away from a text-input row with arrow keys
+                // even while the input is focused (Esc is the cancel path).
+                KeyCode::Up => {
+                    if app.filter_picker.cursor > 0 {
+                        app.filter_picker.cursor -= 1;
+                        app.filter_picker.input.clear();
+                    }
+                }
+                KeyCode::Down => {
+                    if app.filter_picker.cursor < LAST_IDX {
+                        app.filter_picker.cursor += 1;
+                        app.filter_picker.input.clear();
+                    }
+                }
+
+                KeyCode::Backspace if needs_text_input => {
+                    app.filter_picker.input.pop();
+                }
+
+                KeyCode::Char(c) if needs_text_input => {
+                    app.filter_picker.input.push(c);
+                }
+
+                _ => {}
+            }
+        }
 
         // ------------------------------------------------------------------
         // Column-picker mode: the popup is open.
@@ -637,9 +700,9 @@ pub async fn handle_key_event(
             KeyCode::Char('s') => app.cycle_sort_column(),
             KeyCode::Char('S') => app.toggle_sort_order(),
 
-            // [F] cycles the active filter (All → Flagged → All → …).
+            // [F] opens the filter picker popup.
             KeyCode::Char('f') | KeyCode::Char('F') => {
-                app.cycle_filter();
+                app.open_filter_picker();
             }
 
             // Space toggles the flagged state of the selected MR and persists immediately.
@@ -799,6 +862,42 @@ async fn handle_enter(
 /// Accepts both `Press` and `Repeat` kinds so held keys scroll smoothly.
 /// Returns `true` if the main loop should exit (Esc was pressed).
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
+    // Filter picker popup intercepts all keys when open.
+    if app.input_mode == InputMode::FilterPicker {
+        use crate::app::FILTER_PICKER_ENTRIES;
+        const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
+        let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+        match key.code {
+            KeyCode::Esc => {
+                app.input_mode = InputMode::Normal;
+                app.filter_picker = FilterPickerState::default();
+            }
+            KeyCode::Enter => {
+                app.apply_filter_picker();
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.filter_picker.cursor > 0 {
+                    app.filter_picker.cursor -= 1;
+                    app.filter_picker.input.clear();
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if app.filter_picker.cursor < LAST_IDX {
+                    app.filter_picker.cursor += 1;
+                    app.filter_picker.input.clear();
+                }
+            }
+            KeyCode::Backspace if needs_text_input => {
+                app.filter_picker.input.pop();
+            }
+            KeyCode::Char(c) if needs_text_input => {
+                app.filter_picker.input.push(c);
+            }
+            _ => {}
+        }
+        return false;
+    }
+
     // Column-picker popup intercepts all keys when open.
     if app.input_mode == InputMode::ColumnPicker {
         const COLUMN_COUNT: usize = 5;
@@ -898,9 +997,9 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('s') => app.cycle_sort_column(),
         KeyCode::Char('S') => app.toggle_sort_order(),
 
-        // [F] cycles the active filter in demo mode.
+        // [F] opens the filter picker popup in demo mode.
         KeyCode::Char('f') | KeyCode::Char('F') => {
-            app.cycle_filter();
+            app.open_filter_picker();
         }
 
         // Space toggles the flagged state of the selected MR in demo mode (no persistence).

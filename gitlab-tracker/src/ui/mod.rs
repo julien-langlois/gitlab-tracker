@@ -5,6 +5,7 @@ pub mod tracker;
 
 use crate::app::{
     ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
+    FILTER_PICKER_ENTRIES,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -190,6 +191,10 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             ),
             Style::default(),
         ),
+        InputMode::FilterPicker => (
+            " FILTER │ [↑/↓]: Navigate │ [Enter]: Apply │ [Esc]: Cancel ".to_string(),
+            Style::default().fg(Color::Green),
+        ),
         // The Log Time popup handles its own rendering — the input bar is hidden behind it.
         // We still need to cover this arm to satisfy exhaustiveness.
         InputMode::LogTime => (
@@ -209,6 +214,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     // Render the column-picker popup on top of the UI when active.
     if app.input_mode == InputMode::ColumnPicker {
         render_column_picker(f, app, f.area());
+    }
+
+    // Render the filter picker popup on top of the UI when active.
+    if app.input_mode == InputMode::FilterPicker {
+        render_filter_picker(f, app, f.area());
     }
 
     // Render the milestone autocomplete dropdown above the input bar when suggestions exist.
@@ -461,6 +471,143 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
     let mut list_state = ListState::default();
     list_state.select(Some(cursor.saturating_sub(scroll_offset)));
     f.render_stateful_widget(list, popup_area, &mut list_state);
+}
+
+/// Renders the filter picker popup centred over the terminal area.
+///
+/// Displays all available filter entries. Entries 13 (Milestone) and 14 (Assignee)
+/// show an inline text input field beneath the list when selected.
+fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
+    let entries = FILTER_PICKER_ENTRIES;
+    let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+
+    // Height: one row per entry + borders + optional text input row (3 lines).
+    let list_height = entries.len() as u16;
+    let input_extra: u16 = if needs_text_input { 3 } else { 0 };
+    let popup_height = list_height + 2 + input_extra; // +2 for borders
+    let popup_width: u16 = 48;
+
+    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    f.render_widget(Clear, popup_area);
+
+    // Outer border.
+    let outer_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green))
+        .title(Span::styled(
+            " Filter ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ));
+    f.render_widget(outer_block, popup_area);
+
+    // Inner area (inside the border).
+    let inner = Rect::new(
+        popup_area.x + 1,
+        popup_area.y + 1,
+        popup_area.width.saturating_sub(2),
+        popup_area.height.saturating_sub(2),
+    );
+
+    // Split inner area into list + optional text field.
+    let zones = if needs_text_input {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(3)])
+            .split(inner)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1)])
+            .split(inner)
+    };
+
+    // Build list items.
+    let cursor = app.filter_picker.cursor;
+    let items: Vec<ListItem> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let is_active = i == cursor;
+            // Mark the currently applied filter with a bullet.
+            let is_current = {
+                use crate::app::FilterMode;
+                use crate::models::{GitlabMrState, MergeabilityStatus};
+                match i {
+                    0 => app.filter_mode == FilterMode::All,
+                    1 => app.filter_mode == FilterMode::Flagged,
+                    2 => app.filter_mode == FilterMode::State(GitlabMrState::Opened),
+                    3 => app.filter_mode == FilterMode::State(GitlabMrState::Merged),
+                    4 => app.filter_mode == FilterMode::State(GitlabMrState::Closed),
+                    5 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Mergeable),
+                    6 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Conflict),
+                    7 => {
+                        app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::NeedsRebase)
+                    }
+                    8 => {
+                        app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::NotApproved)
+                    }
+                    9 => {
+                        app.filter_mode
+                            == FilterMode::Mergeability(MergeabilityStatus::RequestedChanges)
+                    }
+                    10 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Draft),
+                    11 => {
+                        app.filter_mode
+                            == FilterMode::Mergeability(MergeabilityStatus::DiscussionsNotResolved)
+                    }
+                    12 => app.filter_mode == FilterMode::HasNotes,
+                    13 => matches!(app.filter_mode, FilterMode::Milestone(_)),
+                    14 => matches!(app.filter_mode, FilterMode::Assignee(_)),
+                    _ => false,
+                }
+            };
+
+            let prefix = if is_current { "● " } else { "  " };
+            let style = if is_active {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_current {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(Line::from(Span::styled(
+                format!("{}{}", prefix, label),
+                style,
+            )))
+        })
+        .collect();
+
+    let list = List::new(items);
+    let mut list_state = ListState::default();
+    list_state.select(Some(cursor));
+    f.render_stateful_widget(list, zones[0], &mut list_state);
+
+    // Text input field for Milestone / Assignee entries.
+    if needs_text_input {
+        let field_label = if app.filter_picker.cursor == 13 {
+            " Milestone contains "
+        } else {
+            " Assignee contains "
+        };
+        let input_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow))
+            .title(Span::styled(field_label, Style::default().fg(Color::White)));
+        let input_widget = Paragraph::new(app.filter_picker.input.as_str())
+            .block(input_block)
+            .style(Style::default().fg(Color::White));
+        f.render_widget(input_widget, zones[1]);
+    }
 }
 
 /// Renders the column-picker popup centred over the terminal area.

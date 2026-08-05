@@ -36,6 +36,8 @@ pub enum SortOrder {
 /// - `Editing`: every printable key feeds the input field; shortcuts are suspended.
 ///   Enter `/` or `i` to enter Editing mode; press `Esc` to leave it.
 /// - `ColumnPicker`: the column visibility popup is open; arrow keys and Space navigate/toggle.
+/// - `FilterPicker`: the filter picker popup is open — arrow keys navigate, Enter confirms,
+///   typing feeds the text input for Milestone/Assignee entries.
 /// - `LogTime`: the Log Time popup is open — Tab navigates fields, Enter submits.
 ///   Only reachable when a tracker provider is configured (`app.tracker.is_some()`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -47,6 +49,9 @@ pub enum InputMode {
     Editing,
     /// The column-picker popup is open — arrow keys and Space toggle columns.
     ColumnPicker,
+    /// The filter picker popup is open — arrow keys navigate, Enter confirms.
+    /// Typing feeds the text input for Milestone / Assignee entries.
+    FilterPicker,
     /// The Log Time popup is open — Tab cycles fields, Enter submits.
     /// Only reachable when `app.tracker.is_some()`.
     LogTime,
@@ -165,34 +170,71 @@ impl TrackerView {
 
 /// Controls which MRs are displayed in the table.
 ///
-/// Cycles with the [F] key in Normal mode:
-///   - `All`     → all tracked MRs are shown (default)
-///   - `Flagged` → only manually flagged MRs are shown
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+/// Selected interactively via the [F] key which opens a `FilterPicker` popup.
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum FilterMode {
     /// Show all tracked MRs (no filtering).
     #[default]
     All,
     /// Show only MRs that have been manually flagged with Space.
     Flagged,
+    /// Show only MRs with the given GitLab lifecycle state.
+    State(crate::models::GitlabMrState),
+    /// Show only MRs with the given mergeability status.
+    Mergeability(crate::models::MergeabilityStatus),
+    /// Show only MRs that have at least one comment or discussion thread.
+    HasNotes,
+    /// Show only MRs whose milestone title contains the given string (case-insensitive).
+    Milestone(String),
+    /// Show only MRs whose assignee contains the given string (case-insensitive).
+    Assignee(String),
 }
 
 impl FilterMode {
-    /// Cycles to the next filter mode in a round-robin fashion.
-    pub fn next(self) -> Self {
+    /// Returns the display label shown in the table header.
+    pub fn label(&self) -> String {
         match self {
-            FilterMode::All => FilterMode::Flagged,
-            FilterMode::Flagged => FilterMode::All,
+            FilterMode::All => "All".to_string(),
+            FilterMode::Flagged => "Flagged ★".to_string(),
+            FilterMode::State(s) => match s {
+                crate::models::GitlabMrState::Opened => "State: Opened".to_string(),
+                crate::models::GitlabMrState::Merged => "State: Merged".to_string(),
+                crate::models::GitlabMrState::Closed => "State: Closed".to_string(),
+            },
+            FilterMode::Mergeability(m) => format!("Mergeability: {:?}", m),
+            FilterMode::HasNotes => "Has comments 💬".to_string(),
+            FilterMode::Milestone(q) => format!("Milestone: {}", q),
+            FilterMode::Assignee(q) => format!("Assignee: {}", q),
         }
     }
+}
 
-    /// Returns the display label shown in the header.
-    pub fn label(self) -> &'static str {
-        match self {
-            FilterMode::All => "All",
-            FilterMode::Flagged => "Flagged ★",
-        }
-    }
+/// Index of each row in the filter picker popup, in display order.
+pub const FILTER_PICKER_ENTRIES: &[&str] = &[
+    "All (no filter)",
+    "Flagged ★",
+    "State: Opened",
+    "State: Merged",
+    "State: Closed",
+    "Mergeability: Mergeable",
+    "Mergeability: Conflict",
+    "Mergeability: Needs Rebase",
+    "Mergeability: Not Approved",
+    "Mergeability: Requested Changes",
+    "Mergeability: Draft",
+    "Mergeability: Discussions",
+    "Has comments 💬",
+    "Milestone… (type below)",
+    "Assignee… (type below)",
+];
+
+/// State held by the filter picker popup while it is open.
+#[derive(Debug, Clone, Default)]
+pub struct FilterPickerState {
+    /// Index of the currently highlighted row (0-based).
+    pub cursor: usize,
+    /// Free-text input used for Milestone and Assignee filters.
+    pub input: String,
 }
 
 pub struct App {
@@ -245,8 +287,11 @@ pub struct App {
     pub milestone_suggestions: Vec<String>,
     /// Index of the currently highlighted suggestion in the autocomplete popup.
     pub milestone_suggestion_cursor: usize,
-    /// Active filter applied to the MR table — toggled with [F] in Normal mode.
+    /// Active filter applied to the MR table — selected via the [F] picker popup.
     pub filter_mode: FilterMode,
+    /// State of the filter picker popup (cursor position + text input).
+    /// Reset each time the popup is opened.
+    pub filter_picker: FilterPickerState,
     /// Number of MR fetches still pending from the initial startup load.
     /// Change notifications (updated_at, mergeability, milestone) are suppressed
     /// until this reaches zero, preventing spurious toasts on first launch.
@@ -309,6 +354,7 @@ impl App {
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
             filter_mode: FilterMode::default(),
+            filter_picker: FilterPickerState::default(),
             // Initialised to 0 — main.rs sets this to the number of MRs loaded from state
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
             pending_initial_fetches: 0,
@@ -332,12 +378,84 @@ impl App {
         Some(mr.id.clone())
     }
 
-    /// Cycles the active filter to the next mode.
+    /// Opens the filter picker popup, initialising its state from the current filter.
     ///
-    /// Resets the table selection to the first row to avoid out-of-bounds access
-    /// when the filtered list is shorter than the current selection index.
-    pub fn cycle_filter(&mut self) {
-        self.filter_mode = self.filter_mode.next();
+    /// Pre-selects the row that matches the active filter so the user sees their current
+    /// selection highlighted when the popup opens.
+    pub fn open_filter_picker(&mut self) {
+        // Derive the initial cursor position from the active filter.
+        let cursor = match &self.filter_mode {
+            FilterMode::All => 0,
+            FilterMode::Flagged => 1,
+            FilterMode::State(crate::models::GitlabMrState::Opened) => 2,
+            FilterMode::State(crate::models::GitlabMrState::Merged) => 3,
+            FilterMode::State(crate::models::GitlabMrState::Closed) => 4,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::Mergeable) => 5,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::Conflict) => 6,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::NeedsRebase) => 7,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::NotApproved) => 8,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::RequestedChanges) => 9,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::Draft) => 10,
+            FilterMode::Mergeability(crate::models::MergeabilityStatus::DiscussionsNotResolved) => {
+                11
+            }
+            FilterMode::Mergeability(_) => 5,
+            FilterMode::HasNotes => 12,
+            FilterMode::Milestone(_) => 13,
+            FilterMode::Assignee(_) => 14,
+        };
+
+        // Pre-fill the text input from the current filter value if applicable.
+        let input = match &self.filter_mode {
+            FilterMode::Milestone(q) => q.clone(),
+            FilterMode::Assignee(q) => q.clone(),
+            _ => String::new(),
+        };
+
+        self.filter_picker = FilterPickerState { cursor, input };
+        self.input_mode = InputMode::FilterPicker;
+    }
+
+    /// Applies the filter picker selection and closes the popup.
+    ///
+    /// Derives a `FilterMode` from the current picker cursor and text input,
+    /// then resets the table selection to avoid out-of-bounds access.
+    pub fn apply_filter_picker(&mut self) {
+        use crate::models::{GitlabMrState, MergeabilityStatus};
+        let input = self.filter_picker.input.trim().to_string();
+
+        self.filter_mode = match self.filter_picker.cursor {
+            0 => FilterMode::All,
+            1 => FilterMode::Flagged,
+            2 => FilterMode::State(GitlabMrState::Opened),
+            3 => FilterMode::State(GitlabMrState::Merged),
+            4 => FilterMode::State(GitlabMrState::Closed),
+            5 => FilterMode::Mergeability(MergeabilityStatus::Mergeable),
+            6 => FilterMode::Mergeability(MergeabilityStatus::Conflict),
+            7 => FilterMode::Mergeability(MergeabilityStatus::NeedsRebase),
+            8 => FilterMode::Mergeability(MergeabilityStatus::NotApproved),
+            9 => FilterMode::Mergeability(MergeabilityStatus::RequestedChanges),
+            10 => FilterMode::Mergeability(MergeabilityStatus::Draft),
+            11 => FilterMode::Mergeability(MergeabilityStatus::DiscussionsNotResolved),
+            12 => FilterMode::HasNotes,
+            13 => {
+                if input.is_empty() {
+                    FilterMode::All
+                } else {
+                    FilterMode::Milestone(input)
+                }
+            }
+            14 => {
+                if input.is_empty() {
+                    FilterMode::All
+                } else {
+                    FilterMode::Assignee(input)
+                }
+            }
+            _ => FilterMode::All,
+        };
+
+        self.input_mode = InputMode::Normal;
         // Reset selection so we never point past the end of the filtered list.
         if self.visible_mrs().next().is_some() {
             self.table_state.select(Some(0));
@@ -349,19 +467,45 @@ impl App {
 
     /// Returns an iterator over the MRs that pass the current filter.
     pub fn visible_mrs(&self) -> impl Iterator<Item = &TrackedMr> {
-        self.mrs.iter().filter(move |mr| match self.filter_mode {
-            FilterMode::All => true,
-            FilterMode::Flagged => mr.flagged,
-        })
+        self.mrs.iter().filter(move |mr| self.filter_passes(mr))
     }
 
     /// Returns a mutable iterator over the MRs that pass the current filter.
     fn visible_mrs_mut(&mut self) -> impl Iterator<Item = &mut TrackedMr> {
-        let filter = self.filter_mode;
-        self.mrs.iter_mut().filter(move |mr| match filter {
+        let filter = self.filter_mode.clone();
+        self.mrs
+            .iter_mut()
+            .filter(move |mr| Self::filter_passes_static(&filter, mr))
+    }
+
+    /// Returns `true` when `mr` passes the currently active filter.
+    fn filter_passes(&self, mr: &TrackedMr) -> bool {
+        Self::filter_passes_static(&self.filter_mode, mr)
+    }
+
+    /// Pure predicate — does not borrow `self`, usable inside `iter_mut` closures.
+    fn filter_passes_static(filter: &FilterMode, mr: &TrackedMr) -> bool {
+        match filter {
             FilterMode::All => true,
             FilterMode::Flagged => mr.flagged,
-        })
+            FilterMode::State(s) => &mr.state == s,
+            FilterMode::Mergeability(m) => &mr.mergeability == m,
+            FilterMode::HasNotes => mr.user_notes_count > 0,
+            FilterMode::Milestone(q) => mr.milestone.to_lowercase().contains(&q.to_lowercase()),
+            FilterMode::Assignee(q) => {
+                let q_lower = q.to_lowercase();
+                // Match against the GitLab assignee field …
+                let gitlab_match = mr.assignee.to_lowercase().contains(&q_lower);
+                // … or the tracker ticket assignee when a ticket is linked.
+                let tracker_match = mr
+                    .linked_ticket
+                    .as_ref()
+                    .and_then(|t| t.assignee.as_deref())
+                    .map(|a| a.to_lowercase().contains(&q_lower))
+                    .unwrap_or(false);
+                gitlab_match || tracker_match
+            }
+        }
     }
 
     /// Updates `milestone_suggestions` based on the current input query after `@`.
