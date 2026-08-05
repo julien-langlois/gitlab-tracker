@@ -8,7 +8,23 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
 
 ## Features
 
-* **Linked ticket display:** subject, status, author, and assignee shown in the Inspector's MR Info view.
+* **Linked ticket display** in the Inspector's MR Info view — the following fields are shown when available:
+
+  | Field | Source (`GET /issues/{id}.json`) |
+  | :--- | :--- |
+  | Ticket ID + Subject | `id`, `subject` |
+  | Type badge | `tracker.name` (e.g. "Bug", "Evolution") |
+  | Priority badge | `priority.name` (e.g. "Normal", "High") |
+  | Status | `status.name` |
+  | Author / Assignee | `author.name`, `assigned_to.name` |
+  | Target version | `fixed_version.name` |
+  | Start date | `start_date` |
+  | Progress bar | `done_ratio` (0–100 %) |
+  | Estimate / Spent / Remaining | `estimated_hours`, `spent_hours`, `remaining_hours` |
+  | Direct URL | built from `redmine_url` + ticket ID |
+
+  Type and Priority are rendered as **coloured badges** — colours are fully configurable in `redmine.yaml` (see [Configuration](#configuration) below).
+
 * **Time Log view (`P`):** press `P` twice to reach the **Time Log** view:
   * A progress bar comparing time spent vs. the ticket's estimate.
   * The full list of time entries (date, user, activity, duration, comment) fetched live from Redmine.
@@ -61,20 +77,79 @@ You can also pre-configure via environment variable to skip the prompt entirely:
 REDMINE_URL=https://redmine.my-company.com
 ```
 
-The generated `redmine.yaml` (edit to customise ticket detection patterns):
+### `redmine.yaml` — full reference
 
 ```yaml
+# ── Connection ────────────────────────────────────────────────────────────────
+
+# Base URL of your Redmine instance. No trailing slash.
+# Can also be set via the REDMINE_URL environment variable.
 redmine_url: "https://redmine.my-company.com"
+
+# ── Ticket detection ──────────────────────────────────────────────────────────
+
+# Regex patterns used to detect ticket IDs in MR titles and descriptions.
+# Each pattern must expose the numeric ID in capture group 1.
+# The first match wins; patterns are tried in order.
 ticket_patterns:
-  - "#(\\d+)"
-  - "(?i)(?:refs|fixes|closes|resolves)\\s+#(\\d+)"
-  - "/issues/(\\d+)"
+  - "#(\\d+)"                                        # plain #1234
+  - "(?i)(?:refs|fixes|closes|resolves)\\s+#(\\d+)" # refs #1234, fixes #1234, …
+  - "/issues/(\\d+)"                                 # full Redmine URL in description
+
+# ── Badge colours ─────────────────────────────────────────────────────────────
+#
+# Colour both the "Type" and "Priority" badges displayed in the Inspector panel.
+# Keys are matched CASE-INSENSITIVELY against the value returned by the Redmine API.
+# Use "*" as a catch-all fallback for any label not listed explicitly.
+#
+# Accepted colour values:
+#   Named:  red, green, yellow, blue, magenta, cyan, white, black, dark_gray, light_gray
+#   Hex:    #rrggbb  (e.g. #ff6600)
+
+# tracker_type_colors maps the "tracker.name" field (ticket category in Redmine).
+# Discover your instance's values with:
+#   curl -s -H "X-Redmine-API-Key: YOUR_TOKEN" \
+#     "https://your-redmine.com/issues/ANY_ID.json" | jq '.issue.tracker'
+tracker_type_colors:
+  "Bug":       { bg: "red",      fg: "white" }
+  "Evolution": { bg: "cyan",     fg: "black" }
+  "Support":   { bg: "yellow",   fg: "black" }
+  "*":         { bg: "dark_gray", fg: "white" } # catch-all for unlisted types
+
+# priority_colors maps the "priority.name" field.
+# Discover your instance's values with:
+#   curl -s -H "X-Redmine-API-Key: YOUR_TOKEN" \
+#     "https://your-redmine.com/issues/ANY_ID.json" | jq '.issue.priority'
+priority_colors:
+  "Low":   { bg: "dark_gray", fg: "white" }
+  "Normal": { bg: "dark_gray", fg: "white" }
+  "High":   { bg: "yellow",    fg: "black" }
+  "Urgent": { bg: "red",       fg: "white" }
+  "*":       { bg: "dark_gray", fg: "white" } # catch-all for unlisted priorities
 ```
 
-| Field | Description |
-| :--- | :--- |
-| `redmine_url` | Base URL of your Redmine instance (no trailing slash) |
-| `ticket_patterns` | Regex patterns used to detect ticket IDs in MR titles/descriptions — capture group 1 must match the numeric ID |
+| Field | Required | Description |
+| :--- | :--- | :--- |
+| `redmine_url` | ✅ | Base URL of your Redmine instance (no trailing slash) |
+| `ticket_patterns` | ✅ | Regex list to detect ticket IDs in MR titles/descriptions — capture group 1 must match the numeric ID |
+| `tracker_type_colors` | ❌ | Badge colour map for the `tracker.name` field. Keys are case-insensitive; `"*"` is a catch-all fallback. Omit the section entirely to use the default (dark_gray / white) |
+| `priority_colors` | ❌ | Badge colour map for the `priority.name` field. Same rules as above |
+
+> **How to discover your Redmine's label values**
+>
+> Label names (tracker types, priorities) are instance-specific and may be in any language. Run these commands against any existing issue to see what your instance returns:
+>
+> ```bash
+> # Tracker type and priority of issue #1234
+> curl -s -H "X-Redmine-API-Key: YOUR_TOKEN" \
+>   "https://your-redmine.com/issues/1234.json" \
+>   | jq '.issue | {tracker: .tracker.name, priority: .priority.name}'
+>
+> # All priorities defined in your instance
+> curl -s -H "X-Redmine-API-Key: YOUR_TOKEN" \
+>   "https://your-redmine.com/enumerations/issue_priorities.json" \
+>   | jq '[.issue_priorities[].name]'
+> ```
 
 ---
 
@@ -127,20 +202,54 @@ The Redmine personal API token follows the same secure lookup chain as the GitLa
 
 ## Adding a New Tracker Plugin
 
-To add a different tracker (Jira, Linear, …), create a new crate that implements the `TrackerProvider` trait from `gitlab-tracker-core`:
+To add a different tracker (Jira, Linear, …), create a new crate and implement the `TrackerProvider` trait from `gitlab-tracker-core`.
+
+### Required methods
 
 ```rust
 #[async_trait]
 impl TrackerProvider for MyProvider {
     fn name(&self) -> &'static str { "My Tracker" }
+
     fn detect_ticket_id(&self, title: &str, description: &str) -> Option<String> { ... }
+
     async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket> { ... }
+
     fn ticket_url(&self, ticket_id: &str) -> String { ... }
-    // Optional — override for time tracking support:
-    async fn fetch_activities(&self) -> Vec<Activity> { ... }
-    async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> { ... }
-    async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> { ... }
 }
 ```
 
-Then wire it in `gitlab-tracker/src/main.rs` under a new feature flag — no other file in the orchestrator needs to change.
+### Optional overrides (all have default no-op implementations)
+
+```rust
+    // Badge colours for Type and Priority labels — read from your config file.
+    // Return raw (bg, fg) string pairs; the orchestrator converts them to ratatui::Color.
+    // Omit to use the hard-coded fallback (dark_gray / white).
+    fn label_colors(&self) -> LabelColorMaps { ... }
+
+    // Time-tracking support:
+    async fn fetch_activities(&self) -> Vec<Activity> { ... }
+    async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> { ... }
+    async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> { ... }
+```
+
+### Wiring in `main.rs`
+
+Add a `#[cfg(feature = "my-tracker")]` block in `gitlab-tracker/src/main.rs` — the `build_tracker_colors` helper is already generic over any `TrackerProvider`, so no further changes are needed in the orchestrator:
+
+```rust
+#[cfg(feature = "my-tracker")]
+if let Some(ref provider) = my_tracker_provider {
+    app.tracker_colors = build_tracker_colors(provider.as_ref());
+    app.tracker = my_tracker_provider;
+}
+```
+
+The `LabelColorMaps` flow:
+
+```text
+Your config file (YAML/JSON/…)
+  └─ label_colors() in your provider   ← String pairs, no ratatui dependency
+       └─ build_tracker_colors()        ← converts to ratatui::Color (orchestrator only)
+            └─ TrackerLabelColors       ← passed to the Inspector renderer
+```

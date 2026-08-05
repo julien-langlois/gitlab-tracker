@@ -3,6 +3,59 @@ use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, 
 use crate::ui::table::badge_label;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
+use std::collections::HashMap;
+
+/// Colour maps (background + foreground) for tracker badge labels shown in the Inspector.
+///
+/// Populated at startup from the active tracker's config file (e.g. `redmine.yaml`)
+/// and forwarded to `render_safe_inspector_text` so the renderer stays fully agnostic
+/// of every tracker's internal data model.
+///
+/// Any future tracker plugin (Jira, Linear, …) simply fills the same two maps —
+/// no change to the renderer is needed.
+///
+/// Fields and methods are used only when a tracker feature flag is enabled at build
+/// time, so `#[allow]` suppresses Clippy false-positives in feature-less builds.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Default)]
+pub struct TrackerLabelColors {
+    /// Colour map for tracker-type labels (e.g. "Bug", "Evolution").
+    /// Keys are stored lowercased; `"*"` is a catch-all fallback.
+    pub tracker_type: HashMap<String, (Color, Color)>,
+    /// Colour map for priority labels (e.g. "Normal", "High").
+    /// Keys are stored lowercased; `"*"` is a catch-all fallback.
+    pub priority: HashMap<String, (Color, Color)>,
+}
+
+#[allow(dead_code)]
+impl TrackerLabelColors {
+    /// Resolves a label against a colour map with case-insensitive exact match,
+    /// then a wildcard `"*"` fallback, then a hard-coded default (dark_gray / white).
+    fn resolve(map: &HashMap<String, (Color, Color)>, label: &str) -> (Color, Color) {
+        let label_lower = label.to_lowercase();
+        if let Some(&colors) = map.get(&label_lower).or_else(|| {
+            map.iter()
+                .find(|(k, _)| k.to_lowercase() == label_lower)
+                .map(|(_, v)| v)
+        }) {
+            return colors;
+        }
+        if let Some(&colors) = map.get("*") {
+            return colors;
+        }
+        (Color::DarkGray, Color::White)
+    }
+
+    /// Resolves the colour pair for a tracker-type label.
+    pub fn get_tracker_type_color(&self, label: &str) -> (Color, Color) {
+        Self::resolve(&self.tracker_type, label)
+    }
+
+    /// Resolves the colour pair for a priority label.
+    pub fn get_priority_color(&self, label: &str) -> (Color, Color) {
+        Self::resolve(&self.priority, label)
+    }
+}
 
 /// Renders the pipeline list view for the Inspector panel.
 ///
@@ -321,7 +374,15 @@ fn section_header(title: &'static str) -> Line<'static> {
     ])
 }
 
-pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
+// `tracker_colors` is only exercised when a tracker feature (e.g. `redmine`) is compiled in
+// and a ticket is linked. Clippy sees it as unused in feature-less builds — suppressed here
+// rather than prefixing with `_` so call sites stay readable.
+#[allow(unused_variables)]
+pub fn render_safe_inspector_text(
+    mr: &TrackedMr,
+    config: &AppConfig,
+    tracker_colors: &TrackerLabelColors,
+) -> Text<'static> {
     // Format ISO 8601 timestamp to a more readable form (date + time, drop sub-seconds).
     let updated_at_display = mr
         .updated_at
@@ -616,6 +677,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         lines.push(section_header("Tracker"));
         match &mr.linked_ticket {
             Some(ticket) => {
+                // ── Ticket ID + subject ───────────────────────────────────────
                 lines.push(Line::from(vec![
                     Span::raw("Ticket   : "),
                     Span::styled(
@@ -627,6 +689,38 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                     Span::raw("  "),
                     Span::styled(ticket.subject.clone(), Style::default().fg(Color::White)),
                 ]));
+
+                // ── Type badge — colour from tracker_colors (user-configurable) ──
+                if let Some(tracker_type) = &ticket.tracker_type {
+                    let (type_bg, type_fg) = tracker_colors.get_tracker_type_color(tracker_type);
+                    lines.push(Line::from(vec![
+                        Span::raw("Type     : "),
+                        Span::styled(
+                            format!(" {} ", tracker_type),
+                            Style::default()
+                                .bg(type_bg)
+                                .fg(type_fg)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+
+                // ── Priority badge — colour from tracker_colors (user-configurable) ──
+                if let Some(priority) = &ticket.priority {
+                    let (prio_bg, prio_fg) = tracker_colors.get_priority_color(priority);
+                    lines.push(Line::from(vec![
+                        Span::raw("Priority : "),
+                        Span::styled(
+                            format!(" {} ", priority),
+                            Style::default()
+                                .bg(prio_bg)
+                                .fg(prio_fg)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+
+                // ── Status ────────────────────────────────────────────────────
                 lines.push(Line::from(vec![
                     Span::raw("Status   : "),
                     Span::styled(
@@ -636,6 +730,8 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                             .add_modifier(Modifier::BOLD),
                     ),
                 ]));
+
+                // ── Author / Assignee ─────────────────────────────────────────
                 lines.push(Line::from(vec![
                     Span::raw("Author   : "),
                     Span::styled(
@@ -659,19 +755,55 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                     ),
                 ]));
 
-                // Time tracking — shown only when at least one value is set by Redmine.
+                // ── Target version / sprint ───────────────────────────────────
+                if let Some(version) = &ticket.version {
+                    lines.push(Line::from(vec![
+                        Span::raw("Version  : "),
+                        Span::styled(
+                            version.clone(),
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+
+                // ── Start date ────────────────────────────────────────────────
+                if let Some(start) = &ticket.start_date {
+                    lines.push(Line::from(vec![
+                        Span::raw("Start    : "),
+                        Span::styled(start.clone(), Style::default().fg(Color::DarkGray)),
+                    ]));
+                }
+
+                // ── Progress bar (done_ratio) ─────────────────────────────────
+                if let Some(ratio) = ticket.done_ratio {
+                    let bar_width: usize = 28;
+                    let filled = (ratio as f32 / 100.0 * bar_width as f32).round() as usize;
+                    let empty = bar_width.saturating_sub(filled);
+                    let bar = format!("{}{}", "█".repeat(filled), "░".repeat(empty));
+                    let bar_color = if ratio >= 100 {
+                        Color::Green
+                    } else if ratio >= 75 {
+                        Color::Cyan
+                    } else {
+                        Color::Yellow
+                    };
+                    lines.push(Line::from(vec![
+                        Span::raw("Progress : "),
+                        Span::styled(bar, Style::default().fg(bar_color)),
+                        Span::styled(
+                            format!("  {}%", ratio),
+                            Style::default().fg(bar_color).add_modifier(Modifier::BOLD),
+                        ),
+                    ]));
+                }
+
+                // ── Time tracking ─────────────────────────────────────────────
                 let has_estimate = ticket.time_estimate.map(|v| v > 0).unwrap_or(false);
                 let has_spent = ticket.time_spent.map(|v| v > 0).unwrap_or(false);
-                if has_estimate || has_spent {
-                    let estimate_str = ticket
-                        .time_estimate
-                        .map(format_duration)
-                        .unwrap_or_else(|| "—".to_string());
-                    let spent_str = ticket
-                        .time_spent
-                        .map(format_duration)
-                        .unwrap_or_else(|| "—".to_string());
-
+                let has_remaining = ticket.time_remaining.map(|v| v > 0).unwrap_or(false);
+                if has_estimate || has_spent || has_remaining {
                     // Colour the spent value relative to the estimate:
                     // green < 80 %, yellow 80–100 %, red when over budget.
                     let spent_color = match (ticket.time_estimate, ticket.time_spent) {
@@ -688,26 +820,51 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                         _ => Color::DarkGray,
                     };
 
-                    lines.push(Line::from(vec![
-                        Span::raw("Estimate : "),
-                        Span::styled(
-                            estimate_str,
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
-                    lines.push(Line::from(vec![
-                        Span::raw("Spent    : "),
-                        Span::styled(
-                            spent_str,
-                            Style::default()
-                                .fg(spent_color)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
+                    if has_estimate {
+                        lines.push(Line::from(vec![
+                            Span::raw("Estimate : "),
+                            Span::styled(
+                                ticket
+                                    .time_estimate
+                                    .map(format_duration)
+                                    .unwrap_or_else(|| "—".to_string()),
+                                Style::default()
+                                    .fg(Color::Cyan)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]));
+                    }
+                    if has_spent {
+                        lines.push(Line::from(vec![
+                            Span::raw("Spent    : "),
+                            Span::styled(
+                                ticket
+                                    .time_spent
+                                    .map(format_duration)
+                                    .unwrap_or_else(|| "—".to_string()),
+                                Style::default()
+                                    .fg(spent_color)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]));
+                    }
+                    if has_remaining {
+                        lines.push(Line::from(vec![
+                            Span::raw("Remaining: "),
+                            Span::styled(
+                                ticket
+                                    .time_remaining
+                                    .map(format_duration)
+                                    .unwrap_or_else(|| "—".to_string()),
+                                Style::default()
+                                    .fg(Color::DarkGray)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]));
+                    }
                 }
 
+                // ── URL ───────────────────────────────────────────────────────
                 lines.push(Line::from(vec![
                     Span::raw("URL      : "),
                     Span::styled(ticket.url.clone(), Style::default().fg(Color::DarkGray)),

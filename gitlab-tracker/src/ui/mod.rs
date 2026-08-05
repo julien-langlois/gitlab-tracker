@@ -55,7 +55,9 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         if let Some(mr) = app.mrs.get(selected) {
             // Dispatch to the correct inspector view based on the current toggle state.
             let rendered_text = match app.inspector_view {
-                InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
+                InspectorView::MrInfo => {
+                    inspector::render_safe_inspector_text(mr, &app.config, &app.tracker_colors)
+                }
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr),
                 InspectorView::TimeLog => inspector::render_time_log_text(mr, &app.time_entries),
             };

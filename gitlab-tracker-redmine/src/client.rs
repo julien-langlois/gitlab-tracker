@@ -11,15 +11,32 @@ pub struct RedmineUser {
     pub name: String,
 }
 
+/// A named reference as returned by Redmine for nested objects such as tracker type,
+/// priority, or fixed version (e.g. `{ "id": 2, "name": "Evolution" }`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct RedmineNamedRef {
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedmineIssue {
     pub id: u64,
     pub subject: String,
     pub status: RedmineStatus,
+    /// Tracker type (e.g. "Bug", "Evolution") — the `tracker` field in the Redmine API.
+    pub tracker: Option<RedmineNamedRef>,
+    /// Priority label (e.g. "Normal", "High") — the `priority` field in the Redmine API.
+    pub priority: Option<RedmineNamedRef>,
+    /// Target version / sprint — the `fixed_version` field in the Redmine API.
+    pub fixed_version: Option<RedmineNamedRef>,
     /// Original creator of the issue.
     pub author: Option<RedmineUser>,
     /// User currently assigned to the issue (`assigned_to` in the Redmine API).
     pub assigned_to: Option<RedmineUser>,
+    /// Start date in `YYYY-MM-DD` format — the `start_date` field in the Redmine API.
+    pub start_date: Option<String>,
+    /// Completion percentage (0–100) — the `done_ratio` field in the Redmine API.
+    pub done_ratio: Option<u32>,
     /// Estimated time in hours (`estimated_hours` — standard Redmine field).
     /// Converted to seconds when building [`LinkedTicket`].
     pub estimated_hours: Option<f32>,

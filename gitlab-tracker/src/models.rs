@@ -292,9 +292,10 @@ pub enum AppEvent {
     },
     /// Fired when a tracker plugin has resolved the ticket linked to a MR.
     /// Emitted by any active tracker provider (Redmine, Jira, Trello, …).
+    /// `ticket` is boxed to keep the enum variant size in check (Clippy `large_enum_variant`).
     TrackerTicketLoaded {
         mr_id: String,
-        ticket: gitlab_tracker_core::LinkedTicket,
+        ticket: Box<gitlab_tracker_core::LinkedTicket>,
     },
     /// Fired when the list of time-tracking activity categories has been fetched.
     /// Stored in `App` for use in the Log Time popup selector.

@@ -225,6 +225,10 @@ pub struct App {
     /// Active tracker provider (Redmine, Jira, Trello, …), shared across async tasks via Arc.
     /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
+    /// Colour maps for tracker badge labels (type and priority).
+    /// Populated from `redmine.yaml` at startup and forwarded to the Inspector renderer.
+    /// Defaults to empty maps (dark_gray / white fallback) when no provider is configured.
+    pub tracker_colors: crate::ui::inspector::TrackerLabelColors,
     /// Activity categories fetched from the tracker at startup.
     /// Populated by `AppEvent::ActivitiesLoaded` and used to fill the Log Time popup.
     pub activities: Vec<gitlab_tracker_core::Activity>,
@@ -277,6 +281,7 @@ impl App {
             pending_initial_fetches: 0,
             // Initialised to None — main.rs injects the provider after keyring lookup.
             tracker: None,
+            tracker_colors: crate::ui::inspector::TrackerLabelColors::default(),
             activities: Vec::new(),
             time_entries: Vec::new(),
             log_time_form: LogTimeForm::default(),
@@ -642,7 +647,7 @@ impl App {
             // ── Tracker ticket resolved ───────────────────────────────────────
             AppEvent::TrackerTicketLoaded { mr_id, ticket } => {
                 if let Some(mr) = self.mrs.find_mut(&mr_id) {
-                    mr.linked_ticket = Some(ticket);
+                    mr.linked_ticket = Some(*ticket);
                 }
                 // Ticket data is display-only — no state persist needed.
                 false
@@ -677,7 +682,10 @@ impl App {
                         );
                         let _ = tx2.send(AppEvent::TimeEntriesLoaded { entries });
                         if let Some(ticket) = ticket {
-                            let _ = tx2.send(AppEvent::TrackerTicketLoaded { mr_id, ticket });
+                            let _ = tx2.send(AppEvent::TrackerTicketLoaded {
+                                mr_id,
+                                ticket: Box::new(ticket),
+                            });
                         }
                     });
                 }
@@ -810,12 +818,21 @@ impl App {
                     // Determine the ticket id to fetch:
                     //   - If the detected id differs from the cache → use the new id.
                     //   - If they match but we want a forced refresh → reuse the cached id.
+                    //   - If the cached ticket's schema is outdated → invalidate and re-fetch.
                     //   - If nothing is detected and nothing cached → nothing to do.
+                    let cache_is_stale = mr.linked_ticket.as_ref().is_some_and(|t| {
+                        t.schema_version < gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION
+                    });
+
                     let fetch_id: Option<String> = if detected_id != cached_id {
                         // ID changed (or newly detected): always re-fetch.
                         detected_id.clone()
                     } else if detected_id.is_some() && was_updated {
                         // Same ID but the MR was updated: refresh to pick up new spent hours.
+                        detected_id.clone()
+                    } else if detected_id.is_some() && cache_is_stale {
+                        // Same ID but the cached struct is from an older schema version:
+                        // re-fetch silently to populate the new fields.
                         detected_id.clone()
                     } else {
                         // No change needed.
@@ -828,7 +845,10 @@ impl App {
                         let tx2 = tx.clone();
                         tokio::spawn(async move {
                             if let Some(ticket) = provider.fetch_ticket(&raw_id).await {
-                                let _ = tx2.send(AppEvent::TrackerTicketLoaded { mr_id, ticket });
+                                let _ = tx2.send(AppEvent::TrackerTicketLoaded {
+                                    mr_id,
+                                    ticket: Box::new(ticket),
+                                });
                             }
                         });
                     } else if detected_id.is_none() && cached_id.is_some() {

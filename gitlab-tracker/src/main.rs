@@ -37,6 +37,38 @@ struct Args {
     demo: bool,
 }
 
+/// Converts a provider's raw `LabelColorMaps` (String pairs) into the ratatui-typed
+/// `TrackerLabelColors` used by the Inspector renderer.
+///
+/// This is the only place in `gitlab-tracker` that bridges the provider contract
+/// (colour-as-String, no ratatui dependency) with the UI layer (ratatui::Color).
+/// Every future provider plugin follows the same path — no additional glue needed.
+///
+/// Compiled only when at least one tracker feature is enabled — the function is
+/// unreachable in a vanilla build and would produce a dead-code warning otherwise.
+// Extend to `#[cfg(any(feature = "redmine", feature = "jira"))]` when adding a new tracker.
+#[cfg(feature = "redmine")]
+fn build_tracker_colors(
+    provider: &dyn gitlab_tracker_core::TrackerProvider,
+) -> ui::inspector::TrackerLabelColors {
+    use config::parse_color;
+    use ui::inspector::TrackerLabelColors;
+
+    let maps = provider.label_colors();
+
+    let convert = |source: std::collections::HashMap<String, (String, String)>| {
+        source
+            .into_iter()
+            .map(|(k, (bg, fg))| (k, (parse_color(&bg), parse_color(&fg))))
+            .collect()
+    };
+
+    TrackerLabelColors {
+        tracker_type: convert(maps.tracker_type),
+        priority: convert(maps.priority),
+    }
+}
+
 /// Initialises file-based logging (rolling daily, non-blocking).
 ///
 /// Writes to `~/.config/gitlab-tracker/gitlab-tracker.log`.
@@ -180,9 +212,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
 
-    // Inject the Redmine provider if it was successfully initialised above.
+    // Inject the tracker provider and derive colour maps from it.
+    // Each provider owns its config and exposes `label_colors()` — main.rs only
+    // converts the raw (String, String) pairs to ratatui::Color via `parse_color`.
+    // This block is generic: any future provider (Jira, Linear, …) gets wired here
+    // under its own feature flag without touching the logic below.
     #[cfg(feature = "redmine")]
-    {
+    if let Some(ref provider) = redmine_provider {
+        app.tracker_colors = build_tracker_colors(provider.as_ref());
         app.tracker = redmine_provider;
     }
 

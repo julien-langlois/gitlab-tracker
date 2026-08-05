@@ -417,9 +417,9 @@ This project is structured as a **Cargo workspace** with four crates:
 ```text
 gitlab-tracker/                  # Binary crate — TUI orchestrator
 └── src/
-    ├── main.rs          # Event loop orchestrator & async channel setup
+    ├── main.rs          # Entry point: wires providers, calls build_tracker_colors(), event loop
     ├── app.rs           # State machine, InputMode, row navigation & sort logic
-    ├── config.rs        # Label filtering, wildcard matching, HEX color parsing & activity badge
+    ├── config.rs        # Label filtering, wildcard matching, parse_color() & activity badge
     ├── models.rs        # Strongly-typed API DTOs & runtime event types
     ├── gitlab.rs        # Async network handling & rate-limit semaphores
     ├── events.rs        # Keyboard & mouse event dispatch (Normal / Insert mode routing)
@@ -429,18 +429,24 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
     └── ui/
         ├── mod.rs       # Root layout renderer & input bar (mode-aware)
         ├── table.rs     # Main MR table widget
-        └── inspector.rs # Side panel: MR metadata & pipeline history views
+        └── inspector.rs # Side panel: MR metadata, pipeline history & TrackerLabelColors
 
-gitlab-tracker-core/             # Library crate — shared trait contracts (TrackerProvider, LinkedTicket)
+gitlab-tracker-core/             # Library crate — shared trait contracts, zero UI dependency
+└── src/
+    ├── lib.rs           # Re-exports: TrackerProvider, LinkedTicket, LabelColorMaps, …
+    └── provider.rs      # TrackerProvider trait + all shared domain types
+                         #   LinkedTicket: flat ticket data (type, priority, version, progress, …)
+                         #   LabelColorMaps: raw (String, String) badge colour maps — no ratatui
+
 gitlab-tracker-notify/           # Library crate — optional desktop notification plugin
 └── src/
     └── lib.rs           # notify-rust integration (no-op stubs when feature `desktop` is disabled)
 
 gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
 └── src/
-    ├── lib.rs           # RedmineProvider: implements TrackerProvider
-    ├── client.rs        # Async Redmine REST API client
-    ├── config.rs        # RedmineConfig: YAML config load/save & interactive onboarding
+    ├── lib.rs           # RedmineProvider: implements TrackerProvider + label_colors()
+    ├── client.rs        # Async Redmine REST API client (issue, time entries, activities)
+    ├── config.rs        # RedmineConfig: YAML load/save, LabelColorConfig, onboarding prompt
     ├── detector.rs      # Regex-based ticket ID detector (title & description)
     └── keyring.rs       # Secure token retrieval via OS Keyring
 ```
@@ -458,7 +464,8 @@ gitlab-tracker-redmine/          # Library crate — optional Redmine integratio
 
 When a tracker plugin is configured, the dashboard is enriched with:
 
-* **Linked ticket display** in the Inspector (subject, status, assignee, time tracking)
+* **Linked ticket display** in the Inspector — subject, type, priority, status, assignee, target version, start date, progress bar, and time tracking (estimate / spent / remaining)
+* **Coloured badges** for Type and Priority — colours are fully configurable per-label in the plugin's config file (no hardcoded values — works with any language or custom workflow)
 * **Time Log view** (`P`) — time entries for the linked ticket, auto-refreshed on MR navigation
 * **Log time** (`L`) — submit a new time entry directly from the TUI
 * **Tracker column** in the table (toggleable via `C`)

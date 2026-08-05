@@ -539,7 +539,7 @@ pub async fn handle_key_event(
                                     let _ =
                                         tx2.send(crate::models::AppEvent::TrackerTicketLoaded {
                                             mr_id,
-                                            ticket,
+                                            ticket: Box::new(ticket),
                                         });
                                 }
                             });

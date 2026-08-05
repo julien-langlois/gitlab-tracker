@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Regex patterns applied to MR titles and descriptions to detect Redmine ticket IDs.
@@ -13,6 +14,18 @@ fn default_patterns() -> Vec<String> {
         // Direct Redmine URL embedded in the description
         r"/issues/(\d+)".to_string(),
     ]
+}
+
+/// Colour pair (background + foreground) for a badge label in the Inspector panel.
+///
+/// Colour values are the same strings accepted by `AppConfig::parse_color`:
+/// named colours (`"red"`, `"cyan"`, …) or hex codes (`"#ff6600"`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LabelColorConfig {
+    /// Background colour of the badge.
+    pub bg: String,
+    /// Foreground (text) colour of the badge.
+    pub fg: String,
 }
 
 /// Redmine integration configuration, persisted as `redmine.yaml`
@@ -31,6 +44,41 @@ pub struct RedmineConfig {
     /// Each pattern must expose the numeric ticket ID in capture group 1.
     #[serde(default = "default_patterns")]
     pub ticket_patterns: Vec<String>,
+
+    /// Colour overrides for Redmine tracker-type labels displayed as badges
+    /// in the Inspector panel (e.g. "Evolution", "Bug", "Support").
+    ///
+    /// Keys are matched case-insensitively against the `tracker` field returned
+    /// by the Redmine API. Use `"*"` as a catch-all fallback.
+    ///
+    /// Example:
+    /// ```yaml
+    /// tracker_type_colors:
+    ///   "Bug":       { bg: "red",    fg: "white" }
+    ///   "Evolution": { bg: "cyan",   fg: "black" }
+    ///   "Support":   { bg: "yellow", fg: "black" }
+    ///   "*":         { bg: "dark_gray", fg: "white" }
+    /// ```
+    #[serde(default)]
+    pub tracker_type_colors: HashMap<String, LabelColorConfig>,
+
+    /// Colour overrides for Redmine priority labels displayed as badges
+    /// in the Inspector panel (e.g. "Regular", "High", "Urgent").
+    ///
+    /// Keys are matched case-insensitively against the `priority` field returned
+    /// by the Redmine API. Use `"*"` as a catch-all fallback.
+    ///
+    /// Example:
+    /// ```yaml
+    /// priority_colors:
+    ///   "Low":    { bg: "dark_gray", fg: "white" }
+    ///   "Regular":  { bg: "dark_gray", fg: "white" }
+    ///   "High":    { bg: "yellow",    fg: "black" }
+    ///   "Urgent":  { bg: "red",       fg: "white" }
+    ///   "*":        { bg: "dark_gray", fg: "white" }
+    /// ```
+    #[serde(default)]
+    pub priority_colors: HashMap<String, LabelColorConfig>,
 }
 
 impl Default for RedmineConfig {
@@ -38,6 +86,8 @@ impl Default for RedmineConfig {
         Self {
             redmine_url: String::new(),
             ticket_patterns: default_patterns(),
+            tracker_type_colors: HashMap::new(),
+            priority_colors: HashMap::new(),
         }
     }
 }

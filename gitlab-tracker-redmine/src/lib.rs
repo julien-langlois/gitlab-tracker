@@ -5,7 +5,10 @@ pub mod config;
 pub mod keyring;
 
 use async_trait::async_trait;
-use gitlab_tracker_core::{Activity, LinkedTicket, TimeEntry, TimeEntryRequest, TrackerProvider};
+use gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION;
+use gitlab_tracker_core::{
+    Activity, LabelColorMaps, LinkedTicket, TimeEntry, TimeEntryRequest, TrackerProvider,
+};
 
 pub use config::{load_or_create_config, RedmineConfig};
 pub use keyring::get_or_prompt_token;
@@ -45,12 +48,40 @@ impl TrackerProvider for RedmineProvider {
         detector::detect_ticket_id(title, description, &self.config.ticket_patterns)
     }
 
+    /// Exposes the colour maps configured in `redmine.yaml` to the orchestrator.
+    ///
+    /// The orchestrator converts the raw strings to `ratatui::Color` values — this
+    /// crate stays free of any UI/rendering dependency.
+    fn label_colors(&self) -> LabelColorMaps {
+        let to_map = |source: &std::collections::HashMap<String, config::LabelColorConfig>| {
+            source
+                .iter()
+                .map(|(k, cfg)| {
+                    // Store wildcard as-is; all other keys are lowercased so the
+                    // renderer's case-insensitive lookup can use a plain HashMap::get.
+                    let key = if k == "*" {
+                        k.clone()
+                    } else {
+                        k.to_lowercase()
+                    };
+                    (key, (cfg.bg.clone(), cfg.fg.clone()))
+                })
+                .collect()
+        };
+
+        LabelColorMaps {
+            tracker_type: to_map(&self.config.tracker_type_colors),
+            priority: to_map(&self.config.priority_colors),
+        }
+    }
+
     async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket> {
         let issue =
             client::fetch_issue(&self.http, &self.config.redmine_url, &self.token, ticket_id)
                 .await?;
 
         Some(LinkedTicket {
+            schema_version: LINKED_TICKET_SCHEMA_VERSION,
             id: issue.id.to_string(),
             subject: issue.subject,
             status: issue.status.name,
@@ -60,6 +91,12 @@ impl TrackerProvider for RedmineProvider {
             // Redmine returns hours — convert to seconds for the generic LinkedTicket contract.
             time_estimate: issue.estimated_hours.map(|h| (h * 3600.0).round() as u32),
             time_spent: issue.spent_hours.map(|h| (h * 3600.0).round() as u32),
+            time_remaining: issue.remaining_hours.map(|h| (h * 3600.0).round() as u32),
+            tracker_type: issue.tracker.map(|t| t.name),
+            priority: issue.priority.map(|p| p.name),
+            version: issue.fixed_version.map(|v| v.name),
+            start_date: issue.start_date,
+            done_ratio: issue.done_ratio,
         })
     }
 
