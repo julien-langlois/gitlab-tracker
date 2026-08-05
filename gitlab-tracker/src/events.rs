@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{ActivePane, App, InputMode, InspectorView, LogTimeField, LogTimeForm};
+use crate::app::{ActivePane, App, InputMode, LogTimeField, LogTimeForm, TrackerView};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_config_async, save_state_async};
@@ -17,30 +17,44 @@ use crate::utils::parse_duration_to_hours;
 pub fn handle_mouse_event(
     mouse: MouseEvent,
     term_width: u16,
+    term_height: u16,
     app: &mut App,
     tx: &UnboundedSender<AppEvent>,
 ) {
-    // The inspector occupies the right 35% of the terminal width.
+    // The right column starts at 65% of the terminal width.
     let inspector_start_col = term_width * 65 / 100;
+    // The Tracker pane occupies the bottom 33% of the right column.
+    // Subtract 1 for the status bar at the bottom.
+    let tracker_start_row = term_height.saturating_sub(1) * 67 / 100;
+    // Whether the cursor is in the right column and below the Inspector pane.
+    let in_tracker_pane = mouse.column >= inspector_start_col
+        && app.has_tracker_ticket()
+        && mouse.row >= tracker_start_row;
 
     match mouse.kind {
         // Update focus based on where the cursor is.
         MouseEventKind::Moved | MouseEventKind::Drag(_) => {
             if mouse.column >= inspector_start_col {
-                app.active_pane = ActivePane::Inspector;
+                if in_tracker_pane {
+                    app.active_pane = ActivePane::Tracker;
+                } else {
+                    app.active_pane = ActivePane::Inspector;
+                }
             } else {
                 app.active_pane = ActivePane::Dashboard;
             }
         }
         // Route scroll to the pane under the cursor.
         MouseEventKind::ScrollDown => {
-            if mouse.column >= inspector_start_col {
+            if in_tracker_pane {
+                app.tracker_scroll_down(3);
+            } else if mouse.column >= inspector_start_col {
                 app.inspector_scroll_down(3);
             } else {
                 app.next_row();
                 // When the TimeLog view is active, re-fetch time entries for the newly
                 // selected MR's linked ticket — mirrors the keyboard ↓ / j handler.
-                if app.inspector_view == InspectorView::TimeLog {
+                if app.tracker_view == TrackerView::TimeLog {
                     if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                         let ticket_id = app
                             .table_state
@@ -62,13 +76,14 @@ pub fn handle_mouse_event(
             }
         }
         MouseEventKind::ScrollUp => {
-            if mouse.column >= inspector_start_col {
+            if in_tracker_pane {
+                app.tracker_scroll_up(3);
+            } else if mouse.column >= inspector_start_col {
                 app.inspector_scroll_up(3);
             } else {
                 app.prev_row();
-                // When the TimeLog view is active, re-fetch time entries for the newly
-                // selected MR's linked ticket — mirrors the keyboard ↑ / k handler.
-                if app.inspector_view == InspectorView::TimeLog {
+                // When the TimeLog tracker view is active, re-fetch time entries.
+                if app.tracker_view == TrackerView::TimeLog {
                     if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                         let ticket_id = app
                             .table_state
@@ -414,17 +429,18 @@ pub async fn handle_key_event(
 
             // Tab cycles focus between panes.
             KeyCode::Tab => {
-                app.active_pane = app.active_pane.next();
+                app.active_pane = app.active_pane.next(app.has_tracker_ticket());
             }
 
             // Arrow keys and j/k are routed based on the active pane.
             KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
                 ActivePane::Inspector => app.inspector_scroll_down(1),
+                ActivePane::Tracker => app.tracker_scroll_down(1),
                 ActivePane::Dashboard => {
                     app.next_row();
-                    // When navigating rows while the TimeLog view is active, re-fetch
-                    // time entries for the newly selected MR's linked ticket.
-                    if app.inspector_view == InspectorView::TimeLog {
+                    // When the TimeLog tracker view is active, re-fetch time entries
+                    // for the newly selected MR's linked ticket.
+                    if app.tracker_view == TrackerView::TimeLog {
                         if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                             let ticket_id = app
                                 .table_state
@@ -448,11 +464,12 @@ pub async fn handle_key_event(
             },
             KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
                 ActivePane::Inspector => app.inspector_scroll_up(1),
+                ActivePane::Tracker => app.tracker_scroll_up(1),
                 ActivePane::Dashboard => {
                     app.prev_row();
-                    // When navigating rows while the TimeLog view is active, re-fetch
-                    // time entries for the newly selected MR's linked ticket.
-                    if app.inspector_view == InspectorView::TimeLog {
+                    // When the TimeLog tracker view is active, re-fetch time entries
+                    // for the newly selected MR's linked ticket.
+                    if app.tracker_view == TrackerView::TimeLog {
                         if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                             let ticket_id = app
                                 .table_state
@@ -548,43 +565,43 @@ pub async fn handle_key_event(
                 }
             }
 
-            // [P] cycles the Inspector view: MrInfo → Pipelines → TimeLog → MrInfo.
-            // TimeLog is skipped when no tracker provider is configured.
+            // [P] cycles the current pane's view:
+            //   - Inspector pane: MrInfo ↔ Pipelines
+            //   - Tracker pane:   TicketInfo ↔ TimeLog (fetches entries on enter)
+            //   - Dashboard: no-op
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                let next = app.inspector_view.next_for(app.tracker.is_some());
-                app.inspector_view = next;
-                app.reset_inspector_scroll();
+                match app.active_pane {
+                    ActivePane::Tracker => {
+                        app.tracker_view = app.tracker_view.next();
+                        app.reset_tracker_scroll();
 
-                // When entering the TimeLog view, fetch time entries for the selected ticket.
-                if app.inspector_view == InspectorView::TimeLog {
-                    let has_provider = app.tracker.is_some();
-                    let selected_idx = app.table_state.selected();
-                    let ticket_id = selected_idx
-                        .and_then(|i| app.visible_mrs().nth(i))
-                        .and_then(|mr| mr.linked_ticket.as_ref())
-                        .map(|t| t.id.clone());
+                        // When entering TimeLog, fetch time entries for the selected ticket.
+                        if app.tracker_view == TrackerView::TimeLog {
+                            let ticket_id = app
+                                .table_state
+                                .selected()
+                                .and_then(|i| app.visible_mrs().nth(i))
+                                .and_then(|mr| mr.linked_ticket.as_ref())
+                                .map(|t| t.id.clone());
 
-                    tracing::debug!(
-                        has_provider,
-                        selected_idx = ?selected_idx,
-                        ticket_id = ?ticket_id,
-                        "TimeLog view entered — attempting time entries fetch"
-                    );
-
-                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                        if let Some(tid) = ticket_id {
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                tracing::debug!(ticket_id = %tid, "Spawning fetch_time_entries");
-                                let entries = provider.fetch_time_entries(&tid).await;
-                                tracing::debug!(
-                                    count = entries.len(),
-                                    "fetch_time_entries returned"
-                                );
-                                let _ = tx2
-                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
-                            });
+                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                if let Some(tid) = ticket_id {
+                                    let tx2 = tx.clone();
+                                    tokio::spawn(async move {
+                                        let entries = provider.fetch_time_entries(&tid).await;
+                                        let _ =
+                                            tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
+                                                entries,
+                                            });
+                                    });
+                                }
+                            }
                         }
+                    }
+                    _ => {
+                        // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
+                        app.inspector_view = app.inspector_view.next();
+                        app.reset_inspector_scroll();
                     }
                 }
             }
@@ -638,15 +655,22 @@ pub async fn handle_key_event(
                 app.input_mode = InputMode::ColumnPicker;
             }
 
-            // [T] opens the tracker ticket linked to the selected MR in the browser.
-            // Only active when a tracker provider is configured and a ticket is linked.
+            // [T] cycles focus to the Tracker pane (or opens the URL when already focused).
+            // When focused on Tracker: [T] opens the ticket URL in the browser.
+            // Otherwise: [T] moves focus to the Tracker pane (if a ticket is linked).
             KeyCode::Char('t') | KeyCode::Char('T') => {
-                if let Some(selected) = app.table_state.selected() {
-                    if let Some(mr) = app.visible_mrs().nth(selected) {
-                        if let Some(ticket) = &mr.linked_ticket {
-                            let _ = open::that(&ticket.url);
+                if app.active_pane == ActivePane::Tracker {
+                    // Already on Tracker pane — open URL in browser.
+                    if let Some(selected) = app.table_state.selected() {
+                        if let Some(mr) = app.visible_mrs().nth(selected) {
+                            if let Some(ticket) = &mr.linked_ticket {
+                                let _ = open::that(&ticket.url);
+                            }
                         }
                     }
+                } else if app.has_tracker_ticket() {
+                    // Move focus to the Tracker pane.
+                    app.active_pane = ActivePane::Tracker;
                 }
             }
 
@@ -816,15 +840,17 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         KeyCode::Esc => return true,
 
         KeyCode::Tab => {
-            app.active_pane = app.active_pane.next();
+            app.active_pane = app.active_pane.next(app.has_tracker_ticket());
         }
 
         KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
             ActivePane::Inspector => app.inspector_scroll_down(1),
+            ActivePane::Tracker => app.tracker_scroll_down(1),
             ActivePane::Dashboard => app.next_row(),
         },
         KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
             ActivePane::Inspector => app.inspector_scroll_up(1),
+            ActivePane::Tracker => app.tracker_scroll_up(1),
             ActivePane::Dashboard => app.prev_row(),
         },
 
@@ -883,10 +909,16 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         }
 
         // [P] cycles the Inspector view in demo mode (no network fetch).
-        KeyCode::Char('p') | KeyCode::Char('P') => {
-            app.inspector_view = app.inspector_view.next_for(app.tracker.is_some());
-            app.reset_inspector_scroll();
-        }
+        KeyCode::Char('p') | KeyCode::Char('P') => match app.active_pane {
+            ActivePane::Tracker => {
+                app.tracker_view = app.tracker_view.next();
+                app.reset_tracker_scroll();
+            }
+            _ => {
+                app.inspector_view = app.inspector_view.next();
+                app.reset_inspector_scroll();
+            }
+        },
 
         _ => {}
     }

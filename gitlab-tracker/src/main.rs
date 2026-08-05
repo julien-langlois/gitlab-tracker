@@ -50,9 +50,9 @@ struct Args {
 #[cfg(feature = "redmine")]
 fn build_tracker_colors(
     provider: &dyn gitlab_tracker_core::TrackerProvider,
-) -> ui::inspector::TrackerLabelColors {
+) -> ui::tracker::TrackerLabelColors {
     use config::parse_color;
-    use ui::inspector::TrackerLabelColors;
+    use ui::tracker::TrackerLabelColors;
 
     let maps = provider.label_colors();
 
@@ -256,8 +256,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if event::poll(Duration::from_millis(50))? {
             match event::read()? {
                 Event::Mouse(mouse) => {
-                    let term_width = terminal.size()?.width;
-                    handle_mouse_event(mouse, term_width, &mut app, &tx);
+                    let size = terminal.size()?;
+                    handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
                 }
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press

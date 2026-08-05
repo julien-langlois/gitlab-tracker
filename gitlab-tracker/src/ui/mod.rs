@@ -1,7 +1,10 @@
 pub mod inspector;
 pub mod table;
+pub mod tracker;
 
-use crate::app::{ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder};
+use crate::app::{
+    ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
@@ -32,19 +35,45 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         .split(chunks[0]);
 
     // --- Left Pane: Main Table ---
-    // The table block highlights its border when it is the active pane.
     let table = table::render_table(app, main_chunks[0]);
     f.render_stateful_widget(table, main_chunks[0], &mut app.table_state);
 
-    // --- Right Pane: Context Inspector Panel ---
+    // --- Right Column: split vertically when a tracker ticket is available ---
+    let has_ticket = app
+        .table_state
+        .selected()
+        .and_then(|i| app.mrs.get(i))
+        .and_then(|mr| mr.linked_ticket.as_ref())
+        .is_some();
+
+    let right_chunks = if has_ticket {
+        // 2/3 Inspector (top) + 1/3 Tracker (bottom)
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(67), Constraint::Percentage(33)])
+            .split(main_chunks[1])
+    } else {
+        // Full height for Inspector only
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(100)])
+            .split(main_chunks[1])
+    };
+
+    let inspector_area = right_chunks[0];
+    let tracker_area = if has_ticket {
+        Some(right_chunks[1])
+    } else {
+        None
+    };
+
+    // --- Inspector Pane (upper-right) ---
     let inspector_is_active = app.active_pane == ActivePane::Inspector;
     let inspector_title = match (inspector_is_active, app.inspector_view) {
         (true, InspectorView::MrInfo) => " MR Inspector [FOCUS] │ [P]: Pipelines ",
         (false, InspectorView::MrInfo) => " MR Inspector │ [P]: Pipelines ",
-        (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: Time Log ",
-        (false, InspectorView::Pipelines) => " Pipelines │ [P]: Time Log ",
-        (true, InspectorView::TimeLog) => " Time Log [FOCUS] │ [P]: MR Info │ [L]: Log Time ",
-        (false, InspectorView::TimeLog) => " Time Log │ [P]: MR Info │ [L]: Log Time ",
+        (true, InspectorView::Pipelines) => " Pipelines [FOCUS] │ [P]: MR Info ",
+        (false, InspectorView::Pipelines) => " Pipelines │ [P]: MR Info ",
     };
     let inspector_block = Block::default()
         .borders(Borders::ALL)
@@ -53,38 +82,74 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 
     if let Some(selected) = app.table_state.selected() {
         if let Some(mr) = app.mrs.get(selected) {
-            // Dispatch to the correct inspector view based on the current toggle state.
             let rendered_text = match app.inspector_view {
-                InspectorView::MrInfo => {
-                    inspector::render_safe_inspector_text(mr, &app.config, &app.tracker_colors)
-                }
+                InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr),
-                InspectorView::TimeLog => inspector::render_time_log_text(mr, &app.time_entries),
             };
 
-            // Update content/pane dimensions so scroll clamping in App is accurate.
-            // Inner height removes the 2 border rows (top + bottom).
             app.inspector_content_lines = rendered_text.lines.len() as u16;
-            app.inspector_pane_height = main_chunks[1].height.saturating_sub(2);
+            app.inspector_pane_height = inspector_area.height.saturating_sub(2);
 
             let inspector_paragraph = Paragraph::new(rendered_text)
                 .block(inspector_block)
                 .wrap(Wrap { trim: false })
                 .scroll((app.inspector_scroll, 0));
-            f.render_widget(inspector_paragraph, main_chunks[1]);
+            f.render_widget(inspector_paragraph, inspector_area);
         } else {
-            let inspector_paragraph =
-                Paragraph::new("Selected metadata unavailable.").block(inspector_block);
-            f.render_widget(inspector_paragraph, main_chunks[1]);
+            f.render_widget(
+                Paragraph::new("Selected metadata unavailable.").block(inspector_block),
+                inspector_area,
+            );
         }
     } else {
-        let inspector_paragraph = Paragraph::new(
-            "Select an active Merge Request row to display side inspector panels context.",
-        )
-        .block(inspector_block)
-        .dark_gray();
-        f.render_widget(inspector_paragraph, main_chunks[1]);
-    };
+        f.render_widget(
+            Paragraph::new(
+                "Select an active Merge Request row to display side inspector panels context.",
+            )
+            .block(inspector_block)
+            .dark_gray(),
+            inspector_area,
+        );
+    }
+
+    // --- Tracker Pane (lower-right) — only when a ticket is linked ---
+    if let Some(area) = tracker_area {
+        if let Some(selected) = app.table_state.selected() {
+            if let Some(mr) = app.mrs.get(selected) {
+                let tracker_is_active = app.active_pane == ActivePane::Tracker;
+
+                let tracker_title = match (tracker_is_active, app.tracker_view) {
+                    (true, TrackerView::TicketInfo) => {
+                        " Tracker [FOCUS] │ [P]: Time Log │ [L]: Log Time │ [T]: Open URL "
+                    }
+                    (false, TrackerView::TicketInfo) => " Tracker │ [T]: Focus ",
+                    (true, TrackerView::TimeLog) => {
+                        " Time Log [FOCUS] │ [P]: Ticket Info │ [L]: Log Time "
+                    }
+                    (false, TrackerView::TimeLog) => " Time Log │ [T]: Focus ",
+                };
+
+                let tracker_block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(pane_border_style(tracker_is_active))
+                    .title(tracker_title);
+
+                let rendered_text = match app.tracker_view {
+                    TrackerView::TicketInfo => tracker::render_ticket_info(mr, &app.tracker_colors),
+                    TrackerView::TimeLog => tracker::render_time_log(mr, &app.time_entries),
+                };
+
+                app.tracker_content_lines = rendered_text.lines.len() as u16;
+                app.tracker_pane_height = area.height.saturating_sub(2);
+
+                let tracker_paragraph = Paragraph::new(rendered_text)
+                    .block(tracker_block)
+                    .wrap(Wrap { trim: false })
+                    .scroll((app.tracker_scroll, 0));
+                f.render_widget(tracker_paragraph, area);
+            }
+        }
+    }
 
     let sort_status = match (app.sort_column, app.sort_order) {
         (SortColumn::UpdatedAt, SortOrder::Ascending) => "Sort: Updated ▲",
@@ -101,6 +166,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     let pane_hint = match app.active_pane {
         ActivePane::Dashboard => "Pane: Dashboard",
         ActivePane::Inspector => "Pane: Inspector",
+        ActivePane::Tracker => "Pane: Tracker",
     };
     // The input bar title and border change depending on whether the field has focus.
     let (input_title, input_border_style) = match app.input_mode {

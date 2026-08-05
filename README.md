@@ -359,8 +359,9 @@ Shortcut keys are active. The input field is passive.
 | :--- | :--- |
 | `i` or `/` | **Enter Insert mode** — focus the input field |
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
-| `Tab` | Cycle focus between Dashboard and Inspector panes |
-| `P` | Cycle Inspector view: **MR Info → Pipelines → Time Log** → MR Info (Time Log shown only when a tracker is configured) |
+| `Tab` | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked) |
+| `T` | When focus is on Dashboard or Inspector: **jump to Tracker pane**. When already on Tracker: **open ticket URL** in browser |
+| `P` | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: cycle Ticket Info ↔ Time Log |
 | `L` | **Log time** on the linked tracker ticket *(only when a tracker plugin is configured)* |
 | `C` | **Open column picker** — toggle optional columns on/off |
 | `O` | Open selected MR in your default web browser |
@@ -429,7 +430,8 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
     └── ui/
         ├── mod.rs       # Root layout renderer & input bar (mode-aware)
         ├── table.rs     # Main MR table widget
-        └── inspector.rs # Side panel: MR metadata, pipeline history & TrackerLabelColors
+        ├── inspector.rs # Upper-right pane: MR metadata & pipeline history
+        └── tracker.rs   # Lower-right pane: linked ticket details & time log (TrackerLabelColors)
 
 gitlab-tracker-core/             # Library crate — shared trait contracts, zero UI dependency
 └── src/

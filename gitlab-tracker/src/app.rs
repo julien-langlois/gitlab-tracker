@@ -92,52 +92,73 @@ pub enum ActivePane {
     /// The main MR list table (left pane).
     #[default]
     Dashboard,
-    /// The MR detail side viewer (right pane).
+    /// The MR detail side viewer — upper-right pane.
     Inspector,
+    /// The tracker ticket pane — lower-right pane.
+    /// Only reachable when a tracker provider is configured and a ticket is linked.
+    Tracker,
 }
 
 impl ActivePane {
-    /// Cycles to the next pane in a round-robin fashion.
-    pub fn next(self) -> Self {
+    /// Cycles to the next pane.
+    /// When a tracker ticket is available the cycle is: Dashboard → Inspector → Tracker → Dashboard.
+    /// Otherwise: Dashboard ↔ Inspector.
+    pub fn next(self, has_tracker_ticket: bool) -> Self {
         match self {
             ActivePane::Dashboard => ActivePane::Inspector,
-            ActivePane::Inspector => ActivePane::Dashboard,
+            ActivePane::Inspector => {
+                if has_tracker_ticket {
+                    ActivePane::Tracker
+                } else {
+                    ActivePane::Dashboard
+                }
+            }
+            ActivePane::Tracker => ActivePane::Dashboard,
         }
     }
 }
 
 /// Controls which view is rendered inside the Inspector side panel.
 ///
-/// Cycled with [P] — rotates between MrInfo, Pipelines, and (when a tracker
-/// provider is configured) the TimeLog view.
+/// Cycled with [P] — rotates between MrInfo and Pipelines only.
+/// The TimeLog has moved to the dedicated Tracker pane.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InspectorView {
-    /// Default: MR metadata, description, labels (existing behaviour).
+    /// Default: MR metadata, description, labels.
     #[default]
     MrInfo,
     /// Pipeline list for the selected MR.
     Pipelines,
-    /// Time entries logged on the linked tracker ticket.
-    /// Only reachable at runtime when `app.tracker.is_some()`.
-    TimeLog,
 }
 
 impl InspectorView {
-    /// Cycles to the next view in a round-robin fashion.
-    ///
-    /// When a tracker provider is configured: MrInfo → Pipelines → TimeLog → MrInfo.
-    /// Otherwise: MrInfo ↔ Pipelines.
-    pub fn next_for(self, has_tracker: bool) -> Self {
+    /// Cycles between MrInfo and Pipelines.
+    pub fn next(self) -> Self {
         match self {
             InspectorView::MrInfo => InspectorView::Pipelines,
-            InspectorView::Pipelines => {
-                if has_tracker {
-                    InspectorView::TimeLog
-                } else {
-                    InspectorView::MrInfo
-                }
-            }
-            InspectorView::TimeLog => InspectorView::MrInfo,
+            InspectorView::Pipelines => InspectorView::MrInfo,
+        }
+    }
+}
+
+/// Controls which view is rendered inside the Tracker pane (lower-right).
+///
+/// Cycled with [P] when the Tracker pane is focused.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum TrackerView {
+    /// Ticket details: type, priority, status, version, progress, time tracking.
+    #[default]
+    TicketInfo,
+    /// Time entries logged on the linked ticket.
+    TimeLog,
+}
+
+impl TrackerView {
+    /// Cycles between TicketInfo and TimeLog.
+    pub fn next(self) -> Self {
+        match self {
+            TrackerView::TicketInfo => TrackerView::TimeLog,
+            TrackerView::TimeLog => TrackerView::TicketInfo,
         }
     }
 }
@@ -201,6 +222,14 @@ pub struct App {
     pub inspector_content_lines: u16,
     /// Height (in rows) of the Inspector pane area, updated at each render frame.
     pub inspector_pane_height: u16,
+    /// Which view is rendered inside the Tracker pane ([P] toggles when focused).
+    pub tracker_view: TrackerView,
+    /// Vertical scroll offset for the Tracker pane (in lines).
+    pub tracker_scroll: u16,
+    /// Total number of lines in the currently rendered Tracker pane content.
+    pub tracker_content_lines: u16,
+    /// Height (in rows) of the Tracker pane area, updated at each render frame.
+    pub tracker_pane_height: u16,
     /// Index of the currently highlighted row in the column-picker popup (0-based).
     pub column_picker_cursor: usize,
     /// Countdown (in ticks ~= seconds) during which recently-updated rows stay highlighted.
@@ -226,9 +255,9 @@ pub struct App {
     /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
     /// Colour maps for tracker badge labels (type and priority).
-    /// Populated from `redmine.yaml` at startup and forwarded to the Inspector renderer.
+    /// Populated from the active tracker's config at startup and forwarded to the Tracker pane renderer.
     /// Defaults to empty maps (dark_gray / white fallback) when no provider is configured.
-    pub tracker_colors: crate::ui::inspector::TrackerLabelColors,
+    pub tracker_colors: crate::ui::tracker::TrackerLabelColors,
     /// Activity categories fetched from the tracker at startup.
     /// Populated by `AppEvent::ActivitiesLoaded` and used to fill the Log Time popup.
     pub activities: Vec<gitlab_tracker_core::Activity>,
@@ -270,6 +299,10 @@ impl App {
             inspector_scroll: 0,
             inspector_content_lines: 0,
             inspector_pane_height: 0,
+            tracker_view: TrackerView::default(),
+            tracker_scroll: 0,
+            tracker_content_lines: 0,
+            tracker_pane_height: 0,
             column_picker_cursor: 0,
             update_highlight_ticks: 0,
             milestones: Vec::new(),
@@ -281,7 +314,7 @@ impl App {
             pending_initial_fetches: 0,
             // Initialised to None — main.rs injects the provider after keyring lookup.
             tracker: None,
-            tracker_colors: crate::ui::inspector::TrackerLabelColors::default(),
+            tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
             activities: Vec::new(),
             time_entries: Vec::new(),
             log_time_form: LogTimeForm::default(),
@@ -401,6 +434,30 @@ impl App {
     /// Resets the Inspector scroll to the top (e.g. when selecting a new MR).
     pub fn reset_inspector_scroll(&mut self) {
         self.inspector_scroll = 0;
+    }
+
+    pub fn tracker_scroll_down(&mut self, amount: u16) {
+        let max_scroll = self
+            .tracker_content_lines
+            .saturating_sub(self.tracker_pane_height);
+        self.tracker_scroll = self.tracker_scroll.saturating_add(amount).min(max_scroll);
+    }
+
+    pub fn tracker_scroll_up(&mut self, amount: u16) {
+        self.tracker_scroll = self.tracker_scroll.saturating_sub(amount);
+    }
+
+    pub fn reset_tracker_scroll(&mut self) {
+        self.tracker_scroll = 0;
+    }
+
+    /// Returns true when the selected MR has a linked tracker ticket.
+    pub fn has_tracker_ticket(&self) -> bool {
+        self.table_state
+            .selected()
+            .and_then(|i| self.visible_mrs().nth(i))
+            .and_then(|mr| mr.linked_ticket.as_ref())
+            .is_some()
     }
 
     pub fn next_row(&mut self) {

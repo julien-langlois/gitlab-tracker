@@ -7,6 +7,7 @@ use crate::models::{
 };
 use crate::ui;
 use crossterm::event::{self, Event, KeyEventKind};
+use gitlab_tracker_core::{LinkedTicket, LINKED_TICKET_SCHEMA_VERSION};
 use std::time::Duration;
 
 /// Returns an ISO 8601 UTC timestamp offset by `days_ago` days from now.
@@ -217,7 +218,24 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with several comments awaiting review.
             user_notes_count: 5,
             flagged: true,
-            linked_ticket: None,
+            // Demo: simulate a linked Redmine ticket with full metadata for the Tracker pane.
+            linked_ticket: Some(LinkedTicket {
+                schema_version: LINKED_TICKET_SCHEMA_VERSION,
+                id: "4271".into(),
+                subject: "Expose MR metadata via GraphQL — server-side implementation".into(),
+                status: "In Progress".into(),
+                url: "https://redmine.example.com/issues/4271".into(),
+                author: Some("Marina Graphetti".into()),
+                assignee: Some("Thomas Dubosc".into()),
+                tracker_type: Some("Evolution".into()),
+                priority: Some("High".into()),
+                version: Some("v2.4.0".into()),
+                start_date: Some("2024-04-15".into()),
+                done_ratio: Some(65),
+                time_estimate: Some(28800),   // 8 h
+                time_spent: Some(18000),       // 5 h
+                time_remaining: Some(10800),   // 3 h
+            }),
         },
         TrackedMr {
             id: "101".into(),
@@ -275,7 +293,24 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with unread comments from reviewers.
             user_notes_count: 3,
             flagged: false,
-            linked_ticket: None,
+            // Demo: simulate a linked Redmine bug ticket with partial time tracking.
+            linked_ticket: Some(LinkedTicket {
+                schema_version: LINKED_TICKET_SCHEMA_VERSION,
+                id: "3987".into(),
+                subject: "Connection pool deadlocks under sustained high load".into(),
+                status: "Assigned".into(),
+                url: "https://redmine.example.com/issues/3987".into(),
+                author: Some("Thomas Dubosc".into()),
+                assignee: Some("Alex Devries".into()),
+                tracker_type: Some("Bug".into()),
+                priority: Some("Low".into()),
+                version: Some("v2.4.0".into()),
+                start_date: Some("2024-04-28".into()),
+                done_ratio: Some(30),
+                time_estimate: Some(14400),  // 4 h
+                time_spent: Some(5400),       // 1 h 30
+                time_remaining: Some(9000),   // 2 h 30
+            }),
         },
         TrackedMr {
             id: "103".into(),
@@ -430,8 +465,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         if event::poll(Duration::from_millis(50))? {
             match event::read()? {
                 Event::Mouse(mouse) => {
-                    let term_width = terminal.size()?.width;
-                    handle_mouse_event(mouse, term_width, &mut app, &tx);
+                    let size = terminal.size()?;
+                    handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
                 }
                 // Accept both Press and Repeat so held keys scroll smoothly in demo mode.
                 Event::Key(key)
