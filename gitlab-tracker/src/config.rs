@@ -202,8 +202,13 @@ pub fn parse_color(s: &str) -> Color {
         "cyan" => Color::Cyan,
         "white" => Color::White,
         "black" => Color::Black,
-        "gray" | "grey" | "dark_gray" => Color::DarkGray,
-        "light_gray" => Color::Gray,
+        // Named ANSI greys are remapped to absolute RGB values so that badges and
+        // muted text render consistently across all terminal palettes (Ambiance,
+        // Dracula, Nord, Gruvbox Dark, Solarized Dark, …).
+        // Color::DarkGray maps to ANSI slot #8 which many palettes render too dark
+        // (~#333–#555) to remain legible as a badge background or muted foreground.
+        "dark_gray" | "dark_grey" => Color::Rgb(88, 88, 100),
+        "gray" | "grey" | "light_gray" | "light_grey" => Color::Rgb(160, 160, 175),
         _ => {
             if s.starts_with('#') && s.len() == 7 {
                 let r = u8::from_str_radix(&s[1..3], 16).unwrap_or(128);
@@ -211,7 +216,9 @@ pub fn parse_color(s: &str) -> Color {
                 let b = u8::from_str_radix(&s[5..7], 16).unwrap_or(128);
                 Color::Rgb(r, g, b)
             } else {
-                Color::DarkGray
+                // Unknown token — fall back to a visible mid-grey rather than the
+                // opaque ANSI DarkGray that may be invisible on dark palettes.
+                Color::Rgb(88, 88, 100)
             }
         }
     }

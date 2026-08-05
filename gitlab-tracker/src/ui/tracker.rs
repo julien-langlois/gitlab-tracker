@@ -10,6 +10,7 @@
 //!  - Zero coupling to MR Inspector logic; `inspector.rs` is untouched.
 
 use crate::models::TrackedMr;
+use crate::ui::theme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use std::collections::HashMap;
@@ -54,7 +55,7 @@ impl TrackerLabelColors {
         if let Some(&colors) = map.get("*") {
             return colors;
         }
-        (Color::DarkGray, Color::White)
+        (theme::MUTED_DIM, Color::White)
     }
 
     /// Resolves the colour pair for a tracker-type label.
@@ -215,7 +216,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
     if let Some(start) = &ticket.start_date {
         lines.push(Line::from(vec![
             Span::raw("Start    : "),
-            Span::styled(start.clone(), Style::default().fg(Color::DarkGray)),
+            Span::styled(start.clone(), Style::default().fg(theme::MUTED)),
         ]));
     }
 
@@ -253,6 +254,8 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
     if has_estimate || has_spent || has_remaining {
         let spent_color = match (ticket.time_estimate, ticket.time_spent) {
             (Some(est), Some(spent)) if est > 0 => {
+                // Colour encodes burn-rate against estimate: green = on track,
+                // yellow = approaching limit (≥80%), red = over budget.
                 let ratio = spent as f32 / est as f32;
                 if ratio >= 1.0 {
                     Color::Red
@@ -262,7 +265,9 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
                     Color::Green
                 }
             }
-            _ => Color::DarkGray,
+            // No estimate available — display spent time in cyan (neutral/informational)
+            // rather than an invisible muted grey.
+            _ => Color::Cyan,
         };
         if has_estimate {
             lines.push(Line::from(vec![
@@ -301,7 +306,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
                         .map(format_duration)
                         .unwrap_or_else(|| "—".to_string()),
                     Style::default()
-                        .fg(Color::DarkGray)
+                        .fg(theme::MUTED)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -387,7 +392,7 @@ pub fn render_time_log(
 
     // ── Entries list ──────────────────────────────────────────────────────────
     lines.push(Line::from(vec![
-        Span::styled("── ", Style::default().fg(Color::DarkGray)),
+        Span::styled("── ", Style::default().fg(theme::MUTED_DIM)),
         Span::styled(
             "Entries",
             Style::default()
@@ -396,20 +401,20 @@ pub fn render_time_log(
         ),
         Span::styled(
             " ──────────────────────────────",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED_DIM),
         ),
     ]));
 
     if entries.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No time entries recorded yet.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED),
         )]));
     } else {
         for entry in entries {
             // Line 1: date | duration | activity | user
             lines.push(Line::from(vec![
-                Span::styled(entry.spent_on.clone(), Style::default().fg(Color::DarkGray)),
+                Span::styled(entry.spent_on.clone(), Style::default().fg(theme::MUTED)),
                 Span::raw("  "),
                 Span::styled(
                     fmt_hours(entry.hours),
@@ -433,7 +438,7 @@ pub fn render_time_log(
                     Span::raw("  "),
                     Span::styled(
                         format!("\"{}\"", entry.comment),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(theme::MUTED_COMMENT),
                     ),
                 ]));
             }

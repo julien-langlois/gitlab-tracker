@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr};
 use crate::ui::table::badge_label;
+use crate::ui::theme;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -22,7 +23,7 @@ pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
     if mr.pipelines.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No pipelines found for this MR.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED),
         )]));
     } else {
         for pipeline in &mr.pipelines {
@@ -60,14 +61,14 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
         ),
         Span::styled(
             format!("  {}", date_display),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED_DIM),
         ),
     ])];
 
     if pipeline.jobs.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "  No jobs.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED),
         )]));
         return lines;
     }
@@ -108,10 +109,10 @@ fn pipeline_status_style(state: &PipelineState) -> (&'static str, Color) {
         PipelineState::Failed => ("✘ failed", Color::Red),
         PipelineState::Running => ("⟳ running", Color::Cyan),
         PipelineState::Pending => ("◔ pending", Color::Yellow),
-        PipelineState::Canceled => ("⊘ canceled", Color::DarkGray),
-        PipelineState::Skipped => ("⊝ skipped", Color::DarkGray),
+        PipelineState::Canceled => ("⊘ canceled", theme::MUTED_INACTIVE),
+        PipelineState::Skipped => ("⊝ skipped", theme::MUTED_INACTIVE),
         PipelineState::Created => ("○ created", Color::White),
-        PipelineState::Unknown => ("? unknown", Color::DarkGray),
+        PipelineState::Unknown => ("? unknown", theme::MUTED_INACTIVE),
     }
 }
 
@@ -122,10 +123,10 @@ fn job_status_style(status: &str) -> (&'static str, Color) {
         "failed" => ("✘", Color::Red),
         "running" => ("⟳", Color::Cyan),
         "pending" => ("◔", Color::Yellow),
-        "canceled" => ("⊘", Color::DarkGray),
-        "skipped" => ("⊝", Color::DarkGray),
+        "canceled" => ("⊘", theme::MUTED_INACTIVE),
+        "skipped" => ("⊝", theme::MUTED_INACTIVE),
         "created" => ("○", Color::White),
-        _ => ("?", Color::DarkGray),
+        _ => ("?", theme::MUTED_INACTIVE),
     }
 }
 
@@ -140,7 +141,7 @@ pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
 /// Renders a section header separator with a coloured title.
 fn section_header(title: &'static str) -> Line<'static> {
     Line::from(vec![
-        Span::styled("── ", Style::default().fg(Color::DarkGray)),
+        Span::styled("── ", Style::default().fg(theme::MUTED_DIM)),
         Span::styled(
             title,
             Style::default()
@@ -149,7 +150,7 @@ fn section_header(title: &'static str) -> Line<'static> {
         ),
         Span::styled(
             " ──────────────────────────────",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::MUTED_DIM),
         ),
     ])
 }
@@ -218,14 +219,11 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  →  "),
-            Span::styled(
-                mr.target_branch.clone(),
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(mr.target_branch.clone(), Style::default().fg(theme::MUTED)),
         ]),
         Line::from(vec![
             Span::raw("Clone    : "),
-            Span::styled(git_clone_cmd.clone(), Style::default().fg(Color::DarkGray)),
+            Span::styled(git_clone_cmd.clone(), Style::default().fg(theme::MUTED)),
             Span::raw("  "),
             Span::styled(
                 "[Y] copy",
@@ -236,7 +234,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         ]),
         Line::from(vec![
             Span::raw("URL      : "),
-            Span::styled(mr.web_url.clone(), Style::default().fg(Color::DarkGray)),
+            Span::styled(mr.web_url.clone(), Style::default().fg(theme::MUTED)),
         ]),
     ];
 
@@ -262,7 +260,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     if mr.reviewers.is_empty() {
         lines.push(Line::from(vec![
             Span::raw("Reviewers: "),
-            Span::styled("None", Style::default().fg(Color::DarkGray)),
+            Span::styled("None", Style::default().fg(theme::MUTED)),
         ]));
     } else {
         for (i, reviewer) in mr.reviewers.iter().enumerate() {
@@ -281,11 +279,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // Notes / comments indicator — always shown, highlights when non-zero.
     let (notes_text, notes_fg, notes_bg) = if mr.user_notes_count == 0 {
-        (
-            "  ✔ No comments  ".to_string(),
-            Color::DarkGray,
-            Color::Black,
-        )
+        ("  ✔ No comments  ".to_string(), theme::MUTED, Color::Black)
     } else {
         (
             format!("  💬 {} comment(s) — review pending  ", mr.user_notes_count),
@@ -424,7 +418,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     } else {
         lines.push(Line::from(vec![Span::styled(
             "None",
-            Style::default().dark_gray(),
+            Style::default().fg(theme::MUTED),
         )]));
     }
 
@@ -436,7 +430,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     if mr.description.trim().is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No description text provided.",
-            Style::default().dark_gray(),
+            Style::default().fg(theme::MUTED),
         )]));
         return Text::from(lines);
     }

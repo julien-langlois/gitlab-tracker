@@ -1,5 +1,6 @@
 pub mod inspector;
 pub mod table;
+pub mod theme;
 pub mod tracker;
 
 use crate::app::{
@@ -289,7 +290,7 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         if focused {
             Style::default().fg(Color::Yellow)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(theme::MUTED_HINT)
         }
     };
 
@@ -387,12 +388,12 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         )])
     } else {
         Line::from(vec![
-            Span::styled(" [Tab] ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Next field  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Enter] ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Submit  ", Style::default().fg(Color::DarkGray)),
-            Span::styled("[Esc] ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Cancel", Style::default().fg(Color::DarkGray)),
+            Span::styled(" [Tab] ", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled("Next field  ", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled("[Enter] ", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled("Submit  ", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled("[Esc] ", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled("Cancel", Style::default().fg(theme::MUTED_HINT)),
         ])
     };
     f.render_widget(Paragraph::new(bottom_line), zones[3]);
