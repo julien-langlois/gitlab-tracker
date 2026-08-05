@@ -921,7 +921,7 @@ impl App {
 
                 for b in &data.branches {
                     if !previously_known.contains(b) {
-                        notify::mr_on_new_branch(&data.id, &data.title, b);
+                        notify::mr_on_new_branch(&data.id, &data.title, b, &data.web_url);
                     }
                 }
 
@@ -949,7 +949,12 @@ impl App {
                         "MR updated_at changed",
                     );
                     if notify_allowed {
-                        notify::mr_updated(&data.id, &data.title, data.updated_at.as_deref());
+                        notify::mr_updated(
+                            &data.id,
+                            &data.title,
+                            data.updated_at.as_deref(),
+                            &data.web_url,
+                        );
                     }
                 }
                 if mr.mergeability != data.mergeability {
@@ -965,6 +970,7 @@ impl App {
                             &data.title,
                             &format!("{:?}", mr.mergeability),
                             &format!("{:?}", data.mergeability),
+                            &data.web_url,
                         );
                     }
                 }
@@ -981,6 +987,7 @@ impl App {
                             &data.title,
                             &mr.milestone,
                             &data.milestone,
+                            &data.web_url,
                         );
                     }
                 }

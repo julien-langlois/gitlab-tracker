@@ -12,7 +12,8 @@ categories = ["command-line-utilities"]
 [features]
 # Enabled by default; disable with --no-default-features to build without libdbus.
 default = ["desktop"]
-desktop = ["dep:notify-rust"]
+desktop = ["dep:notify-rust", "dep:open"]
 
 [dependencies]
 notify-rust = { version = "4", optional = true }
+open = { version = "5", optional = true }
