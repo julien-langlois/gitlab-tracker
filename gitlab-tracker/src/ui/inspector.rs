@@ -130,8 +130,18 @@ fn job_status_style(status: &str) -> (&'static str, Color) {
     }
 }
 
-pub fn create_chip_span(label: &str, config: &AppConfig) -> Span<'static> {
-    let (bg, fg) = config.get_label_style(label);
+/// Builds a coloured chip `Span` for a label.
+///
+/// Colour resolution order:
+/// 1. Exact or wildcard override from `config.json`
+/// 2. GitLab-side hex colour (`gitlab_color`) with auto-computed foreground
+/// 3. Generic dark-gray fallback
+pub fn create_chip_span(
+    label: &str,
+    config: &AppConfig,
+    gitlab_color: Option<&str>,
+) -> Span<'static> {
+    let (bg, fg) = config.get_label_style(label, gitlab_color);
     Span::styled(
         format!(" {} ", label),
         Style::default().bg(bg).fg(fg).add_modifier(Modifier::BOLD),
@@ -411,7 +421,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     if !mr.labels.is_empty() {
         let mut label_spans: Vec<Span<'static>> = vec![];
         for label in &mr.labels {
-            label_spans.push(create_chip_span(label, config));
+            // Look up the GitLab-side hex colour for this label (passed via `gitlab_label_colors`
+            // stored in App). Falls back to config overrides then generic gray if absent.
+            let gitlab_color = config
+                .gitlab_label_colors
+                .get(&label.to_lowercase())
+                .map(|s| s.as_str());
+            label_spans.push(create_chip_span(label, config, gitlab_color));
             label_spans.push(Span::raw(" "));
         }
         lines.push(Line::from(label_spans));

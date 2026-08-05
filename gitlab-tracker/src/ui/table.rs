@@ -126,7 +126,12 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             } else {
                 let mut spans = Vec::new();
                 for label in filtered_labels {
-                    spans.push(create_chip_span(label, &app.config));
+                    let gitlab_color = app
+                        .config
+                        .gitlab_label_colors
+                        .get(&label.to_lowercase())
+                        .map(|s| s.as_str());
+                    spans.push(create_chip_span(label, &app.config, gitlab_color));
                     spans.push(ratatui::text::Span::raw(" "));
                 }
                 Cell::from(Line::from(spans))

@@ -1,6 +1,6 @@
 use crate::models::{
-    AppEvent, GitLabMilestone, GitLabMr, GitLabRef, MergeabilityStatus, MrLoadedData, Pipeline,
-    PipelineJob,
+    AppEvent, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef, MergeabilityStatus,
+    MrLoadedData, Pipeline, PipelineJob,
 };
 use crate::utils::{calculate_relevance, RELEVANCE_THRESHOLD};
 use std::collections::HashSet;
@@ -130,6 +130,41 @@ pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
     };
     milestones.sort_by(|a, b| a.title.cmp(&b.title));
     milestones
+}
+
+/// Fetches all labels for the project from the GitLab API, including their colours.
+///
+/// Used to provide a fallback colour for labels not overridden in `config.json`.
+/// Returns an empty vec on any error — labels are best-effort.
+pub async fn fetch_gitlab_labels(ctx: &FetchContext) -> Vec<GitLabLabelDetail> {
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/v4/projects/{}/labels?per_page=100",
+        ctx.base_url, ctx.project_id
+    );
+    let res = match client
+        .get(&url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => r,
+        _ => return vec![],
+    };
+    res.json::<Vec<GitLabLabelDetail>>()
+        .await
+        .unwrap_or_default()
+}
+
+/// Spawns an async task that fetches all project labels (with colours) and sends them via `tx`.
+pub fn spawn_gitlab_labels_fetch(
+    ctx: FetchContext,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    tokio::spawn(async move {
+        let labels = fetch_gitlab_labels(&ctx).await;
+        let _ = tx.send(AppEvent::GitlabLabelsLoaded(labels));
+    });
 }
 
 /// Spawns an async task that fetches all open milestones and sends them via `tx`.

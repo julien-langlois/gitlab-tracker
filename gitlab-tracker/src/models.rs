@@ -1,6 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+/// A GitLab label as returned by the `/projects/:id/labels` endpoint.
+///
+/// Only `name` and `color` are needed — `color` is the hex background colour
+/// (e.g. `"#6699cc"`) that GitLab uses when displaying the label badge.
+#[derive(Deserialize, Debug, Clone)]
+pub struct GitLabLabelDetail {
+    pub name: String,
+    /// Hex background colour as returned by GitLab (e.g. `"#6699cc"`).
+    pub color: String,
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabUser {
     pub username: String,
@@ -283,6 +294,8 @@ pub enum AppEvent {
         id: String,
         error: String,
     },
+    /// Fired when the project label list (with colours) has been fetched from GitLab.
+    GitlabLabelsLoaded(Vec<GitLabLabelDetail>),
     /// Fired when the milestone list has been fetched from GitLab.
     MilestonesLoaded(Vec<GitLabMilestone>),
     /// Fired when the MR IDs linked to a milestone have been resolved.

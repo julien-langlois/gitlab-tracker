@@ -927,6 +927,15 @@ impl App {
                 true
             }
 
+            AppEvent::GitlabLabelsLoaded(labels) => {
+                // Store into config so it flows through everywhere config is passed.
+                self.config.gitlab_label_colors = labels
+                    .into_iter()
+                    .map(|l| (l.name.to_lowercase(), l.color))
+                    .collect();
+                false
+            }
+
             AppEvent::MilestonesLoaded(milestones) => {
                 self.milestones = milestones;
                 false

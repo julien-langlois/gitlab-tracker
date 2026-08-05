@@ -70,6 +70,11 @@ pub struct AppConfig {
     /// All columns are hidden by default — enable them individually in config.json.
     #[serde(default)]
     pub visible_columns: VisibleColumns,
+    /// GitLab-side label colours fetched at startup — maps lowercase label name → hex colour.
+    /// Populated at runtime via `AppEvent::GitlabLabelsLoaded`; never read from config.json.
+    /// Not serialised — always re-fetched from the GitLab API on startup.
+    #[serde(skip)]
+    pub gitlab_label_colors: HashMap<String, String>,
 }
 
 impl Default for AppConfig {
@@ -128,6 +133,8 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             visible_columns: VisibleColumns::default(),
+            // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.
+            gitlab_label_colors: HashMap::new(),
         }
     }
 }
@@ -172,13 +179,23 @@ impl AppConfig {
         }
     }
 
-    pub fn get_label_style(&self, label: &str) -> (Color, Color) {
+    /// Resolves the background and foreground colours for a label chip.
+    ///
+    /// Priority:
+    /// 1. Exact match in `config.json` `label_colors`
+    /// 2. Wildcard prefix match in `config.json` (e.g. `"deploy::*"`)
+    /// 3. GitLab-side colour passed as `gitlab_color` (hex, e.g. `"#6699cc"`) with a
+    ///    computed foreground (black or white depending on luminance)
+    /// 4. Default dark-gray background with white foreground
+    pub fn get_label_style(&self, label: &str, gitlab_color: Option<&str>) -> (Color, Color) {
         let label_lower = label.to_lowercase();
 
+        // 1. Exact match override from config.json
         if let Some(cfg) = self.label_colors.get(&label_lower) {
             return (parse_color(&cfg.bg), parse_color(&cfg.fg));
         }
 
+        // 2. Wildcard prefix override from config.json
         for (key, cfg) in &self.label_colors {
             if let Some(prefix) = key.strip_suffix('*') {
                 if label_lower.starts_with(&prefix.to_lowercase()) {
@@ -187,7 +204,49 @@ impl AppConfig {
             }
         }
 
+        // 3. GitLab-provided colour (hex) — compute a legible foreground automatically
+        if let Some(hex) = gitlab_color {
+            let bg = parse_color(hex);
+            let fg = auto_foreground(&bg);
+            return (bg, fg);
+        }
+
+        // 4. Generic fallback
         (Color::DarkGray, Color::White)
+    }
+}
+
+/// Picks black or white as foreground based on the perceived luminance of `bg`.
+///
+/// Uses the W3C relative luminance formula (sRGB linearisation) so the chip
+/// text remains legible on any GitLab badge colour without manual override.
+fn auto_foreground(bg: &Color) -> Color {
+    let (r, g, b) = match bg {
+        Color::Rgb(r, g, b) => (*r, *g, *b),
+        Color::Black => (0, 0, 0),
+        Color::White => (255, 255, 255),
+        Color::Red => (128, 0, 0),
+        Color::Green => (0, 128, 0),
+        Color::Blue => (0, 0, 128),
+        Color::Yellow => (128, 128, 0),
+        Color::Cyan => (0, 128, 128),
+        Color::Magenta => (128, 0, 128),
+        _ => return Color::White,
+    };
+    // sRGB linearisation then luminance (ITU-R BT.709)
+    let linearise = |c: u8| {
+        let f = c as f32 / 255.0;
+        if f <= 0.04045 {
+            f / 12.92
+        } else {
+            ((f + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * linearise(r) + 0.7152 * linearise(g) + 0.0722 * linearise(b);
+    if luminance > 0.179 {
+        Color::Black
+    } else {
+        Color::White
     }
 }
 

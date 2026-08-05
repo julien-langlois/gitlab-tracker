@@ -229,6 +229,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fetch active milestones on startup so the autocomplete is ready immediately.
     gitlab::spawn_milestones_fetch(app.fetch_context(), tx.clone());
 
+    // Fetch project label colours on startup so chip badges reflect GitLab colours
+    // for labels not overridden in config.json.
+    gitlab::spawn_gitlab_labels_fetch(app.fetch_context(), tx.clone());
+
     // Spawn the 1-second tick timer that drives the refresh countdown.
     let tx_timer = tx.clone();
     tokio::spawn(async move {
