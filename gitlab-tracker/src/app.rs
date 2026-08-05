@@ -310,6 +310,9 @@ pub struct App {
     pub time_entries: Vec<gitlab_tracker_core::TimeEntry>,
     /// State of the Log Time popup form. Reset each time the popup is opened.
     pub log_time_form: LogTimeForm,
+    /// When `true`, the user has pressed Esc once and is being asked to confirm quitting.
+    /// A second Esc (or `y`) confirms; any other key cancels.
+    pub quit_confirm: bool,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -364,6 +367,7 @@ impl App {
             activities: Vec::new(),
             time_entries: Vec::new(),
             log_time_form: LogTimeForm::default(),
+            quit_confirm: false,
         }
     }
 

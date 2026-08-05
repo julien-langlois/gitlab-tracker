@@ -481,173 +481,50 @@ pub async fn handle_key_event(
         // Normal mode: shortcuts are active; input field is passive.
         // '/' or 'i' enters Editing mode (vim-style focus).
         // ------------------------------------------------------------------
-        InputMode::Normal => match key.code {
-            // Quit the application.
-            KeyCode::Esc => return true,
-
-            // Enter Editing mode — the input field now has exclusive focus.
-            KeyCode::Char('/') | KeyCode::Char('i') => {
-                app.input_mode = InputMode::Editing;
-            }
-
-            // Tab cycles focus between panes.
-            KeyCode::Tab => {
-                app.active_pane = app.active_pane.next(app.has_tracker_ticket());
-            }
-
-            // Arrow keys and j/k are routed based on the active pane.
-            KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
-                ActivePane::Inspector => app.inspector_scroll_down(1),
-                ActivePane::Tracker => app.tracker_scroll_down(1),
-                ActivePane::Dashboard => {
-                    app.next_row();
-                    // When the TimeLog tracker view is active, re-fetch time entries
-                    // for the newly selected MR's linked ticket.
-                    if app.tracker_view == TrackerView::TimeLog {
-                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                            let ticket_id = app
-                                .table_state
-                                .selected()
-                                .and_then(|i| app.visible_mrs().nth(i))
-                                .and_then(|mr| mr.linked_ticket.as_ref())
-                                .map(|t| t.id.clone());
-
-                            if let Some(tid) = ticket_id {
-                                let tx2 = tx.clone();
-                                tokio::spawn(async move {
-                                    let entries = provider.fetch_time_entries(&tid).await;
-                                    let _ = tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
-                                        entries,
-                                    });
-                                });
-                            }
-                        }
-                    }
-                }
-            },
-            KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
-                ActivePane::Inspector => app.inspector_scroll_up(1),
-                ActivePane::Tracker => app.tracker_scroll_up(1),
-                ActivePane::Dashboard => {
-                    app.prev_row();
-                    // When the TimeLog tracker view is active, re-fetch time entries
-                    // for the newly selected MR's linked ticket.
-                    if app.tracker_view == TrackerView::TimeLog {
-                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                            let ticket_id = app
-                                .table_state
-                                .selected()
-                                .and_then(|i| app.visible_mrs().nth(i))
-                                .and_then(|mr| mr.linked_ticket.as_ref())
-                                .map(|t| t.id.clone());
-
-                            if let Some(tid) = ticket_id {
-                                let tx2 = tx.clone();
-                                tokio::spawn(async move {
-                                    let entries = provider.fetch_time_entries(&tid).await;
-                                    let _ = tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
-                                        entries,
-                                    });
-                                });
-                            }
-                        }
-                    }
-                }
-            },
-
-            // Open the MR URL in the default browser.
-            KeyCode::Char('o') | KeyCode::Char('O') => {
-                if let Some(selected) = app.table_state.selected() {
-                    if let Some(mr) = app.mrs.get(selected) {
-                        let target_url = if !mr.web_url.is_empty() {
-                            mr.web_url.clone()
-                        } else {
-                            format!(
-                                "{}/projects/{}/merge_requests/{}",
-                                app.base_url, app.project_id, mr.id
-                            )
-                        };
-                        let _ = open::that(target_url);
+        InputMode::Normal => {
+            // When quit confirmation is pending, only Esc/y confirm and any other key cancels.
+            if app.quit_confirm {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('y') => return true,
+                    _ => {
+                        app.quit_confirm = false;
+                        return false;
                     }
                 }
             }
-
-            // [Y]ank — copy the git clone command for the MR source branch to clipboard.
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                if let Some(selected) = app.table_state.selected() {
-                    if let Some(mr) = app.mrs.get(selected) {
-                        let ssh_url = mr
-                            .web_url
-                            .split("/-/")
-                            .next()
-                            .unwrap_or("")
-                            .replacen("https://", "git@", 1)
-                            .replacen('/', ":", 1);
-                        let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
-                        if let Ok(mut ctx) = arboard::Clipboard::new() {
-                            let _ = ctx.set_text(cmd);
-                        }
-                    }
+            match key.code {
+                // First Esc: request confirmation. A second Esc or 'y' will confirm.
+                KeyCode::Esc => {
+                    app.quit_confirm = true;
                 }
-            }
 
-            // Force a full refresh of all MRs (GitLab + Redmine tickets).
-            KeyCode::Char('r') | KeyCode::Char('R') => {
-                app.time_left = app.refresh_interval_secs;
-                let ctx = build_fetch_context(app);
-
-                for mr in &mut app.mrs {
-                    mr.status = MrStatus::Loading;
-                    let cached = cached_from_mr(mr);
-                    spawn_mr_fetch(
-                        ctx.clone(),
-                        mr.id.clone(),
-                        cached,
-                        api_semaphore.clone(),
-                        tx.clone(),
-                    );
-
-                    // Re-fetch the tracker ticket so that spent_hours and time entries
-                    // reflect any change logged since the last refresh, regardless of
-                    // whether the GitLab MR itself was updated.
-                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                        if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
-                            let mr_id = mr.id.clone();
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
-                                    let _ =
-                                        tx2.send(crate::models::AppEvent::TrackerTicketLoaded {
-                                            mr_id,
-                                            ticket: Box::new(ticket),
-                                        });
-                                }
-                            });
-                        }
-                    }
+                // Enter Editing mode — the input field now has exclusive focus.
+                KeyCode::Char('/') | KeyCode::Char('i') => {
+                    app.input_mode = InputMode::Editing;
                 }
-            }
 
-            // [P] cycles the current pane's view:
-            //   - Inspector pane: MrInfo ↔ Pipelines
-            //   - Tracker pane:   TicketInfo ↔ TimeLog (fetches entries on enter)
-            //   - Dashboard: no-op
-            KeyCode::Char('p') | KeyCode::Char('P') => {
-                match app.active_pane {
-                    ActivePane::Tracker => {
-                        app.tracker_view = app.tracker_view.next();
-                        app.reset_tracker_scroll();
+                // Tab cycles focus between panes.
+                KeyCode::Tab => {
+                    app.active_pane = app.active_pane.next(app.has_tracker_ticket());
+                }
 
-                        // When entering TimeLog, fetch time entries for the selected ticket.
+                // Arrow keys and j/k are routed based on the active pane.
+                KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
+                    ActivePane::Inspector => app.inspector_scroll_down(1),
+                    ActivePane::Tracker => app.tracker_scroll_down(1),
+                    ActivePane::Dashboard => {
+                        app.next_row();
+                        // When the TimeLog tracker view is active, re-fetch time entries
+                        // for the newly selected MR's linked ticket.
                         if app.tracker_view == TrackerView::TimeLog {
-                            let ticket_id = app
-                                .table_state
-                                .selected()
-                                .and_then(|i| app.visible_mrs().nth(i))
-                                .and_then(|mr| mr.linked_ticket.as_ref())
-                                .map(|t| t.id.clone());
-
                             if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                let ticket_id = app
+                                    .table_state
+                                    .selected()
+                                    .and_then(|i| app.visible_mrs().nth(i))
+                                    .and_then(|mr| mr.linked_ticket.as_ref())
+                                    .map(|t| t.id.clone());
+
                                 if let Some(tid) = ticket_id {
                                     let tx2 = tx.clone();
                                     tokio::spawn(async move {
@@ -661,99 +538,242 @@ pub async fn handle_key_event(
                             }
                         }
                     }
-                    _ => {
-                        // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
-                        app.inspector_view = app.inspector_view.next();
-                        app.reset_inspector_scroll();
-                    }
-                }
-            }
+                },
+                KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
+                    ActivePane::Inspector => app.inspector_scroll_up(1),
+                    ActivePane::Tracker => app.tracker_scroll_up(1),
+                    ActivePane::Dashboard => {
+                        app.prev_row();
+                        // When the TimeLog tracker view is active, re-fetch time entries
+                        // for the newly selected MR's linked ticket.
+                        if app.tracker_view == TrackerView::TimeLog {
+                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                let ticket_id = app
+                                    .table_state
+                                    .selected()
+                                    .and_then(|i| app.visible_mrs().nth(i))
+                                    .and_then(|mr| mr.linked_ticket.as_ref())
+                                    .map(|t| t.id.clone());
 
-            // [L] opens the Log Time popup for the selected MR's linked tracker ticket.
-            // Only active when a tracker provider is configured and a ticket is linked.
-            KeyCode::Char('l') | KeyCode::Char('L') => {
-                let has_ticket = app
-                    .table_state
-                    .selected()
-                    .and_then(|i| app.visible_mrs().nth(i))
-                    .and_then(|mr| mr.linked_ticket.as_ref())
-                    .is_some();
-
-                if has_ticket {
-                    app.log_time_form = LogTimeForm::default();
-                    app.input_mode = InputMode::LogTime;
-
-                    // Fetch activities lazily if not yet loaded.
-                    if app.activities.is_empty() {
-                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                let activities = provider.fetch_activities().await;
-                                let _ =
-                                    tx2.send(crate::models::AppEvent::ActivitiesLoaded(activities));
-                            });
-                        }
-                    }
-                }
-            }
-
-            KeyCode::Char('s') => app.cycle_sort_column(),
-            KeyCode::Char('S') => app.toggle_sort_order(),
-
-            // [F] opens the filter picker popup.
-            KeyCode::Char('f') | KeyCode::Char('F') => {
-                app.open_filter_picker();
-            }
-
-            // Space toggles the flagged state of the selected MR and persists immediately.
-            KeyCode::Char(' ') => {
-                if app.toggle_flag_selected().is_some() {
-                    save_state_async(&app.mrs, &app.branches, last_known_branches).await;
-                }
-            }
-
-            // [C] opens the column-picker popup.
-            KeyCode::Char('c') | KeyCode::Char('C') => {
-                app.column_picker_cursor = 0;
-                app.input_mode = InputMode::ColumnPicker;
-            }
-
-            // [T] cycles focus to the Tracker pane (or opens the URL when already focused).
-            // When focused on Tracker: [T] opens the ticket URL in the browser.
-            // Otherwise: [T] moves focus to the Tracker pane (if a ticket is linked).
-            KeyCode::Char('t') | KeyCode::Char('T') => {
-                if app.active_pane == ActivePane::Tracker {
-                    // Already on Tracker pane — open URL in browser.
-                    if let Some(selected) = app.table_state.selected() {
-                        if let Some(mr) = app.visible_mrs().nth(selected) {
-                            if let Some(ticket) = &mr.linked_ticket {
-                                let _ = open::that(&ticket.url);
+                                if let Some(tid) = ticket_id {
+                                    let tx2 = tx.clone();
+                                    tokio::spawn(async move {
+                                        let entries = provider.fetch_time_entries(&tid).await;
+                                        let _ =
+                                            tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
+                                                entries,
+                                            });
+                                    });
+                                }
                             }
                         }
                     }
-                } else if app.has_tracker_ticket() {
-                    // Move focus to the Tracker pane.
-                    app.active_pane = ActivePane::Tracker;
-                }
-            }
+                },
 
-            // Delete: remove the selected MR from the list.
-            KeyCode::Delete => {
-                if let Some(selected) = app.table_state.selected() {
-                    if selected < app.mrs.len() {
-                        app.mrs.remove(selected);
-                        if app.mrs.is_empty() {
-                            app.table_state.select(None);
-                        } else if selected >= app.mrs.len() {
-                            app.table_state.select(Some(app.mrs.len() - 1));
+                // Open the MR URL in the default browser.
+                KeyCode::Char('o') | KeyCode::Char('O') => {
+                    if let Some(selected) = app.table_state.selected() {
+                        if let Some(mr) = app.mrs.get(selected) {
+                            let target_url = if !mr.web_url.is_empty() {
+                                mr.web_url.clone()
+                            } else {
+                                format!(
+                                    "{}/projects/{}/merge_requests/{}",
+                                    app.base_url, app.project_id, mr.id
+                                )
+                            };
+                            let _ = open::that(target_url);
                         }
+                    }
+                }
+
+                // [Y]ank — copy the git clone command for the MR source branch to clipboard.
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    if let Some(selected) = app.table_state.selected() {
+                        if let Some(mr) = app.mrs.get(selected) {
+                            let ssh_url = mr
+                                .web_url
+                                .split("/-/")
+                                .next()
+                                .unwrap_or("")
+                                .replacen("https://", "git@", 1)
+                                .replacen('/', ":", 1);
+                            let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
+                            if let Ok(mut ctx) = arboard::Clipboard::new() {
+                                let _ = ctx.set_text(cmd);
+                            }
+                        }
+                    }
+                }
+
+                // Force a full refresh of all MRs (GitLab + Redmine tickets).
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    app.time_left = app.refresh_interval_secs;
+                    let ctx = build_fetch_context(app);
+
+                    for mr in &mut app.mrs {
+                        mr.status = MrStatus::Loading;
+                        let cached = cached_from_mr(mr);
+                        spawn_mr_fetch(
+                            ctx.clone(),
+                            mr.id.clone(),
+                            cached,
+                            api_semaphore.clone(),
+                            tx.clone(),
+                        );
+
+                        // Re-fetch the tracker ticket so that spent_hours and time entries
+                        // reflect any change logged since the last refresh, regardless of
+                        // whether the GitLab MR itself was updated.
+                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                            if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone())
+                            {
+                                let mr_id = mr.id.clone();
+                                let tx2 = tx.clone();
+                                tokio::spawn(async move {
+                                    if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
+                                        let _ = tx2.send(
+                                            crate::models::AppEvent::TrackerTicketLoaded {
+                                                mr_id,
+                                                ticket: Box::new(ticket),
+                                            },
+                                        );
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // [P] cycles the current pane's view:
+                //   - Inspector pane: MrInfo ↔ Pipelines
+                //   - Tracker pane:   TicketInfo ↔ TimeLog (fetches entries on enter)
+                //   - Dashboard: no-op
+                KeyCode::Char('p') | KeyCode::Char('P') => {
+                    match app.active_pane {
+                        ActivePane::Tracker => {
+                            app.tracker_view = app.tracker_view.next();
+                            app.reset_tracker_scroll();
+
+                            // When entering TimeLog, fetch time entries for the selected ticket.
+                            if app.tracker_view == TrackerView::TimeLog {
+                                let ticket_id = app
+                                    .table_state
+                                    .selected()
+                                    .and_then(|i| app.visible_mrs().nth(i))
+                                    .and_then(|mr| mr.linked_ticket.as_ref())
+                                    .map(|t| t.id.clone());
+
+                                if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                    if let Some(tid) = ticket_id {
+                                        let tx2 = tx.clone();
+                                        tokio::spawn(async move {
+                                            let entries = provider.fetch_time_entries(&tid).await;
+                                            let _ = tx2.send(
+                                                crate::models::AppEvent::TimeEntriesLoaded {
+                                                    entries,
+                                                },
+                                            );
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
+                            app.inspector_view = app.inspector_view.next();
+                            app.reset_inspector_scroll();
+                        }
+                    }
+                }
+
+                // [L] opens the Log Time popup for the selected MR's linked tracker ticket.
+                // Only active when a tracker provider is configured and a ticket is linked.
+                KeyCode::Char('l') | KeyCode::Char('L') => {
+                    let has_ticket = app
+                        .table_state
+                        .selected()
+                        .and_then(|i| app.visible_mrs().nth(i))
+                        .and_then(|mr| mr.linked_ticket.as_ref())
+                        .is_some();
+
+                    if has_ticket {
+                        app.log_time_form = LogTimeForm::default();
+                        app.input_mode = InputMode::LogTime;
+
+                        // Fetch activities lazily if not yet loaded.
+                        if app.activities.is_empty() {
+                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                let tx2 = tx.clone();
+                                tokio::spawn(async move {
+                                    let activities = provider.fetch_activities().await;
+                                    let _ = tx2.send(crate::models::AppEvent::ActivitiesLoaded(
+                                        activities,
+                                    ));
+                                });
+                            }
+                        }
+                    }
+                }
+
+                KeyCode::Char('s') => app.cycle_sort_column(),
+                KeyCode::Char('S') => app.toggle_sort_order(),
+
+                // [F] opens the filter picker popup.
+                KeyCode::Char('f') | KeyCode::Char('F') => {
+                    app.open_filter_picker();
+                }
+
+                // Space toggles the flagged state of the selected MR and persists immediately.
+                KeyCode::Char(' ') => {
+                    if app.toggle_flag_selected().is_some() {
                         save_state_async(&app.mrs, &app.branches, last_known_branches).await;
                     }
                 }
-            }
 
-            _ => {}
-        },
+                // [C] opens the column-picker popup.
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    app.column_picker_cursor = 0;
+                    app.input_mode = InputMode::ColumnPicker;
+                }
+
+                // [T] cycles focus to the Tracker pane (or opens the URL when already focused).
+                // When focused on Tracker: [T] opens the ticket URL in the browser.
+                // Otherwise: [T] moves focus to the Tracker pane (if a ticket is linked).
+                KeyCode::Char('t') | KeyCode::Char('T') => {
+                    if app.active_pane == ActivePane::Tracker {
+                        // Already on Tracker pane — open URL in browser.
+                        if let Some(selected) = app.table_state.selected() {
+                            if let Some(mr) = app.visible_mrs().nth(selected) {
+                                if let Some(ticket) = &mr.linked_ticket {
+                                    let _ = open::that(&ticket.url);
+                                }
+                            }
+                        }
+                    } else if app.has_tracker_ticket() {
+                        // Move focus to the Tracker pane.
+                        app.active_pane = ActivePane::Tracker;
+                    }
+                }
+
+                // Delete: remove the selected MR from the list.
+                KeyCode::Delete => {
+                    if let Some(selected) = app.table_state.selected() {
+                        if selected < app.mrs.len() {
+                            app.mrs.remove(selected);
+                            if app.mrs.is_empty() {
+                                app.table_state.select(None);
+                            } else if selected >= app.mrs.len() {
+                                app.table_state.select(Some(app.mrs.len() - 1));
+                            }
+                            save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+                        }
+                    }
+                }
+
+                _ => {}
+            }
+        }
     }
 
     false

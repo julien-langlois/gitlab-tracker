@@ -184,6 +184,10 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             " COLUMNS │ [↑/↓]: Navigate │ [Space]: Toggle │ [Esc]: Close & Save ".to_string(),
             Style::default().fg(Color::Cyan),
         ),
+        InputMode::Normal if app.quit_confirm => (
+            " Quit? Press [Esc] or [y] to confirm, any other key to cancel ".to_string(),
+            Style::default().fg(Color::Red),
+        ),
         InputMode::Normal => (
             format!(
                 " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [Esc]: Quit ",
