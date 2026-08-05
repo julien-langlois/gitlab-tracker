@@ -88,14 +88,25 @@ impl TrackerProvider for RedmineProvider {
 
     /// Submits a new time entry on the given Redmine issue.
     ///
+    /// Fetches the issue beforehand to attach `budget_hours` and `remaining_hours`
+    /// (ETC) directly to the time entry payload — as required by the Redmine Budget
+    /// plugin. Both fields are omitted when the issue does not expose them (vanilla
+    /// Redmine). The fetch failure is non-fatal: submission proceeds without them.
+    ///
     /// Delegates to `POST /time_entries.json`.
     async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> {
+        // Fetch the issue to get remaining_hours / estimated_hours for ETC computation.
+        // A None here simply means the ETC update step will be skipped — not an error.
+        let issue =
+            client::fetch_issue(&self.http, &self.config.redmine_url, &self.token, ticket_id).await;
+
         client::log_time(
             &self.http,
             &self.config.redmine_url,
             &self.token,
             ticket_id,
             entry,
+            issue.as_ref(),
         )
         .await
     }

@@ -20,12 +20,16 @@ pub struct RedmineIssue {
     pub author: Option<RedmineUser>,
     /// User currently assigned to the issue (`assigned_to` in the Redmine API).
     pub assigned_to: Option<RedmineUser>,
-    /// Estimated time in hours as returned by Redmine (`estimated_hours`).
+    /// Estimated time in hours (`estimated_hours` — standard Redmine field).
     /// Converted to seconds when building [`LinkedTicket`].
     pub estimated_hours: Option<f32>,
-    /// Total time spent in hours as returned by Redmine (`spent_hours`).
+    /// Total time spent in hours (`spent_hours` — standard Redmine field).
     /// Converted to seconds when building [`LinkedTicket`].
     pub spent_hours: Option<f32>,
+    /// Estimate to Complete (ETC) in hours — provided by some Redmine plugins (e.g. Redmine Budget).
+    /// When present, used directly to compute the updated ETC on time entry submission.
+    /// Absent on vanilla Redmine instances; always treated as optional.
+    pub remaining_hours: Option<f32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -91,6 +95,43 @@ struct PostTimeEntry {
     activity_id: u32,
     comments: String,
     spent_on: String,
+    /// Time budget in hours — plugin field (e.g. Redmine Budget).
+    /// Omitted when the instance does not support it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    budget_hours: Option<f32>,
+    /// Estimate to Complete (ETC) in hours — plugin field (e.g. Redmine Budget).
+    /// Omitted when the instance does not support it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remaining_hours: Option<f32>,
+}
+
+// ── ETC computation ───────────────────────────────────────────────────────────
+
+/// Computes the updated Estimate to Complete (ETC) after a new time entry is submitted.
+///
+/// **Strategy 1 — plugin field** (preferred):
+/// Use `remaining_hours` from the issue directly — this field is maintained by
+/// Redmine plugins such as Redmine Budget and always reflects the current ETC.
+/// `ETC = issue.remaining_hours − new_hours`
+///
+/// **Strategy 2 — estimate fallback**:
+/// When the plugin field is absent (vanilla Redmine), derive from the estimate:
+/// `ETC = estimated_hours − spent_hours − new_hours`
+///
+/// Both strategies clamp the result to `0.0` — ETC cannot be negative.
+/// Returns `None` when neither field is available (no-op for the caller).
+pub fn compute_etc(issue: &RedmineIssue, new_hours: f32) -> Option<f32> {
+    // Strategy 1: remaining_hours is directly tracked by the Redmine plugin.
+    if let Some(remaining) = issue.remaining_hours {
+        return Some((remaining - new_hours).max(0.0));
+    }
+
+    // Strategy 2: derive from estimate and already-spent time.
+    if let (Some(estimated), Some(spent)) = (issue.estimated_hours, issue.spent_hours) {
+        return Some((estimated - spent - new_hours).max(0.0));
+    }
+
+    None
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -254,16 +295,31 @@ pub async fn fetch_time_entries(
 
 /// Submits a new time entry on the given Redmine issue.
 ///
-/// Calls `POST /time_entries.json` with the JSON payload.
-/// Returns `Ok(())` on success or an error message on failure.
+/// Accepts a pre-fetched `issue` so the caller can reuse it without an extra
+/// network round-trip. When the issue exposes `remaining_hours` or `estimated_hours`,
+/// the ETC is computed and attached directly to the time entry payload — this is
+/// how Redmine Budget plugin tracks remaining time (fields on the entry, not the issue).
+///
+/// Both `budget_hours` and `remaining_hours` are omitted from the payload when the
+/// issue does not expose the necessary fields, ensuring compatibility with vanilla
+/// Redmine instances.
+///
+/// Calls `POST /time_entries.json`.
+/// Returns `Ok(())` on success or an error string suitable for inline TUI display.
 pub async fn log_time(
     http: &reqwest::Client,
     base_url: &str,
     token: &str,
     ticket_id: &str,
     entry: TimeEntryRequest,
+    issue: Option<&RedmineIssue>,
 ) -> Result<(), String> {
     let url = format!("{}/time_entries.json", base_url.trim_end_matches('/'));
+
+    // Compute budget and ETC from the issue when available.
+    // Both are None on vanilla Redmine — skipped_serializing_if handles the rest.
+    let budget_hours = issue.and_then(|i| i.estimated_hours);
+    let remaining_hours = issue.and_then(|i| compute_etc(i, entry.hours));
 
     let body = PostTimeEntryBody {
         time_entry: PostTimeEntry {
@@ -272,10 +328,18 @@ pub async fn log_time(
             activity_id: entry.activity_id,
             comments: entry.comment,
             spent_on: entry.spent_on,
+            budget_hours,
+            remaining_hours,
         },
     };
 
-    tracing::debug!(url = %url, ticket_id = %ticket_id, "Posting Redmine time entry");
+    tracing::debug!(
+        url = %url,
+        ticket_id = %ticket_id,
+        budget_hours = ?budget_hours,
+        remaining_hours = ?remaining_hours,
+        "Posting Redmine time entry"
+    );
 
     let resp = http
         .post(&url)

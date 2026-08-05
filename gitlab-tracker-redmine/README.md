@@ -78,6 +78,41 @@ ticket_patterns:
 
 ---
 
+## Estimate to Complete (ETC) — automatic update on time entry submission
+
+When you log time via the `L` popup, the app automatically recomputes the **Estimate to Complete (ETC)** on the linked Redmine ticket and writes it back.
+
+> **ETC** (Estimate to Complete) is the standard project management term for the remaining effort needed to finish a task. It is sometimes labelled _Remaining time_ or _Reste à faire_ (RAF) in French Redmine instances.
+
+### How it works
+
+The computation uses fields returned directly by the Redmine issue API (`GET /issues/{id}.json`) — no admin access required:
+
+| Priority | Field used | Formula | Available on |
+| :--- | :--- | :--- | :--- |
+| 1 (preferred) | `remaining_hours` | `remaining_hours − new_hours` | Redmine instances with a budget/planning plugin |
+| 2 (fallback) | `estimated_hours` + `spent_hours` | `estimated_hours − spent_hours − new_hours` | All standard Redmine instances |
+
+Both strategies clamp the result to `0.0` — ETC cannot be negative.
+
+The ETC and budget are submitted **directly on the time entry** (`POST /time_entries.json`), which is how the Redmine Budget plugin tracks them. The `remaining_hours` field on the issue is then automatically recalculated by the plugin — no separate write to the issue is needed. If your Redmine instance does not expose these fields, they are simply omitted from the payload — the time entry is still created successfully.
+
+### No configuration needed
+
+The ETC update is **fully automatic** and requires no changes to `redmine.yaml`. It activates whenever the issue returns usable time fields, and degrades gracefully otherwise.
+
+**Verify your instance exposes the fields** by running:
+
+> ```bash
+> curl -s -H "X-Redmine-API-Key: YOUR_TOKEN" \
+>   "https://your-redmine.com/issues/YOUR_ISSUE_ID.json" \
+>   | jq '.issue | {estimated_hours, spent_hours, remaining_hours}'
+> ```
+
+If `remaining_hours` appears in the output, Strategy 1 is used. If only `estimated_hours` and `spent_hours` appear, Strategy 2 (fallback) is used.
+
+---
+
 ## API Token
 
 The Redmine personal API token follows the same secure lookup chain as the GitLab token — it is **never stored in plain text**:
