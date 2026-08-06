@@ -27,6 +27,10 @@ fn pane_border_style(is_active: bool) -> Style {
 }
 
 pub fn render_ui(f: &mut Frame, app: &mut App) {
+    // Bump the frame counter on every render so the spinner animates at full frame rate,
+    // independently of the 1-second tick timer.
+    app.spinner_frame = app.spinner_frame.wrapping_add(1);
+
     let chunks = Layout::default()
         .constraints([Constraint::Min(3), Constraint::Length(3)])
         .split(f.area());

@@ -296,6 +296,9 @@ pub struct App {
     /// Change notifications (updated_at, mergeability, milestone) are suppressed
     /// until this reaches zero, preventing spurious toasts on first launch.
     pub pending_initial_fetches: usize,
+    /// Number of MR fetches still pending from the current auto-refresh cycle.
+    /// Drives the spinner in the table title; reset to 0 when all fetches complete.
+    pub pending_refresh_fetches: usize,
     /// Active tracker provider (Redmine, Jira, Trello, …), shared across async tasks via Arc.
     /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
@@ -313,6 +316,9 @@ pub struct App {
     /// When `true`, the user has pressed Esc once and is being asked to confirm quitting.
     /// A second Esc (or `y`) confirms; any other key cancels.
     pub quit_confirm: bool,
+    /// Monotonically incrementing counter bumped on every render frame (~20 fps).
+    /// Used to animate the spinner independently of the 1-second tick timer.
+    pub spinner_frame: usize,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -361,6 +367,7 @@ impl App {
             // Initialised to 0 — main.rs sets this to the number of MRs loaded from state
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
             pending_initial_fetches: 0,
+            pending_refresh_fetches: 0,
             // Initialised to None — main.rs injects the provider after keyring lookup.
             tracker: None,
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
@@ -368,6 +375,7 @@ impl App {
             time_entries: Vec::new(),
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
+            spinner_frame: 0,
         }
     }
 
@@ -934,6 +942,10 @@ impl App {
                 if self.pending_initial_fetches > 0 {
                     self.pending_initial_fetches -= 1;
                 }
+                // Decrement the auto-refresh counter (drives the spinner in the table title).
+                if self.pending_refresh_fetches > 0 {
+                    self.pending_refresh_fetches -= 1;
+                }
 
                 // Detect whether this MR was actually updated since the last refresh.
                 // We compare the old `updated_at` before overwriting it.
@@ -1205,6 +1217,8 @@ impl App {
                         semaphore.clone(),
                         tx.clone(),
                     );
+                    // Track pending auto-refresh fetches to drive the spinner.
+                    self.pending_refresh_fetches += 1;
                 }
 
                 false

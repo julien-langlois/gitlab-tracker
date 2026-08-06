@@ -621,6 +621,8 @@ pub async fn handle_key_event(
                             api_semaphore.clone(),
                             tx.clone(),
                         );
+                        // Track pending fetches to drive the spinner in the table title.
+                        app.pending_refresh_fetches += 1;
 
                         // Re-fetch the tracker ticket so that spent_hours and time entries
                         // reflect any change logged since the last refresh, regardless of

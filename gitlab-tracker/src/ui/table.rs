@@ -353,9 +353,39 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
 
     let filter_label = app.filter_mode.label();
 
-    let title_text = format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ Sort: {} {} │ Filter: {} ",
-        app.base_url, mins, secs, sort_label, order_label, filter_label
+    // Show "X/Y MRs" when a filter is active, plain "Y MRs" otherwise.
+    let total = app.mrs.len();
+    let visible = app.visible_mrs().count();
+    let mr_count_label = if visible < total {
+        format!("{}/{} MRs", visible, total)
+    } else {
+        format!("{} MRs", total)
+    };
+
+    // Spinner frames cycled on every tick while fetches are pending.
+    // Shown both during the initial load (pending_initial_fetches) and auto-refresh cycles
+    // (pending_refresh_fetches) so the user always knows when the data is being refreshed.
+    const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+    let pending = app.pending_initial_fetches + app.pending_refresh_fetches;
+
+    let loading_indicator = if pending > 0 {
+        // Divide by 3 to slow down the animation to ~7 fps — fast enough to feel smooth,
+
+        // slow enough for the braille frames to be readable (not a blur).
+
+        let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
+
+        format!(" {} Loading ({} pending)…", frame, pending)
+    } else {
+        String::new()
+    };
+
+    let title_text =
+        format!(
+        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ {} │ Sort: {} {} │ Filter: {}{}",
+        app.base_url, mins, secs, mr_count_label, sort_label, order_label, filter_label,
+        loading_indicator,
     );
 
     Table::new(rows, constraints)
