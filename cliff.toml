@@ -28,6 +28,17 @@ split_commits = false
 
 # Group commits by their type
 commit_parsers = [
+  # Skip release commits first
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore: [Rr]elease", skip = true },
+
+  # Scope-based rules: any type with a ui/demo scope is grouped by scope
+  { message = "^[a-z]+\\(ui\\)", group = "<!-- 9 -->🖥️ UI" },
+  { message = "^[a-z]+\\(demo\\)", group = "<!-- 10 -->🎬 Demo" },
+  { message = "^[a-z]+\\(ci\\)", group = "<!-- 8 -->👷 CI" },
+  { message = "^[a-z]+\\(build\\)", group = "<!-- 7 -->🏗️ Build" },
+
+  # Type-based rules (fallback when no scope override applies)
   { message = "^feat", group = "<!-- 0 -->🚀 Features" },
   { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
   { message = "^doc", group = "<!-- 2 -->📚 Documentation" },
@@ -39,8 +50,6 @@ commit_parsers = [
   { message = "^ci", group = "<!-- 8 -->👷 CI" },
   { message = "^ui", group = "<!-- 9 -->🖥️ UI" },
   { message = "^demo", group = "<!-- 10 -->🎬 Demo" },
-  { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore: [Rr]elease", skip = true },
   { message = "^chore", group = "<!-- 11 -->⚙️ Miscellaneous" },
 ]
 
