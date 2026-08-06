@@ -1249,6 +1249,25 @@ impl App {
                     );
                     // Track pending auto-refresh fetches to drive the spinner.
                     self.pending_refresh_fetches += 1;
+
+                    // Re-fetch the tracker ticket unconditionally on each auto-refresh cycle,
+                    // mirroring the manual [R] refresh behaviour. The GitLab MR may not have
+                    // changed (was_updated = false) while the tracker ticket status, spent time,
+                    // or priority did — the conditional re-fetch inside MrLoaded would miss this.
+                    if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
+                        if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
+                            let mr_id = mr.id.clone();
+                            let tx2 = tx.clone();
+                            tokio::spawn(async move {
+                                if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
+                                    let _ = tx2.send(AppEvent::TrackerTicketLoaded {
+                                        mr_id,
+                                        ticket: Box::new(ticket),
+                                    });
+                                }
+                            });
+                        }
+                    }
                 }
 
                 false
