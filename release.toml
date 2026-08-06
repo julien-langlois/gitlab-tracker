@@ -6,8 +6,4 @@ publish = false
 sign-tag = true
 sign-commit = true
 
-pre-release-hook = [
-  "bash", "-c",
-  "ROOT=$(git rev-parse --show-toplevel); grep -qF '## [{{version}}]' $ROOT/CHANGELOG.md || git-cliff --workdir $ROOT --tag v{{version}} --unreleased --prepend $ROOT/CHANGELOG.md"
-]
 pre-release-commit-message = "chore(release): v{{version}}"
