@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.4] - 2026-08-06
 
+### 🚀 Features
+
+- **notify**: Open MR in browser on notification click
+
+### 🐛 Bug Fixes
+
+- **release**: Scope git-cliff hook to run once via idempotent guard
+- **release**: Run git-cliff hook from workspace root via --workdir
+
+### ⚙️ Miscellaneous
+
+- Add git-cliff changelog automation and harden release pipeline
+
 ## [0.3.3] - 2026-08-05
 
 ### 🚀 Features
