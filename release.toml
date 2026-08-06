@@ -2,3 +2,9 @@ shared-version = true
 tag-name = "v{{version}}"
 push = true
 publish = false
+
+sign-tag = true
+sign-commit = true
+
+pre-release-hook = ["git-cliff", "--tag", "v{{version}}", "--unreleased", "--prepend", "CHANGELOG.md"]
+pre-release-commit-message = "chore(release): v{{version}}"
