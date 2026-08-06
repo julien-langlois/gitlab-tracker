@@ -255,6 +255,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        // Update the terminal window title with live stats.
+        // Uses the OSC 0 escape sequence supported by all modern terminal emulators.
+        let mode_label = match app.input_mode {
+            app::InputMode::Editing => "✏️  Editing",
+            app::InputMode::ColumnPicker => "⚙️  Columns",
+            app::InputMode::FilterPicker => "🔍 Filter",
+            app::InputMode::LogTime => "⏱️  Log Time",
+            app::InputMode::Normal => "Normal",
+        };
+        let filter_label = app.filter_mode.label();
+        let window_title = format!(
+            "GitLab Tracker │ {} MRs │ {} │ {}",
+            app.mrs.len(),
+            mode_label,
+            filter_label,
+        );
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::SetTitle(&window_title)
+        )?;
+
         terminal.draw(|f| ui::render_ui(f, &mut app))?;
 
         if event::poll(Duration::from_millis(50))? {
