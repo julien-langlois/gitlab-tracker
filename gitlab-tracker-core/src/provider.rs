@@ -122,6 +122,112 @@ pub struct TimeEntryRequest {
     pub spent_on: String,
 }
 
+/// Represents a single field change detected between two versions of a [`LinkedTicket`].
+///
+/// # Design
+/// This enum is the **only** place in the codebase where "which fields are trackable"
+/// is declared. Adding a new tracked field (e.g. `Sprint`, `DoneRatio`) only requires:
+///   1. Adding a variant here.
+///   2. Adding a match arm in `LinkedTicket::diff`.
+///   3. Handling the new variant in the orchestrator's notification dispatch.
+///
+/// The orchestrator (`gitlab-tracker`) and notification plugin (`gitlab-tracker-notify`)
+/// never need to know about field names directly — they only receive `TicketChange` values.
+/// This satisfies OCP: providers (Redmine, Jira, …) and consumers (app, notify) are
+/// decoupled from the field enumeration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TicketChange {
+    /// The priority label changed (e.g. "Normal" → "High").
+    Priority { old: String, new: String },
+    /// The status label changed (e.g. "In Progress" → "Resolved").
+    Status { old: String, new: String },
+    /// The assignee changed (e.g. "Alice" → "Bob", or "Unassigned" when empty).
+    Assignee { old: String, new: String },
+    /// The target version/release changed (e.g. "v1.2" → "v1.3", or "None" when unset).
+    Version { old: String, new: String },
+}
+
+impl TicketChange {
+    /// Returns a human-readable label for the changed field, suitable for notification summaries.
+    pub fn field_label(&self) -> &'static str {
+        match self {
+            TicketChange::Priority { .. } => "priority",
+            TicketChange::Status { .. } => "status",
+            TicketChange::Assignee { .. } => "assignee",
+            TicketChange::Version { .. } => "version",
+        }
+    }
+
+    /// Returns the before/after values as `(&str, &str)` for display purposes.
+    pub fn before_after(&self) -> (&str, &str) {
+        match self {
+            TicketChange::Priority { old, new }
+            | TicketChange::Status { old, new }
+            | TicketChange::Assignee { old, new }
+            | TicketChange::Version { old, new } => (old.as_str(), new.as_str()),
+        }
+    }
+}
+
+impl LinkedTicket {
+    /// Computes the list of tracked field changes between `self` (old) and `new`.
+    ///
+    /// Returns an empty `Vec` when nothing changed. The caller (orchestrator) should
+    /// iterate over the result and dispatch notifications for each entry.
+    ///
+    /// # Design
+    /// This is a **pure function** — no side effects, no I/O. Adding a new tracked field
+    /// only requires adding a comparison block here and a variant to [`TicketChange`].
+    /// The orchestrator and notification plugin remain unchanged for existing fields.
+    pub fn diff(&self, new: &LinkedTicket) -> Vec<TicketChange> {
+        let mut changes = Vec::new();
+
+        // Helper: normalise an Option<&str> to a display string for comparison.
+        let opt_str =
+            |v: Option<&str>, fallback: &str| -> String { v.unwrap_or(fallback).to_string() };
+
+        // Priority
+        let old_priority = opt_str(self.priority.as_deref(), "None");
+        let new_priority = opt_str(new.priority.as_deref(), "None");
+        if old_priority != new_priority {
+            changes.push(TicketChange::Priority {
+                old: old_priority,
+                new: new_priority,
+            });
+        }
+
+        // Status
+        if self.status != new.status {
+            changes.push(TicketChange::Status {
+                old: self.status.clone(),
+                new: new.status.clone(),
+            });
+        }
+
+        // Assignee
+        let old_assignee = opt_str(self.assignee.as_deref(), "Unassigned");
+        let new_assignee = opt_str(new.assignee.as_deref(), "Unassigned");
+        if old_assignee != new_assignee {
+            changes.push(TicketChange::Assignee {
+                old: old_assignee,
+                new: new_assignee,
+            });
+        }
+
+        // Version / release
+        let old_version = opt_str(self.version.as_deref(), "None");
+        let new_version = opt_str(new.version.as_deref(), "None");
+        if old_version != new_version {
+            changes.push(TicketChange::Version {
+                old: old_version,
+                new: new_version,
+            });
+        }
+
+        changes
+    }
+}
+
 /// Raw colour maps for badge labels, expressed as plain `(bg, fg)` string pairs.
 ///
 /// Strings use the same vocabulary as `AppConfig::parse_color` in `gitlab-tracker`:

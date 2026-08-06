@@ -860,6 +860,36 @@ impl App {
             // ── Tracker ticket resolved ───────────────────────────────────────
             AppEvent::TrackerTicketLoaded { mr_id, ticket } => {
                 if let Some(mr) = self.mrs.find_mut(&mr_id) {
+                    // Compute the diff between the cached ticket and the freshly fetched one.
+                    // The diff logic lives entirely in `core` (LinkedTicket::diff) — this site
+                    // only dispatches the resulting changes to the notification layer.
+                    // Adding a new tracked field only requires touching `core::TicketChange`
+                    // and `core::LinkedTicket::diff`; this match arm stays unchanged.
+                    if let Some(old) = &mr.linked_ticket {
+                        let mr_title = mr.title.clone();
+                        let ticket_url = ticket.url.clone();
+                        let ticket_id = ticket.id.clone();
+
+                        for change in old.diff(&ticket) {
+                            let (old_val, new_val) = change.before_after();
+                            tracing::info!(
+                                ticket_id = %ticket_id,
+                                field = %change.field_label(),
+                                old = %old_val,
+                                new = %new_val,
+                                "Tracker ticket field changed",
+                            );
+                            notify::ticket_field_changed(
+                                &ticket_id,
+                                &mr_title,
+                                change.field_label(),
+                                old_val,
+                                new_val,
+                                &ticket_url,
+                            );
+                        }
+                    }
+
                     mr.linked_ticket = Some(*ticket);
                 }
                 // Ticket data is display-only — no state persist needed.

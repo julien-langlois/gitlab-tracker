@@ -23,7 +23,7 @@ fn show_with_url(notification: notify_rust::Notification, url: String) {
     }
 }
 
-// ── Notification events ──────────────────────────────────────────────────────
+// ── MR notification events ───────────────────────────────────────────────────
 
 /// Notify that an MR has appeared on a branch it was not previously seen on.
 #[cfg(feature = "desktop")]
@@ -81,6 +81,43 @@ pub fn mr_milestone_changed(mr_id: &str, title: &str, old: &str, new: &str, web_
     show_with_url(notification, web_url.to_owned());
 }
 
+// ── Tracker ticket notification events ───────────────────────────────────────
+
+/// Notify that a tracked field on a linked tracker ticket has changed.
+///
+/// This is a **single generic entry point** for all ticket field changes.
+/// The `field` parameter is a human-readable label (e.g. `"priority"`, `"status"`),
+/// sourced from [`gitlab_tracker_core::TicketChange::field_label`].
+///
+/// Using one function instead of per-field functions means that adding a new tracked
+/// field in `core` (e.g. `Sprint`) requires **zero changes** to this crate.
+/// The orchestrator maps `TicketChange` variants to this function directly.
+///
+/// # Icon selection
+/// Priority changes use `"dialog-warning"` (yellow); all others use `"dialog-information"`.
+#[cfg(feature = "desktop")]
+pub fn ticket_field_changed(
+    ticket_id: &str,
+    mr_title: &str,
+    field: &str,
+    old: &str,
+    new: &str,
+    ticket_url: &str,
+) {
+    let icon = if field == "priority" {
+        "dialog-warning"
+    } else {
+        "dialog-information"
+    };
+    let notification = notify_rust::Notification::new()
+        .summary(&format!("Ticket #{} — {} changed", ticket_id, field))
+        .body(&format!("{}\n{} → {}", mr_title, old, new))
+        .icon(icon)
+        .action("default", "Open ticket")
+        .finalize();
+    show_with_url(notification, ticket_url.to_owned());
+}
+
 // ── No-op stubs when the `desktop` feature is disabled ───────────────────────
 
 #[cfg(not(feature = "desktop"))]
@@ -99,3 +136,15 @@ pub fn mr_mergeability_changed(_mr_id: &str, _title: &str, _old: &str, _new: &st
 #[cfg(not(feature = "desktop"))]
 #[inline(always)]
 pub fn mr_milestone_changed(_mr_id: &str, _title: &str, _old: &str, _new: &str, _web_url: &str) {}
+
+#[cfg(not(feature = "desktop"))]
+#[inline(always)]
+pub fn ticket_field_changed(
+    _ticket_id: &str,
+    _mr_title: &str,
+    _field: &str,
+    _old: &str,
+    _new: &str,
+    _ticket_url: &str,
+) {
+}
