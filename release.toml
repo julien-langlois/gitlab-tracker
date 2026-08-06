@@ -6,5 +6,5 @@ publish = false
 sign-tag = true
 sign-commit = true
 
-pre-release-hook = ["git-cliff", "--tag", "v{{version}}", "--unreleased", "--prepend", "CHANGELOG.md"]
+pre-release-hook = ["git-cliff", "--workdir", ".", "--tag", "v{{version}}", "--unreleased", "--prepend", "CHANGELOG.md"]
 pre-release-commit-message = "chore(release): v{{version}}"
