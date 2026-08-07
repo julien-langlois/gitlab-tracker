@@ -145,6 +145,9 @@ pub enum TicketChange {
     Assignee { old: String, new: String },
     /// The target version/release changed (e.g. "v1.2" → "v1.3", or "None" when unset).
     Version { old: String, new: String },
+    /// The completion percentage changed (0–100). Fires on both increase and decrease.
+    /// `old` and `new` are formatted as "N%" strings for display consistency.
+    DoneRatio { old: String, new: String },
 }
 
 impl TicketChange {
@@ -155,6 +158,7 @@ impl TicketChange {
             TicketChange::Status { .. } => "status",
             TicketChange::Assignee { .. } => "assignee",
             TicketChange::Version { .. } => "version",
+            TicketChange::DoneRatio { .. } => "progress",
         }
     }
 
@@ -164,7 +168,8 @@ impl TicketChange {
             TicketChange::Priority { old, new }
             | TicketChange::Status { old, new }
             | TicketChange::Assignee { old, new }
-            | TicketChange::Version { old, new } => (old.as_str(), new.as_str()),
+            | TicketChange::Version { old, new }
+            | TicketChange::DoneRatio { old, new } => (old.as_str(), new.as_str()),
         }
     }
 }
@@ -221,6 +226,17 @@ impl LinkedTicket {
             changes.push(TicketChange::Version {
                 old: old_version,
                 new: new_version,
+            });
+        }
+
+        // Completion percentage — fires on both increase and decrease.
+        // Formatted as "N%" so the notification body is immediately readable.
+        let old_ratio = self.done_ratio.unwrap_or(0);
+        let new_ratio = new.done_ratio.unwrap_or(0);
+        if old_ratio != new_ratio {
+            changes.push(TicketChange::DoneRatio {
+                old: format!("{}%", old_ratio),
+                new: format!("{}%", new_ratio),
             });
         }
 
