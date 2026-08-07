@@ -1,5 +1,5 @@
 use crate::app::{App, SortColumn, SortOrder};
-use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus};
+use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
     layout::{Constraint, Rect},
@@ -21,15 +21,17 @@ pub fn badge_label(text: &str) -> String {
 
 /// Returns a styled badge cell for the GitLab MR state.
 ///
-/// For open MRs, `tick` (the current `time_left` value) drives an alternating animation
-/// between the base "Open" badge and a contextual mergeability badge:
-///   - even tick  → "Open" centred in a fixed-width green badge
-///   - odd tick   → mergeability-specific badge (color varies), same fixed width
+/// For open MRs, `tick` (the current `time_left` value) drives a three-phase animation:
+///   - tick % 3 == 0 → "OPEN" base badge (green)
+///   - tick % 3 == 1 → mergeability badge (colour varies)
+///   - tick % 3 == 2 → CI pipeline badge when the latest pipeline is running or pending,
+///     otherwise falls back to the mergeability badge
 ///
 /// All badges share the same `BADGE_WIDTH` so the column never shifts.
 fn state_badge(
     state: &GitlabMrState,
     mergeability: &MergeabilityStatus,
+    pipelines: &[crate::models::Pipeline],
     tick: u64,
 ) -> Cell<'static> {
     // For non-open states the badge is static — mergeability is not meaningful.
@@ -45,8 +47,13 @@ fn state_badge(
         )));
     }
 
-    // Even tick: always show the base "OPEN" badge.
-    if tick.is_multiple_of(2) {
+    // Detect whether the latest pipeline is actively running or pending.
+    let ci_active = pipelines
+        .first()
+        .is_some_and(|p| matches!(p.status, PipelineState::Running | PipelineState::Pending));
+
+    // tick % 3 == 0: always show the base "OPEN" badge.
+    if tick.is_multiple_of(3) {
         return Cell::from(Line::from(Span::styled(
             badge_label("OPEN"),
             Style::default()
@@ -56,7 +63,24 @@ fn state_badge(
         )));
     }
 
-    // Odd tick: show the mergeability-specific badge.
+    // tick % 3 == 2 and CI is running: show animated CI badge.
+    if tick % 3 == 2 && ci_active {
+        // Alternate between two spinner frames to create a pulse effect.
+        let label = if tick % 6 < 3 {
+            "CI RUNNING"
+        } else {
+            "CI PENDING"
+        };
+        return Cell::from(Line::from(Span::styled(
+            badge_label(label),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Rgb(180, 120, 0))
+                .add_modifier(Modifier::BOLD),
+        )));
+    }
+
+    // tick % 3 == 1, or tick % 3 == 2 with no active CI: show the mergeability badge.
     let (text, fg, bg) = match mergeability {
         MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
         MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
@@ -179,7 +203,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 maybe_highlight(Cell::from(format!("!{}", mr.id)), highlight),
                 maybe_highlight(title_cell, highlight),
                 maybe_highlight(
-                    state_badge(&mr.state, &mr.mergeability, app.time_left),
+                    state_badge(&mr.state, &mr.mergeability, &mr.pipelines, app.time_left),
                     highlight,
                 ),
             ];
