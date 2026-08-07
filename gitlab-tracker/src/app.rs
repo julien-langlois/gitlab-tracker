@@ -188,6 +188,10 @@ pub enum FilterMode {
     Milestone(String),
     /// Show only MRs whose assignee contains the given string (case-insensitive).
     Assignee(String),
+    /// Show only MRs that have a linked tracker ticket (e.g. Redmine).
+    HasLinkedTicket,
+    /// Show only MRs whose latest pipeline has failed.
+    CiFailing,
 }
 
 impl FilterMode {
@@ -205,6 +209,8 @@ impl FilterMode {
             FilterMode::HasNotes => "Has comments 💬".to_string(),
             FilterMode::Milestone(q) => format!("Milestone: {}", q),
             FilterMode::Assignee(q) => format!("Assignee: {}", q),
+            FilterMode::HasLinkedTicket => "Has linked ticket 🎫".to_string(),
+            FilterMode::CiFailing => "CI failing ❌".to_string(),
         }
     }
 }
@@ -224,6 +230,8 @@ pub const FILTER_PICKER_ENTRIES: &[&str] = &[
     "Mergeability: Draft",
     "Mergeability: Discussions",
     "Has comments 💬",
+    "Has linked ticket 🎫",
+    "CI failing ❌",
     "Milestone… (type below)",
     "Assignee… (type below)",
 ];
@@ -413,8 +421,10 @@ impl App {
             }
             FilterMode::Mergeability(_) => 5,
             FilterMode::HasNotes => 12,
-            FilterMode::Milestone(_) => 13,
-            FilterMode::Assignee(_) => 14,
+            FilterMode::HasLinkedTicket => 13,
+            FilterMode::CiFailing => 14,
+            FilterMode::Milestone(_) => 15,
+            FilterMode::Assignee(_) => 16,
         };
 
         // Pre-fill the text input from the current filter value if applicable.
@@ -450,14 +460,16 @@ impl App {
             10 => FilterMode::Mergeability(MergeabilityStatus::Draft),
             11 => FilterMode::Mergeability(MergeabilityStatus::DiscussionsNotResolved),
             12 => FilterMode::HasNotes,
-            13 => {
+            13 => FilterMode::HasLinkedTicket,
+            14 => FilterMode::CiFailing,
+            15 => {
                 if input.is_empty() {
                     FilterMode::All
                 } else {
                     FilterMode::Milestone(input)
                 }
             }
-            14 => {
+            16 => {
                 if input.is_empty() {
                     FilterMode::All
                 } else {
@@ -517,6 +529,13 @@ impl App {
                     .unwrap_or(false);
                 gitlab_match || tracker_match
             }
+            // Show only MRs that have a resolved tracker ticket.
+            FilterMode::HasLinkedTicket => mr.linked_ticket.is_some(),
+            // Show only MRs whose latest pipeline has a failed status.
+            FilterMode::CiFailing => mr
+                .pipelines
+                .first()
+                .is_some_and(|p| p.status == crate::models::PipelineState::Failed),
         }
     }
 

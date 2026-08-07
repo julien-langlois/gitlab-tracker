@@ -201,7 +201,7 @@ pub async fn handle_key_event(
         InputMode::FilterPicker => {
             const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
             // Entries that require a text input (Milestone=13, Assignee=14).
-            let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+            let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
 
             match key.code {
                 KeyCode::Esc => {
@@ -888,7 +888,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     if app.input_mode == InputMode::FilterPicker {
         use crate::app::FILTER_PICKER_ENTRIES;
         const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
-        let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+        let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
         match key.code {
             KeyCode::Esc => {
                 app.input_mode = InputMode::Normal;

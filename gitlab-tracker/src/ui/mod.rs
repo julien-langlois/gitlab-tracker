@@ -487,7 +487,7 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
 /// show an inline text input field beneath the list when selected.
 fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     let entries = FILTER_PICKER_ENTRIES;
-    let needs_text_input = matches!(app.filter_picker.cursor, 13 | 14);
+    let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
 
     // Height: one row per entry + borders + optional text input row (3 lines).
     let list_height = entries.len() as u16;
@@ -536,6 +536,13 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 
     // Build list items.
     let cursor = app.filter_picker.cursor;
+
+    // Pre-compute availability of context-dependent filters so they can be
+    // rendered as dimmed when no data makes them applicable. The indices must
+    // stay stable (no entries are hidden) to keep the cursor math correct.
+    let has_any_linked_ticket = app.mrs.iter().any(|mr| mr.linked_ticket.is_some());
+    let has_any_pipeline = app.mrs.iter().any(|mr| !mr.pipelines.is_empty());
+
     let items: Vec<ListItem> = entries
         .iter()
         .enumerate()
@@ -569,14 +576,33 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
                             == FilterMode::Mergeability(MergeabilityStatus::DiscussionsNotResolved)
                     }
                     12 => app.filter_mode == FilterMode::HasNotes,
-                    13 => matches!(app.filter_mode, FilterMode::Milestone(_)),
-                    14 => matches!(app.filter_mode, FilterMode::Assignee(_)),
+                    13 => app.filter_mode == FilterMode::HasLinkedTicket,
+                    14 => app.filter_mode == FilterMode::CiFailing,
+                    15 => matches!(app.filter_mode, FilterMode::Milestone(_)),
+                    16 => matches!(app.filter_mode, FilterMode::Assignee(_)),
                     _ => false,
                 }
             };
 
+            // Entries that are inapplicable in the current context are dimmed
+            // (n/a label suffix) to inform the user without removing them —
+            // keeping all indices stable avoids any cursor mapping bug.
+            let is_na = match i {
+                13 => !has_any_linked_ticket,
+                14 => !has_any_pipeline,
+                _ => false,
+            };
+
             let prefix = if is_current { "● " } else { "  " };
-            let style = if is_active {
+            let display_label = if is_na {
+                format!("{}{}  (n/a)", prefix, label)
+            } else {
+                format!("{}{}", prefix, label)
+            };
+            let style = if is_na {
+                // Dimmed regardless of cursor position — not useful to select.
+                Style::default().fg(Color::Rgb(90, 90, 90))
+            } else if is_active {
                 Style::default()
                     .fg(Color::Black)
                     .bg(Color::Green)
@@ -588,10 +614,7 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 Style::default().fg(Color::White)
             };
-            ListItem::new(Line::from(Span::styled(
-                format!("{}{}", prefix, label),
-                style,
-            )))
+            ListItem::new(Line::from(Span::styled(display_label, style)))
         })
         .collect();
 
@@ -602,7 +625,7 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 
     // Text input field for Milestone / Assignee entries.
     if needs_text_input {
-        let field_label = if app.filter_picker.cursor == 13 {
+        let field_label = if app.filter_picker.cursor == 15 {
             " Milestone contains "
         } else {
             " Assignee contains "
