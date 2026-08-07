@@ -25,10 +25,23 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
 
   Type and Priority are rendered as **coloured badges** — colours are fully configurable in `redmine.yaml` (see [Configuration](#configuration) below).
 
-* **Time Log view (`P`):** press `P` twice to reach the **Time Log** view:
+* **Change notifications:** when a ticket field changes between two refresh cycles, a native desktop notification is raised with the **before → after** values. Tracked fields:
+
+  | Field | Notification icon |
+  | :--- | :--- |
+  | Priority | ⚠️ `dialog-warning` |
+  | Status | ℹ️ `dialog-information` |
+  | Assignee | ℹ️ `dialog-information` |
+  | Target version | ℹ️ `dialog-information` |
+  | Progress (`done_ratio`) | ℹ️ `dialog-information` — fires on both increase **and** decrease |
+
+  Notifications are suppressed during the initial sync (see [`gitlab-tracker-notify`](../gitlab-tracker-notify/README.md)).
+
+* **Time Log view (`P` × 2):** press `P` twice (when the Tracker pane is focused) to reach the **Time Log** view:
   * A progress bar comparing time spent vs. the ticket's estimate.
   * The full list of time entries (date, user, activity, duration, comment) fetched live from Redmine.
   * Navigating between MRs with `↑`/`↓` while on this view automatically refreshes the entries for the newly selected ticket.
+
 * **Log time (`L`):** open a popup to submit a new time entry directly to Redmine — select the activity category, enter a duration (e.g. `1h30`, `90m`, `1.5h`), optionally add a comment, and confirm with `Enter`.
 * **Tracker column** in the main table (toggleable via `C`) — shows ticket ID, status, and spent/estimated time at a glance.
 

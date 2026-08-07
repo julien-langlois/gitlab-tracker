@@ -30,15 +30,15 @@
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
-* 🔀 **Animated Mergeability Badge:** For open MRs, the Status column alternates every second between the base `Open` badge and a live mergeability indicator sourced directly from the GitLab API:
+* 🔀 **Animated Status Badge:** For open MRs, the Status column cycles through three phases every second with no extra column:
 
-  | Badge | Color | Meaning |
-  | :--- | :--- | :--- |
-  | `Mergeable` | 🟩 Light green | MR can be merged cleanly |
-  | `Conflict` | 🟥 Red | Merge conflicts must be resolved |
-  | `Rebase` | 🟨 Yellow | Branch is behind target — rebase required |
+  | Phase | Badge | Color | Meaning |
+  | :--- | :--- | :--- | :--- |
+  | 1 | `OPEN` | 🟩 Green | Base state |
+  | 2 | Mergeability | varies | Live mergeability from GitLab API |
+  | 3 | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
 
-  No extra column is added: the animation keeps the layout compact while surfacing critical merge-readiness at a glance.
+  The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `config.json` and persisted across restarts — no manual file editing required. Available optional columns:
 
   | Column | Description |
@@ -354,7 +354,7 @@ Shortcut keys are active. The input field is passive.
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table |
 | `Tab` | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked) |
 | `T` | When focus is on Dashboard or Inspector: **jump to Tracker pane**. When already on Tracker: **open ticket URL** in browser |
-| `P` | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: cycle Ticket Info ↔ Time Log |
+| `P` | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: toggle Ticket Info ↔ Time Log |
 | `L` | **Log time** on the linked tracker ticket *(only when a tracker plugin is configured)* |
 | `C` | **Open column picker** — toggle optional columns on/off |
 | `O` | Open selected MR in your default web browser |
@@ -461,7 +461,7 @@ When a tracker plugin is configured, the dashboard is enriched with:
 
 * **Linked ticket display** in the Inspector — subject, type, priority, status, assignee, target version, start date, progress bar, and time tracking (estimate / spent / remaining)
 * **Coloured badges** for Type and Priority — colours are fully configurable per-label in the plugin's config file (no hardcoded values — works with any language or custom workflow)
-* **Time Log view** (`P`) — time entries for the linked ticket, auto-refreshed on MR navigation
+* **Time Log view** (`P` × 2) — chronological list of time entries for the linked ticket, auto-refreshed on MR navigation
 * **Log time** (`L`) — submit a new time entry directly from the TUI
 * **Tracker column** in the table (toggleable via `C`)
 

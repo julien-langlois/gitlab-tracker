@@ -8,7 +8,9 @@ Powered by [`notify-rust`](https://crates.io/crates/notify-rust), it surfaces MR
 
 ## Events
 
-Four events trigger a desktop notification:
+Eight events trigger a desktop notification:
+
+**GitLab MR events**
 
 | Event | Trigger condition |
 | :--- | :--- |
@@ -16,6 +18,20 @@ Four events trigger a desktop notification:
 | 🕐 **MR updated** | `updated_at` from GitLab differs from the previously stored value |
 | 🔀 **Mergeability changed** | The mergeability status transitioned (e.g. `Mergeable → Conflict`) |
 | 🏁 **Milestone changed** | The milestone attached to the MR changed (e.g. `v2.4.0 → v2.5.0`) |
+
+**Tracker ticket events** *(requires an active tracker plugin, e.g. Redmine)*
+
+Each notification shows the changed field with a clear **before → after** format.
+
+| Event | Trigger condition |
+| :--- | :--- |
+| 🔴 **Priority changed** | Ticket priority transitioned (e.g. `Normal → High`) — uses `dialog-warning` icon |
+| 🔄 **Status changed** | Ticket status transitioned (e.g. `In Progress → Resolved`) |
+| 👤 **Assignee changed** | Ticket assignee changed (e.g. `Alice → Bob`, or `→ Unassigned`) |
+| 📦 **Version changed** | Target version/release changed (e.g. `v1.2 → v1.3`, or `→ None`) |
+| 📊 **Progress changed** | Completion percentage changed in either direction (e.g. `50% → 75%` or `75% → 50%`) |
+
+Tracker ticket notifications open the **ticket URL** (not the MR) when clicked.
 
 ---
 

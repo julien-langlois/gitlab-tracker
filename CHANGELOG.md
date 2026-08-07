@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5] - 2026-08-07
+
+### 🚀 Features
+
+- **core**: Add TicketChange enum and LinkedTicket::diff for tracker field change tracking
+- **core**: Add DoneRatio variant to TicketChange and track progress changes in diff
+- **filter**: Add HasLinkedTicket and CiFailing filter modes with n/a dimming
+
+### 🐛 Bug Fixes
+
+- **auto-refresh**: Always re-fetch Redmine tickets on timer tick
+- **pipelines**: Always re-fetch pipelines when a cached pipeline is in a transient state
+
+### ⚙️ Miscellaneous
+
+- **changelog**: Adapt cliff.toml commit parsers
+
+### 📚 Documentation
+
+- Manually backfill 0.3.4 changelog entries
+
+### 🖥️ UI
+
+- **ui**: Add animated spinner and live MR count to table title
+- **ui**: Inject live MR count, input mode and active filter into terminal window title
+- **ui**: Add live CI pipeline badge to status column animation
+
 ## [0.3.4] - 2026-08-06
 
 ### 🚀 Features
@@ -21,20 +48,20 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
-- **ui**: Add quit confirmation on Esc key press
 - **filter**: Replace cycle with interactive picker (state, mergeability, notes, milestone, assignee)
 - Use GitLab label colours as fallback for unoverridden chips
-- **ui**: Add split tracker pane with mouse-hover focus
 - **redmine**: Add data from Redmine in side panel
 - **redmine**: Auto-update ETC on time entry submission
-
-### 🐛 Bug Fixes
-
-- **ui**: Replace ANSI DarkGray with absolute RGB colours for consistent readability
 
 ### 📚 Documentation
 
 - Use GitLab label colours as fallback for unoverridden chips
+
+### 🖥️ UI
+
+- **ui**: Add quit confirmation on Esc key press
+- **ui**: Replace ANSI DarkGray with absolute RGB colours for consistent readability
+- **ui**: Add split tracker pane with mouse-hover focus
 
 ## [0.3.2] - 2026-08-04
 
@@ -93,10 +120,13 @@ All notable changes to this project will be documented in this file.
 
 - **keyring**: Unify service name and add legacy entry migration
 
+### 🎬 Demo
+
+- **demo**: Update tape scenario to cover flagging, filter and column picker
+
 ### ⚙️ Miscellaneous
 
 - Bump package version from 0.2.8 to 0.2.9
-- **demo**: Update tape scenario to cover flagging, filter and column picker
 
 ### 🖥️ UI
 
@@ -143,20 +173,11 @@ All notable changes to this project will be documented in this file.
 - **input**: Add Normal/Insert mode to prevent shortcut conflicts with branch names
 - **pipelines**: Add pipeline inspector panel with rate-limit-aware caching
 
-### 🐛 Bug Fixes
+### 🖥️ UI
 
 - **ui**: Enforce fixed-width centered state badges in table
 
 ## [0.2.5] - 2026-07-27
-
-### 🚀 Features
-
-- **ui**: Animate mergeability badge on open MR status column
-- **ui**: Add MR lifecycle state badge to table and inspector
-
-### 🐛 Bug Fixes
-
-- **ui**: Remove redundant [Open] title prefix now superseded by state badge
 
 ### ⚙️ Miscellaneous
 
@@ -166,6 +187,12 @@ All notable changes to this project will be documented in this file.
 ### 🔨 Refactor
 
 - Extract key and mouse event handling into dedicated events module
+
+### 🖥️ UI
+
+- **ui**: Animate mergeability badge on open MR status column
+- **ui**: Remove redundant [Open] title prefix now superseded by state badge
+- **ui**: Add MR lifecycle state badge to table and inspector
 
 ## [0.2.4] - 2026-07-27
 
