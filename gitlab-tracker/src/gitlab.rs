@@ -512,13 +512,27 @@ pub async fn fetch_gitlab_data(
     // stale cache entries written before jobs were persisted.
     // Also re-fetch if any cached pipeline is missing `created_at` — this
     // transparently enriches state files written before that field was added.
+    //
+    // IMPORTANT: always re-fetch when any cached pipeline is in a transient state
+    // (running, pending, created, waiting). A pipeline can transition to success/failed
+    // without the MR's `updated_at` changing, so the equality check alone is not
+    // sufficient to detect stale pipeline data.
     let cached_has_jobs = cached.pipelines.iter().any(|p| !p.jobs.is_empty());
     let cached_has_dates = cached.pipelines.iter().all(|p| p.created_at.is_some());
+    let cached_has_transient_pipeline = cached.pipelines.iter().any(|p| {
+        matches!(
+            p.status,
+            crate::models::PipelineState::Running
+                | crate::models::PipelineState::Pending
+                | crate::models::PipelineState::Created
+        )
+    });
     let pipelines = if updated_at.is_some()
         && updated_at == cached.updated_at
         && !cached.pipelines.is_empty()
         && cached_has_jobs
         && cached_has_dates
+        && !cached_has_transient_pipeline
     {
         cached.pipelines
     } else {
