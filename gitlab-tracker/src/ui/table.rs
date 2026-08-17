@@ -243,23 +243,42 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 ));
             }
 
-            // Optional complexity column — shows only the coloured dot calibrated
-            // against the configured tech-stack profile (full details in the side panel).
+            // Optional complexity column — shows a fixed-width coloured chip badge
+
+            // matching the side-panel style. All labels are uppercased and padded to
+
+            // the width of the longest one ("COMPLEX") so every chip is the same size.
+
+            // Emoji glyphs occupy 2 terminal columns, so padding is computed manually:
+
+            //   🟢 EASY    → 2 + 5 = 7  → 3 trailing spaces to reach 10
+
+            //   🟡 MEDIUM  → 2 + 7 = 9  → 1 trailing space  to reach 10
+
+            //   🔴 COMPLEX → 2 + 8 = 10 → no extra padding needed
+
             if cols.diff_stats {
                 let complexity_cell = match &mr.diff_stats {
                     Some(stats) => {
                         let score = stats.difficulty(&app.config.complexity_profile);
-                        let dot = if score < 0.33 {
-                            Span::styled("🟢", Style::default())
+
+                        let (label, fg, bg) = if score < 0.33 {
+                            ("🟢 EASY   ", Color::Black, Color::Green)
                         } else if score < 0.66 {
-                            Span::styled("🟡", Style::default())
+                            ("🟡 MEDIUM ", Color::Black, Color::Yellow)
                         } else {
-                            Span::styled("🔴", Style::default())
+                            ("🔴 COMPLEX", Color::White, Color::Red)
                         };
-                        Cell::from(Line::from(vec![dot]))
+
+                        Cell::from(Line::from(vec![Span::styled(
+                            format!(" {} ", label),
+                            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+                        )]))
                     }
+
                     None => Cell::from("—").fg(Color::DarkGray),
                 };
+
                 cells.push(maybe_highlight(complexity_cell, highlight));
             }
 
@@ -377,7 +396,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         constraints.push(Constraint::Length(10)); // Notes badge
     }
     if cols.diff_stats {
-        constraints.push(Constraint::Length(12)); // Complexity dot only
+        constraints.push(Constraint::Length(14)); // Complexity chip badge (e.g. " 🔴 Complex ")
     }
     if cols.tracker_ticket {
         constraints.push(Constraint::Fill(2)); // Tracker ticket

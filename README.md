@@ -31,7 +31,7 @@
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `activity_recent_days` / `activity_stale_days` in `projects.toml`.
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🎯 **Review Complexity Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded complexity indicator calibrated to your tech stack:
-  * In the **table**, the optional **Complexity** column shows a single dot — 🟢 Easy, 🟡 Medium, 🔴 Complex — keeping the layout compact.
+  * In the **table**, the optional **Complexity** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
   * In the **side Inspector**, the full breakdown is always visible: file/line counts, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
 
   The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
@@ -73,7 +73,7 @@
   | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
   | **Milestone** | The associated milestone title |
   | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
-  | **Complexity** | Review complexity dot — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
+  | **Complexity** | Review complexity chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
@@ -267,7 +267,7 @@ labels        = false
 milestone     = true
 notes         = false
 tracker_ticket = true
-diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 dot based on diff size)
+diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 chip badge based on diff size)
 
 # Label colour overrides — exact names or wildcard patterns (e.g. "deploy::*").
 # Accepted colour values: named colours ("red", "cyan", "dark_gray", …) or hex codes ("#D32F2F").
@@ -308,7 +308,7 @@ diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 dot based on diff s
 > | `labels` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | **Milestone** — the associated milestone title |
 > | `notes` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
-> | `diff_stats` | **Complexity** — 🟢 / 🟡 / 🔴 dot calibrated to `complexity_profile` |
+> | `diff_stats` | **Complexity** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
 > | `tracker_ticket` | **Ticket** — linked tracker ticket ID + status (requires a tracker plugin) |
 
 > **Activity badge thresholds** control the colour-coded indicator next to the `Updated` field in the Context Inspector:
