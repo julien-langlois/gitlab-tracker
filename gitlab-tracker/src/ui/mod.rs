@@ -674,6 +674,7 @@ fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
         ("Labels", app.config.visible_columns.labels),
         ("Milestone", app.config.visible_columns.milestone),
         ("Notes", app.config.visible_columns.notes),
+        ("Complexity", app.config.visible_columns.diff_stats),
     ];
     if app.tracker.is_some() {
         entries_vec.push(("Tracker", app.config.visible_columns.tracker_ticket));

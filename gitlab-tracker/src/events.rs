@@ -258,8 +258,8 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            // Column count: 5 fixed columns + 1 tracker column when a provider is configured.
-            let column_count = if app.tracker.is_some() { 6 } else { 5 };
+            // Column count: 6 fixed columns + 1 tracker column when a provider is configured.
+            let column_count = if app.tracker.is_some() { 7 } else { 6 };
 
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
@@ -291,8 +291,12 @@ pub async fn handle_key_event(
                                 !app.config.visible_columns.milestone
                         }
                         4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
-                        // Entry 5 — only reachable when a tracker provider is configured.
                         5 => {
+                            app.config.visible_columns.diff_stats =
+                                !app.config.visible_columns.diff_stats
+                        }
+                        // Entry 6 — only reachable when a tracker provider is configured.
+                        6 => {
                             app.config.visible_columns.tracker_ticket =
                                 !app.config.visible_columns.tracker_ticket
                         }
@@ -842,6 +846,8 @@ async fn handle_enter(
                 flagged: false,
                 // Ticket resolved live after the first MR fetch — not pre-populated.
                 linked_ticket: None,
+                // Diff stats fetched on the first MR load — not pre-populated.
+                diff_stats: None,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
             save_state_async(&app.mrs, &app.branches, last_known_branches).await;
@@ -924,7 +930,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
 
     // Column-picker popup intercepts all keys when open.
     if app.input_mode == InputMode::ColumnPicker {
-        const COLUMN_COUNT: usize = 5;
+        const COLUMN_COUNT: usize = 6;
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 if app.column_picker_cursor > 0 {
@@ -945,6 +951,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
                 3 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
                 4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
+                5 => app.config.visible_columns.diff_stats = !app.config.visible_columns.diff_stats,
                 _ => {}
             },
             // Close the popup — no disk write in demo mode.
@@ -1076,5 +1083,6 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         labels: Some(mr.labels.clone()),
         updated_at: mr.updated_at.clone(),
         pipelines: mr.pipelines.clone(),
+        diff_stats: mr.diff_stats.clone(),
     }
 }

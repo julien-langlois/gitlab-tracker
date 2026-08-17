@@ -154,6 +154,10 @@ pub struct SavedMr {
     /// `None` when no tracker provider is configured or no ticket reference was found.
     #[serde(default)]
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
+    /// Diff statistics (files changed, additions, deletions) — persisted across restarts.
+    /// Refreshed only when `updated_at` changes (same cache strategy as pipelines).
+    #[serde(default)]
+    pub diff_stats: Option<DiffStats>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -210,6 +214,8 @@ pub struct TrackedMr {
     /// Ticket linked to this MR, resolved by the active [`TrackerProvider`].
     /// `None` when no tracker provider is configured or no ticket reference was found.
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
+    /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
+    pub diff_stats: Option<DiffStats>,
 }
 
 #[derive(Debug, Clone)]
@@ -243,6 +249,72 @@ pub struct MrLoadedData {
     pub pipelines: Vec<Pipeline>,
     /// Total number of user notes (comments + discussion threads) on this MR.
     pub user_notes_count: u32,
+    /// Diff statistics fetched from the GitLab Changes API.
+    /// `None` until the first successful fetch or when the API returns no data.
+    pub diff_stats: Option<DiffStats>,
+}
+
+/// Diff statistics for a merge request: files changed, lines added, lines deleted.
+///
+/// Fetched from the GitLab Changes API and used to display a compact summary
+/// (e.g. "9 files  +545 -32") alongside a review-difficulty score.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DiffStats {
+    /// Number of files touched by this MR.
+    pub files_changed: u32,
+    /// Total lines added across all changed files.
+    pub additions: u32,
+    /// Total lines deleted across all changed files.
+    pub deletions: u32,
+}
+
+impl DiffStats {
+    /// Computes a review-difficulty score in [0.0, 1.0] based on the tech-stack profile.
+    ///
+    /// The formula weights total changed lines against the profile's "easy" and "hard"
+    /// thresholds.  Below the easy threshold → 0.0 (trivial).  Above the hard threshold
+    /// → 1.0 (very complex).  Between the two the score is interpolated linearly, then
+    /// capped to [0.0, 1.0].
+    pub fn difficulty(&self, profile: &DifficultyProfile) -> f64 {
+        let total_lines = (self.additions + self.deletions) as f64;
+        // Files weigh 20 % of the total so a patch that only reorganises many tiny
+        // files (e.g. Drupal config YAML) is penalised less than one that rewrites
+        // large, logic-heavy files.
+        let weighted = total_lines * 0.8 + self.files_changed as f64 * 0.2;
+        let range = (profile.hard_threshold - profile.easy_threshold) as f64;
+        if range <= 0.0 {
+            return 1.0;
+        }
+        let score = (weighted - profile.easy_threshold as f64) / range;
+        score.clamp(0.0, 1.0)
+    }
+}
+
+/// Tech-stack calibration for the review-difficulty score.
+///
+/// Different ecosystems have very different "cost per line" — a 500-line Drupal
+/// YAML config dump is far cheaper to review than 500 lines of Java business logic.
+/// These thresholds let users tune the scoring to their project's reality via
+/// `config.json` (`diff_difficulty_profile`).
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DifficultyProfile {
+    /// Human-readable name shown in the UI (e.g. "Drupal", "Java", "Generic").
+    pub name: String,
+    /// Weighted score below which a MR is considered easy (maps to 0.0).
+    pub easy_threshold: u32,
+    /// Weighted score above which a MR is considered very complex (maps to 1.0).
+    pub hard_threshold: u32,
+}
+
+impl Default for DifficultyProfile {
+    fn default() -> Self {
+        // Conservative generic defaults: easy < 200 weighted units, hard > 1 000.
+        Self {
+            name: "Generic".to_string(),
+            easy_threshold: 200,
+            hard_threshold: 1000,
+        }
+    }
 }
 
 /// Lifecycle state of a GitLab pipeline run.

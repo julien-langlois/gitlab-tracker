@@ -342,6 +342,7 @@ pub async fn save_state_async(
                 user_notes_count: m.user_notes_count,
                 flagged: m.flagged,
                 linked_ticket: m.linked_ticket.clone(),
+                diff_stats: m.diff_stats.clone(),
             })
             .collect(),
         branches: branches.to_vec(),

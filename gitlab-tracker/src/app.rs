@@ -835,6 +835,8 @@ impl App {
                 flagged: saved.flagged,
                 // Restore persisted ticket — avoids a tracker request on every restart.
                 linked_ticket: saved.linked_ticket,
+                // Restore persisted diff stats — refreshed only when updated_at changes.
+                diff_stats: saved.diff_stats.clone(),
             });
 
             if initial_status == MrStatus::Loading {
@@ -848,6 +850,7 @@ impl App {
                     labels: saved.labels,
                     updated_at: saved.updated_at,
                     pipelines: saved.pipelines,
+                    diff_stats: saved.diff_stats,
                 };
 
                 // Count each pending fetch so we can suppress change notifications
@@ -1074,6 +1077,7 @@ impl App {
                 mr.pipelines = data.pipelines;
                 mr.recently_updated = was_updated;
                 mr.user_notes_count = data.user_notes_count;
+                mr.diff_stats = data.diff_stats;
 
                 // Arm (or re-arm) the global fade countdown.
                 if was_updated {
@@ -1194,6 +1198,7 @@ impl App {
                         user_notes_count: 0,
                         // New MRs start unflagged.
                         flagged: false,
+                        diff_stats: None,
                         // Ticket resolved live after each MR fetch — never pre-populated.
                         linked_ticket: None,
                     });
@@ -1258,6 +1263,7 @@ impl App {
                         labels: Some(mr.labels.clone()),
                         updated_at: mr.updated_at.clone(),
                         pipelines: mr.pipelines.clone(),
+                        diff_stats: mr.diff_stats.clone(),
                     };
                     spawn_mr_fetch(
                         ctx.clone(),

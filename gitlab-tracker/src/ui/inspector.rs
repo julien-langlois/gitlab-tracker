@@ -1,5 +1,7 @@
 use crate::config::AppConfig;
-use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr};
+use crate::models::{
+    DifficultyProfile, GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr,
+};
 use crate::ui::table::badge_label;
 use crate::ui::theme;
 use crate::utils::format_relative_date;
@@ -168,6 +170,84 @@ fn section_header(title: &'static str) -> Line<'static> {
             Style::default().fg(theme::MUTED_DIM),
         ),
     ])
+}
+
+/// Renders the diff stats block for the inspector panel.
+///
+/// Shows the file/line summary and the difficulty badge calibrated against
+/// the project's `DifficultyProfile`. Always rendered, even when
+/// `visible_columns.diff_stats` is off — the side panel is the canonical
+/// place for this information.
+fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<Line<'static>> {
+    let Some(ref stats) = mr.diff_stats else {
+        return vec![Line::from(vec![
+            Span::raw("Diff     : "),
+            Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+        ])];
+    };
+
+    let difficulty_score = stats.difficulty(profile);
+    let (diff_icon, diff_fg, diff_bg) = if difficulty_score < 0.33 {
+        ("🟢 Easy", Color::Black, Color::Green)
+    } else if difficulty_score < 0.66 {
+        ("🟡 Medium", Color::Black, Color::Yellow)
+    } else {
+        ("🔴 Complex", Color::White, Color::Red)
+    };
+
+    // Build a visual bar proportional to difficulty (10 chars wide).
+    let filled = (difficulty_score * 10.0).round() as usize;
+    let bar = format!(
+        "[{}{}]",
+        "█".repeat(filled),
+        "░".repeat(10usize.saturating_sub(filled))
+    );
+
+    vec![
+        Line::from(vec![
+            Span::raw("Diff     : "),
+            Span::styled(
+                format!("{} files  ", stats.files_changed),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("+{}", stats.additions),
+                Style::default().fg(Color::Green),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("-{}", stats.deletions),
+                Style::default().fg(Color::Red),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("Review   : "),
+            Span::styled(
+                bar,
+                Style::default().fg(if difficulty_score < 0.33 {
+                    Color::Green
+                } else if difficulty_score < 0.66 {
+                    Color::Yellow
+                } else {
+                    Color::Red
+                }),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!(" {} ", diff_icon),
+                Style::default()
+                    .fg(diff_fg)
+                    .bg(diff_bg)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  ({})", profile.name),
+                Style::default().fg(theme::MUTED_DIM),
+            ),
+        ]),
+    ]
 }
 
 pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
@@ -430,6 +510,11 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
+
+    // ── SECTION 4b: Diff & Complexity ────────────────────────────────────────
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(section_header("Diff & Complexity"));
+    lines.extend(render_diff_stats_lines(mr, &config.diff_difficulty_profile));
 
     // ── SECTION 5: Labels ────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));

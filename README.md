@@ -30,6 +30,32 @@
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
+* 🎯 **Review Complexity Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded complexity indicator calibrated to your tech stack:
+  * In the **table**, the optional **Complexity** column shows a single dot — 🟢 Easy, 🟡 Medium, 🔴 Complex — keeping the layout compact.
+  * In the **side Inspector**, the full breakdown is always visible: file/line counts, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
+
+  The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile can be set per-project in `config.json`:
+
+  ```json
+  "diff_difficulty_profile": {
+    "name": "Drupal",
+    "easy_threshold": 400,
+    "hard_threshold": 3000
+  }
+  ```
+
+  Suggested presets:
+
+  | Tech stack | `easy_threshold` | `hard_threshold` | Rationale |
+  | :--- | :--- | :--- | :--- |
+  | **Drupal** | `400` | `3000` | Lots of YAML/config files that are verbose but lightweight to review |
+  | **Symfony / PHP** | `200` | `1200` | Denser business logic, typically smaller PRs |
+  | **Java / Spring** | `100` | `600` | Highly logic-dense lines; verbosity adds review cost |
+  | **TypeScript / React** | `150` | `900` | JSX inflates line counts but remains readable |
+  | **Go** | `150` | `800` | Concise but each line carries weight |
+  | **Generic** *(default)* | `200` | `1000` | Conservative baseline for mixed stacks |
+
+  Diff data is cached behind the same `updated_at` guard as pipelines — no extra API call when the MR has not changed since the last refresh.
 * 🔀 **Animated Status Badge:** For open MRs, the Status column cycles through three phases every second with no extra column:
 
   | Phase | Badge | Color | Meaning |
@@ -48,6 +74,7 @@
   | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
   | **Milestone** | The associated milestone title |
   | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
+  | **Complexity** | Review complexity dot — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `diff_difficulty_profile` |
 
   All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
@@ -261,6 +288,7 @@ You can edit this file to adjust default environment branches, label badge color
 > | `labels` | `false` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | `false` | **Milestone** — the associated milestone title |
 > | `notes` | `false` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
+> | `diff_stats` | `false` | **Complexity** — 🟢 / 🟡 / 🔴 dot calibrated to `diff_difficulty_profile` |
 >
 > Example — enable Activity and Target only:
 >

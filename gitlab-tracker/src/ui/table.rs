@@ -127,6 +127,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     if cols.notes {
         header_cells.push(Cell::from("Notes").bold());
     }
+    if cols.diff_stats {
+        header_cells.push(Cell::from("Complexity").bold());
+    }
     if cols.tracker_ticket {
         header_cells.push(Cell::from("Tracker").bold());
     }
@@ -238,6 +241,26 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     Cell::from(notes_text).fg(notes_color),
                     highlight,
                 ));
+            }
+
+            // Optional complexity column — shows only the coloured dot calibrated
+            // against the configured tech-stack profile (full details in the side panel).
+            if cols.diff_stats {
+                let complexity_cell = match &mr.diff_stats {
+                    Some(stats) => {
+                        let score = stats.difficulty(&app.config.diff_difficulty_profile);
+                        let dot = if score < 0.33 {
+                            Span::styled("🟢", Style::default())
+                        } else if score < 0.66 {
+                            Span::styled("🟡", Style::default())
+                        } else {
+                            Span::styled("🔴", Style::default())
+                        };
+                        Cell::from(Line::from(vec![dot]))
+                    }
+                    None => Cell::from("—").fg(Color::DarkGray),
+                };
+                cells.push(maybe_highlight(complexity_cell, highlight));
             }
 
             // Optional tracker ticket column — visible when a provider is configured.
@@ -352,6 +375,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     }
     if cols.notes {
         constraints.push(Constraint::Length(10)); // Notes badge
+    }
+    if cols.diff_stats {
+        constraints.push(Constraint::Length(12)); // Complexity dot only
     }
     if cols.tracker_ticket {
         constraints.push(Constraint::Fill(2)); // Tracker ticket

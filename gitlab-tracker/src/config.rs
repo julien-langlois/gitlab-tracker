@@ -31,6 +31,9 @@ pub struct VisibleColumns {
     /// Only visible when a tracker provider is configured at runtime.
     #[serde(default)]
     pub tracker_ticket: bool,
+    /// Show the "Diff" column with files changed, additions, deletions and difficulty badge.
+    #[serde(default)]
+    pub diff_stats: bool,
 }
 
 /// Default threshold (in days) above which an MR is considered "stale" (red badge).
@@ -70,6 +73,14 @@ pub struct AppConfig {
     /// All columns are hidden by default — enable them individually in config.json.
     #[serde(default)]
     pub visible_columns: VisibleColumns,
+    /// Tech-stack calibration for the review-difficulty score.
+    ///
+    /// Preset examples (set `diff_difficulty_profile` in config.json):
+    /// - Drupal:  easy_threshold: 300, hard_threshold: 2000  (lots of YAML/config)
+    /// - Java:    easy_threshold: 100, hard_threshold:  600  (logic-dense lines)
+    /// - Generic: easy_threshold: 200, hard_threshold: 1000  (default)
+    #[serde(default)]
+    pub diff_difficulty_profile: crate::models::DifficultyProfile,
     /// GitLab-side label colours fetched at startup — maps lowercase label name → hex colour.
     /// Populated at runtime via `AppEvent::GitlabLabelsLoaded`; never read from config.json.
     /// Not serialised — always re-fetched from the GitLab API on startup.
@@ -133,6 +144,7 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             visible_columns: VisibleColumns::default(),
+            diff_difficulty_profile: crate::models::DifficultyProfile::default(),
             // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.
             gitlab_label_colors: HashMap::new(),
         }

@@ -1,6 +1,6 @@
 use crate::models::{
-    AppEvent, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef, MergeabilityStatus,
-    MrLoadedData, Pipeline, PipelineJob,
+    AppEvent, DiffStats, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef,
+    MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
 };
 use crate::utils::{calculate_relevance, RELEVANCE_THRESHOLD};
 use std::collections::HashSet;
@@ -32,6 +32,8 @@ pub struct CachedMrData {
     pub updated_at: Option<String>,
     /// Pipelines from the previous fetch — reused when `updated_at` is unchanged.
     pub pipelines: Vec<Pipeline>,
+    /// Diff stats from the previous fetch — reused when `updated_at` is unchanged.
+    pub diff_stats: Option<crate::models::DiffStats>,
 }
 
 /// Fetches the last 5 pipelines for the given MR, then enriches each with
@@ -102,6 +104,67 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     }
 
     pipelines
+}
+
+/// Fetches diff statistics for a merge request from the GitLab Changes API.
+///
+/// Calls `GET /projects/:id/merge_requests/:iid/changes` and aggregates
+/// `additions` + `deletions` from each changed file entry.
+///
+/// Returns `None` on any network or parse error — diff stats are best-effort
+/// and must not block the MR data from being displayed.
+async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> {
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/changes",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let res = client
+        .get(&url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() {
+        tracing::warn!(
+            "Changes API returned non-2xx for MR {}: {}",
+            mr_id,
+            res.status()
+        );
+        return None;
+    }
+
+    let body: serde_json::Value = res.json().await.ok()?;
+    let changes = body.get("changes")?.as_array()?;
+
+    let mut files_changed: u32 = 0;
+    let mut additions: u32 = 0;
+    let mut deletions: u32 = 0;
+
+    for change in changes {
+        files_changed += 1;
+
+        // The GitLab Changes API does not expose pre-aggregated line counts.
+        // Each `change` entry carries a `diff` field containing the raw unified
+        // diff patch. We count lines starting with `+` (additions) and `-`
+        // (deletions), excluding the `+++`/`---` file header lines.
+        if let Some(diff) = change.get("diff").and_then(|v| v.as_str()) {
+            for line in diff.lines() {
+                if line.starts_with('+') && !line.starts_with("+++") {
+                    additions += 1;
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    deletions += 1;
+                }
+            }
+        }
+    }
+
+    Some(DiffStats {
+        files_changed,
+        additions,
+        deletions,
+    })
 }
 
 /// Fetches all open or upcoming milestones for the project from the GitLab API.
@@ -505,6 +568,23 @@ pub async fn fetch_gitlab_data(
         }
     }
 
+    // Fetch diff statistics (files changed, additions, deletions) from the Changes API.
+    // We cache this behind the same `updated_at` guard as pipelines to avoid hammering
+    // the API: if the MR hasn't changed, the diff hasn't changed either.
+    let cached_diff_stats = cached.diff_stats.clone();
+    // Invalidate the cache if the stored stats look corrupted: files_changed > 0
+    // but both additions and deletions are 0 means they were fetched with the old
+    // `added_lines`/`removed_lines` fields that do not exist in the GitLab API.
+    let cached_diff_stats_valid = cached_diff_stats
+        .as_ref()
+        .is_some_and(|s| s.files_changed == 0 || s.additions > 0 || s.deletions > 0);
+    let diff_stats =
+        if updated_at.is_some() && updated_at == cached.updated_at && cached_diff_stats_valid {
+            cached_diff_stats
+        } else {
+            fetch_diff_stats(ctx, mr_id).await
+        };
+
     // Only re-fetch pipelines if the MR has been updated since the last cycle.
     // If `updated_at` is unchanged, reuse the cached pipeline data to avoid
     // hammering the GitLab API with redundant requests (rate-limit friendly).
@@ -563,5 +643,6 @@ pub async fn fetch_gitlab_data(
         mergeability,
         pipelines,
         user_notes_count,
+        diff_stats,
     })
 }
