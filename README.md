@@ -84,7 +84,7 @@
   * **Milestone** — free-text search on the milestone title (case-insensitive)
   * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
 
-  The active filter is shown in the table header. Flagged state is **persisted across restarts** via `tracker_state.json`.
+  The active filter is shown in the table header. Flagged state is **persisted across restarts** via a tenant-scoped state file (`tracker_<hash>.json`, where the hash is derived from your GitLab URL and project ID).
 
 * 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all open MRs attached to that milestone** in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
 
@@ -333,7 +333,7 @@ See [`gitlab-tracker-notify/README.md`](gitlab-tracker-notify/README.md) for the
 Tracked branches (the columns shown in the MR table) are resolved in this priority order at startup:
 
 1. **`tracked_branches`** in `projects.toml` — the canonical source, written automatically by the TUI whenever you add or remove a branch in Insert mode.
-2. **`branches`** in `tracker_state.json` — legacy field from older versions, migrated silently to `projects.toml` on first startup and never written again.
+2. **`branches`** in `tracker_<hash>.json` — legacy field from older versions, migrated silently to `projects.toml` on first startup and never written again.
 3. **`default_branches`** in `projects.toml` — used on the very first run before any branch has been tracked interactively.
 
 ---

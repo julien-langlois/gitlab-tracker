@@ -257,8 +257,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = ratatui::init();
 
-    let (saved_mrs, migrated_branches, mut last_known_branches) = load_state_async().await;
-    let mut app = App::new(token, project_id, base_url, refresh_interval_secs, config);
+    let (saved_mrs, migrated_branches, mut last_known_branches) =
+        load_state_async(&base_url, &project_id).await;
+    let mut app = App::new(
+        token,
+        project_id.clone(),
+        base_url.clone(),
+        refresh_interval_secs,
+        config,
+    );
 
     // Branch resolution priority:
     //   1. tracked_branches in projects.toml (canonical source after migration)
@@ -318,7 +325,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
                 .await;
             if needs_save {
-                save_state_async(&app.mrs, &last_known_branches).await;
+                save_state_async(&app.mrs, &last_known_branches, &base_url, &project_id).await;
             }
         }
 

@@ -848,48 +848,130 @@ pub async fn load_or_create_config_async() -> AppConfig {
     AppConfig::default()
 }
 
-/// Loads the tracker state and performs a one-shot silent migration of
-/// `branches` from `tracker_state.json` into `projects.toml` when needed.
+/// Computes a short, stable FNV-1a 32-bit hash of the `(gitlab_url, project_id)` pair
+/// and returns the tenant-scoped state file name, e.g. `tracker_fa123ffb.json`.
+///
+/// FNV-1a was chosen because it requires no external dependency, has excellent
+/// distribution for short strings, and produces a compact 8-hex-char suffix that
+/// is human-readable in a file listing.
+///
+/// The hash is computed over the canonical form `"<url>|<project_id>"` so that
+/// different (url, id) pairs never collide even when one is a prefix of the other.
+fn tracker_state_file_name(gitlab_url: &str, project_id: &str) -> String {
+    // FNV-1a 32-bit constants.
+    const FNV_OFFSET: u32 = 2_166_136_261;
+    const FNV_PRIME: u32 = 16_777_619;
+
+    let mut hash = FNV_OFFSET;
+    // Normalise the URL so trailing slashes do not produce a different hash.
+    let url = gitlab_url.trim_end_matches('/');
+    for byte in url
+        .bytes()
+        .chain(b"|".iter().copied())
+        .chain(project_id.bytes())
+    {
+        hash ^= byte as u32;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    format!("tracker_{:08x}.json", hash)
+}
+
+/// Silently migrates the legacy `tracker_state.json` file to the tenant-scoped
+/// name when the new file does not yet exist.
+///
+/// This is a one-time, zero-friction operation: the user never sees a prompt and
+/// no data is lost. If both files already exist (e.g. two different projects were
+/// used before this version) the legacy file is left untouched so the user can
+/// review it manually.
+async fn migrate_tracker_state_file(
+    config_dir: &std::path::Path,
+    gitlab_url: &str,
+    project_id: &str,
+) {
+    let legacy = config_dir.join("tracker_state.json");
+    let target_name = tracker_state_file_name(gitlab_url, project_id);
+    let target = config_dir.join(&target_name);
+
+    // Only migrate when the legacy file exists and the new file does not.
+    if !legacy.exists() || target.exists() {
+        return;
+    }
+
+    match tokio::fs::rename(&legacy, &target).await {
+        Ok(_) => {
+            tracing::info!(
+                from = "tracker_state.json",
+                to = %target_name,
+                "Silently migrated tracker state to tenant-scoped file"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "Could not rename tracker_state.json to tenant-scoped file — \
+                 will create a fresh state file on next save"
+            );
+        }
+    }
+}
+
+/// Loads the tracker state and performs one-shot silent migrations:
+///   - Renames `tracker_state.json` to the tenant-scoped `tracker_<hash>.json`
+///   - Backfills `tracked_branches` from the state file into `projects.toml`
 ///
 /// Returns `(mrs, branches, last_known_branches)`.
 /// `branches` is sourced (in priority order) from:
 ///   1. `tracked_branches` in `projects.toml` (already migrated)
-///   2. `branches` in `tracker_state.json` (legacy — migrated on the spot)
+///   2. `branches` in the state file (legacy — migrated on the spot)
 ///   3. Empty vec (first run)
-pub async fn load_state_async() -> (Vec<SavedMr>, Vec<String>, HashMap<String, HashSet<String>>) {
-    if let Some(config_dir) = get_save_dir() {
-        let path = config_dir.join("tracker_state.json");
-        if let Ok(content) = tokio::fs::read_to_string(path).await {
-            if let Ok(state) = serde_json::from_str::<SavedState>(&content) {
-                // One-shot migration: if tracker_state.json has branches and
-                // projects.toml does not yet, backfill projects.toml now.
-                if !state.branches.is_empty() {
-                    let mut cfg = load_projects_toml().await;
-                    let needs_migration = cfg
-                        .projects
-                        .first()
-                        .map(|p| p.tracked_branches.is_none())
-                        .unwrap_or(false);
-                    if needs_migration {
-                        if let Some(entry) = cfg.projects.first_mut() {
-                            entry.tracked_branches = Some(state.branches.clone());
-                            save_projects_toml(&cfg).await;
-                            tracing::info!(
-                                "Migrated tracked branches from tracker_state.json to projects.toml"
-                            );
-                        }
+pub async fn load_state_async(
+    gitlab_url: &str,
+    project_id: &str,
+) -> (Vec<SavedMr>, Vec<String>, HashMap<String, HashSet<String>>) {
+    let Some(config_dir) = get_save_dir() else {
+        return (vec![], vec![], HashMap::new());
+    };
+
+    // One-shot silent rename: tracker_state.json → tracker_<hash>.json.
+    migrate_tracker_state_file(&config_dir, gitlab_url, project_id).await;
+
+    let file_name = tracker_state_file_name(gitlab_url, project_id);
+    let path = config_dir.join(&file_name);
+
+    if let Ok(content) = tokio::fs::read_to_string(&path).await {
+        if let Ok(state) = serde_json::from_str::<SavedState>(&content) {
+            // One-shot migration: if the state file has branches and
+            // projects.toml does not yet, backfill projects.toml now.
+            if !state.branches.is_empty() {
+                let mut cfg = load_projects_toml().await;
+                let needs_migration = cfg
+                    .projects
+                    .first()
+                    .map(|p| p.tracked_branches.is_none())
+                    .unwrap_or(false);
+                if needs_migration {
+                    if let Some(entry) = cfg.projects.first_mut() {
+                        entry.tracked_branches = Some(state.branches.clone());
+                        save_projects_toml(&cfg).await;
+                        tracing::info!(
+                            "Migrated tracked branches from {} to projects.toml",
+                            file_name
+                        );
                     }
                 }
-                return (state.mrs, state.branches, state.last_known_branches);
             }
+            return (state.mrs, state.branches, state.last_known_branches);
         }
     }
+
     (vec![], vec![], HashMap::new())
 }
 
 pub async fn save_state_async(
     mrs: &[TrackedMr],
     last_known_branches: &HashMap<String, HashSet<String>>,
+    gitlab_url: &str,
+    project_id: &str,
 ) {
     let state = SavedState {
         mrs: mrs
@@ -930,7 +1012,8 @@ pub async fn save_state_async(
 
     if let Ok(json) = serde_json::to_string_pretty(&state) {
         if let Some(config_dir) = get_save_dir() {
-            let path = config_dir.join("tracker_state.json");
+            let file_name = tracker_state_file_name(gitlab_url, project_id);
+            let path = config_dir.join(file_name);
             let _ = tokio::fs::create_dir_all(&config_dir).await;
             let _ = tokio::fs::write(path, json).await;
         }

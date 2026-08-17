@@ -735,7 +735,13 @@ pub async fn handle_key_event(
                 // Space toggles the flagged state of the selected MR and persists immediately.
                 KeyCode::Char(' ') => {
                     if app.toggle_flag_selected().is_some() {
-                        save_state_async(&app.mrs, last_known_branches).await;
+                        save_state_async(
+                            &app.mrs,
+                            last_known_branches,
+                            &app.base_url.clone(),
+                            &app.project_id.clone(),
+                        )
+                        .await;
                     }
                 }
 
@@ -774,7 +780,13 @@ pub async fn handle_key_event(
                             } else if selected >= app.mrs.len() {
                                 app.table_state.select(Some(app.mrs.len() - 1));
                             }
-                            save_state_async(&app.mrs, last_known_branches).await;
+                            save_state_async(
+                                &app.mrs,
+                                last_known_branches,
+                                &app.base_url.clone(),
+                                &app.project_id.clone(),
+                            )
+                            .await;
                         }
                     }
                 }
@@ -805,7 +817,13 @@ async fn handle_enter(
         let to_remove = value.trim_start_matches('-').to_string();
         if to_remove.chars().all(|c| c.is_numeric()) {
             app.mrs.retain(|m| m.id != to_remove);
-            save_state_async(&app.mrs, last_known_branches).await;
+            save_state_async(
+                &app.mrs,
+                last_known_branches,
+                &app.base_url.clone(),
+                &app.project_id.clone(),
+            )
+            .await;
         } else {
             app.branches.retain(|b| b != &to_remove);
             // Branches live in projects.toml — persist there, not in tracker_state.json.
@@ -852,7 +870,13 @@ async fn handle_enter(
                 diff_stats: None,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
-            save_state_async(&app.mrs, last_known_branches).await;
+            save_state_async(
+                &app.mrs,
+                last_known_branches,
+                &app.base_url.clone(),
+                &app.project_id.clone(),
+            )
+            .await;
 
             let ctx = build_fetch_context(app);
             spawn_mr_fetch(
