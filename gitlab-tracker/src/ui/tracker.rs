@@ -11,6 +11,7 @@
 
 use crate::models::TrackedMr;
 use crate::ui::theme;
+use crate::utils::format_relative_date;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use std::collections::HashMap;
@@ -214,9 +215,15 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
         ]));
     }
     if let Some(start) = &ticket.start_date {
+        // Append T00:00:00Z so format_relative_date can parse the date-only string.
+        let iso_for_relative = format!("{}T00:00:00Z", start);
+        let relative = format_relative_date(&iso_for_relative);
         lines.push(Line::from(vec![
             Span::raw("Start    : "),
-            Span::styled(start.clone(), Style::default().fg(theme::MUTED)),
+            Span::styled(
+                format!("{}  ({})", start, relative),
+                Style::default().fg(theme::MUTED),
+            ),
         ]));
     }
 

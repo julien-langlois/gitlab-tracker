@@ -1,6 +1,72 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
+
 pub const RELEVANCE_THRESHOLD: f64 = 0.70;
+
+/// Formats an ISO 8601 timestamp string into a human-readable relative date label.
+///
+/// Returns labels such as "à l'instant", "il y a 5 min", "Hier", "Il y a 3 jours", etc.
+/// Falls back to a compact absolute date ("2024-06-01 14:32") when the timestamp
+/// cannot be parsed or when the difference exceeds 30 days.
+pub fn format_relative_date(iso: &str) -> String {
+    let Ok(dt) = iso.parse::<DateTime<Utc>>() else {
+        // Graceful fallback: show a compact absolute date (drop sub-seconds and TZ).
+        return iso.get(..19).unwrap_or(iso).replace('T', " ");
+    };
+
+    let now = Utc::now();
+    let diff = now.signed_duration_since(dt);
+    let secs = diff.num_seconds();
+    let minutes = diff.num_minutes();
+    let hours = diff.num_hours();
+    let days = diff.num_days();
+
+    // Handle future dates (e.g. milestone due dates in the future).
+    if secs < 0 {
+        let future_diff = dt.signed_duration_since(now);
+        let future_days = future_diff.num_days();
+        let future_hours = future_diff.num_hours();
+        let future_minutes = future_diff.num_minutes();
+        let future_secs = future_diff.num_seconds();
+
+        let future_months = future_days / 30;
+        let future_years = future_days / 365;
+
+        return match (future_secs, future_minutes, future_hours, future_days) {
+            (s, _, _, _) if s < 60 => "just now".to_string(),
+            (_, m, _, _) if m < 60 => format!("in {} min", m),
+            (_, _, h, _) if h < 24 => format!("in {}h", h),
+            (_, _, _, 1) => "tomorrow".to_string(),
+            (_, _, _, d) if d < 7 => format!("in {} days", d),
+            (_, _, _, d) if d < 14 => "next week".to_string(),
+            (_, _, _, d) if d < 30 => format!("in {} weeks", d / 7),
+            (_, _, _, d) if d < 60 => "in about a month".to_string(),
+            _ if future_years >= 1 => format!(
+                "in {} year{}",
+                future_years,
+                if future_years > 1 { "s" } else { "" }
+            ),
+            _ => format!("in {} months", future_months),
+        };
+    }
+
+    let months = days / 30;
+    let years = days / 365;
+
+    match (secs, minutes, hours, days) {
+        (s, _, _, _) if s < 60 => "just now".to_string(),
+        (_, m, _, _) if m < 60 => format!("{} min ago", m),
+        (_, _, h, _) if h < 24 => format!("{}h ago", h),
+        (_, _, _, 1) => "yesterday".to_string(),
+        (_, _, _, d) if d < 7 => format!("{} days ago", d),
+        (_, _, _, d) if d < 14 => "last week".to_string(),
+        (_, _, _, d) if d < 30 => format!("{} weeks ago", d / 7),
+        (_, _, _, d) if d < 60 => "about a month ago".to_string(),
+        _ if years >= 1 => format!("{} year{} ago", years, if years > 1 { "s" } else { "" }),
+        _ => format!("{} months ago", months),
+    }
+}
 
 pub fn calculate_relevance(mr_title: &str, commit_msg: &str) -> f64 {
     let extract_keywords = |text: &str| -> HashSet<String> {

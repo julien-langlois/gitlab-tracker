@@ -2,6 +2,7 @@ use crate::config::AppConfig;
 use crate::models::{GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr};
 use crate::ui::table::badge_label;
 use crate::ui::theme;
+use crate::utils::format_relative_date;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -39,11 +40,15 @@ pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
 fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
     let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
 
-    // Format the creation timestamp to a compact readable form (drop sub-seconds and timezone).
+    // Format the creation timestamp as "YYYY-MM-DD HH:MM  (relative label)".
     let date_display = pipeline
         .created_at
         .as_deref()
-        .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+        .map(|s| {
+            let absolute = s.get(..16).unwrap_or(s).replace('T', " ");
+            let relative = format_relative_date(s);
+            format!("{}  ({})", absolute, relative)
+        })
         .unwrap_or_else(|| "unknown date".to_string());
 
     let mut lines = vec![Line::from(vec![
@@ -166,11 +171,15 @@ fn section_header(title: &'static str) -> Line<'static> {
 }
 
 pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
-    // Format ISO 8601 timestamp to a more readable form (date + time, drop sub-seconds).
+    // Format the updated_at timestamp as "YYYY-MM-DD HH:MM  (relative label)".
     let updated_at_display = mr
         .updated_at
         .as_deref()
-        .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+        .map(|s| {
+            let absolute = s.get(..16).unwrap_or(s).replace('T', " ");
+            let relative = format_relative_date(s);
+            format!("{}  ({})", absolute, relative)
+        })
         .unwrap_or_else(|| "Unknown".to_string());
 
     // Compute the activity badge (icon + color) based on configurable thresholds.
@@ -316,13 +325,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         Span::styled(mr.milestone.clone(), Style::default().fg(Color::Cyan)),
     ]));
 
-    // Milestone due date — show with urgency colouring when set.
+    // Milestone due date — show absolute date + relative label, with urgency colouring.
+    // The due_date field is YYYY-MM-DD (date only), so we append T00:00:00Z for parsing.
     let (due_text, due_color) = match mr.milestone_due_date.as_deref() {
         None | Some("") => ("Not set".to_string(), Color::DarkGray),
         Some(date) => {
             // Colour the date based on proximity: red if past, yellow if within 7 days,
-            // green otherwise. We do a simple lexicographic comparison against today's date
-            // (YYYY-MM-DD format sorts correctly without parsing).
+            // green otherwise. Lexicographic comparison works for YYYY-MM-DD format.
             let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
             let in_7_days = (chrono::Utc::now() + chrono::Duration::days(7))
                 .format("%Y-%m-%d")
@@ -334,7 +343,10 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             } else {
                 Color::Green
             };
-            (date.to_string(), color)
+            // Append T00:00:00Z so format_relative_date can parse it as a full timestamp.
+            let iso_for_relative = format!("{}T00:00:00Z", date);
+            let relative = format_relative_date(&iso_for_relative);
+            (format!("{}  ({})", date, relative), color)
         }
     };
     lines.push(Line::from(vec![
@@ -382,10 +394,15 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     // merged_by / merged_at — only shown for merged MRs.
     if mr.state == GitlabMrState::Merged {
         let merged_by_display = mr.merged_by.as_deref().unwrap_or("Unknown");
+        // Format the merged_at timestamp as "YYYY-MM-DD HH:MM  (relative label)".
         let merged_at_display = mr
             .merged_at
             .as_deref()
-            .map(|s| s.get(..19).unwrap_or(s).replace('T', " "))
+            .map(|s| {
+                let absolute = s.get(..16).unwrap_or(s).replace('T', " ");
+                let relative = format_relative_date(s);
+                format!("{}  ({})", absolute, relative)
+            })
             .unwrap_or_else(|| "Unknown".to_string());
         lines.push(Line::from(vec![
             Span::raw("Merged by: "),
