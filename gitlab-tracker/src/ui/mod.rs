@@ -7,6 +7,7 @@ use crate::app::{
     ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
     FILTER_PICKER_ENTRIES,
 };
+use crate::models::TrackedMr;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
@@ -86,27 +87,34 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         .border_style(pane_border_style(inspector_is_active))
         .title(inspector_title);
 
-    if let Some(selected) = app.table_state.selected() {
-        if let Some(mr) = app.mrs.get(selected) {
-            let rendered_text = match app.inspector_view {
-                InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
-                InspectorView::Pipelines => inspector::render_pipelines_text(mr),
-            };
+    // Resolve the selected MR from the *filtered* list before any mutable access to `app`.
+    // The iterator returned by visible_mrs() holds an immutable borrow on `app`, so we
+    // materialise the clone in a plain `let` binding — this drops the iterator (and the
+    // borrow) immediately, before the `if let` block that writes back to `app`.
+    let selected_inspector_mr: Option<TrackedMr> = app
+        .table_state
+        .selected()
+        .and_then(|i| app.visible_mrs().nth(i).cloned());
 
-            app.inspector_content_lines = rendered_text.lines.len() as u16;
-            app.inspector_pane_height = inspector_area.height.saturating_sub(2);
+    if let Some(mr) = selected_inspector_mr {
+        let rendered_text = match app.inspector_view {
+            InspectorView::MrInfo => inspector::render_safe_inspector_text(&mr, &app.config),
+            InspectorView::Pipelines => inspector::render_pipelines_text(&mr),
+        };
 
-            let inspector_paragraph = Paragraph::new(rendered_text)
-                .block(inspector_block)
-                .wrap(Wrap { trim: false })
-                .scroll((app.inspector_scroll, 0));
-            f.render_widget(inspector_paragraph, inspector_area);
-        } else {
-            f.render_widget(
-                Paragraph::new("Selected metadata unavailable.").block(inspector_block),
-                inspector_area,
-            );
-        }
+        app.inspector_content_lines = rendered_text.lines.len() as u16;
+        app.inspector_pane_height = inspector_area.height.saturating_sub(2);
+
+        let inspector_paragraph = Paragraph::new(rendered_text)
+            .block(inspector_block)
+            .wrap(Wrap { trim: false })
+            .scroll((app.inspector_scroll, 0));
+        f.render_widget(inspector_paragraph, inspector_area);
+    } else if app.table_state.selected().is_some() {
+        f.render_widget(
+            Paragraph::new("Selected metadata unavailable.").block(inspector_block),
+            inspector_area,
+        );
     } else {
         f.render_widget(
             Paragraph::new(
@@ -120,40 +128,44 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 
     // --- Tracker Pane (lower-right) — only when a ticket is linked ---
     if let Some(area) = tracker_area {
-        if let Some(selected) = app.table_state.selected() {
-            if let Some(mr) = app.mrs.get(selected) {
-                let tracker_is_active = app.active_pane == ActivePane::Tracker;
+        // Same pattern: resolve + clone before any mutable write to `app`.
+        let selected_tracker_mr: Option<TrackedMr> = app
+            .table_state
+            .selected()
+            .and_then(|i| app.visible_mrs().nth(i).cloned());
 
-                let tracker_title = match (tracker_is_active, app.tracker_view) {
-                    (true, TrackerView::TicketInfo) => {
-                        " Tracker [FOCUS] │ [P]: Time Log │ [L]: Log Time │ [T]: Open URL "
-                    }
-                    (false, TrackerView::TicketInfo) => " Tracker │ [T]: Focus ",
-                    (true, TrackerView::TimeLog) => {
-                        " Time Log [FOCUS] │ [P]: Ticket Info │ [L]: Log Time "
-                    }
-                    (false, TrackerView::TimeLog) => " Time Log │ [T]: Focus ",
-                };
+        if let Some(mr) = selected_tracker_mr {
+            let tracker_is_active = app.active_pane == ActivePane::Tracker;
 
-                let tracker_block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(pane_border_style(tracker_is_active))
-                    .title(tracker_title);
+            let tracker_title = match (tracker_is_active, app.tracker_view) {
+                (true, TrackerView::TicketInfo) => {
+                    " Tracker [FOCUS] │ [P]: Time Log │ [L]: Log Time │ [T]: Open URL "
+                }
+                (false, TrackerView::TicketInfo) => " Tracker │ [T]: Focus ",
+                (true, TrackerView::TimeLog) => {
+                    " Time Log [FOCUS] │ [P]: Ticket Info │ [L]: Log Time "
+                }
+                (false, TrackerView::TimeLog) => " Time Log │ [T]: Focus ",
+            };
 
-                let rendered_text = match app.tracker_view {
-                    TrackerView::TicketInfo => tracker::render_ticket_info(mr, &app.tracker_colors),
-                    TrackerView::TimeLog => tracker::render_time_log(mr, &app.time_entries),
-                };
+            let tracker_block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(pane_border_style(tracker_is_active))
+                .title(tracker_title);
 
-                app.tracker_content_lines = rendered_text.lines.len() as u16;
-                app.tracker_pane_height = area.height.saturating_sub(2);
+            let rendered_text = match app.tracker_view {
+                TrackerView::TicketInfo => tracker::render_ticket_info(&mr, &app.tracker_colors),
+                TrackerView::TimeLog => tracker::render_time_log(&mr, &app.time_entries),
+            };
 
-                let tracker_paragraph = Paragraph::new(rendered_text)
-                    .block(tracker_block)
-                    .wrap(Wrap { trim: false })
-                    .scroll((app.tracker_scroll, 0));
-                f.render_widget(tracker_paragraph, area);
-            }
+            app.tracker_content_lines = rendered_text.lines.len() as u16;
+            app.tracker_pane_height = area.height.saturating_sub(2);
+
+            let tracker_paragraph = Paragraph::new(rendered_text)
+                .block(tracker_block)
+                .wrap(Wrap { trim: false })
+                .scroll((app.tracker_scroll, 0));
+            f.render_widget(tracker_paragraph, area);
         }
     }
 

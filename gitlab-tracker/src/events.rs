@@ -573,7 +573,8 @@ pub async fn handle_key_event(
                 // Open the MR URL in the default browser.
                 KeyCode::Char('o') | KeyCode::Char('O') => {
                     if let Some(selected) = app.table_state.selected() {
-                        if let Some(mr) = app.mrs.get(selected) {
+                        // Use visible_mrs() so the index is relative to the filtered list.
+                        if let Some(mr) = app.visible_mrs().nth(selected) {
                             let target_url = if !mr.web_url.is_empty() {
                                 mr.web_url.clone()
                             } else {
@@ -590,7 +591,8 @@ pub async fn handle_key_event(
                 // [Y]ank — copy the git clone command for the MR source branch to clipboard.
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     if let Some(selected) = app.table_state.selected() {
-                        if let Some(mr) = app.mrs.get(selected) {
+                        // Use visible_mrs() so the index is relative to the filtered list.
+                        if let Some(mr) = app.visible_mrs().nth(selected) {
                             let ssh_url = mr
                                 .web_url
                                 .split("/-/")
@@ -978,7 +980,8 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         // Open the MR URL in the default browser (useful even in demo mode).
         KeyCode::Char('o') | KeyCode::Char('O') => {
             if let Some(selected) = app.table_state.selected() {
-                if let Some(mr) = app.mrs.get(selected) {
+                // Use visible_mrs() so the index is relative to the filtered list.
+                if let Some(mr) = app.visible_mrs().nth(selected) {
                     let target_url = if !mr.web_url.is_empty() {
                         mr.web_url.clone()
                     } else {
@@ -995,7 +998,8 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         // [Y]ank — copy the git clone command for the MR source branch to clipboard.
         KeyCode::Char('y') | KeyCode::Char('Y') => {
             if let Some(selected) = app.table_state.selected() {
-                if let Some(mr) = app.mrs.get(selected) {
+                // Use visible_mrs() so the index is relative to the filtered list.
+                if let Some(mr) = app.visible_mrs().nth(selected) {
                     let ssh_url = mr
                         .web_url
                         .split("/-/")
