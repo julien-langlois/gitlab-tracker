@@ -1254,6 +1254,7 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "serde_yaml",
  "tokio",
  "toml",
  "tracing",

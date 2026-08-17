@@ -18,7 +18,7 @@ path = "src/main.rs"
 [features]
 default = ["notifications"]
 notifications = ["gitlab-tracker-notify/desktop"]
-redmine = ["dep:gitlab-tracker-redmine"]
+redmine = ["dep:gitlab-tracker-redmine", "dep:serde_yaml"]
 
 [dependencies]
 gitlab-tracker-notify  = { version = "0.3.5", path = "../gitlab-tracker-notify" }
@@ -41,6 +41,7 @@ clap = { version = "4.6.3", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 futures = "0.3"
 toml = { version = "0.8", features = ["parse"] }
+serde_yaml = { version = "0.9", optional = true }
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

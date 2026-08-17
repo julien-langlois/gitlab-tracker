@@ -63,6 +63,51 @@ pub struct ProjectEntry {
     /// Keys may contain `::` and `*` — serialised as quoted TOML keys automatically.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label_colors: Option<std::collections::HashMap<String, crate::config::LabelColorConfig>>,
+
+    /// Optional external tracker integration for this specific project.
+    ///
+    /// Each project can point to a **different** tracker instance (multi-tenant).
+    /// The `provider` field selects the plugin; all other fields are provider-specific
+    /// and parsed by the plugin itself — `ProjectEntry` stays closed to modification
+    /// when new providers are added.
+    ///
+    /// The API token for each instance is stored in the OS keyring keyed by
+    /// `tracker.url`, so multiple instances never clobber each other's credentials.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// [project.tracker]
+    /// provider = "redmine"
+    /// url      = "https://redmine.example.com"
+    ///
+    /// [project.tracker.tracker_type_colors]
+    /// "Bug" = { bg = "red", fg = "white" }
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tracker: Option<TrackerConfig>,
+}
+
+/// Provider-agnostic tracker configuration embedded in each `[[project]]` entry.
+///
+/// The `provider` field acts as a discriminant that tells the runtime which
+/// plugin crate to instantiate. All remaining fields are forwarded opaquely to
+/// the plugin — `projects.toml` and `storage.rs` never need to change when a
+/// new provider is added.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackerConfig {
+    /// Plugin identifier — must match a compiled-in feature flag name.
+    /// Accepted values (case-insensitive): `"redmine"`, `"jira"` (future), …
+    pub provider: String,
+
+    /// Base URL of the tracker instance (e.g. "https://redmine.example.com").
+    /// Used both as the API root and as the OS keyring account key.
+    pub url: String,
+
+    /// All remaining provider-specific fields (colours, patterns, …) are kept
+    /// as a raw TOML table and forwarded to the plugin for deserialisation.
+    /// Unknown keys are silently ignored, keeping forward-compatibility intact.
+    #[serde(flatten)]
+    pub extra: toml::Table,
 }
 
 /// Root structure of `projects.toml`.
@@ -190,6 +235,16 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .filter(|m: &std::collections::HashMap<_, _>| !m.is_empty());
 
+    // Attempt a one-shot silent migration from the legacy `redmine.yaml` file.
+    // When the file exists and contains a non-empty URL, we populate the generic
+    // `[project.tracker]` section so the user is not re-prompted on upgrade.
+    // Compiled only when `--features redmine` is active; always `None` otherwise
+    // so vanilla builds never see a `TrackerConfig` populated here.
+    #[cfg(feature = "redmine")]
+    let tracker = try_migrate_redmine_yaml(&config_dir).await;
+    #[cfg(not(feature = "redmine"))]
+    let tracker: Option<TrackerConfig> = None;
+
     let entry = ProjectEntry {
         name: Some("Migrated from config.json".to_string()),
         gitlab_url: gitlab_url.clone(),
@@ -204,6 +259,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         activity_recent_days,
         visible_columns,
         label_colors,
+        tracker,
     };
 
     // Write projects.toml with the migrated values.
@@ -219,6 +275,67 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
     println!("✅ Project settings migrated from config.json to projects.toml\n");
 
     Some(entry)
+}
+
+/// Attempts a one-shot silent migration from the legacy `redmine.yaml` file into
+/// the generic `TrackerConfig` embedded in `ProjectEntry`.
+///
+/// Compiled only when `--features redmine` is active — `serde_yaml` is a
+/// dependency of `gitlab-tracker-redmine`, not of the vanilla binary.
+///
+/// Reads `redmine.yaml` as a raw YAML mapping so `storage.rs` never depends on
+/// `RedmineConfig` directly; the struct stays provider-agnostic at all times.
+///
+/// Returns `None` when the file is absent, unparseable, or the URL is empty.
+#[cfg(feature = "redmine")]
+async fn try_migrate_redmine_yaml(config_dir: &std::path::Path) -> Option<TrackerConfig> {
+    let yaml_path = config_dir.join("redmine.yaml");
+    let content = tokio::fs::read_to_string(&yaml_path).await.ok()?;
+
+    // Parse as a generic YAML mapping — no dependency on RedmineConfig.
+    let map: serde_yaml::Mapping = serde_yaml::from_str(&content).ok()?;
+
+    // The legacy field was called `redmine_url`; we normalise it to `url`.
+    let url = map
+        .get("redmine_url")
+        .and_then(|v| v.as_str())
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| v.trim_end_matches('/').to_string())?;
+
+    // Forward every remaining field (ticket_patterns, *_colors, …) as raw TOML
+    // so the Redmine plugin can still deserialise them without any glue code here.
+    let mut extra = toml::Table::new();
+    for (k, v) in &map {
+        let key = match k.as_str() {
+            Some(s) if s != "redmine_url" => s.to_string(),
+            _ => continue,
+        };
+        // Best-effort YAML → TOML value conversion via JSON as an intermediate.
+        if let Ok(json) = serde_json::to_value(v) {
+            if let Ok(toml_val) = toml::Value::try_from(json) {
+                extra.insert(key, toml_val);
+            }
+        }
+    }
+
+    tracing::info!(url = %url, "Migrated Redmine config from redmine.yaml to projects.toml");
+    println!("✅ Redmine config migrated from redmine.yaml to projects.toml");
+
+    // Remove the legacy file so it is never read again and the user does not
+    // have to clean it up manually. Failure is non-fatal — the migration result
+    // is still returned and written to projects.toml.
+    match tokio::fs::remove_file(&yaml_path).await {
+        Ok(_) => println!("🗑️  redmine.yaml removed (settings are now in projects.toml)\n"),
+        Err(e) => {
+            tracing::warn!(error = %e, path = ?yaml_path, "Could not remove legacy redmine.yaml")
+        }
+    }
+
+    Some(TrackerConfig {
+        provider: "redmine".to_string(),
+        url,
+        extra,
+    })
 }
 
 /// Enriches a `ProjectEntry` that is missing fields by reading them from the
@@ -368,6 +485,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             activity_recent_days: None,
             visible_columns: None,
             label_colors: None,
+            tracker: None,
         };
     }
 
@@ -385,10 +503,36 @@ pub async fn resolve_active_project() -> ProjectEntry {
 
         // Backfill project-scoped fields that were absent when projects.toml
         // was first created (one-time enrichment from config.json).
-        if try_enrich_from_config_json(entry).await {
+        let needs_save_json = try_enrich_from_config_json(entry).await;
+        if needs_save_json {
             tracing::info!(
                 "Backfilled project-scoped settings into projects.toml from config.json"
             );
+        }
+
+        // One-shot silent migration from legacy `redmine.yaml` — runs only when
+        // [project.tracker] is absent from the active entry and a redmine.yaml
+        // file still exists on disk. After this the section is written to
+        // projects.toml and the migration never runs again.
+        #[cfg(feature = "redmine")]
+        let needs_save_redmine = if entry.tracker.is_none() {
+            if let Some(config_dir) = get_save_dir() {
+                if let Some(tracker) = try_migrate_redmine_yaml(&config_dir).await {
+                    entry.tracker = Some(tracker);
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        #[cfg(not(feature = "redmine"))]
+        let needs_save_redmine = false;
+
+        if needs_save_json || needs_save_redmine {
             save_projects_toml(&projects_cfg).await;
         }
 
@@ -447,6 +591,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         activity_recent_days: None,
         visible_columns: None,
         label_colors: None,
+        tracker: None,
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;

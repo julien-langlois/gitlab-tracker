@@ -10,7 +10,7 @@ use gitlab_tracker_core::{
     Activity, LabelColorMaps, LinkedTicket, TimeEntry, TimeEntryRequest, TrackerProvider,
 };
 
-pub use config::{load_or_create_config, RedmineConfig};
+pub use config::RedmineConfig;
 pub use keyring::get_or_prompt_token;
 
 /// Redmine implementation of the [`TrackerProvider`] contract.
@@ -77,8 +77,7 @@ impl TrackerProvider for RedmineProvider {
 
     async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket> {
         let issue =
-            client::fetch_issue(&self.http, &self.config.redmine_url, &self.token, ticket_id)
-                .await?;
+            client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await?;
 
         Some(LinkedTicket {
             schema_version: LINKED_TICKET_SCHEMA_VERSION,
@@ -103,7 +102,7 @@ impl TrackerProvider for RedmineProvider {
     fn ticket_url(&self, ticket_id: &str) -> String {
         format!(
             "{}/issues/{}",
-            self.config.redmine_url.trim_end_matches('/'),
+            self.config.url.trim_end_matches('/'),
             ticket_id
         )
     }
@@ -112,15 +111,14 @@ impl TrackerProvider for RedmineProvider {
     ///
     /// Delegates to `GET /enumerations/time_entry_activities.json`.
     async fn fetch_activities(&self) -> Vec<Activity> {
-        client::fetch_activities(&self.http, &self.config.redmine_url, &self.token).await
+        client::fetch_activities(&self.http, &self.config.url, &self.token).await
     }
 
     /// Fetches all time entries recorded on a Redmine issue.
     ///
     /// Delegates to `GET /time_entries.json?issue_id={id}`.
     async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> {
-        client::fetch_time_entries(&self.http, &self.config.redmine_url, &self.token, ticket_id)
-            .await
+        client::fetch_time_entries(&self.http, &self.config.url, &self.token, ticket_id).await
     }
 
     /// Submits a new time entry on the given Redmine issue.
@@ -134,12 +132,11 @@ impl TrackerProvider for RedmineProvider {
     async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> {
         // Fetch the issue to get remaining_hours / estimated_hours for ETC computation.
         // A None here simply means the ETC update step will be skipped — not an error.
-        let issue =
-            client::fetch_issue(&self.http, &self.config.redmine_url, &self.token, ticket_id).await;
+        let issue = client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await;
 
         client::log_time(
             &self.http,
-            &self.config.redmine_url,
+            &self.config.url,
             &self.token,
             ticket_id,
             entry,

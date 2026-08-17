@@ -187,26 +187,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // of the program is unaffected; the Zeroizing wrapper is immediately dropped.
     let token = get_or_prompt_token().to_string();
 
-    // ── Optional Redmine integration ─────────────────────────────────────────
-    // Loads config + prompts for the API token only when the `redmine` feature
-    // is compiled in. The provider is `None` when the user skips the token prompt,
-    // keeping the integration fully inactive without affecting the rest of the app.
+    // ── Optional tracker integration ──────────────────────────────────────────
+    // The tracker config lives inside the active `ProjectEntry` under the generic
+    // `[project.tracker]` key. The `provider` field selects the plugin at runtime;
+    // all provider-specific fields are forwarded via `extra: toml::Table`.
+    //
+    // This block is the only place that maps a provider name to a concrete plugin
+    // crate — adding a new provider (Jira, Linear, …) means adding one `else if`
+    // branch here and a new feature-gated crate, without touching any other file.
     #[cfg(feature = "redmine")]
     let redmine_provider: Option<app::TrackerHandle> = {
         use std::sync::Arc;
-        let mut redmine_cfg = gitlab_tracker_redmine::config::load_or_create_config().await;
-        // Prompt for the Redmine URL if it is missing (first run or unconfigured).
-        gitlab_tracker_redmine::config::ensure_redmine_config(&mut redmine_cfg).await;
-        // Skip integration silently if no Redmine URL is configured yet.
-        if redmine_cfg.redmine_url.trim().is_empty() {
-            tracing::info!("Redmine URL not configured — integration disabled");
-            None
-        } else {
-            gitlab_tracker_redmine::keyring::get_or_prompt_token().map(|tok| {
-                let provider =
-                    gitlab_tracker_redmine::RedmineProvider::new(redmine_cfg, tok.to_string());
-                Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
-            })
+
+        // Extract the generic tracker config from the active project entry.
+        // If absent or pointing to a different provider, the Redmine integration
+        // stays inactive without any error.
+        let tracker_cfg = project
+            .tracker
+            .as_ref()
+            .filter(|t| t.provider.eq_ignore_ascii_case("redmine"));
+
+        match tracker_cfg {
+            None => {
+                // No [project.tracker] section configured — integration is opt-in,
+                // so we stay silent and inactive. The user enables Redmine by adding
+                // the section manually to projects.toml (or via a future setup command).
+                // We never prompt here to avoid asking on every startup.
+                tracing::info!("No [project.tracker] section found — tracker integration disabled");
+                None
+            }
+            Some(cfg) => {
+                // Deserialise the provider-specific fields from the opaque `extra`
+                // table — only the Redmine plugin knows which keys it expects.
+                let mut redmine_cfg: gitlab_tracker_redmine::config::RedmineConfig =
+                    cfg.extra.clone().try_into().unwrap_or_default();
+                redmine_cfg.url = cfg.url.clone();
+
+                // Apply REDMINE_URL env override if set.
+                redmine_cfg.apply_env_override();
+
+                if !redmine_cfg.is_active() {
+                    tracing::warn!(
+                        "[project.tracker] found but url is empty — integration disabled"
+                    );
+                    None
+                } else {
+                    tracing::info!(url = %redmine_cfg.url, "Redmine integration active (from projects.toml)");
+                    // Token is keyed by URL — each tenant instance is independent.
+                    gitlab_tracker_redmine::keyring::get_or_prompt_token(&redmine_cfg.url).map(
+                        |tok| {
+                            let provider = gitlab_tracker_redmine::RedmineProvider::new(
+                                redmine_cfg,
+                                tok.to_string(),
+                            );
+                            Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
+                        },
+                    )
+                }
+            }
         }
     };
 
