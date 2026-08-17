@@ -27,28 +27,27 @@
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
 * ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
-* **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `config.json` or the `GITLAB_REFRESH_INTERVAL_SECS` environment variable.
-* 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `config.json` or environment variables (`ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`).
+* **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `refresh_interval_secs` in `projects.toml`.
+* 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `activity_recent_days` / `activity_stale_days` in `projects.toml`.
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🎯 **Review Complexity Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded complexity indicator calibrated to your tech stack:
   * In the **table**, the optional **Complexity** column shows a single dot — 🟢 Easy, 🟡 Medium, 🔴 Complex — keeping the layout compact.
   * In the **side Inspector**, the full breakdown is always visible: file/line counts, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
 
-  The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile can be set per-project in `config.json`:
+  The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
 
-  ```json
-  "diff_difficulty_profile": {
-    "name": "Drupal",
-    "easy_threshold": 400,
-    "hard_threshold": 3000
-  }
+  ```toml
+  [project.complexity_profile]
+  name           = "Drupal"
+  easy_threshold = 300
+  hard_threshold = 2000
   ```
 
   Suggested presets:
 
   | Tech stack | `easy_threshold` | `hard_threshold` | Rationale |
   | :--- | :--- | :--- | :--- |
-  | **Drupal** | `400` | `3000` | Lots of YAML/config files that are verbose but lightweight to review |
+  | **Drupal** | `300` | `2000` | Lots of YAML/config files that are verbose but lightweight to review |
   | **Symfony / PHP** | `200` | `1200` | Denser business logic, typically smaller PRs |
   | **Java / Spring** | `100` | `600` | Highly logic-dense lines; verbosity adds review cost |
   | **TypeScript / React** | `150` | `900` | JSX inflates line counts but remains readable |
@@ -65,7 +64,7 @@
   | 3 | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
 
   The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
-* 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `config.json` and persisted across restarts — no manual file editing required. Available optional columns:
+* 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `projects.toml` and persisted across restarts — no manual file editing required. Available optional columns:
 
   | Column | Description |
   | :--- | :--- |
@@ -74,9 +73,9 @@
   | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
   | **Milestone** | The associated milestone title |
   | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
-  | **Complexity** | Review complexity dot — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `diff_difficulty_profile` |
+  | **Complexity** | Review complexity dot — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
 
-  All columns are hidden by default to keep the layout compact. They can also be enabled statically via `visible_columns` in `config.json` (see configuration section below).
+  All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
   * `Flagged ★` — only your manually flagged MRs
   * **GitLab state** — `Opened`, `Merged`, or `Closed`
@@ -116,11 +115,11 @@
 
 ## 🔑 Authentication & Configuration
 
-The application requires your GitLab Project configuration and an API Personal Access Token.
+The application requires a GitLab project configuration and an API Personal Access Token.
 
 ### Step 1: Set up environment variables (optional)
 
-> **✨ Zero-config first run:** If no `.env` file or `config.json` is present, `gitlab-tracker` will interactively prompt you for the required values on first launch and persist them automatically to `config.json`. No manual file setup is needed.
+> **✨ Zero-config first run:** If no `.env` file or `projects.toml` is present, `gitlab-tracker` will interactively prompt you for the required values on first launch and persist them automatically to `projects.toml`. No manual file setup is needed.
 
 ```text
  ┌──────────────────────────────────────────────────────────┐
@@ -128,6 +127,7 @@ The application requires your GitLab Project configuration and an API Personal A
  ├──────────────────────────────────────────────────────────┤
  │ 🌐 GitLab URL [https://gitlab.com]: _                    │
  │ 🔢 GitLab Project ID: _                                  │
+ │ 🏷️  Project name (optional): _                           │
  │ 🔑 GitLab Personal Access Token: _                       │
  └──────────────────────────────────────────────────────────┘
 ```
@@ -146,21 +146,11 @@ For teams and CI pipelines, you can still pre-configure everything via a `.env` 
    # Required: Your target GitLab Project ID
    GITLAB_PROJECT_ID=12345678
 
-   # Optional: Custom self-hosted GitLab instance (Defaults to https://gitlab.com if omitted)
+   # Optional: Custom self-hosted GitLab instance (defaults to https://gitlab.com if omitted)
    GITLAB_URL=https://gitlab.my-company.com
 
-   # Optional: Override token via environment variable (Not recommended for disk storage)
+   # Optional: Override token via environment variable (not recommended for disk storage)
    # GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
-
-   # Optional: Override initial tracked branches for new sessions (comma-separated)
-   DEFAULT_BRANCHES="main,develop"
-
-   # Optional: Filter table column tags by prefix (comma-separated)
-   TABLE_LABEL_PREFIXES="deploy::,review::"
-
-   # Optional: Activity badge thresholds in the Context Inspector (in days)
-   ACTIVITY_RECENT_DAYS=2   # 🟢 Green if updated within N days (default: 2)
-   ACTIVITY_STALE_DAYS=7    # 🔴 Red if not updated for N days (default: 7)
    ```
 
 ---
@@ -171,8 +161,10 @@ Settings are resolved in the following order (highest to lowest priority):
 
 1. **System Environment Variables & Local `.env`** (current directory)
 2. **Global `.env`** (`~/.config/gitlab-tracker/.env`)
-3. **User Config File** (`~/.config/gitlab-tracker/config.json`)
+3. **`projects.toml`** (`~/.config/gitlab-tracker/projects.toml`) — canonical config file
 4. **Built-in Fallback Defaults** (`https://gitlab.com`, `["main"]` for default branch)
+
+> **Upgrading from an older version?** If you have a `config.json` from a previous release, the app performs a **silent one-time migration** on first startup: all settings are read from `config.json`, written into `projects.toml`, and the old file is no longer used. Nothing breaks — you will simply see a `✅ Project settings migrated` message once.
 
 ---
 
@@ -188,8 +180,8 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
  ├──────────────────────────────────────────────────────────────┤
  │ GITLAB_PROJECT_ID & GITLAB_URL                               │
  │   1. Environment variable / .env file                        │
- │   2. ~/.config/gitlab-tracker/config.json                    │
- │   3. Interactive CLI prompt → saved to config.json           │
+ │   2. ~/.config/gitlab-tracker/projects.toml                  │
+ │   3. Interactive CLI prompt → saved to projects.toml         │
  ├──────────────────────────────────────────────────────────────┤
  │ GITLAB_TOKEN                                                 │
  │   1. GITLAB_TOKEN environment variable (if set)              │
@@ -199,15 +191,15 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
 ```
 
 1. **First-Run Onboarding:**
-   If no `GITLAB_TOKEN` is found in your `.env` or environment, the application will prompt you interactively in the terminal on its initial launch:
+   If no project is configured yet, the application will prompt you interactively on first launch:
 
    ```text
-   🌐 No GitLab URL found in config or environment.
-      Leave empty to use the default (https://gitlab.com)
+   ⚙️  No project configured yet. Let's set one up.
+
    GitLab URL [https://gitlab.com]: https://gitlab.my-company.com
-   🔢 No GitLab Project ID found in config or environment.
-   Please enter your GitLab Project ID: 12345678
-   ✅ Config saved to config.json!
+   GitLab Project ID: 12345678
+   Project name (optional label): My Project
+   ✅ Project saved to projects.toml!
 
    🔑 No GITLAB_TOKEN found in environment or system Keyring.
    Please enter your GitLab Personal Access Token: glpat-xxxxxxxxxxxx
@@ -225,84 +217,101 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
 
 ---
 
-### Step 3: UI, Default Branches & Label Customization (`config.json`)
+### Step 3: Project Configuration (`projects.toml`)
 
-On its first launch, the tool automatically generates a `config.json` file inside your OS user configuration directory:
+All settings — connection details, display preferences, branch lists, and label colours — live in a single TOML file per project:
 
-* **Linux:** `~/.config/gitlab-tracker/config.json`
-* **macOS:** `~/Library/Application Support/gitlab-tracker/config.json`
-* **Windows:** `C:\Users\<User>\AppData\Roaming\gitlab-tracker\config.json`
+* **Linux:** `~/.config/gitlab-tracker/projects.toml`
+* **macOS:** `~/Library/Application Support/gitlab-tracker/projects.toml`
+* **Windows:** `C:\Users\<User>\AppData\Roaming\gitlab-tracker\projects.toml`
 
-You can edit this file to adjust default environment branches, label badge colors, wildcard rules, and activity badge thresholds:
+The file supports **multiple projects** in a `[[project]]` array. The active project is the first entry with `active = true` (or the first entry overall when none is marked).
 
-```json
-{
-  "project_id": "12345678",
-  "gitlab_url": "https://gitlab.my-company.com",
-  "refresh_interval_secs": 900,
-  "default_branches": [
-    "main"
-  ],
-  "table_label_prefixes": [
-    "deploy::",
-    "review::"
-  ],
-  "activity_recent_days": 2,
-  "activity_stale_days": 7,
-  "visible_columns": {
-    "target_branch": false,
-    "labels": false,
-    "milestone": false
-  },
-  "label_colors": {
-    "deploy::*": {
-      "bg": "#2E7D32",
-      "fg": "white"
-    },
-    "review::approved": {
-      "bg": "magenta",
-      "fg": "white"
-    },
-    "review::*": {
-      "bg": "cyan",
-      "fg": "black"
-    },
-    "size::*": {
-      "bg": "dark_gray",
-      "fg": "white"
-    },
-    "bug": {
-      "bg": "#D32F2F",
-      "fg": "white"
-    }
-  }
-}
+#### Full annotated example
+
+```toml
+[[project]]
+name = "My Company — Backend"
+gitlab_url = "https://gitlab.my-company.com"
+project_id = "12345678"
+active = true
+
+# Branches whose pipeline status appears as columns in the MR table.
+default_branches = ["main", "staging"]
+
+# Branches currently tracked in the TUI (managed automatically via Insert mode).
+tracked_branches = ["main", "develop", "staging"]
+
+# Label prefixes shown as chips in the "Labels" table column.
+table_label_prefixes = ["deploy::", "review::"]
+
+# How often the MR list is refreshed from GitLab (in seconds).
+refresh_interval_secs = 900
+
+# Activity badge thresholds (in days) shown in the Context Inspector.
+activity_recent_days = 2   # 🟢 Active if updated within N days
+activity_stale_days  = 7   # 🔴 Stale if not updated for N days
+
+# Tech-stack calibration for the review-difficulty score.
+# Weighted formula: (additions + deletions) × 0.8 + files_changed × 0.2
+[project.complexity_profile]
+name            = "Drupal"
+easy_threshold  = 300    # score below this → 🟢 Easy
+hard_threshold  = 2000   # score above this → 🔴 Complex
+
+# Which optional columns are visible in the MR table.
+[project.visible_columns]
+activity      = false
+target_branch = false
+labels        = false
+milestone     = true
+notes         = false
+tracker_ticket = true
+diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 dot based on diff size)
+
+# Label colour overrides — exact names or wildcard patterns (e.g. "deploy::*").
+# Accepted colour values: named colours ("red", "cyan", "dark_gray", …) or hex codes ("#D32F2F").
+[project.label_colors]
+"bug"              = { bg = "red",      fg = "white" }
+"fix"              = { bg = "red",      fg = "white" }
+"deploy::*"        = { bg = "green",    fg = "black" }
+"review::*"        = { bg = "cyan",     fg = "black" }
+"review::approved" = { bg = "magenta",  fg = "white" }
+"size::*"          = { bg = "dark_gray", fg = "white" }
+
+
+# Add more projects below — only the one with `active = true` is loaded at startup.
+# [[project]]
+# name       = "My Company — Frontend"
+# gitlab_url = "https://gitlab.my-company.com"
+# project_id = "87654321"
+# active     = false
 ```
 
-> **Optional table columns** — By default the table only shows the fixed columns (ID, Title, Status) plus your tracked branches, keeping the layout compact. Enable any optional column individually in `config.json` under `visible_columns`:
+> **Complexity profile presets:**
 >
-> | Key | Default | Column shown |
-> | :--- | :--- | :--- |
-> | `activity` | `false` | **Activity** — 🟢 Active / 🟡 Slowing / 🔴 Stale badge |
-> | `target_branch` | `false` | **Target** — the branch the MR merges into |
-> | `labels` | `false` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
-> | `milestone` | `false` | **Milestone** — the associated milestone title |
-> | `notes` | `false` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
-> | `diff_stats` | `false` | **Complexity** — 🟢 / 🟡 / 🔴 dot calibrated to `diff_difficulty_profile` |
->
-> Example — enable Activity and Target only:
->
-> ```json
-> "visible_columns": {
->   "activity": true,
->   "target_branch": true,
->   "labels": false,
->   "milestone": false,
->   "notes": false
-> }
-> ```
+> | Tech stack | `easy_threshold` | `hard_threshold` | Rationale |
+> | :--- | :--- | :--- | :--- |
+> | **Drupal** | `300` | `2000` | Lots of YAML/config files — verbose but lightweight to review |
+> | **Symfony / PHP** | `200` | `1200` | Denser business logic, typically smaller PRs |
+> | **Java / Spring** | `100` | `600` | Highly logic-dense lines; verbosity adds review cost |
+> | **TypeScript / React** | `150` | `900` | JSX inflates line counts but remains readable |
+> | **Go** | `150` | `800` | Concise but each line carries weight |
+> | **Generic** *(default)* | `200` | `1000` | Conservative baseline for mixed stacks |
 
-> **Activity badge thresholds** control the colored indicator displayed next to the `Updated` field in the Context Inspector:
+> **Optional table columns** — all hidden by default. Enable them per project under `[project.visible_columns]`:
+>
+> | Key | Column shown |
+> | :--- | :--- |
+> | `activity` | **Activity** — 🟢 Active / 🟡 Slowing / 🔴 Stale badge |
+> | `target_branch` | **Target** — the branch the MR merges into |
+> | `labels` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
+> | `milestone` | **Milestone** — the associated milestone title |
+> | `notes` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
+> | `diff_stats` | **Complexity** — 🟢 / 🟡 / 🔴 dot calibrated to `complexity_profile` |
+> | `tracker_ticket` | **Ticket** — linked tracker ticket ID + status (requires a tracker plugin) |
+
+> **Activity badge thresholds** control the colour-coded indicator next to the `Updated` field in the Context Inspector:
 >
 > | Badge | Meaning | Condition |
 > | :--- | :--- | :--- |
@@ -319,10 +328,13 @@ See [`gitlab-tracker-notify/README.md`](gitlab-tracker-notify/README.md) for the
 
 ---
 
-#### 🌿 How Branch Resolution Works:
+#### 🌿 How Branch Resolution Works
 
-1. **Active Session Priority:** If `tracker_state.json` exists from a previous run, the app restores your last active layout (columns added/removed via input).
-2. **First Run / Fresh Session:** If no state exists, initial branches are loaded from `DEFAULT_BRANCHES` in `.env` if provided, falling back to `default_branches` in `config.json` (defaults to `["main"]`).
+Tracked branches (the columns shown in the MR table) are resolved in this priority order at startup:
+
+1. **`tracked_branches`** in `projects.toml` — the canonical source, written automatically by the TUI whenever you add or remove a branch in Insert mode.
+2. **`branches`** in `tracker_state.json` — legacy field from older versions, migrated silently to `projects.toml` on first startup and never written again.
+3. **`default_branches`** in `projects.toml` — used on the very first run before any branch has been tracked interactively.
 
 ---
 
@@ -402,7 +414,7 @@ Opened with `C`. The table border turns **cyan** as a visual indicator.
 | :--- | :--- |
 | `▲` / `▼` or `k` / `j` | Navigate the column list |
 | `Space` | Toggle the highlighted column on/off |
-| `Enter` or `Esc` | Close the picker — changes are saved immediately to `config.json` |
+| `Enter` or `Esc` | Close the picker — changes are saved immediately to `projects.toml` |
 
 ### 🟨 Insert Mode
 

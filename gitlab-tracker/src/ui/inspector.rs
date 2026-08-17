@@ -514,7 +514,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     // ── SECTION 4b: Diff & Complexity ────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
     lines.push(section_header("Diff & Complexity"));
-    lines.extend(render_diff_stats_lines(mr, &config.diff_difficulty_profile));
+    lines.extend(render_diff_stats_lines(mr, &config.complexity_profile));
 
     // ── SECTION 5: Labels ────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));

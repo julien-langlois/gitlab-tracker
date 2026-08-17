@@ -248,7 +248,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             if cols.diff_stats {
                 let complexity_cell = match &mr.diff_stats {
                     Some(stats) => {
-                        let score = stats.difficulty(&app.config.diff_difficulty_profile);
+                        let score = stats.difficulty(&app.config.complexity_profile);
                         let dot = if score < 0.33 {
                             Span::styled("🟢", Style::default())
                         } else if score < 0.66 {

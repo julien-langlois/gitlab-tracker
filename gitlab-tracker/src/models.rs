@@ -163,6 +163,10 @@ pub struct SavedMr {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SavedState {
     pub mrs: Vec<SavedMr>,
+    /// Tracked branches — read-only for one-shot silent migration to `projects.toml`.
+    /// New writes no longer include this field; it is kept here only so that
+    /// existing `tracker_state.json` files are still deserialised correctly.
+    #[serde(default, skip_serializing)]
     pub branches: Vec<String>,
     #[serde(default)]
     pub last_known_branches: HashMap<String, HashSet<String>>,
@@ -295,7 +299,7 @@ impl DiffStats {
 /// Different ecosystems have very different "cost per line" — a 500-line Drupal
 /// YAML config dump is far cheaper to review than 500 lines of Java business logic.
 /// These thresholds let users tune the scoring to their project's reality via
-/// `config.json` (`diff_difficulty_profile`).
+/// `config.json` (`complexity_profile`).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DifficultyProfile {
     /// Human-readable name shown in the UI (e.g. "Drupal", "Java", "Generic").

@@ -54,8 +54,6 @@ pub struct LabelColorConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub project_id: Option<String>,
-    pub gitlab_url: Option<String>,
     pub refresh_interval_secs: Option<u64>,
     #[serde(default = "default_branches_val")]
     pub default_branches: Vec<String>,
@@ -75,12 +73,14 @@ pub struct AppConfig {
     pub visible_columns: VisibleColumns,
     /// Tech-stack calibration for the review-difficulty score.
     ///
-    /// Preset examples (set `diff_difficulty_profile` in config.json):
+    /// Preset examples (set `complexity_profile` in config.json):
     /// - Drupal:  easy_threshold: 300, hard_threshold: 2000  (lots of YAML/config)
     /// - Java:    easy_threshold: 100, hard_threshold:  600  (logic-dense lines)
     /// - Generic: easy_threshold: 200, hard_threshold: 1000  (default)
-    #[serde(default)]
-    pub diff_difficulty_profile: crate::models::DifficultyProfile,
+    ///
+    /// `diff_difficulty_profile` is accepted as a legacy alias for seamless migration.
+    #[serde(default, alias = "diff_difficulty_profile")]
+    pub complexity_profile: crate::models::DifficultyProfile,
     /// GitLab-side label colours fetched at startup — maps lowercase label name → hex colour.
     /// Populated at runtime via `AppEvent::GitlabLabelsLoaded`; never read from config.json.
     /// Not serialised — always re-fetched from the GitLab API on startup.
@@ -135,8 +135,6 @@ impl Default for AppConfig {
         );
 
         Self {
-            project_id: None,
-            gitlab_url: None,
             refresh_interval_secs: Some(900),
             default_branches: default_branches_val(),
             table_label_prefixes: vec!["deploy::".to_string(), "review::".to_string()],
@@ -144,7 +142,7 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             visible_columns: VisibleColumns::default(),
-            diff_difficulty_profile: crate::models::DifficultyProfile::default(),
+            complexity_profile: crate::models::DifficultyProfile::default(),
             // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.
             gitlab_label_colors: HashMap::new(),
         }

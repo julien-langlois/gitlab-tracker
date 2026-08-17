@@ -10,7 +10,7 @@ use crate::app::{
 };
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
-use crate::storage::{save_config_async, save_state_async};
+use crate::storage::{save_branches_async, save_state_async, save_visible_columns_async};
 use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
@@ -304,9 +304,9 @@ pub async fn handle_key_event(
                     }
                 }
                 KeyCode::Esc | KeyCode::Enter => {
-                    // Close the popup and persist the new column visibility to config.json.
+                    // Close the popup and persist the new column visibility to projects.toml.
                     app.input_mode = InputMode::Normal;
-                    save_config_async(&app.config).await;
+                    save_visible_columns_async(&app.config.visible_columns, 0).await;
                 }
                 _ => {}
             }
@@ -735,7 +735,7 @@ pub async fn handle_key_event(
                 // Space toggles the flagged state of the selected MR and persists immediately.
                 KeyCode::Char(' ') => {
                     if app.toggle_flag_selected().is_some() {
-                        save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+                        save_state_async(&app.mrs, last_known_branches).await;
                     }
                 }
 
@@ -774,7 +774,7 @@ pub async fn handle_key_event(
                             } else if selected >= app.mrs.len() {
                                 app.table_state.select(Some(app.mrs.len() - 1));
                             }
-                            save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+                            save_state_async(&app.mrs, last_known_branches).await;
                         }
                     }
                 }
@@ -805,10 +805,12 @@ async fn handle_enter(
         let to_remove = value.trim_start_matches('-').to_string();
         if to_remove.chars().all(|c| c.is_numeric()) {
             app.mrs.retain(|m| m.id != to_remove);
+            save_state_async(&app.mrs, last_known_branches).await;
         } else {
             app.branches.retain(|b| b != &to_remove);
+            // Branches live in projects.toml — persist there, not in tracker_state.json.
+            save_branches_async(&app.branches, 0).await;
         }
-        save_state_async(&app.mrs, &app.branches, last_known_branches).await;
         if app.mrs.is_empty() {
             app.table_state.select(None);
         }
@@ -850,7 +852,7 @@ async fn handle_enter(
                 diff_stats: None,
             });
             app.table_state.select(Some(app.mrs.len() - 1));
-            save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+            save_state_async(&app.mrs, last_known_branches).await;
 
             let ctx = build_fetch_context(app);
             spawn_mr_fetch(
@@ -865,7 +867,8 @@ async fn handle_enter(
         // Add a new branch to track.
         if !app.branches.contains(&value) {
             app.branches.push(value.clone());
-            save_state_async(&app.mrs, &app.branches, last_known_branches).await;
+            // Branches live in projects.toml — persist there, not in tracker_state.json.
+            save_branches_async(&app.branches, 0).await;
 
             let ctx = build_fetch_context(app);
             for mr in &mut app.mrs {

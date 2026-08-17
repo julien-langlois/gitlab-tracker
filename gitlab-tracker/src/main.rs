@@ -17,8 +17,8 @@ use models::AppEvent;
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{
-    ensure_gitlab_config, get_or_prompt_token, load_or_create_config_async, load_state_async,
-    migrate_legacy_keyring_entry, save_state_async,
+    get_or_prompt_token, load_or_create_config_async, load_state_async,
+    migrate_legacy_keyring_entry, resolve_active_project, save_state_async, ProjectEntry,
 };
 use tokio::sync::Semaphore;
 
@@ -100,31 +100,45 @@ fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     Some(guard)
 }
 
-/// Resolves the GitLab `project_id`, `base_url` and `refresh_interval_secs`
-/// from env vars, config file, or sensible defaults — in that priority order.
-fn resolve_config_values(config: &config::AppConfig) -> (String, String, u64) {
-    let project_id = std::env::var("GITLAB_PROJECT_ID")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .or_else(|| config.project_id.clone())
-        .filter(|id| !id.trim().is_empty())
-        .expect("GITLAB_PROJECT_ID must be set");
-
-    let base_url = std::env::var("GITLAB_URL")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .or_else(|| config.gitlab_url.clone())
-        .filter(|url| !url.trim().is_empty())
-        .unwrap_or_else(|| "https://gitlab.com".to_string());
-    let base_url = base_url.trim_end_matches('/').to_string();
-
-    let refresh_interval_secs = std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
+/// Resolves `refresh_interval_secs` from env var, config file, or default.
+fn resolve_refresh_interval(config: &config::AppConfig) -> u64 {
+    std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .or(config.refresh_interval_secs)
-        .unwrap_or(900);
+        .unwrap_or(900)
+}
 
-    (project_id, base_url, refresh_interval_secs)
+/// Applies project-scoped overrides from `projects.toml` onto the global `AppConfig`.
+///
+/// Priority: `projects.toml` entry > `config.json` value > compiled-in default.
+/// Only fields explicitly set in the `ProjectEntry` override the config — `None`
+/// means "use whatever config.json / the default says".
+fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntry) {
+    if let Some(branches) = &project.default_branches {
+        config.default_branches = branches.clone();
+    }
+    if let Some(prefixes) = &project.table_label_prefixes {
+        config.table_label_prefixes = prefixes.clone();
+    }
+    if let Some(profile) = &project.complexity_profile {
+        config.complexity_profile = profile.clone();
+    }
+    if let Some(secs) = project.refresh_interval_secs {
+        config.refresh_interval_secs = Some(secs);
+    }
+    if let Some(days) = project.activity_stale_days {
+        config.activity_stale_days = days;
+    }
+    if let Some(days) = project.activity_recent_days {
+        config.activity_recent_days = days;
+    }
+    if let Some(cols) = &project.visible_columns {
+        config.visible_columns = cols.clone();
+    }
+    if let Some(colors) = &project.label_colors {
+        config.label_colors = colors.clone();
+    }
 }
 
 #[tokio::main]
@@ -152,11 +166,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return demo::run_demo_mode(config).await;
     }
 
-    // Ensure gitlab_url and project_id are available (env var > config > prompt).
-    // ensure_gitlab_config is idempotent: it only prompts when a value is truly missing.
-    ensure_gitlab_config(&mut config).await;
+    // Resolve the active project from projects.toml (env vars > active entry > prompt).
+    // Project-scoped settings override the global config.json values when present.
+    let project = resolve_active_project().await;
+    apply_project_overrides(&mut config, &project);
 
-    let (project_id, base_url, refresh_interval_secs) = resolve_config_values(&config);
+    // Extract tracked_branches before moving project fields.
+    let project_tracked_branches = project.tracked_branches.clone();
+    let base_url = project.gitlab_url;
+    let project_id = project.project_id;
+    let refresh_interval_secs = resolve_refresh_interval(&config);
 
     // One-time silent migration: move any token stored under the legacy keyring
     // service name ("gitlab_tracker") to the canonical one ("gitlab-tracker"),
@@ -200,13 +219,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = ratatui::init();
 
-    let (saved_mrs, saved_branches, mut last_known_branches) = load_state_async().await;
+    let (saved_mrs, migrated_branches, mut last_known_branches) = load_state_async().await;
     let mut app = App::new(token, project_id, base_url, refresh_interval_secs, config);
 
-    app.branches = if saved_branches.is_empty() {
-        app.config.default_branches.clone()
+    // Branch resolution priority:
+    //   1. tracked_branches in projects.toml (canonical source after migration)
+    //   2. branches from tracker_state.json (legacy — one-shot migration done in load_state_async)
+    //   3. default_branches from config (first run)
+    app.branches = if let Some(ref tb) = project_tracked_branches {
+        if tb.is_empty() {
+            app.config.default_branches.clone()
+        } else {
+            tb.clone()
+        }
+    } else if !migrated_branches.is_empty() {
+        migrated_branches
     } else {
-        saved_branches
+        app.config.default_branches.clone()
     };
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
@@ -251,7 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
                 .await;
             if needs_save {
-                save_state_async(&app.mrs, &app.branches, &last_known_branches).await;
+                save_state_async(&app.mrs, &last_known_branches).await;
             }
         }
 
