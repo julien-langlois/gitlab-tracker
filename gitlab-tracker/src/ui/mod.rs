@@ -1,3 +1,4 @@
+pub mod help_popup;
 pub mod inspector;
 pub mod table;
 pub mod theme;
@@ -7,6 +8,7 @@ use crate::app::{
     ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
     FILTER_PICKER_ENTRIES,
 };
+use help_popup::render_help_popup;
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -214,7 +216,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         ),
         InputMode::Normal => (
             format!(
-                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [Esc]: Quit ",
+                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [?]: Help │ [Esc]: Quit ",
                 pane_hint, sort_status
             ),
             Style::default(),
@@ -228,6 +230,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         InputMode::LogTime => (
             " LOG TIME │ [Tab]: Next field │ [Enter]: Submit │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Magenta),
+        ),
+        // The Help popup covers the full screen — the input bar is hidden behind it.
+        InputMode::Help => (
+            " HELP │ [any key]: Close ".to_string(),
+            Style::default().fg(Color::Cyan),
         ),
     };
 
@@ -257,6 +264,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     // Render the Log Time popup on top of everything when active.
     if app.input_mode == InputMode::LogTime {
         render_log_time_popup(f, app, f.area());
+    }
+
+    // Render the help popup on top of everything when active.
+    if app.input_mode == InputMode::Help {
+        render_help_popup(f, app);
     }
 }
 

@@ -1247,6 +1247,7 @@ dependencies = [
  "gitlab-tracker-core",
  "gitlab-tracker-notify",
  "gitlab-tracker-redmine",
+ "inventory",
  "keyring",
  "open",
  "ratatui",
@@ -1269,6 +1270,7 @@ name = "gitlab-tracker-core"
 version = "0.3.6"
 dependencies = [
  "async-trait",
+ "inventory",
  "serde",
  "tokio",
 ]
@@ -1288,6 +1290,7 @@ dependencies = [
  "async-trait",
  "directories",
  "gitlab-tracker-core",
+ "inventory",
  "keyring",
  "regex",
  "reqwest",
@@ -1680,6 +1683,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]

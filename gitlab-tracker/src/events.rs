@@ -485,6 +485,11 @@ pub async fn handle_key_event(
         // Normal mode: shortcuts are active; input field is passive.
         // '/' or 'i' enters Editing mode (vim-style focus).
         // ------------------------------------------------------------------
+        // Help popup is open — any key closes it.
+        InputMode::Help => {
+            app.input_mode = InputMode::Normal;
+        }
+
         InputMode::Normal => {
             // When quit confirmation is pending, only Esc/y confirm and any other key cancels.
             if app.quit_confirm {
@@ -500,6 +505,11 @@ pub async fn handle_key_event(
                 // First Esc: request confirmation. A second Esc or 'y' will confirm.
                 KeyCode::Esc => {
                     app.quit_confirm = true;
+                }
+
+                // Open the help popup listing all registered shortcuts by section.
+                KeyCode::Char('?') => {
+                    app.input_mode = InputMode::Help;
                 }
 
                 // Enter Editing mode — the input field now has exclusive focus.

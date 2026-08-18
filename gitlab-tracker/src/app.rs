@@ -40,6 +40,7 @@ pub enum SortOrder {
 ///   typing feeds the text input for Milestone/Assignee entries.
 /// - `LogTime`: the Log Time popup is open — Tab navigates fields, Enter submits.
 ///   Only reachable when a tracker provider is configured (`app.tracker.is_some()`).
+/// - `Help`: the help popup is open — any key closes it.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InputMode {
     /// Shortcut keys are active; the input field is passive.
@@ -55,6 +56,9 @@ pub enum InputMode {
     /// The Log Time popup is open — Tab cycles fields, Enter submits.
     /// Only reachable when `app.tracker.is_some()`.
     LogTime,
+    /// The help popup is open — lists all registered shortcuts by section.
+    /// Any key press closes it and returns to Normal mode.
+    Help,
 }
 
 /// Which field is focused inside the Log Time popup.
@@ -327,6 +331,12 @@ pub struct App {
     /// Monotonically incrementing counter bumped on every render frame (~20 fps).
     /// Used to animate the spinner independently of the 1-second tick timer.
     pub spinner_frame: usize,
+    /// Shortcut blocks collected at startup via `inventory` from every linked crate.
+    ///
+    /// Populated once by `gitlab_tracker_core::collect_all_blocks()` — no explicit
+    /// provider registration needed in `main.rs`. The help popup iterates this list
+    /// in collection order (link order: Core first, optional plugins after).
+    pub shortcut_providers: Vec<gitlab_tracker_core::ShortcutBlock>,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -384,6 +394,8 @@ impl App {
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
             spinner_frame: 0,
+            // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
+            shortcut_providers: Vec::new(),
         }
     }
 

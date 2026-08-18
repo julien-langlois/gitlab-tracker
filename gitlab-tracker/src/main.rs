@@ -4,6 +4,7 @@ mod demo;
 mod events;
 mod gitlab;
 mod models;
+mod shortcuts_core;
 mod storage;
 mod ui;
 mod utils;
@@ -297,6 +298,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app.tracker = redmine_provider;
     }
 
+    // Collect all shortcut blocks registered via inventory::submit! across every
+    // linked crate (Core, Redmine if feature-enabled, any future plugin).
+    // No explicit mention of any provider crate is needed here — adding a new
+    // plugin only requires linking it (i.e. enabling its feature in Cargo.toml).
+    app.shortcut_providers = gitlab_tracker_core::collect_all_blocks();
+
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
     app.restore_from_saved(saved_mrs, api_semaphore.clone(), tx.clone());
 
@@ -336,6 +343,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app::InputMode::ColumnPicker => "⚙️  Columns",
             app::InputMode::FilterPicker => "🔍 Filter",
             app::InputMode::LogTime => "⏱️  Log Time",
+            app::InputMode::Help => "❓ Help",
             app::InputMode::Normal => "Normal",
         };
         let filter_label = app.filter_mode.label();

@@ -3,6 +3,7 @@ mod detector;
 
 pub mod config;
 pub mod keyring;
+pub mod shortcuts;
 
 use async_trait::async_trait;
 use gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION;

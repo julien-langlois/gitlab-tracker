@@ -11,6 +11,7 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 gitlab-tracker-core = { version = "0.3.6", path = "../gitlab-tracker-core" }
+inventory = "0.3"
 
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
