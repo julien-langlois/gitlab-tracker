@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-08-18
+
+### 🚀 Features
+
+- **config**: Migrate all settings from config.json to projects.toml
+- **redmine**: Migrate config to projects.toml with multi-tenant support
+- **storage**: Scope tracker state file per tenant (`tracker_<hash>.json`)
+- **diff**: Add review complexity scoring from MR diff stats
+
+### 🐛 Bug Fixes
+
+- **filter**: Resolve filter-aware MR selection for inspector and side panels (#3)
+
+### 🖥️ UI
+
+- **ui**: Add relative date labels to inspector and tracker panels
+- **ui**: Update complexity chips width
+
 ## [0.3.5] - 2026-08-07
 
 ### 🚀 Features
