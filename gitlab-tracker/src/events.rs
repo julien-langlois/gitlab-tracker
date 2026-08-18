@@ -425,7 +425,7 @@ pub async fn handle_key_event(
                                                         Err(e) => {
                                                             let _ = tx2.send(
                                                                 crate::models::AppEvent::TimeLogFailed {
-                                                                    error: e,
+                                                                    error: e.to_string(),
                                                                 },
                                                             );
                                                         }

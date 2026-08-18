@@ -293,7 +293,7 @@ async fn try_migrate_redmine_yaml(config_dir: &std::path::Path) -> Option<Tracke
     let content = tokio::fs::read_to_string(&yaml_path).await.ok()?;
 
     // Parse as a generic YAML mapping — no dependency on RedmineConfig.
-    let map: serde_yaml::Mapping = serde_yaml::from_str(&content).ok()?;
+    let map: serde_yml::Mapping = serde_yml::from_str(&content).ok()?;
 
     // The legacy field was called `redmine_url`; we normalise it to `url`.
     let url = map
@@ -702,7 +702,7 @@ pub fn migrate_legacy_keyring_entry() {
     // Delete the legacy entry now that the token is safely copied.
     match keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT) {
         Ok(entry) => {
-            if let Err(e) = entry.delete_password() {
+            if let Err(e) = entry.delete_credential() {
                 tracing::warn!(error = %e, "Token migrated but failed to delete legacy keyring entry");
             } else {
                 tracing::info!("Legacy keyring entry deleted successfully");

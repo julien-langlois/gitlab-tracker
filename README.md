@@ -45,34 +45,34 @@
 
   Suggested presets:
 
-  | Tech stack | `easy_threshold` | `hard_threshold` | Rationale |
-  | :--- | :--- | :--- | :--- |
-  | **Drupal** | `300` | `2000` | Lots of YAML/config files that are verbose but lightweight to review |
-  | **Symfony / PHP** | `200` | `1200` | Denser business logic, typically smaller PRs |
-  | **Java / Spring** | `100` | `600` | Highly logic-dense lines; verbosity adds review cost |
-  | **TypeScript / React** | `150` | `900` | JSX inflates line counts but remains readable |
-  | **Go** | `150` | `800` | Concise but each line carries weight |
-  | **Generic** *(default)* | `200` | `1000` | Conservative baseline for mixed stacks |
+  | Tech stack              | `easy_threshold` | `hard_threshold` | Rationale                                                            |
+  | :---------------------- | :--------------- | :--------------- | :------------------------------------------------------------------- |
+  | **Drupal**              | `300`            | `2000`           | Lots of YAML/config files that are verbose but lightweight to review |
+  | **Symfony / PHP**       | `200`            | `1200`           | Denser business logic, typically smaller PRs                         |
+  | **Java / Spring**       | `100`            | `600`            | Highly logic-dense lines; verbosity adds review cost                 |
+  | **TypeScript / React**  | `150`            | `900`            | JSX inflates line counts but remains readable                        |
+  | **Go**                  | `150`            | `800`            | Concise but each line carries weight                                 |
+  | **Generic** *(default)* | `200`            | `1000`           | Conservative baseline for mixed stacks                               |
 
   Diff data is cached behind the same `updated_at` guard as pipelines — no extra API call when the MR has not changed since the last refresh.
 * 🔀 **Animated Status Badge:** For open MRs, the Status column cycles through three phases every second with no extra column:
 
-  | Phase | Badge | Color | Meaning |
-  | :--- | :--- | :--- | :--- |
-  | 1 | `OPEN` | 🟩 Green | Base state |
-  | 2 | Mergeability | varies | Live mergeability from GitLab API |
-  | 3 | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
+  | Phase | Badge                       | Color      | Meaning                                                               |
+  | :---- | :-------------------------- | :--------- | :-------------------------------------------------------------------- |
+  | 1     | `OPEN`                      | 🟩 Green  | Base state                                                            |
+  | 2     | Mergeability                | varies     | Live mergeability from GitLab API                                     |
+  | 3     | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
 
   The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `projects.toml` and persisted across restarts — no manual file editing required. Available optional columns:
 
-  | Column | Description |
-  | :--- | :--- |
-  | **Activity** | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector) |
-  | **Target** | The branch the MR is intended to merge into |
-  | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
-  | **Milestone** | The associated milestone title |
-  | **Notes** | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise |
+  | Column         | Description                                                                                                 |
+  | :------------- | :---------------------------------------------------------------------------------------------------------- |
+  | **Activity**   | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector)          |
+  | **Target**     | The branch the MR is intended to merge into                                                                 |
+  | **Labels**     | Filtered label chips (respects `table_label_prefixes`)                                                      |
+  | **Milestone**  | The associated milestone title                                                                              |
+  | **Notes**      | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise  |
   | **Complexity** | Review complexity chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
@@ -340,6 +340,36 @@ Tracked branches (the columns shown in the MR table) are resolved in this priori
 
 ## 📦 Installation
 
+### Prerequisites
+
+Before installing, ensure the following system dependencies are present:
+
+| Platform    | Requirement                   | Notes                                                                  |
+| ----------- | ----------------------------- | ---------------------------------------------------------------------- |
+| **Linux**   | `libdbus-1-dev`, `pkg-config` | Required for OS Keyring (Secret Service API) and desktop notifications |
+| **macOS**   | —                             | Uses native Apple Keychain — no extra dependencies                     |
+| **Windows** | —                             | Uses native Windows Credential Manager — no extra dependencies         |
+
+**Linux (Debian / Ubuntu):**
+
+```bash
+sudo apt install libdbus-1-dev pkg-config
+```
+
+**Linux (Fedora / RHEL):**
+
+```bash
+sudo dnf install dbus-devel pkgconf
+```
+
+**Linux (Arch):**
+
+```bash
+sudo pacman -S dbus pkgconf
+```
+
+---
+
 ### Recommended — Install from crates.io
 
 The simplest way to install `gitlab-tracker` if you have Rust (1.80+) available:
@@ -388,57 +418,57 @@ The dashboard operates in two keyboard modes, inspired by vim:
 
 Shortcut keys are active. The input field is passive.
 
-| Shortcut | Action |
-| :--- | :--- |
-| `i` or `/` | **Enter Insert mode** — focus the input field |
-| `▲` / `▼` or `k` / `j` | Navigate rows in the table |
-| `Tab` | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked) |
-| `T` | When focus is on Dashboard or Inspector: **jump to Tracker pane**. When already on Tracker: **open ticket URL** in browser |
-| `P` | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: toggle Ticket Info ↔ Time Log |
-| `L` | **Log time** on the linked tracker ticket *(only when a tracker plugin is configured)* |
-| `C` | **Open column picker** — toggle optional columns on/off |
-| `O` | Open selected MR in your default web browser |
-| `R` | Force immediate network refresh for all MRs |
-| `s` | Cycle sort column (`Updated → ID → Milestone → Title → …`) |
-| `S` | Toggle sort direction (ascending / descending) |
-| `Space` | **Toggle flag ★** on the selected MR — persisted across restarts |
-| `F` | Open filter picker (state, mergeability, notes, milestone, assignee…) |
-| `Del` | Delete selected MR row |
-| `Esc` | Quit dashboard |
+| Shortcut               | Action                                                                                                                     |
+| :--------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `i` or `/`             | **Enter Insert mode** — focus the input field                                                                              |
+| `▲` / `▼` or `k` / `j` | Navigate rows in the table                                                                                                 |
+| `Tab`                  | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked)     |
+| `T`                    | When focus is on Dashboard or Inspector: **jump to Tracker pane**. When already on Tracker: **open ticket URL** in browser |
+| `P`                    | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: toggle Ticket Info ↔ Time Log             |
+| `L`                    | **Log time** on the linked tracker ticket *(only when a tracker plugin is configured)*                                     |
+| `C`                    | **Open column picker** — toggle optional columns on/off                                                                    |
+| `O`                    | Open selected MR in your default web browser                                                                               |
+| `R`                    | Force immediate network refresh for all MRs                                                                                |
+| `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
+| `S`                    | Toggle sort direction (ascending / descending)                                                                             |
+| `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
+| `F`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |
+| `Del`                  | Delete selected MR row                                                                                                     |
+| `Esc`                  | Quit dashboard                                                                                                             |
 
 ### 🟩 Column Picker Mode
 
 Opened with `C`. The table border turns **cyan** as a visual indicator.
 
-| Shortcut | Action |
-| :--- | :--- |
-| `▲` / `▼` or `k` / `j` | Navigate the column list |
-| `Space` | Toggle the highlighted column on/off |
-| `Enter` or `Esc` | Close the picker — changes are saved immediately to `projects.toml` |
+| Shortcut               | Action                                                              |
+| :--------------------- | :------------------------------------------------------------------ |
+| `▲` / `▼` or `k` / `j` | Navigate the column list                                            |
+| `Space`                | Toggle the highlighted column on/off                                |
+| `Enter` or `Esc`       | Close the picker — changes are saved immediately to `projects.toml` |
 
 ### 🟨 Insert Mode
 
 The input field has exclusive focus. All printable keys feed the field — shortcuts are suspended. The input bar turns **yellow** as a visual indicator.
 
-| Shortcut | Action |
-| :--- | :--- |
-| `142` + `Enter` | Add MR ID `!142` to tracking |
-| `staging` + `Enter` | Add branch `staging` to target columns |
-| `-142` + `Enter` | Remove MR ID `!142` from tracking |
-| `-staging` + `Enter` | Remove branch column `staging` |
-| `@name` | Filter milestones matching `name` — opens autocomplete dropdown |
-| `Enter` | Submit input, or confirm highlighted milestone suggestion |
-| `Esc` | Close autocomplete dropdown, or cancel and return to Normal mode |
+| Shortcut             | Action                                                           |
+| :------------------- | :--------------------------------------------------------------- |
+| `142` + `Enter`      | Add MR ID `!142` to tracking                                     |
+| `staging` + `Enter`  | Add branch `staging` to target columns                           |
+| `-142` + `Enter`     | Remove MR ID `!142` from tracking                                |
+| `-staging` + `Enter` | Remove branch column `staging`                                   |
+| `@name`              | Filter milestones matching `name` — opens autocomplete dropdown  |
+| `Enter`              | Submit input, or confirm highlighted milestone suggestion        |
+| `Esc`                | Close autocomplete dropdown, or cancel and return to Normal mode |
 
 #### 🏁 Milestone Autocomplete (Insert Mode)
 
 When the input starts with `@`, a dropdown appears above the input bar listing all active/upcoming milestones fetched from GitLab. The list is filtered in real time as you type.
 
-| Shortcut | Action |
-| :--- | :--- |
-| `↑` / `↓` or `Shift+Tab` / `Tab` | Navigate suggestions |
-| `Enter` | Confirm selection — bulk-adds all open MRs from the milestone |
-| `Esc` | Close dropdown without selecting |
+| Shortcut                         | Action                                                        |
+| :------------------------------- | :------------------------------------------------------------ |
+| `↑` / `↓` or `Shift+Tab` / `Tab` | Navigate suggestions                                          |
+| `Enter`                          | Confirm selection — bulk-adds all open MRs from the milestone |
+| `Esc`                            | Close dropdown without selecting                              |
 
 > **Why two modes?** Branch names starting with `s`, `S`, `p`, `P`, `o`, `O`, `r` or `R` would otherwise collide with shortcut keys. Insert mode guarantees the full branch name is captured without interference.
 
@@ -497,10 +527,10 @@ gitlab-tracker-redmine/          # Library crate — optional Redmine integratio
 
 ### Optional Feature Flags
 
-| Feature flag | Default | Effect |
-| :--- | :--- | :--- |
-| `notifications` | ✅ enabled | Desktop notifications via `notify-rust` |
-| `redmine` | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md)) |
+| Feature flag    | Default     | Effect                                                                                                        |
+| :-------------- | :---------- | :------------------------------------------------------------------------------------------------------------ |
+| `notifications` | ✅ enabled  | Desktop notifications via `notify-rust`                                                                       |
+| `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md)) |
 
 ### Tracker Plugins
 
@@ -516,8 +546,8 @@ When a tracker plugin is configured, the dashboard is enriched with:
 
 Each plugin lives in its own crate and is activated via a Cargo feature flag. See the plugin's own README for setup instructions:
 
-| Plugin | Feature flag | Documentation |
-| :--- | :--- | :--- |
+| Plugin      | Feature flag         | Documentation                                                          |
+| :---------- | :------------------- | :--------------------------------------------------------------------- |
 | **Redmine** | `--features redmine` | [`gitlab-tracker-redmine/README.md`](gitlab-tracker-redmine/README.md) |
 
 ---

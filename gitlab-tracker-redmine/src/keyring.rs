@@ -95,6 +95,6 @@ pub fn get_or_prompt_token(redmine_url: &str) -> Option<Zeroizing<String>> {
 /// Returns `true` if the entry was deleted successfully, `false` otherwise.
 pub fn delete_token(redmine_url: &str) -> bool {
     keyring::Entry::new(KEYRING_SERVICE, &account_for(redmine_url))
-        .and_then(|e| e.delete_password())
+        .and_then(|e| e.delete_credential())
         .is_ok()
 }

@@ -2,6 +2,30 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Typed error returned by [`TrackerProvider`] operations.
+///
+/// Using `thiserror` instead of `Result<(), String>` gives callers a proper
+/// type to match on, enables `?` propagation, and keeps error messages
+/// consistent across all provider implementations.
+#[derive(Debug, thiserror::Error)]
+pub enum TrackerError {
+    /// A network or HTTP-level failure occurred.
+    #[error("Network error: {0}")]
+    Network(String),
+    /// The API token is missing, expired, or rejected.
+    #[error("Authentication failed: {0}")]
+    Auth(String),
+    /// The requested ticket does not exist on the tracker.
+    #[error("Ticket not found: {0}")]
+    NotFound(String),
+    /// The operation is not supported by this provider implementation.
+    #[error("Not supported by this tracker: {0}")]
+    Unsupported(String),
+    /// Any other provider-specific error not covered by the variants above.
+    #[error("{0}")]
+    Other(String),
+}
+
 /// A lightweight reference to an external tracker ticket linked to a MR.
 ///
 /// This struct is the only data type exchanged between the orchestrator
@@ -326,9 +350,15 @@ pub trait TrackerProvider: Send + Sync {
 
     /// Submits a new time entry on the given ticket.
     ///
-    /// Returns `Ok(())` on success, or an error message string suitable for
-    /// displaying inline in the TUI. Default returns an unsupported error.
-    async fn log_time(&self, _ticket_id: &str, _entry: TimeEntryRequest) -> Result<(), String> {
-        Err("Time logging not supported by this tracker".into())
+    /// Returns `Ok(())` on success, or a [`TrackerError`] describing the failure.
+    /// Default returns `TrackerError::Unsupported` — opt-in capability.
+    async fn log_time(
+        &self,
+        _ticket_id: &str,
+        _entry: TimeEntryRequest,
+    ) -> Result<(), TrackerError> {
+        Err(TrackerError::Unsupported(
+            "Time logging not supported by this tracker".into(),
+        ))
     }
 }

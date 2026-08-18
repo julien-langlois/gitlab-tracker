@@ -132,7 +132,11 @@ impl TrackerProvider for RedmineProvider {
     /// Redmine). The fetch failure is non-fatal: submission proceeds without them.
     ///
     /// Delegates to `POST /time_entries.json`.
-    async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> {
+    async fn log_time(
+        &self,
+        ticket_id: &str,
+        entry: TimeEntryRequest,
+    ) -> Result<(), gitlab_tracker_core::TrackerError> {
         // Fetch the issue to get remaining_hours / estimated_hours for ETC computation.
         // A None here simply means the ETC update step will be skipped — not an error.
         let issue = client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await;
@@ -146,5 +150,6 @@ impl TrackerProvider for RedmineProvider {
             issue.as_ref(),
         )
         .await
+        .map_err(gitlab_tracker_core::TrackerError::Other)
     }
 }
