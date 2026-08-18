@@ -1235,7 +1235,7 @@ dependencies = [
 
 [[package]]
 name = "gitlab-tracker"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "arboard",
  "chrono",
@@ -1266,7 +1266,7 @@ dependencies = [
 
 [[package]]
 name = "gitlab-tracker-core"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "async-trait",
  "serde",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "gitlab-tracker-notify"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "notify-rust",
  "open",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "gitlab-tracker-redmine"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "async-trait",
  "directories",
