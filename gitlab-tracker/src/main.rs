@@ -1,7 +1,9 @@
 mod app;
+mod columns_core;
 mod config;
 mod demo;
 mod events;
+mod filters_core;
 mod gitlab;
 mod models;
 mod shortcuts_core;
@@ -346,7 +348,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app::InputMode::Help => "❓ Help",
             app::InputMode::Normal => "Normal",
         };
-        let filter_label = app.filter_mode.label();
+        let filter_label = app.active_filter.label(&app.filter_defs);
         let window_title = format!(
             "GitLab Tracker │ {} MRs │ {} │ {}",
             app.mrs.len(),

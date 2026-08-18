@@ -6,34 +6,45 @@ fn default_branches_val() -> Vec<String> {
     vec!["main".to_string()]
 }
 
-/// Controls which optional columns are rendered in the MR table.
+/// Visibility state for optional MR table columns.
 ///
-/// All columns default to `false` (hidden) so the table stays compact
-/// out of the box. Each field can be toggled individually in `config.json`.
+/// Replaces the old fixed-field struct — columns are now registered via
+/// `inventory::submit!(ColumnDef { … })` in each crate, so this map is
+/// populated dynamically from `collect_all_columns()` at startup.
+///
+/// Keys are the stable `ColumnDef::id` values (e.g. `"activity"`, `"tracker_ticket"`).
+/// Serialised as a flat TOML/JSON map for backward-compatibility with `projects.toml`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct VisibleColumns {
-    /// Show the "Activity" column (Stale / Slowing / Active badge).
-    #[serde(default)]
-    pub activity: bool,
-    /// Show the "Target" column (target branch the MR merges into).
-    #[serde(default)]
-    pub target_branch: bool,
-    /// Show the "Labels" column (filtered label chips).
-    #[serde(default)]
-    pub labels: bool,
-    /// Show the "Milestone" column.
-    #[serde(default)]
-    pub milestone: bool,
-    /// Show the "Notes" column (total number of comments and discussion threads).
-    #[serde(default)]
-    pub notes: bool,
-    /// Show the "Ticket" column with the linked tracker ticket ID + status.
-    /// Only visible when a tracker provider is configured at runtime.
-    #[serde(default)]
-    pub tracker_ticket: bool,
-    /// Show the "Diff" column with files changed, additions, deletions and difficulty badge.
-    #[serde(default)]
-    pub diff_stats: bool,
+pub struct VisibleColumns(pub std::collections::HashMap<String, bool>);
+
+impl VisibleColumns {
+    /// Returns `true` when the column with the given id is visible.
+    /// Defaults to `false` (hidden) when the key is absent.
+    pub fn is_visible(&self, id: &str) -> bool {
+        self.0.get(id).copied().unwrap_or(false)
+    }
+
+    /// Sets the visibility of the column with the given id.
+    pub fn set_visible(&mut self, id: &str, visible: bool) {
+        self.0.insert(id.to_string(), visible);
+    }
+
+    /// Toggles the visibility of the column with the given id.
+    pub fn toggle(&mut self, id: &str) {
+        let current = self.is_visible(id);
+        self.set_visible(id, !current);
+    }
+
+    /// Initialises missing entries from `ColumnDef::default_visible` so that
+    /// newly registered columns are visible/hidden according to their default
+    /// without requiring the user to update their config file.
+    pub fn apply_defaults(&mut self, cols: &[&'static gitlab_tracker_core::ColumnDef]) {
+        for col in cols {
+            self.0
+                .entry(col.id.to_string())
+                .or_insert(col.default_visible);
+        }
+    }
 }
 
 /// Default threshold (in days) above which an MR is considered "stale" (red badge).

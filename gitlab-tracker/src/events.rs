@@ -6,7 +6,6 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use crate::app::{
     ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm, TrackerView,
-    FILTER_PICKER_ENTRIES,
 };
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
@@ -199,9 +198,12 @@ pub async fn handle_key_event(
         // for Milestone and Assignee entries; Esc cancels without applying.
         // ------------------------------------------------------------------
         InputMode::FilterPicker => {
-            const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
-            // Entries that require a text input (Milestone=13, Assignee=14).
-            let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
+            let last_idx = app.filter_defs.len().saturating_sub(1);
+            let needs_text_input = app
+                .filter_defs
+                .get(app.filter_picker.cursor)
+                .map(|d| d.needs_text_input)
+                .unwrap_or(false);
 
             match key.code {
                 KeyCode::Esc => {
@@ -221,7 +223,7 @@ pub async fn handle_key_event(
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') if !needs_text_input => {
-                    if app.filter_picker.cursor < LAST_IDX {
+                    if app.filter_picker.cursor < last_idx {
                         app.filter_picker.cursor += 1;
                         app.filter_picker.input.clear();
                     }
@@ -235,7 +237,7 @@ pub async fn handle_key_event(
                     }
                 }
                 KeyCode::Down => {
-                    if app.filter_picker.cursor < LAST_IDX {
+                    if app.filter_picker.cursor < last_idx {
                         app.filter_picker.cursor += 1;
                         app.filter_picker.input.clear();
                     }
@@ -258,8 +260,19 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            // Column count: 6 fixed columns + 1 tracker column when a provider is configured.
-            let column_count = if app.tracker.is_some() { 7 } else { 6 };
+            // Visible column count: only columns whose `requires_feature` is satisfied.
+            let has_tracker = app.tracker.is_some();
+            let visible_cols: Vec<&'static gitlab_tracker_core::ColumnDef> = app
+                .column_defs
+                .iter()
+                .copied()
+                .filter(|c| {
+                    c.requires_feature
+                        .map(|f| f == "tracker" && has_tracker)
+                        .unwrap_or(true)
+                })
+                .collect();
+            let column_count = visible_cols.len();
 
             match key.code {
                 KeyCode::Up | KeyCode::Char('k') => {
@@ -268,39 +281,14 @@ pub async fn handle_key_event(
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    if app.column_picker_cursor < column_count - 1 {
+                    if column_count > 0 && app.column_picker_cursor < column_count - 1 {
                         app.column_picker_cursor += 1;
                     }
                 }
                 KeyCode::Char(' ') => {
-                    // Toggle the column at the current cursor position.
-                    // Order must mirror `VisibleColumns` field declaration order
-                    // and the entries array in `render_column_picker`.
-                    match app.column_picker_cursor {
-                        0 => {
-                            app.config.visible_columns.activity =
-                                !app.config.visible_columns.activity
-                        }
-                        1 => {
-                            app.config.visible_columns.target_branch =
-                                !app.config.visible_columns.target_branch
-                        }
-                        2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
-                        3 => {
-                            app.config.visible_columns.milestone =
-                                !app.config.visible_columns.milestone
-                        }
-                        4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
-                        5 => {
-                            app.config.visible_columns.diff_stats =
-                                !app.config.visible_columns.diff_stats
-                        }
-                        // Entry 6 — only reachable when a tracker provider is configured.
-                        6 => {
-                            app.config.visible_columns.tracker_ticket =
-                                !app.config.visible_columns.tracker_ticket
-                        }
-                        _ => {}
+                    // Toggle the column at the cursor position using its stable `id`.
+                    if let Some(col) = visible_cols.get(app.column_picker_cursor) {
+                        app.config.visible_columns.toggle(col.id);
                     }
                 }
                 KeyCode::Esc | KeyCode::Enter => {
@@ -931,9 +919,12 @@ async fn handle_enter(
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     // Filter picker popup intercepts all keys when open.
     if app.input_mode == InputMode::FilterPicker {
-        use crate::app::FILTER_PICKER_ENTRIES;
-        const LAST_IDX: usize = FILTER_PICKER_ENTRIES.len() - 1;
-        let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
+        let last_idx = app.filter_defs.len().saturating_sub(1);
+        let needs_text_input = app
+            .filter_defs
+            .get(app.filter_picker.cursor)
+            .map(|d| d.needs_text_input)
+            .unwrap_or(false);
         match key.code {
             KeyCode::Esc => {
                 app.input_mode = InputMode::Normal;
@@ -949,7 +940,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if app.filter_picker.cursor < LAST_IDX {
+                if app.filter_picker.cursor < last_idx {
                     app.filter_picker.cursor += 1;
                     app.filter_picker.input.clear();
                 }
@@ -967,7 +958,19 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
 
     // Column-picker popup intercepts all keys when open.
     if app.input_mode == InputMode::ColumnPicker {
-        const COLUMN_COUNT: usize = 6;
+        let has_tracker = app.tracker.is_some();
+        let visible_cols: Vec<&'static gitlab_tracker_core::ColumnDef> = app
+            .column_defs
+            .iter()
+            .copied()
+            .filter(|c| {
+                c.requires_feature
+                    .map(|f| f == "tracker" && has_tracker)
+                    .unwrap_or(true)
+            })
+            .collect();
+        let column_count = visible_cols.len();
+
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 if app.column_picker_cursor > 0 {
@@ -975,22 +978,15 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if app.column_picker_cursor < COLUMN_COUNT - 1 {
+                if column_count > 0 && app.column_picker_cursor < column_count - 1 {
                     app.column_picker_cursor += 1;
                 }
             }
-            KeyCode::Char(' ') => match app.column_picker_cursor {
-                0 => app.config.visible_columns.activity = !app.config.visible_columns.activity,
-                1 => {
-                    app.config.visible_columns.target_branch =
-                        !app.config.visible_columns.target_branch
+            KeyCode::Char(' ') => {
+                if let Some(col) = visible_cols.get(app.column_picker_cursor) {
+                    app.config.visible_columns.toggle(col.id);
                 }
-                2 => app.config.visible_columns.labels = !app.config.visible_columns.labels,
-                3 => app.config.visible_columns.milestone = !app.config.visible_columns.milestone,
-                4 => app.config.visible_columns.notes = !app.config.visible_columns.notes,
-                5 => app.config.visible_columns.diff_stats = !app.config.visible_columns.diff_stats,
-                _ => {}
-            },
+            }
             // Close the popup — no disk write in demo mode.
             // Enter is used in the demo tape instead of Esc because VHS may fire
             // the Escape sequence before the column picker frame is rendered, causing

@@ -1,7 +1,9 @@
 mod client;
 mod detector;
 
+pub mod columns;
 pub mod config;
+pub mod filters;
 pub mod keyring;
 pub mod shortcuts;
 

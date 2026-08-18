@@ -6,7 +6,6 @@ pub mod tracker;
 
 use crate::app::{
     ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
-    FILTER_PICKER_ENTRIES,
 };
 use help_popup::render_help_popup;
 
@@ -515,16 +514,20 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
 
 /// Renders the filter picker popup centred over the terminal area.
 ///
-/// Displays all available filter entries. Entries 13 (Milestone) and 14 (Assignee)
-/// show an inline text input field beneath the list when selected.
+/// Iterates `app.filter_defs` (collected via `inventory` at startup) — no hardcoded
+/// index mapping needed. Plugin filters (e.g. Redmine's "Has linked ticket") appear
+/// automatically when their crate is linked.
 fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
-    let entries = FILTER_PICKER_ENTRIES;
-    let needs_text_input = matches!(app.filter_picker.cursor, 15 | 16);
+    let cursor = app.filter_picker.cursor;
+    let needs_text_input = app
+        .filter_defs
+        .get(cursor)
+        .map(|d| d.needs_text_input)
+        .unwrap_or(false);
 
-    // Height: one row per entry + borders + optional text input row (3 lines).
-    let list_height = entries.len() as u16;
+    let list_height = app.filter_defs.len() as u16;
     let input_extra: u16 = if needs_text_input { 3 } else { 0 };
-    let popup_height = list_height + 2 + input_extra; // +2 for borders
+    let popup_height = list_height + 2 + input_extra;
     let popup_width: u16 = 48;
 
     let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
@@ -533,7 +536,6 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(Clear, popup_area);
 
-    // Outer border.
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Green))
@@ -545,7 +547,6 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
         ));
     f.render_widget(outer_block, popup_area);
 
-    // Inner area (inside the border).
     let inner = Rect::new(
         popup_area.x + 1,
         popup_area.y + 1,
@@ -553,7 +554,6 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
         popup_area.height.saturating_sub(2),
     );
 
-    // Split inner area into list + optional text field.
     let zones = if needs_text_input {
         Layout::default()
             .direction(Direction::Vertical)
@@ -566,73 +566,33 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
             .split(inner)
     };
 
-    // Build list items.
-    let cursor = app.filter_picker.cursor;
-
-    // Pre-compute availability of context-dependent filters so they can be
-    // rendered as dimmed when no data makes them applicable. The indices must
-    // stay stable (no entries are hidden) to keep the cursor math correct.
+    // Pre-compute applicability hints for context-dependent filters.
     let has_any_linked_ticket = app.mrs.iter().any(|mr| mr.linked_ticket.is_some());
     let has_any_pipeline = app.mrs.iter().any(|mr| !mr.pipelines.is_empty());
 
-    let items: Vec<ListItem> = entries
+    let items: Vec<ListItem> = app
+        .filter_defs
         .iter()
         .enumerate()
-        .map(|(i, label)| {
+        .map(|(i, def)| {
             let is_active = i == cursor;
-            // Mark the currently applied filter with a bullet.
-            let is_current = {
-                use crate::app::FilterMode;
-                use crate::models::{GitlabMrState, MergeabilityStatus};
-                match i {
-                    0 => app.filter_mode == FilterMode::All,
-                    1 => app.filter_mode == FilterMode::Flagged,
-                    2 => app.filter_mode == FilterMode::State(GitlabMrState::Opened),
-                    3 => app.filter_mode == FilterMode::State(GitlabMrState::Merged),
-                    4 => app.filter_mode == FilterMode::State(GitlabMrState::Closed),
-                    5 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Mergeable),
-                    6 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Conflict),
-                    7 => {
-                        app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::NeedsRebase)
-                    }
-                    8 => {
-                        app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::NotApproved)
-                    }
-                    9 => {
-                        app.filter_mode
-                            == FilterMode::Mergeability(MergeabilityStatus::RequestedChanges)
-                    }
-                    10 => app.filter_mode == FilterMode::Mergeability(MergeabilityStatus::Draft),
-                    11 => {
-                        app.filter_mode
-                            == FilterMode::Mergeability(MergeabilityStatus::DiscussionsNotResolved)
-                    }
-                    12 => app.filter_mode == FilterMode::HasNotes,
-                    13 => app.filter_mode == FilterMode::HasLinkedTicket,
-                    14 => app.filter_mode == FilterMode::CiFailing,
-                    15 => matches!(app.filter_mode, FilterMode::Milestone(_)),
-                    16 => matches!(app.filter_mode, FilterMode::Assignee(_)),
-                    _ => false,
-                }
-            };
+            let is_current = i == app.active_filter.index;
 
-            // Entries that are inapplicable in the current context are dimmed
-            // (n/a label suffix) to inform the user without removing them —
-            // keeping all indices stable avoids any cursor mapping bug.
-            let is_na = match i {
-                13 => !has_any_linked_ticket,
-                14 => !has_any_pipeline,
+            // Dim context-dependent filters when they are not applicable.
+            let is_na = match def.id {
+                "has_linked_ticket" => !has_any_linked_ticket,
+                "ci_failing" => !has_any_pipeline,
                 _ => false,
             };
 
             let prefix = if is_current { "● " } else { "  " };
             let display_label = if is_na {
-                format!("{}{}  (n/a)", prefix, label)
+                format!("{}{}  (n/a)", prefix, def.label)
             } else {
-                format!("{}{}", prefix, label)
+                format!("{}{}", prefix, def.label)
             };
+
             let style = if is_na {
-                // Dimmed regardless of cursor position — not useful to select.
                 Style::default().fg(Color::Rgb(90, 90, 90))
             } else if is_active {
                 Style::default()
@@ -655,17 +615,20 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     list_state.select(Some(cursor));
     f.render_stateful_widget(list, zones[0], &mut list_state);
 
-    // Text input field for Milestone / Assignee entries.
+    // Text input field for parametric filters (Milestone, Assignee, …).
     if needs_text_input {
-        let field_label = if app.filter_picker.cursor == 15 {
-            " Milestone contains "
-        } else {
-            " Assignee contains "
-        };
+        let field_label = app
+            .filter_defs
+            .get(cursor)
+            .map(|d| d.active_label)
+            .unwrap_or("Query");
         let input_block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow))
-            .title(Span::styled(field_label, Style::default().fg(Color::White)));
+            .title(Span::styled(
+                format!(" {} ", field_label),
+                Style::default().fg(Color::White),
+            ));
         let input_widget = Paragraph::new(app.filter_picker.input.as_str())
             .block(input_block)
             .style(Style::default().fg(Color::White));
@@ -675,34 +638,32 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 
 /// Renders the column-picker popup centred over the terminal area.
 ///
-/// The popup is overlaid via [`Clear`] so it erases whatever is beneath it.
-/// Arrow keys move the cursor; Space toggles the highlighted entry.
+/// Iterates `app.column_defs` (collected via `inventory` at startup) — no hardcoded
+/// index mapping needed. Plugin columns (e.g. Redmine's "Tracker") appear automatically
+/// when their crate is linked and the runtime condition (`requires_feature`) is met.
 fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
-    // The popup entries mirror the fields of `VisibleColumns` in declaration order.
-    // The "Tracker" entry is appended only when a tracker provider is configured at runtime.
-    let mut entries_vec: Vec<(&str, bool)> = vec![
-        ("Activity", app.config.visible_columns.activity),
-        ("Target branch", app.config.visible_columns.target_branch),
-        ("Labels", app.config.visible_columns.labels),
-        ("Milestone", app.config.visible_columns.milestone),
-        ("Notes", app.config.visible_columns.notes),
-        ("Complexity", app.config.visible_columns.diff_stats),
-    ];
-    if app.tracker.is_some() {
-        entries_vec.push(("Tracker", app.config.visible_columns.tracker_ticket));
-    }
-    let entries: &[(&str, bool)] = &entries_vec;
+    let has_tracker = app.tracker.is_some();
 
-    // Fixed popup size: wide enough for the longest label + checkbox, tall enough for all rows.
+    // Build the visible entry list from registered ColumnDef, filtering out
+    // feature-gated columns whose runtime condition is not satisfied.
+    let entries: Vec<(&str, bool)> = app
+        .column_defs
+        .iter()
+        .filter(|c| {
+            c.requires_feature
+                .map(|f| f == "tracker" && has_tracker)
+                .unwrap_or(true)
+        })
+        .map(|c| (c.label, app.config.visible_columns.is_visible(c.id)))
+        .collect();
+
     let popup_width: u16 = 36;
-    let popup_height: u16 = entries.len() as u16 + 2; // +2 for top/bottom borders
+    let popup_height: u16 = entries.len() as u16 + 2;
 
-    // Centre the popup within the terminal area.
     let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
     let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
     let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
 
-    // Erase the background behind the popup.
     f.render_widget(Clear, popup_area);
 
     let items: Vec<ListItem> = entries

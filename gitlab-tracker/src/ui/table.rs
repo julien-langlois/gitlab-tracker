@@ -104,7 +104,10 @@ fn state_badge(
 
 pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let _ = area; // Reserved for future use (e.g. dynamic column width)
-    let cols = &app.config.visible_columns;
+
+    // Resolve column visibility via the inventory-registered ColumnDef ids.
+    // This replaces the old fixed-field `VisibleColumns` struct accesses.
+    let col = |id: &str| app.config.visible_columns.is_visible(id);
 
     // Build the header dynamically based on enabled optional columns.
     let mut header_cells = vec![
@@ -112,25 +115,25 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         Cell::from("Title / API Status"),
         Cell::from("Status").bold(),
     ];
-    if cols.activity {
+    if col("activity") {
         header_cells.push(Cell::from("Activity").bold());
     }
-    if cols.target_branch {
+    if col("target_branch") {
         header_cells.push(Cell::from("Target").bold());
     }
-    if cols.labels {
+    if col("labels") {
         header_cells.push(Cell::from("Labels").bold());
     }
-    if cols.milestone {
+    if col("milestone") {
         header_cells.push(Cell::from("Milestone").bold());
     }
-    if cols.notes {
+    if col("notes") {
         header_cells.push(Cell::from("Notes").bold());
     }
-    if cols.diff_stats {
+    if col("diff_stats") {
         header_cells.push(Cell::from("Complexity").bold());
     }
-    if cols.tracker_ticket {
+    if col("tracker_ticket") {
         header_cells.push(Cell::from("Tracker").bold());
     }
     for b in &app.branches {
@@ -212,26 +215,26 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             ];
 
             // Optional columns — inserted only when enabled in config.
-            if cols.activity {
+            if col("activity") {
                 let (icon, color) = app.config.activity_badge(mr.updated_at.as_deref());
                 cells.push(maybe_highlight(Cell::from(icon).fg(color), highlight));
             }
-            if cols.target_branch {
+            if col("target_branch") {
                 cells.push(maybe_highlight(
                     Cell::from(mr.target_branch.clone()).fg(Color::LightBlue),
                     highlight,
                 ));
             }
-            if cols.labels {
+            if col("labels") {
                 cells.push(maybe_highlight(label_cell, highlight));
             }
-            if cols.milestone {
+            if col("milestone") {
                 cells.push(maybe_highlight(
                     Cell::from(mr.milestone.clone()).fg(Color::Cyan),
                     highlight,
                 ));
             }
-            if cols.notes {
+            if col("notes") {
                 let (notes_text, notes_color) = if mr.user_notes_count == 0 {
                     ("✔ 0".to_string(), Color::DarkGray)
                 } else {
@@ -250,7 +253,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             //   🟢 EASY    → 2 + 5 = 7  → 3 trailing spaces to reach 10
             //   🟡 MEDIUM  → 2 + 7 = 9  → 1 trailing space  to reach 10
             //   🔴 COMPLEX → 2 + 8 = 10 → no extra padding needed
-            if cols.diff_stats {
+            if col("diff_stats") {
                 let complexity_cell = match &mr.diff_stats {
                     Some(stats) => {
                         let score = stats.difficulty(&app.config.complexity_profile);
@@ -276,7 +279,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             }
 
             // Optional tracker ticket column — visible when a provider is configured.
-            if cols.tracker_ticket {
+            if col("tracker_ticket") {
                 let ticket_cell = match &mr.linked_ticket {
                     Some(t) => {
                         // Format time tracking as "Xh Ym" — reused from inspector logic.
@@ -370,28 +373,28 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         Constraint::Fill(3),                        // Title
         Constraint::Length(BADGE_WIDTH as u16 + 2), // State badge
     ];
-    if cols.activity {
+    if col("activity") {
         constraints.push(Constraint::Length(12)); // Activity badge
     }
-    if cols.target_branch {
+    if col("target_branch") {
         constraints.push(Constraint::Fill(2)); // Target branch
     }
-    if cols.labels {
+    if col("labels") {
         constraints.push(Constraint::Fill(2)); // Labels
     }
-    if cols.milestone {
+    if col("milestone") {
         // Milestone gets a smaller share when the tracker column is also visible,
         // to give more room to the ticket subject which is typically longer.
-        let milestone_fill = if cols.tracker_ticket { 1 } else { 2 };
+        let milestone_fill = if col("tracker_ticket") { 1 } else { 2 };
         constraints.push(Constraint::Fill(milestone_fill)); // Milestone
     }
-    if cols.notes {
+    if col("notes") {
         constraints.push(Constraint::Length(10)); // Notes badge
     }
-    if cols.diff_stats {
+    if col("diff_stats") {
         constraints.push(Constraint::Length(14)); // Complexity chip badge (e.g. " 🔴 Complex ")
     }
-    if cols.tracker_ticket {
+    if col("tracker_ticket") {
         constraints.push(Constraint::Fill(2)); // Tracker ticket
     }
 
@@ -413,7 +416,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         SortOrder::Descending => "↓",
     };
 
-    let filter_label = app.filter_mode.label();
+    let filter_label = app.active_filter.label(&app.filter_defs);
 
     // Show "X/Y MRs" when a filter is active, plain "Y MRs" otherwise.
     let total = app.mrs.len();

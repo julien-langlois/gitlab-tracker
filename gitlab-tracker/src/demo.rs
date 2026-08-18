@@ -79,14 +79,12 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     // In demo mode optional columns start hidden — the demo.tape scenario uses [C]
     // to open the column picker and enable them live, showcasing the feature.
     let demo_config = AppConfig {
-        visible_columns: VisibleColumns {
-            activity: true,
-            target_branch: false,
-            labels: false,
-            milestone: true,
-            notes: true,
-            tracker_ticket: false,
-            diff_stats: false,
+        visible_columns: {
+            let mut vc = VisibleColumns::default();
+            vc.set_visible("activity", true);
+            vc.set_visible("milestone", true);
+            vc.set_visible("notes", true);
+            vc
         },
         ..config
     };
