@@ -452,14 +452,17 @@ This project is structured as a **Cargo workspace** with four crates:
 gitlab-tracker/                  # Binary crate — TUI orchestrator
 └── src/
     ├── main.rs          # Entry point: wires providers, calls build_tracker_colors(), event loop
-    ├── app.rs           # State machine, InputMode, row navigation & sort logic
-    ├── config.rs        # Label filtering, wildcard matching, parse_color() & activity badge
+    ├── app.rs           # State machine, InputMode, ActiveFilter, row navigation & sort logic
+    ├── config.rs        # Label filtering, wildcard matching, parse_color(), VisibleColumns & activity badge
     ├── models.rs        # Strongly-typed API DTOs & runtime event types
     ├── gitlab.rs        # Async network handling & rate-limit semaphores
     ├── events.rs        # Keyboard & mouse event dispatch (Normal / Insert mode routing)
     ├── storage.rs       # OS Keyring interface & XDG state/config persistence
     ├── utils.rs         # Fuzzy matching algorithmic utilities
     ├── demo.rs          # Demo mode with pre-populated mock data (screenshots & CI)
+    ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
+    ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
+    ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
     └── ui/
         ├── mod.rs       # Root layout renderer & input bar (mode-aware)
         ├── table.rs     # Main MR table widget
@@ -468,12 +471,15 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
 
 gitlab-tracker-core/             # Library crate — shared trait contracts, zero UI dependency
 └── src/
-    ├── lib.rs           # Re-exports: TrackerProvider, LinkedTicket, LabelColorMaps, …
-    └── provider.rs      # TrackerProvider trait + all shared domain types
-                         #   LinkedTicket: flat ticket data (type, priority, version, progress, …)
-                         #   LabelColorMaps: raw (String, String) badge colour maps — no ratatui
+    ├── lib.rs           # Re-exports: TrackerProvider, LinkedTicket, FilterDef, ColumnDef, …
+    ├── provider.rs      # TrackerProvider trait + all shared domain types
+    │                    #   LinkedTicket: flat ticket data (type, priority, version, progress, …)
+    │                    #   LabelColorMaps: raw (String, String) badge colour maps — no ratatui
+    ├── filters.rs       # FilterDef contract + MrSnapshot + inventory::collect! registry
+    ├── columns.rs       # ColumnDef contract + inventory::collect! registry
+    └── shortcuts.rs     # ShortcutBlock / ShortcutFactory + inventory::collect! registry
 
-gitlab-tracker-notify/           # Library crate — optional desktop notification plugin
+gitlab-tracker-notify/           # Library crate — desktop notification plugin
 └── src/
     └── lib.rs           # notify-rust integration (no-op stubs when feature `desktop` is disabled)
 
@@ -483,7 +489,10 @@ gitlab-tracker-redmine/          # Library crate — optional Redmine integratio
     ├── client.rs        # Async Redmine REST API client (issue, time entries, activities)
     ├── config.rs        # RedmineConfig: YAML load/save, LabelColorConfig, onboarding prompt
     ├── detector.rs      # Regex-based ticket ID detector (title & description)
-    └── keyring.rs       # Secure token retrieval via OS Keyring
+    ├── keyring.rs       # Secure token retrieval via OS Keyring
+    ├── shortcuts.rs     # inventory::submit! — Redmine keyboard shortcut block
+    ├── filters.rs       # inventory::submit! — "Has linked ticket" filter definition
+    └── columns.rs       # inventory::submit! — "Tracker" column definition
 ```
 
 ### Optional Feature Flags
