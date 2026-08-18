@@ -702,6 +702,14 @@ impl App {
         let order = self.sort_order;
         let col = self.sort_column;
 
+        // Preserve the currently selected MR id so the cursor can be restored
+        // after the sort reorders the underlying vector.
+        let selected_id: Option<String> = self
+            .table_state
+            .selected()
+            .and_then(|i| self.visible_mrs().nth(i))
+            .map(|mr| mr.id.clone());
+
         self.mrs.sort_by(|a, b| {
             let cmp = match col {
                 SortColumn::UpdatedAt => {
@@ -736,6 +744,14 @@ impl App {
                 cmp.reverse()
             }
         });
+
+        // Restore the cursor on the same MR after the sort. If the previously
+        // selected MR is no longer visible (e.g. filtered out), fall back to
+        // position 0 so the selection is never left dangling.
+        if let Some(id) = selected_id {
+            let new_idx = self.visible_mrs().position(|mr| mr.id == id).unwrap_or(0);
+            self.table_state.select(Some(new_idx));
+        }
     }
 }
 
