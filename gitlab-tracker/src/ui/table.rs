@@ -244,19 +244,12 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             }
 
             // Optional complexity column — shows a fixed-width coloured chip badge
-
             // matching the side-panel style. All labels are uppercased and padded to
-
             // the width of the longest one ("COMPLEX") so every chip is the same size.
-
             // Emoji glyphs occupy 2 terminal columns, so padding is computed manually:
-
             //   🟢 EASY    → 2 + 5 = 7  → 3 trailing spaces to reach 10
-
             //   🟡 MEDIUM  → 2 + 7 = 9  → 1 trailing space  to reach 10
-
             //   🔴 COMPLEX → 2 + 8 = 10 → no extra padding needed
-
             if cols.diff_stats {
                 let complexity_cell = match &mr.diff_stats {
                     Some(stats) => {
