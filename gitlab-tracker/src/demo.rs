@@ -217,7 +217,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with several comments awaiting review.
             user_notes_count: 5,
             flagged: true,
-            diff_stats: Some(crate::models::DiffStats { files_changed: 12, additions: 487, deletions: 53 }),
+            diff_stats: Some(crate::models::DiffStats { files_changed: 12, additions: 487, deletions: 53, commits_count: 8 }),
             // Demo: simulate a linked Redmine ticket with full metadata for the Tracker pane.
             linked_ticket: Some(LinkedTicket {
                 schema_version: LINKED_TICKET_SCHEMA_VERSION,
@@ -265,7 +265,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 0,
             flagged: false,
-            diff_stats: Some(crate::models::DiffStats { files_changed: 4, additions: 89, deletions: 12 }),
+            diff_stats: Some(crate::models::DiffStats { files_changed: 4, additions: 89, deletions: 12, commits_count: 3 }),
             linked_ticket: None,
         },
         TrackedMr {
@@ -294,7 +294,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             // Demo: simulate a MR with unread comments from reviewers.
             user_notes_count: 3,
             flagged: false,
-            diff_stats: Some(crate::models::DiffStats { files_changed: 6, additions: 231, deletions: 18 }),
+            diff_stats: Some(crate::models::DiffStats { files_changed: 6, additions: 231, deletions: 18, commits_count: 5 }),
             // Demo: simulate a linked Redmine bug ticket with partial time tracking.
             linked_ticket: Some(LinkedTicket {
                 schema_version: LINKED_TICKET_SCHEMA_VERSION,
@@ -366,7 +366,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 6,
             flagged: false,
-            diff_stats: Some(crate::models::DiffStats { files_changed: 2, additions: 34, deletions: 8 }),
+            diff_stats: Some(crate::models::DiffStats { files_changed: 2, additions: 34, deletions: 8, commits_count: 1 }),
             linked_ticket: None,
         },
         TrackedMr {
@@ -395,7 +395,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             recently_updated: false,
             user_notes_count: 0,
             flagged: false,
-            diff_stats: Some(crate::models::DiffStats { files_changed: 1, additions: 12, deletions: 12 }),
+            diff_stats: Some(crate::models::DiffStats { files_changed: 1, additions: 12, deletions: 12, commits_count: 2 }),
             linked_ticket: None,
         },
         TrackedMr {

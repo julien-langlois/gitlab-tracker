@@ -203,6 +203,30 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
         "░".repeat(10usize.saturating_sub(filled))
     );
 
+    // Singular/plural label — 0 means the field was not yet fetched (stale cache),
+    // so we fall back to "Commits" and show a loading indicator instead.
+    let commits_line = if stats.commits_count == 0 {
+        Line::from(vec![
+            Span::raw("Commits  : "),
+            Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+        ])
+    } else {
+        let commit_label = if stats.commits_count == 1 {
+            "Commit   : "
+        } else {
+            "Commits  : "
+        };
+        Line::from(vec![
+            Span::raw(commit_label),
+            Span::styled(
+                stats.commits_count.to_string(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+    };
+
     vec![
         Line::from(vec![
             Span::raw("Diff     : "),
@@ -222,6 +246,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
                 Style::default().fg(Color::Red),
             ),
         ]),
+        commits_line,
         Line::from(vec![
             Span::raw("Review   : "),
             Span::styled(

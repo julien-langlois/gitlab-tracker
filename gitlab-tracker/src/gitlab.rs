@@ -1,5 +1,5 @@
 use crate::models::{
-    AppEvent, DiffStats, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef,
+    AppEvent, DiffStats, GitLabCommit, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef,
     MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
 };
 use crate::utils::{calculate_relevance, RELEVANCE_THRESHOLD};
@@ -136,34 +136,82 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     }
 
     let body: serde_json::Value = res.json().await.ok()?;
-    let changes = body.get("changes")?.as_array()?;
 
     let mut files_changed: u32 = 0;
     let mut additions: u32 = 0;
     let mut deletions: u32 = 0;
 
-    for change in changes {
-        files_changed += 1;
-
-        // The GitLab Changes API does not expose pre-aggregated line counts.
-        // Each `change` entry carries a `diff` field containing the raw unified
-        // diff patch. We count lines starting with `+` (additions) and `-`
-        // (deletions), excluding the `+++`/`---` file header lines.
-        if let Some(diff) = change.get("diff").and_then(|v| v.as_str()) {
-            for line in diff.lines() {
-                if line.starts_with('+') && !line.starts_with("+++") {
-                    additions += 1;
-                } else if line.starts_with('-') && !line.starts_with("---") {
-                    deletions += 1;
+    // `changes` can be null when the diff is too large for GitLab to compute inline.
+    // In that case we still return the stats we have rather than returning None
+    // and staying stuck on Loading.
+    if let Some(changes) = body.get("changes").and_then(|v| v.as_array()) {
+        for change in changes {
+            files_changed += 1;
+            // Each `change` entry carries a `diff` field with the raw unified patch.
+            // Count lines starting with `+`/`-`, excluding `+++`/`---` file headers.
+            if let Some(diff) = change.get("diff").and_then(|v| v.as_str()) {
+                for line in diff.lines() {
+                    if line.starts_with('+') && !line.starts_with("+++") {
+                        additions += 1;
+                    } else if line.starts_with('-') && !line.starts_with("---") {
+                        deletions += 1;
+                    }
                 }
             }
         }
+    } else {
+        // Fallback: GitLab exposes `changes_count` as a string (e.g. "42") at the
+        // top level when the inline diff is omitted due to size limits.
+        files_changed = body
+            .get("changes_count")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
     }
+
+    // Fetch the commit count via the dedicated commits endpoint —
+    // GET /projects/:id/merge_requests/:iid/commits returns a paginated list;
+    // we iterate through all pages (100 per page) and sum the counts.
+    let commits_count = {
+        let mut total: u32 = 0;
+        let mut page: u32 = 1;
+        loop {
+            let commits_url = format!(
+                "{}/api/v4/projects/{}/merge_requests/{}/commits?per_page=100&page={}",
+                ctx.base_url, ctx.project_id, mr_id, page
+            );
+            let res = client
+                .get(&commits_url)
+                .header("PRIVATE-TOKEN", &ctx.token)
+                .send()
+                .await;
+            match res {
+                Ok(r) if r.status().is_success() => {
+                    match r.json::<Vec<GitLabCommit>>().await {
+                        Ok(page_commits) if !page_commits.is_empty() => {
+                            total += page_commits.len() as u32;
+                            // If fewer than 100 results, this is the last page.
+                            if page_commits.len() < 100 {
+                                break;
+                            }
+                            page += 1;
+                        }
+                        // Empty page or parse error — stop paginating.
+                        _ => break,
+                    }
+                }
+                // Network or HTTP error — stop paginating, keep what we have.
+                _ => break,
+            }
+        }
+        total
+    };
 
     Some(DiffStats {
         files_changed,
         additions,
         deletions,
+        commits_count,
     })
 }
 
@@ -575,9 +623,17 @@ pub async fn fetch_gitlab_data(
     // Invalidate the cache if the stored stats look corrupted: files_changed > 0
     // but both additions and deletions are 0 means they were fetched with the old
     // `added_lines`/`removed_lines` fields that do not exist in the GitLab API.
-    let cached_diff_stats_valid = cached_diff_stats
-        .as_ref()
-        .is_some_and(|s| s.files_changed == 0 || s.additions > 0 || s.deletions > 0);
+    let cached_diff_stats_valid = cached_diff_stats.as_ref().is_some_and(|s| {
+        // Reject entries where additions/deletions are inconsistent (old cache format).
+        let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
+        // Reject entries where commits_count was never fetched (field added later —
+        // stale state files have 0 from serde default, but a real MR always has ≥ 1 commit).
+        // Once the fresh fetch writes a real value (even 0 from the API), we accept it.
+        // We distinguish stale-zero from api-zero by checking files_changed: if files > 0
+        // and commits == 0, the entry was written before this field existed.
+        let commits_ok = s.commits_count > 0 || s.files_changed == 0;
+        lines_ok && commits_ok
+    });
     let diff_stats =
         if updated_at.is_some() && updated_at == cached.updated_at && cached_diff_stats_valid {
             cached_diff_stats

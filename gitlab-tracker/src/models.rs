@@ -26,6 +26,47 @@ pub struct GitLabMilestone {
     pub due_date: Option<String>,
 }
 
+/// A single commit as returned by
+/// `GET /projects/:id/merge_requests/:merge_request_iid/commits`.
+///
+/// Reference: <https://docs.gitlab.com/api/merge_requests/#retrieve-merge-request-commits>
+///
+/// GitLab returns the full commit object; only the fields useful for display
+/// are mapped here — unknown fields are silently ignored by serde.
+/// Fields are not yet consumed beyond deserialization — the struct is kept as a
+/// forward-compatible contract for future UI use (commit list in the side panel, etc.).
+#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
+pub struct GitLabCommit {
+    /// Full SHA-1 hash of the commit (40 hex chars).
+    pub id: String,
+    /// Abbreviated SHA-1 (typically 8 chars) — used for compact display.
+    pub short_id: String,
+    /// First line of the commit message.
+    pub title: String,
+    /// Full commit message, including body and trailers. May be `None` when
+    /// the API omits it (e.g. lightweight tag commits).
+    pub message: Option<String>,
+    /// Display name of the commit author.
+    pub author_name: String,
+    /// Email address of the commit author.
+    pub author_email: String,
+    /// ISO 8601 timestamp when the commit was authored (author date).
+    pub authored_date: String,
+    /// Display name of the committer (may differ from author on rebases/merges).
+    pub committer_name: String,
+    /// Email address of the committer.
+    pub committer_email: String,
+    /// ISO 8601 timestamp when the commit was committed (committer date).
+    pub committed_date: String,
+    /// SHA-1 hashes of parent commits. Empty for root commits, two entries
+    /// for merge commits.
+    #[serde(default)]
+    pub parent_ids: Vec<String>,
+    /// Web URL to the commit detail page on GitLab.
+    pub web_url: String,
+}
+
 /// Represents the GitLab-side lifecycle state of a merge request.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -261,7 +302,7 @@ pub struct MrLoadedData {
 /// Diff statistics for a merge request: files changed, lines added, lines deleted.
 ///
 /// Fetched from the GitLab Changes API and used to display a compact summary
-/// (e.g. "9 files  +545 -32") alongside a review-difficulty score.
+/// (e.g. \"9 files  +545 -32\") alongside a review-difficulty score.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DiffStats {
     /// Number of files touched by this MR.
@@ -270,6 +311,9 @@ pub struct DiffStats {
     pub additions: u32,
     /// Total lines deleted across all changed files.
     pub deletions: u32,
+    /// Number of commits in this MR, as returned by the GitLab Changes API.
+    #[serde(default)]
+    pub commits_count: u32,
 }
 
 impl DiffStats {
