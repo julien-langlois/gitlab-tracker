@@ -64,13 +64,13 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
     let inner_w = popup_width.saturating_sub(2); // minus borders
     let n_cols: usize = if inner_w >= two_col_content_w { 2 } else { 1 };
 
-    // Height: sum of all section header + entries + blank lines, clamped to 90%.
+    // Height: sum of all section header + blank after header + entries + blank lines, clamped to 90%.
     let total_content_lines: u16 = app
         .shortcut_providers
         .iter()
         .map(|b| {
             let rows = (b.entries.len() as u16).div_ceil(n_cols as u16);
-            1 + rows + 1 // header + rows + blank separator
+            1 + 1 + rows + 1 // header + blank after header + rows + blank separator
         })
         .sum::<u16>()
         + 1; // footer hint
@@ -127,6 +127,9 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
             )])
             .alignment(Alignment::Left),
         );
+
+        // Blank line after the section header for readability.
+        lines.push(Line::from(Span::raw("")));
 
         // Distribute entries row-first across n_cols columns.
         for row_entries in block.entries.chunks(n_cols) {
