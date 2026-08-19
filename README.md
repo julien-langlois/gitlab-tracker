@@ -32,7 +32,7 @@
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🎯 **Review Complexity Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded complexity indicator calibrated to your tech stack:
   * In the **table**, the optional **Complexity** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
-  * In the **side Inspector**, the full breakdown is always visible: file/line counts, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
+  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
 
   The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
 
@@ -174,7 +174,7 @@ Your GitLab personal access token is **never stored in plain text**.
 
 On first launch, `gitlab-tracker` resolves each required value using the following priority order — prompting interactively only as a last resort:
 
-```text
+   ```text
  ┌──────────────────────────────────────────────────────────────┐
  │                    SETTINGS LOOKUP ORDER                     │
  ├──────────────────────────────────────────────────────────────┤
@@ -185,10 +185,11 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
  ├──────────────────────────────────────────────────────────────┤
  │ GITLAB_TOKEN                                                 │
  │   1. GITLAB_TOKEN environment variable (if set)              │
- │   2. Native OS Keyring (GNOME Keyring / macOS Keychain)      │
+ │   2. Native OS Keyring — keyed per GitLab instance URL       │
+ │      (multi-tenant: each instance has its own slot)          │
  │   3. Interactive CLI prompt → saved to OS Keyring            │
  └──────────────────────────────────────────────────────────────┘
-```
+ ```
 
 1. **First-Run Onboarding:**
    If no project is configured yet, the application will prompt you interactively on first launch:
@@ -420,6 +421,7 @@ Shortcut keys are active. The input field is passive.
 
 | Shortcut               | Action                                                                                                                     |
 | :--------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `?`                    | **Open help popup** — lists all registered shortcuts by section (any key to close)                                         |
 | `i` or `/`             | **Enter Insert mode** — focus the input field                                                                              |
 | `▲` / `▼` or `k` / `j` | Navigate rows in the table                                                                                                 |
 | `Tab`                  | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked)     |
