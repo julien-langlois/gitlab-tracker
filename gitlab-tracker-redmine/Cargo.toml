@@ -10,7 +10,7 @@ keywords = ["gitlab", "redmine", "tracker", "tui"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-gitlab-tracker-core = { version = "0.3.6", path = "../gitlab-tracker-core" }
+gitlab-tracker-core = { version = "0.4.0", path = "../gitlab-tracker-core" }
 inventory = "0.3"
 
 async-trait = "0.1"
