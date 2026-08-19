@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1] - 2026-08-19
+
+### 👷 CI
+
+- **ci**: Install libdbus-1-dev, libsecret-1-dev and pkg-config on GitHub Actions runner
+
 ## [0.4.0] - 2026-08-19
 
 ### 🚀 Features
