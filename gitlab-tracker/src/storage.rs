@@ -646,32 +646,95 @@ fn prompt_required(label: &str) -> String {
 
 /// Service name used consistently for all keyring read/write operations.
 const KEYRING_SERVICE: &str = "gitlab-tracker";
-/// Account name used consistently for all keyring read/write operations.
-const KEYRING_ACCOUNT: &str = "gitlab_token";
+/// Legacy account name — flat, instance-agnostic key used before multi-tenant support.
+/// Only used during the one-time migrations in `migrate_legacy_keyring_entry`.
+const KEYRING_ACCOUNT_LEGACY: &str = "gitlab_token";
 /// Legacy service name used before the naming was unified (underscore variant).
 /// Only used during the one-time migration in `migrate_legacy_keyring_entry`.
 const KEYRING_SERVICE_LEGACY: &str = "gitlab_tracker";
 
-/// Migrates a token stored under the legacy keyring service name (`gitlab_tracker`)
-/// to the canonical one (`gitlab-tracker`), then deletes the legacy entry.
+/// Derives a stable, per-instance keyring account name from the GitLab instance URL.
 ///
-/// This is a silent, one-time operation: if the canonical entry already exists,
-/// or if no legacy entry is found, nothing happens.
-pub fn migrate_legacy_keyring_entry() {
-    // Skip migration if the canonical entry already holds a token.
-    if let Ok(canonical) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
-        if let Ok(existing) = canonical.get_password() {
+/// Using the URL as the account key enables multi-tenant setups: each GitLab
+/// instance stores its token independently so switching projects never clobbers
+/// another instance's credentials.
+///
+/// Example: `"https://gitlab.example.com"` → `"gitlab_token::https://gitlab.example.com"`
+fn account_for(gitlab_url: &str) -> String {
+    format!("gitlab_token::{}", gitlab_url.trim_end_matches('/'))
+}
+
+/// Migrates tokens stored under legacy keyring keys to the current per-instance key.
+///
+/// Two migration steps are performed silently in order:
+///   1. `gitlab_tracker` / `gitlab_token`  →  `gitlab-tracker` / `gitlab_token`  (service rename)
+///   2. `gitlab-tracker` / `gitlab_token`  →  `gitlab-tracker` / `gitlab_token::<url>` (multi-tenant)
+///
+/// Each step is skipped if the target already contains a token, or if the source is empty.
+/// This is a one-time, non-destructive operation safe to run on every startup.
+pub fn migrate_legacy_keyring_entry(gitlab_url: &str) {
+    let canonical_account = account_for(gitlab_url);
+
+    // ── Step 1: service name rename (gitlab_tracker → gitlab-tracker) ────────
+    // Skip if the intermediate flat canonical entry already exists.
+    let flat_token = match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT_LEGACY) {
+        Ok(entry) => match entry.get_password() {
+            Ok(pwd) if !pwd.trim().is_empty() => Some(Zeroizing::new(pwd.trim().to_string())),
+            _ => None,
+        },
+        Err(_) => None,
+    };
+
+    if flat_token.is_none() {
+        // Try to pull from the very legacy entry (underscore service name).
+        if let Ok(legacy_entry) =
+            keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT_LEGACY)
+        {
+            if let Ok(pwd) = legacy_entry.get_password() {
+                let pwd = Zeroizing::new(pwd.trim().to_string());
+                if !pwd.is_empty() {
+                    tracing::info!(
+                        from = KEYRING_SERVICE_LEGACY,
+                        to = KEYRING_SERVICE,
+                        "Migrating token from legacy service name to canonical service name"
+                    );
+                    if let Ok(canonical_flat) =
+                        keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT_LEGACY)
+                    {
+                        if let Err(e) = canonical_flat.set_password(&pwd) {
+                            tracing::error!(error = %e, "Failed to write to canonical flat entry during step-1 migration");
+                        } else {
+                            // Clean up the legacy service entry.
+                            if let Err(e) = legacy_entry.delete_credential() {
+                                tracing::warn!(error = %e, "Step-1 migration succeeded but failed to delete legacy entry");
+                            } else {
+                                tracing::info!(
+                                    "Legacy keyring entry (step 1) deleted successfully"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Step 2: flat account → per-instance URL account ──────────────────────
+    // Skip if the per-instance entry already holds a token.
+    if let Ok(per_instance) = keyring::Entry::new(KEYRING_SERVICE, &canonical_account) {
+        if let Ok(existing) = per_instance.get_password() {
             if !existing.trim().is_empty() {
                 tracing::debug!(
-                    "Canonical keyring entry already populated — skipping legacy migration"
+                    account = %canonical_account,
+                    "Per-instance keyring entry already populated — skipping step-2 migration"
                 );
                 return;
             }
         }
     }
 
-    // Attempt to read from the legacy entry.
-    let legacy_token = match keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT) {
+    // Read the flat legacy token (written by step 1 or already present).
+    let flat_token = match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT_LEGACY) {
         Ok(entry) => match entry.get_password() {
             Ok(pwd) if !pwd.trim().is_empty() => Zeroizing::new(pwd.trim().to_string()),
             _ => return,
@@ -680,43 +743,44 @@ pub fn migrate_legacy_keyring_entry() {
     };
 
     tracing::info!(
-        from = KEYRING_SERVICE_LEGACY,
-        to = KEYRING_SERVICE,
-        "Migrating token from legacy keyring entry to canonical entry"
+        url = %gitlab_url,
+        from = KEYRING_ACCOUNT_LEGACY,
+        to = %canonical_account,
+        "Migrating token from flat account key to per-instance account key"
     );
 
-    // Write to the canonical entry.
-    match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+    // Write to the per-instance entry.
+    match keyring::Entry::new(KEYRING_SERVICE, &canonical_account) {
         Ok(entry) => {
-            if let Err(e) = entry.set_password(&legacy_token) {
-                tracing::error!(error = %e, "Failed to write token to canonical keyring entry during migration");
+            if let Err(e) = entry.set_password(&flat_token) {
+                tracing::error!(error = %e, "Failed to write to per-instance keyring entry during step-2 migration");
                 return;
             }
         }
         Err(e) => {
-            tracing::error!(error = %e, "Failed to open canonical keyring entry during migration");
+            tracing::error!(error = %e, "Failed to open per-instance keyring entry during step-2 migration");
             return;
         }
     }
 
-    // Delete the legacy entry now that the token is safely copied.
-    match keyring::Entry::new(KEYRING_SERVICE_LEGACY, KEYRING_ACCOUNT) {
+    // Delete the flat legacy entry now that the token is safely copied.
+    match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT_LEGACY) {
         Ok(entry) => {
             if let Err(e) = entry.delete_credential() {
-                tracing::warn!(error = %e, "Token migrated but failed to delete legacy keyring entry");
+                tracing::warn!(error = %e, "Step-2 migration succeeded but failed to delete flat legacy entry");
             } else {
-                tracing::info!("Legacy keyring entry deleted successfully");
+                tracing::info!("Flat legacy keyring entry (step 2) deleted successfully");
             }
         }
         Err(e) => {
-            tracing::warn!(error = %e, "Token migrated but could not open legacy keyring entry for deletion");
+            tracing::warn!(error = %e, "Step-2 migration succeeded but could not open flat legacy entry for deletion: {e}");
         }
     }
 }
 
-/// Resolves the GitLab PAT using the following priority chain:
+/// Resolves the GitLab PAT for a specific GitLab instance using the following priority chain:
 ///   1. `GITLAB_TOKEN` environment variable
-///   2. OS keyring (via the `keyring` crate)
+///   2. OS keyring entry keyed by `gitlab_url` (per-instance, multi-tenant safe)
 ///   3. Interactive prompt (hidden input via `rpassword`, no terminal echo)
 ///
 /// The returned value is wrapped in `Zeroizing<String>` so the secret bytes
@@ -724,7 +788,7 @@ pub fn migrate_legacy_keyring_entry() {
 ///
 /// # Panics
 /// Panics if no token is provided — the program cannot function without one.
-pub fn get_or_prompt_token() -> Zeroizing<String> {
+pub fn get_or_prompt_token(gitlab_url: &str) -> Zeroizing<String> {
     // 1. Environment variable takes priority (CI / dotenv workflows).
     if let Ok(tok) = std::env::var("GITLAB_TOKEN") {
         let tok = Zeroizing::new(tok);
@@ -734,18 +798,20 @@ pub fn get_or_prompt_token() -> Zeroizing<String> {
         }
     }
 
-    // 2. Try the OS keyring.
+    let account = account_for(gitlab_url);
+
+    // 2. Try the OS keyring — keyed per GitLab instance URL.
     tracing::debug!(
         service = KEYRING_SERVICE,
-        account = KEYRING_ACCOUNT,
+        account = %account,
         "Attempting to read token from OS keyring"
     );
-    match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+    match keyring::Entry::new(KEYRING_SERVICE, &account) {
         Ok(entry) => match entry.get_password() {
             Ok(password) => {
                 let password = Zeroizing::new(password);
                 if !password.trim().is_empty() {
-                    tracing::info!("GITLAB_TOKEN loaded from OS keyring");
+                    tracing::info!(url = %gitlab_url, "GITLAB_TOKEN loaded from OS keyring");
                     return Zeroizing::new(password.trim().to_string());
                 }
                 tracing::warn!("Keyring entry found but token is empty — falling back to prompt");
@@ -770,13 +836,13 @@ pub fn get_or_prompt_token() -> Zeroizing<String> {
                 let token = Zeroizing::new(token.trim().to_string());
                 tracing::debug!(
                     service = KEYRING_SERVICE,
-                    account = KEYRING_ACCOUNT,
+                    account = %account,
                     "Saving token to OS keyring"
                 );
-                match keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) {
+                match keyring::Entry::new(KEYRING_SERVICE, &account) {
                     Ok(entry) => match entry.set_password(&token) {
                         Ok(_) => {
-                            tracing::info!("Token successfully saved to OS keyring");
+                            tracing::info!(url = %gitlab_url, "Token successfully saved to OS keyring");
                             println!("✅ Token securely saved to OS Keyring!\n");
                         }
                         Err(e) => {

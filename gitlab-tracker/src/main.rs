@@ -180,15 +180,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let project_id = project.project_id;
     let refresh_interval_secs = resolve_refresh_interval(&config);
 
-    // One-time silent migration: move any token stored under the legacy keyring
-    // service name ("gitlab_tracker") to the canonical one ("gitlab-tracker"),
-    // then delete the orphaned legacy entry.
-    migrate_legacy_keyring_entry();
+    // One-time silent migration: move any token stored under legacy keyring keys
+    // (service rename + flat account → per-instance URL account) to the current
+    // multi-tenant key, then delete orphaned legacy entries.
+    migrate_legacy_keyring_entry(&base_url);
 
     // `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
     // from memory when dropped. We extract the inner `String` here so the rest
     // of the program is unaffected; the Zeroizing wrapper is immediately dropped.
-    let token = get_or_prompt_token().to_string();
+    let token = get_or_prompt_token(&base_url).to_string();
 
     // ── Optional tracker integration ──────────────────────────────────────────
     // The tracker config lives inside the active `ProjectEntry` under the generic
