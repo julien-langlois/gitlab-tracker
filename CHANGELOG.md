@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2] - 2026-08-19
+
+### 👷 CI
+
+- **release**: Add libdbus-1-dev and pkg-config to publish-crates and build-release jobs to fix libdbus-sys compilation
+
 ## [0.4.1] - 2026-08-19
 
 ### 👷 CI
