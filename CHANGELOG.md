@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-08-19
+
+### 🚀 Features
+
+- **inspector**: Add commit count to Diff & Complexity panel
+- **ui**: Add responsive help popup with auto-registered shortcut providers
+- **keyring**: Make GitLab token storage multi-tenant keyed by instance URL
+
+### 🐛 Bug Fixes
+
+- **table**: Preserve cursor position on MR list re-sort after refresh
+
+### 🖥️ UI
+
+- **help_popup**: Add blank line between section header and shortcuts
+
+### 🔨 Refactor
+
+- Migrate filters and columns to inventory auto-registration
+
+### ⚙️ Miscellaneous
+
+- **deps**: Migrate `serde_yaml` → `serde_yml`, `keyring` v2 → v3, add `thiserror` on `TrackerProvider`
+
+### 📚 Documentation
+
+- Update architecture section to reflect inventory-based filter/column/shortcut modules
+
 ## [0.3.6] - 2026-08-18
 
 ### 🚀 Features
