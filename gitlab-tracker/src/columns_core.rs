@@ -44,7 +44,7 @@ inventory::submit!(ColumnDef {
 
 inventory::submit!(ColumnDef {
     id: "diff_stats",
-    label: "Complexity",
+    label: "Effort",
     default_visible: false,
     priority: 5,
     requires_feature: None,

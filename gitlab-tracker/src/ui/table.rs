@@ -131,7 +131,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         header_cells.push(Cell::from("Notes").bold());
     }
     if col("diff_stats") {
-        header_cells.push(Cell::from("Complexity").bold());
+        header_cells.push(Cell::from("Effort").bold());
     }
     if col("tracker_ticket") {
         header_cells.push(Cell::from("Tracker").bold());

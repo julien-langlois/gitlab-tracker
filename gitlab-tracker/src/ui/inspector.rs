@@ -14,12 +14,16 @@ use ratatui::text::{Line, Span, Text};
 /// grouped by pipeline run. Displayed when the user presses [P].
 pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
     let mut lines = vec![
-        Line::from(vec![Span::styled(
-            format!("Pipelines — MR !{}", mr.id),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-        )]),
+        Line::from(vec![
+            Span::styled(
+                format!("Pipelines — MR !{}", mr.id),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            ),
+            // Remind the user that only the 5 most recent pipelines are fetched.
+            Span::styled("  (last 5)", Style::default().fg(theme::MUTED_DIM)),
+        ]),
         Line::from(vec![Span::raw("")]),
     ];
 
@@ -187,12 +191,13 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
     };
 
     let difficulty_score = stats.difficulty(profile);
+    // Labels are uppercased to match the table column style (EASY / MEDIUM / COMPLEX).
     let (diff_icon, diff_fg, diff_bg) = if difficulty_score < 0.33 {
-        ("🟢 Easy", Color::Black, Color::Green)
+        ("🟢 EASY", Color::Black, Color::Green)
     } else if difficulty_score < 0.66 {
-        ("🟡 Medium", Color::Black, Color::Yellow)
+        ("🟡 MEDIUM", Color::Black, Color::Yellow)
     } else {
-        ("🔴 Complex", Color::White, Color::Red)
+        ("🔴 COMPLEX", Color::White, Color::Red)
     };
 
     // Build a visual bar proportional to difficulty (10 chars wide).
@@ -248,7 +253,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
         ]),
         commits_line,
         Line::from(vec![
-            Span::raw("Review   : "),
+            Span::raw("Effort   : "),
             Span::styled(
                 bar,
                 Style::default().fg(if difficulty_score < 0.33 {
@@ -536,9 +541,9 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         ),
     ]));
 
-    // ── SECTION 4b: Diff & Complexity ────────────────────────────────────────
+    // ── SECTION 4b: Diff & Effort ─────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Diff & Complexity"));
+    lines.push(section_header("Diff & Effort"));
     lines.extend(render_diff_stats_lines(mr, &config.complexity_profile));
 
     // ── SECTION 5: Labels ────────────────────────────────────────────────────
