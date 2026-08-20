@@ -104,7 +104,7 @@ pub fn ticket_field_changed(
     new: &str,
     ticket_url: &str,
 ) {
-    let icon = if field == "priority" {
+    let icon = if field == "priority" || field == "effort" {
         "dialog-warning"
     } else {
         "dialog-information"

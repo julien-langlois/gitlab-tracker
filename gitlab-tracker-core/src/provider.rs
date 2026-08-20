@@ -170,8 +170,11 @@ pub enum TicketChange {
     /// The target version/release changed (e.g. "v1.2" → "v1.3", or "None" when unset).
     Version { old: String, new: String },
     /// The completion percentage changed (0–100). Fires on both increase and decrease.
-    /// `old` and `new` are formatted as "N%" strings for display consistency.
+    /// `old` and `new` are formatted as \"N%\" strings for display consistency.
     DoneRatio { old: String, new: String },
+    /// The estimated effort changed. Fires on both increase and decrease.
+    /// `old` and `new` are formatted as \"Xh\" strings (rounded to one decimal) for readability.
+    Effort { old: String, new: String },
 }
 
 impl TicketChange {
@@ -183,6 +186,7 @@ impl TicketChange {
             TicketChange::Assignee { .. } => "assignee",
             TicketChange::Version { .. } => "version",
             TicketChange::DoneRatio { .. } => "progress",
+            TicketChange::Effort { .. } => "effort",
         }
     }
 
@@ -193,7 +197,8 @@ impl TicketChange {
             | TicketChange::Status { old, new }
             | TicketChange::Assignee { old, new }
             | TicketChange::Version { old, new }
-            | TicketChange::DoneRatio { old, new } => (old.as_str(), new.as_str()),
+            | TicketChange::DoneRatio { old, new }
+            | TicketChange::Effort { old, new } => (old.as_str(), new.as_str()),
         }
     }
 }
@@ -261,6 +266,25 @@ impl LinkedTicket {
             changes.push(TicketChange::DoneRatio {
                 old: format!("{}%", old_ratio),
                 new: format!("{}%", new_ratio),
+            });
+        }
+
+        // Estimated effort — fires on both increase and decrease.
+        // Formatted as "Xh" (one decimal, rounded) for immediate readability.
+        let fmt_hours = |secs: u32| -> String {
+            let h = secs as f32 / 3600.0;
+            if h.fract() == 0.0 {
+                format!("{}h", h as u32)
+            } else {
+                format!("{:.1}h", h)
+            }
+        };
+        let old_estimate = self.time_estimate.unwrap_or(0);
+        let new_estimate = new.time_estimate.unwrap_or(0);
+        if old_estimate != new_estimate {
+            changes.push(TicketChange::Effort {
+                old: fmt_hours(old_estimate),
+                new: fmt_hours(new_estimate),
             });
         }
 

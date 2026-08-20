@@ -8,7 +8,7 @@ Powered by [`notify-rust`](https://crates.io/crates/notify-rust), it surfaces MR
 
 ## Events
 
-Eight events trigger a desktop notification:
+Nine events trigger a desktop notification:
 
 **GitLab MR events**
 
@@ -30,6 +30,7 @@ Each notification shows the changed field with a clear **before → after** form
 | 👤 **Assignee changed** | Ticket assignee changed (e.g. `Alice → Bob`, or `→ Unassigned`) |
 | 📦 **Version changed** | Target version/release changed (e.g. `v1.2 → v1.3`, or `→ None`) |
 | 📊 **Progress changed** | Completion percentage changed in either direction (e.g. `50% → 75%` or `75% → 50%`) |
+| ⏱️ **Effort changed** | Estimated effort changed in either direction (e.g. `4h → 8h` or `8h → 4h`) — uses `dialog-warning` icon |
 
 Tracker ticket notifications open the **ticket URL** (not the MR) when clicked.
 
