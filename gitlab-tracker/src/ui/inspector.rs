@@ -57,6 +57,11 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
         })
         .unwrap_or_else(|| "unknown date".to_string());
 
+    // Append cumulative duration to the header when all jobs have finished.
+    let duration_suffix = pipeline_total_duration(pipeline)
+        .map(|secs| format!("  ⏱ {}", format_pipeline_duration(secs)))
+        .unwrap_or_default();
+
     let mut lines = vec![Line::from(vec![
         Span::styled(
             format!("#{} ", pipeline.id),
@@ -74,6 +79,7 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
             format!("  {}", date_display),
             Style::default().fg(theme::MUTED_DIM),
         ),
+        Span::styled(duration_suffix, Style::default().fg(theme::MUTED_DIM)),
     ])];
 
     if pipeline.jobs.is_empty() {
@@ -111,6 +117,39 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
     }
 
     lines
+}
+
+/// Computes the total duration of a pipeline by summing all job durations.
+///
+/// Returns `None` when the pipeline has no jobs, or when at least one job
+/// is still running (i.e. its `duration` field is `None`). This avoids
+/// showing a misleading partial total while the pipeline is in progress.
+fn pipeline_total_duration(pipeline: &Pipeline) -> Option<f64> {
+    if pipeline.jobs.is_empty() {
+        return None;
+    }
+    // Only aggregate when every job has reported its final duration.
+    let all_done = pipeline.jobs.iter().all(|j| j.duration.is_some());
+    if all_done {
+        Some(pipeline.jobs.iter().filter_map(|j| j.duration).sum())
+    } else {
+        None
+    }
+}
+
+/// Formats a duration in seconds into a compact human-readable string.
+///
+/// - `0s` – `59s`  → `"42s"`
+/// - `60s` and above → `"2m 34s"`
+fn format_pipeline_duration(secs: f64) -> String {
+    let total_secs = secs as u32;
+    let mins = total_secs / 60;
+    let s = total_secs % 60;
+    if mins > 0 {
+        format!("{}m {}s", mins, s)
+    } else {
+        format!("{}s", s)
+    }
 }
 
 /// Maps a `PipelineState` to a display icon and its colour.
@@ -365,6 +404,18 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             Span::raw("URL      : "),
             Span::styled(mr.web_url.clone(), Style::default().fg(theme::MUTED)),
         ]),
+        Line::from(vec![
+            Span::raw("HEAD SHA : "),
+            match mr.sha.as_deref() {
+                Some(sha) => Span::styled(
+                    sha.get(..8).unwrap_or(sha).to_string(),
+                    Style::default()
+                        .fg(Color::LightBlue)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                None => Span::styled("—", Style::default().fg(theme::MUTED)),
+            },
+        ]),
     ];
 
     // ── SECTION 2: People ────────────────────────────────────────────────────
@@ -540,6 +591,47 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
+
+    // Last pipeline summary — shows status + total duration without switching to [P].
+    // Only rendered when at least one pipeline is available for this MR.
+    if let Some(pipeline) = mr.pipelines.first() {
+        let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
+
+        // Reuse the shared helper — no duplicated aggregation logic here.
+        let duration_span = match pipeline_total_duration(pipeline) {
+            Some(secs) => Span::styled(
+                format!("  {}", format_pipeline_duration(secs)),
+                Style::default().fg(theme::MUTED_DIM),
+            ),
+            None => Span::raw(""),
+        };
+
+        // Hint to open the full pipeline view.
+        let hint_span = Span::styled(
+            "  [P] details",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
+
+        lines.push(Line::from(vec![
+            Span::raw("Pipeline : "),
+            Span::styled(
+                format!("#{} ", pipeline.id),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                status_icon,
+                Style::default()
+                    .fg(status_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            duration_span,
+            hint_span,
+        ]));
+    }
 
     // ── SECTION 4b: Diff & Effort ─────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
