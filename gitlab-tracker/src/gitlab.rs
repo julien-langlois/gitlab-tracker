@@ -140,6 +140,25 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     let mut additions: u32 = 0;
     let mut deletions: u32 = 0;
 
+    // GitLab sets `overflow: true` when the diff is truncated (> 1 000 files).
+    // In that case `changes` is still present but only contains a partial list,
+    // so counting its entries would give an incorrect total.
+    let overflow = body
+        .get("overflow")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    // Helper: parse `changes_count` from the top-level response.
+    // GitLab returns it as a string, sometimes with a trailing "+" (e.g. "1000+")
+    // when the count itself is capped — strip that suffix before parsing.
+    let parse_changes_count = |b: &serde_json::Value| -> u32 {
+        b.get("changes_count")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim_end_matches('+'))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+    };
+
     // `changes` can be null when the diff is too large for GitLab to compute inline.
     // In that case we still return the stats we have rather than returning None
     // and staying stuck on Loading.
@@ -158,14 +177,21 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
                 }
             }
         }
+
+        // When the diff is overflowing, the `changes` array is truncated.
+        // Prefer the server-side `changes_count` which reflects the real total.
+        if overflow {
+            let server_count = parse_changes_count(&body);
+            if server_count > 0 {
+                files_changed = server_count;
+            }
+            // additions/deletions are already partial and cannot be recovered from
+            // this endpoint when overflowing — they remain best-effort.
+        }
     } else {
         // Fallback: GitLab exposes `changes_count` as a string (e.g. "42") at the
         // top level when the inline diff is omitted due to size limits.
-        files_changed = body
-            .get("changes_count")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+        files_changed = parse_changes_count(&body);
     }
 
     // Fetch the commit count via the dedicated commits endpoint —
