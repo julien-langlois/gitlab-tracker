@@ -18,9 +18,7 @@
   * **Customizable Palette:** Map label names or wildcard patterns (e.g., `deploy::*`) to custom terminal colors or standard HEX codes (`#FF5733`) via an XDG-compliant JSON config. Labels without a config override automatically fall back to their **GitLab-side colour** (fetched at startup), with foreground computed for legibility.
 * ⚡ **High Performance & Asynchronous:** Powered by `tokio` and `reqwest`, utilizing non-blocking event loops and bounded concurrent requests via semaphores to protect GitLab API rate limits.
 * 🛡️ **Pass-Through Pass Caching:** Core MR metadata (author, milestone, assignee, description, labels) is fetched once and cached locally. Fully deployed MRs bypass network re-queries entirely ("Green Pass").
-* 🔍 **Dual Match Verification Engine:**
-  * **System 1 (Strict SHA):** Validates precise merge/squash commit SHAs on target branches (resistant to `git reset --hard`).
-  * **System 2 (Intelligent Fuzzy Matcher):** Uses a keyword relevance matrix to verify cherry-picked commits deployed across branches.
+* 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
@@ -30,9 +28,9 @@
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `refresh_interval_secs` in `projects.toml`.
 * 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `activity_recent_days` / `activity_stale_days` in `projects.toml`.
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
-* 🎯 **Review Complexity Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded complexity indicator calibrated to your tech stack:
-  * In the **table**, the optional **Complexity** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
-  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a 10-block progress bar, and the complexity badge with the active profile name in parentheses.
+* 🎯 **Review Effort Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded effort indicator calibrated to your tech stack:
+  * In the **table**, the optional **Effort** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
+  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a 10-block progress bar, and the effort badge with the active profile name in parentheses.
 
   The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
 
@@ -73,7 +71,7 @@
   | **Labels**     | Filtered label chips (respects `table_label_prefixes`)                                                      |
   | **Milestone**  | The associated milestone title                                                                              |
   | **Notes**      | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise  |
-  | **Complexity** | Review complexity chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
+  | **Effort** | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
@@ -110,6 +108,10 @@
   ```
 
   Pipeline data is fetched **alongside MR metadata** in the same refresh cycle and **persisted to disk** — so it is immediately available on restart without an extra network call. Re-fetching only occurs when GitLab reports a new `updated_at` timestamp, keeping API usage minimal.
+
+* 🔎 **HEAD SHA & Pipeline Summary in Inspector:** The MR metadata panel (default side panel) surfaces two additional at-a-glance fields without requiring a switch to the Pipeline view:
+  * **HEAD SHA** — the abbreviated commit SHA (8 chars) of the MR's source branch tip, useful for cross-referencing with CI logs or `git log`.
+  * **Pipeline summary** — the latest pipeline status (`✔ passed`, `✘ failed`, `⟳ running`, …) with its total execution time and a `[P] details` hint to open the full pipeline inspector.
 
 ---
 
@@ -268,7 +270,7 @@ labels        = false
 milestone     = true
 notes         = false
 tracker_ticket = true
-diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 chip badge based on diff size)
+diff_stats    = true   # "Effort" column (🟢/🟡/🔴 chip badge based on diff size)
 
 # Label colour overrides — exact names or wildcard patterns (e.g. "deploy::*").
 # Accepted colour values: named colours ("red", "cyan", "dark_gray", …) or hex codes ("#D32F2F").
@@ -309,7 +311,7 @@ diff_stats    = true   # "Complexity" column (🟢/🟡/🔴 chip badge based on
 > | `labels` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | **Milestone** — the associated milestone title |
 > | `notes` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
-> | `diff_stats` | **Complexity** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
+> | `diff_stats` | **Effort** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
 > | `tracker_ticket` | **Ticket** — linked tracker ticket ID + status (requires a tracker plugin) |
 
 > **Activity badge thresholds** control the colour-coded indicator next to the `Updated` field in the Context Inspector:

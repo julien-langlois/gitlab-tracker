@@ -1108,7 +1108,6 @@ fn build_fetch_context(app: &App) -> FetchContext {
 fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
     CachedMrData {
         title: Some(mr.title.clone()),
-        sha: mr.sha.clone(),
         description: Some(mr.description.clone()),
         author: Some(mr.author.clone()),
         assignee: Some(mr.assignee.clone()),

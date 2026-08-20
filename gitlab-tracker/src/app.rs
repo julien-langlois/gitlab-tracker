@@ -820,7 +820,6 @@ impl App {
             if initial_status == MrStatus::Loading {
                 let cached = CachedMrData {
                     title: Some(saved.title),
-                    sha: saved.sha,
                     description: saved.description,
                     author: saved.author,
                     assignee: saved.assignee,
@@ -1233,7 +1232,6 @@ impl App {
                     mr.status = MrStatus::Loading;
                     let cached = CachedMrData {
                         title: Some(mr.title.clone()),
-                        sha: mr.sha.clone(),
                         description: Some(mr.description.clone()),
                         author: Some(mr.author.clone()),
                         assignee: Some(mr.assignee.clone()),
