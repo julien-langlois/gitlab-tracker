@@ -1054,6 +1054,37 @@ impl App {
                 mr.pipelines = data.pipelines;
                 mr.recently_updated = was_updated;
                 mr.user_notes_count = data.user_notes_count;
+
+                // Detect complexity category changes (EASY / MEDIUM / COMPLEX) before
+                // overwriting the stored diff_stats. Only fires when both old and new
+                // stats are available and the category boundary is actually crossed.
+                {
+                    let complexity_label = |score: f64| -> &'static str {
+                        if score < 0.33 {
+                            "🟢 EASY"
+                        } else if score < 0.66 {
+                            "🟡 MEDIUM"
+                        } else {
+                            "🔴 COMPLEX"
+                        }
+                    };
+                    if let (Some(old_stats), Some(new_stats)) = (&mr.diff_stats, &data.diff_stats) {
+                        let old_label =
+                            complexity_label(old_stats.difficulty(&self.config.complexity_profile));
+                        let new_label =
+                            complexity_label(new_stats.difficulty(&self.config.complexity_profile));
+                        if old_label != new_label {
+                            notify::mr_complexity_changed(
+                                &mr.id,
+                                &mr.title,
+                                old_label,
+                                new_label,
+                                &mr.web_url,
+                            );
+                        }
+                    }
+                }
+
                 mr.diff_stats = data.diff_stats;
 
                 // Arm (or re-arm) the global fade countdown.

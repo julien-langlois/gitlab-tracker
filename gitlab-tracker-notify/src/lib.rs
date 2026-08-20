@@ -69,6 +69,22 @@ pub fn mr_mergeability_changed(mr_id: &str, title: &str, old: &str, new: &str, w
     show_with_url(notification, web_url.to_owned());
 }
 
+/// Notify that an MR's review complexity category has changed (e.g. EASY → COMPLEX).
+///
+/// Fires when the computed difficulty score crosses a category boundary during a refresh.
+/// `old` and `new` are human-readable labels matching the UI badges (e.g. `"🟢 EASY"`,
+/// `"🟡 MEDIUM"`, `"🔴 COMPLEX"`).
+#[cfg(feature = "desktop")]
+pub fn mr_complexity_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
+    let notification = notify_rust::Notification::new()
+        .summary(&format!("MR !{} — complexity changed", mr_id))
+        .body(&format!("{}\n{} → {}", title, old, new))
+        .icon("dialog-warning")
+        .action("default", "Open MR")
+        .finalize();
+    show_with_url(notification, web_url.to_owned());
+}
+
 /// Notify that an MR's milestone has changed.
 #[cfg(feature = "desktop")]
 pub fn mr_milestone_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
@@ -132,6 +148,10 @@ pub fn mr_updated(_mr_id: &str, _title: &str, _updated_at: Option<&str>, _web_ur
 #[inline(always)]
 pub fn mr_mergeability_changed(_mr_id: &str, _title: &str, _old: &str, _new: &str, _web_url: &str) {
 }
+
+#[cfg(not(feature = "desktop"))]
+#[inline(always)]
+pub fn mr_complexity_changed(_mr_id: &str, _title: &str, _old: &str, _new: &str, _web_url: &str) {}
 
 #[cfg(not(feature = "desktop"))]
 #[inline(always)]
