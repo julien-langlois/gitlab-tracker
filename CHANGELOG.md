@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3] - 2026-08-21
+
+### 🚀 Features
+
+- **notify**: Alert when MR complexity category changes during refresh
+- **inspector**: Add HEAD SHA and pipeline summary to MR overview
+
+### 🐛 Bug Fixes
+
+- Correct truncated diff stats when GitLab diff overflows
+- **detection**: Replace fuzzy keyword matching with strict SHA-based branch detection
+
+### 🔨 Refactor
+
+- **ui**: Rename Complexity to Effort and polish side panel labels
+
 ## [0.4.2] - 2026-08-19
 
 ### 👷 CI
