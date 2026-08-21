@@ -137,9 +137,6 @@ pub struct GitLabMr {
     pub detailed_merge_status: Option<String>,
     /// Whether the MR has unresolved merge conflicts (complementary signal from GitLab).
     pub has_conflicts: Option<bool>,
-    /// Total number of user notes (comments + discussion threads) on this MR.
-    /// Returned natively by the GitLab API — no extra request needed.
-    pub user_notes_count: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

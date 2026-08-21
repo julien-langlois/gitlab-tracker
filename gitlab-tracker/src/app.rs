@@ -828,6 +828,7 @@ impl App {
                     updated_at: saved.updated_at,
                     pipelines: saved.pipelines,
                     diff_stats: saved.diff_stats,
+                    user_notes_count: saved.user_notes_count,
                 };
 
                 // Count each pending fetch so we can suppress change notifications
@@ -1271,6 +1272,7 @@ impl App {
                         updated_at: mr.updated_at.clone(),
                         pipelines: mr.pipelines.clone(),
                         diff_stats: mr.diff_stats.clone(),
+                        user_notes_count: mr.user_notes_count,
                     };
                     spawn_mr_fetch(
                         ctx.clone(),

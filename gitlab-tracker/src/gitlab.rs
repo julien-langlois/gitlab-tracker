@@ -1,6 +1,6 @@
 use crate::models::{
     AppEvent, DiffStats, GitLabCommit, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef,
-    MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
+    GitlabMrState, MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
 };
 
 use std::collections::HashSet;
@@ -33,6 +33,8 @@ pub struct CachedMrData {
     pub pipelines: Vec<Pipeline>,
     /// Diff stats from the previous fetch — reused when `updated_at` is unchanged.
     pub diff_stats: Option<crate::models::DiffStats>,
+    /// Human note count from the previous fetch — reused when `updated_at` is unchanged.
+    pub user_notes_count: u32,
 }
 
 /// Fetches the last 5 pipelines for the given MR, then enriches each with
@@ -103,6 +105,94 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     }
 
     pipelines
+}
+
+/// Fetches the real human-comment count for a MR from the GitLab Discussions API.
+///
+/// `GET /projects/:id/merge_requests/:iid/discussions` returns all discussion threads.
+/// Each thread contains one or more notes. We count every note where `system == false`,
+/// which corresponds to actual human feedback (thread starters + replies), regardless
+/// of whether the thread is resolved or still open.
+///
+/// System notes (label changes, merge commits, assignee changes, etc.) are excluded
+/// because they are GitLab activity entries, not reviewer feedback.
+///
+/// Falls back to `0` on any network or parse error — this is a best-effort enrichment.
+async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Client) -> u32 {
+    let mut total: u32 = 0;
+    let mut page: u32 = 1;
+
+    loop {
+        let url = format!(
+            "{}/api/v4/projects/{}/merge_requests/{}/discussions?per_page=100&page={}",
+            ctx.base_url, ctx.project_id, mr_id, page
+        );
+
+        let res = match client
+            .get(&url)
+            .header("PRIVATE-TOKEN", &ctx.token)
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => r,
+            Ok(r) => {
+                tracing::warn!(
+                    "Discussions API returned non-2xx for MR {}: {}",
+                    mr_id,
+                    r.status()
+                );
+                break;
+            }
+            Err(e) => {
+                tracing::warn!("Discussions API network error for MR {}: {}", mr_id, e);
+                break;
+            }
+        };
+
+        let discussions: Vec<serde_json::Value> = match res.json().await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Failed to deserialize discussions for MR {}: {}", mr_id, e);
+                break;
+            }
+        };
+
+        if discussions.is_empty() {
+            break;
+        }
+
+        let page_count = discussions.len();
+
+        for discussion in discussions {
+            if let Some(notes) = discussion.get("notes").and_then(|n| n.as_array()) {
+                // A discussion thread is "unresolved" when at least one of its notes
+                // is resolvable (i.e. it is a proper review thread, not a plain comment)
+                // and has not yet been resolved.
+                // We count threads (discussions), not individual notes/replies.
+                let is_unresolved_thread = notes.iter().any(|note| {
+                    let resolvable = note
+                        .get("resolvable")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let resolved = note
+                        .get("resolved")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    resolvable && !resolved
+                });
+                if is_unresolved_thread {
+                    total += 1;
+                }
+            }
+        }
+        // If fewer than 100 results were returned, this was the last page.
+        if page_count < 100 {
+            break;
+        }
+        page += 1;
+    }
+
+    total
 }
 
 /// Fetches diff statistics for a merge request from the GitLab Changes API.
@@ -424,8 +514,31 @@ pub async fn fetch_gitlab_data(
     let updated_at = mr.updated_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.clone().unwrap_or_default();
-    // Always read the notes count fresh — it reflects live discussion activity.
-    let user_notes_count = mr.user_notes_count.unwrap_or(0);
+    // Fetch the real human-note count from the discussions endpoint.
+    // The native `user_notes_count` field from the MR API is unreliable: it counts
+    // ALL notes including system events (label changes, merge activity, etc.) and notes
+    // inside resolved threads. On a merged MR this can reach 100+ while the actual
+    // number of human comments is far lower.
+    //
+    // Instead we call GET /discussions which gives us the full thread graph:
+    //   - `notes[].system == true`  → skip (GitLab activity entries, not human comments)
+    //   - everything else           → count (thread starters + replies, resolved or not)
+    //
+    // This number reflects the real volume of review feedback left on the MR.
+    //
+    // NOTE: intentionally NOT cached on `updated_at`. GitLab does NOT update the MR's
+    // `updated_at` timestamp when a discussion thread is resolved or a note is added.
+    // Caching on `updated_at` would therefore silently serve a stale count after a
+    // reviewer resolves a thread. We always refetch — one extra paginated request per
+    // MR per refresh cycle, which is acceptable for correctness.
+    //
+    // Exception: merged/closed MRs with a known count are frozen — their discussion
+    // history is immutable and will never change.
+    let user_notes_count = if state != GitlabMrState::Opened && cached.user_notes_count > 0 {
+        cached.user_notes_count
+    } else {
+        fetch_notes_count(ctx, mr_id, &client).await
+    };
 
     // Resolve mergeability with the following priority:
     //   1. `has_conflicts: true` always wins — manual intervention is required regardless

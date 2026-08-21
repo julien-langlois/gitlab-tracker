@@ -1116,5 +1116,6 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         updated_at: mr.updated_at.clone(),
         pipelines: mr.pipelines.clone(),
         diff_stats: mr.diff_stats.clone(),
+        user_notes_count: mr.user_notes_count,
     }
 }
