@@ -21,9 +21,9 @@ notifications = ["gitlab-tracker-notify/desktop"]
 redmine = ["dep:gitlab-tracker-redmine", "dep:serde_yml"]
 
 [dependencies]
-gitlab-tracker-notify  = { version = "0.4.2", path = "../gitlab-tracker-notify" }
-gitlab-tracker-core    = { version = "0.4.2", path = "../gitlab-tracker-core" }
-gitlab-tracker-redmine = { version = "0.4.2", path = "../gitlab-tracker-redmine", optional = true }
+gitlab-tracker-notify  = { version = "0.4.3", path = "../gitlab-tracker-notify" }
+gitlab-tracker-core    = { version = "0.4.3", path = "../gitlab-tracker-core" }
+gitlab-tracker-redmine = { version = "0.4.3", path = "../gitlab-tracker-redmine", optional = true }
 
 inventory = "0.3"
 ratatui = { version = "0.30", features = ["crossterm_0_28"] }
