@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.4] - 2026-08-24
+
+### 🚀 Features
+
+- **notes**: Replace `user_notes_count` with live unresolved thread count fetched from the GitLab Discussions API — the Notes column and Inspector badge now reflect only threads that actually require attention
+- **core**: Introduce `MrLifecycleEvent` + `MrEventPolicy` trait — lifecycle reactions (refetch, remove, notify, persist) are now declared in a single policy struct, fully decoupled from the UI event loop; `DefaultMrEventPolicy` is provided and injectable
+
+### 🔨 Refactor
+
+- **app**: Centralise MR lifecycle handling via `AppEvent`; add a live GitLab / tracker API call counter in the terminal title bar
+
+### ⚙️ Miscellaneous
+
+- **deps**: Migrate config loading to [`figment`](https://crates.io/crates/figment) (JSON file + `GITLAB_TRACKER_*` env vars, layered); switch `reqwest` from `native-tls-vendored` to `rustls-tls` (pure-Rust TLS, no OpenSSL dependency); drop `serde_yml` (replaced by `serde_json` for the one-shot `redmine.yaml` migration)
+
+### 📚 Documentation
+
+- Update README to document `GITLAB_TRACKER_*` environment variable overrides and the Figment config resolution order
+- Document `MrLifecycleEvent` / `MrEventPolicy` architecture in `gitlab-tracker-core` README
+
+### ⚠️ Breaking Changes
+
+- Environment variable overrides for `AppConfig` fields now require the `GITLAB_TRACKER_` prefix (e.g. `DEFAULT_BRANCHES` → `GITLAB_TRACKER_DEFAULT_BRANCHES`)
+
 ## [0.4.3] - 2026-08-21
 
 ### 🚀 Features
