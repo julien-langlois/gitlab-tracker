@@ -18,7 +18,7 @@ path = "src/main.rs"
 [features]
 default = ["notifications"]
 notifications = ["gitlab-tracker-notify/desktop"]
-redmine = ["dep:gitlab-tracker-redmine", "dep:serde_yml"]
+redmine = ["dep:gitlab-tracker-redmine"]
 
 [dependencies]
 gitlab-tracker-notify  = { version = "0.4.3", path = "../gitlab-tracker-notify" }
@@ -29,7 +29,7 @@ inventory = "0.3"
 ratatui = { version = "0.30", features = ["crossterm_0_28"] }
 crossterm = "0.28"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "native-tls-vendored"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dotenvy = "0.15"
@@ -42,7 +42,7 @@ clap = { version = "4.6.3", features = ["derive"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 futures = "0.3"
 toml = { version = "0.8", features = ["parse"] }
-serde_yml = { version = "0.0.12", optional = true }
+figment = { version = "0.10", features = ["toml", "json", "env"] }
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

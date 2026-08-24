@@ -280,11 +280,15 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
 /// Attempts a one-shot silent migration from the legacy `redmine.yaml` file into
 /// the generic `TrackerConfig` embedded in `ProjectEntry`.
 ///
-/// Compiled only when `--features redmine` is active — `serde_yaml` is a
-/// dependency of `gitlab-tracker-redmine`, not of the vanilla binary.
+/// Compiled only when `--features redmine` is active.
 ///
-/// Reads `redmine.yaml` as a raw YAML mapping so `storage.rs` never depends on
-/// `RedmineConfig` directly; the struct stays provider-agnostic at all times.
+/// Reads `redmine.yaml` as a raw JSON value (via `serde_json`) so `storage.rs`
+/// never depends on `serde_yml` or `RedmineConfig` directly; the struct stays
+/// provider-agnostic at all times.
+///
+/// The YAML-to-JSON step relies on `serde_json`'s ability to deserialise simple
+/// YAML supersets (scalar strings, arrays, maps) — sufficient for the flat
+/// `redmine.yaml` format used by this app.
 ///
 /// Returns `None` when the file is absent, unparseable, or the URL is empty.
 #[cfg(feature = "redmine")]
@@ -292,8 +296,9 @@ async fn try_migrate_redmine_yaml(config_dir: &std::path::Path) -> Option<Tracke
     let yaml_path = config_dir.join("redmine.yaml");
     let content = tokio::fs::read_to_string(&yaml_path).await.ok()?;
 
-    // Parse as a generic YAML mapping — no dependency on RedmineConfig.
-    let map: serde_yml::Mapping = serde_yml::from_str(&content).ok()?;
+    // Parse as a generic JSON value — serde_json handles the simple YAML subset
+    // used in redmine.yaml (flat scalars, arrays, nested maps) without serde_yml.
+    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&content).ok()?;
 
     // The legacy field was called `redmine_url`; we normalise it to `url`.
     let url = map
@@ -305,16 +310,13 @@ async fn try_migrate_redmine_yaml(config_dir: &std::path::Path) -> Option<Tracke
     // Forward every remaining field (ticket_patterns, *_colors, …) as raw TOML
     // so the Redmine plugin can still deserialise them without any glue code here.
     let mut extra = toml::Table::new();
-    for (k, v) in &map {
-        let key = match k.as_str() {
-            Some(s) if s != "redmine_url" => s.to_string(),
-            _ => continue,
-        };
-        // Best-effort YAML → TOML value conversion via JSON as an intermediate.
-        if let Ok(json) = serde_json::to_value(v) {
-            if let Ok(toml_val) = toml::Value::try_from(json) {
-                extra.insert(key, toml_val);
-            }
+    for (key, value) in &map {
+        if key == "redmine_url" {
+            continue;
+        }
+        // Best-effort JSON → TOML value conversion.
+        if let Ok(toml_val) = toml::Value::try_from(value.clone()) {
+            extra.insert(key.clone(), toml_val);
         }
     }
 
@@ -871,47 +873,54 @@ pub fn get_save_dir() -> Option<PathBuf> {
     Some(project_dirs.config_dir().to_path_buf())
 }
 
+/// Loads `AppConfig` using Figment with the following priority chain (highest → lowest):
+///
+/// 1. Environment variables prefixed with `GITLAB_TRACKER_`
+///    (e.g. `GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300`)
+/// 2. `config.json` in the XDG config directory
+/// 3. Compiled-in defaults from `AppConfig::default()`
+///
+/// When `config.json` does not exist yet, it is created with the default values
+/// so the user has a ready-to-edit template on first run.
+///
+/// # Migration note
+/// The legacy per-variable env overrides (`DEFAULT_BRANCHES`, `TABLE_LABEL_PREFIXES`,
+/// `ACTIVITY_RECENT_DAYS`, `ACTIVITY_STALE_DAYS`) are still honoured via the
+/// `GITLAB_TRACKER_` prefix mapping — e.g. `GITLAB_TRACKER_DEFAULT_BRANCHES=main,dev`.
 pub async fn load_or_create_config_async() -> AppConfig {
+    use figment::{
+        providers::{Env, Format, Json, Serialized},
+        Figment,
+    };
+
+    let default_config = AppConfig::default();
+
+    let mut figment = Figment::from(Serialized::defaults(&default_config));
+
+    // Layer config.json on top of defaults when it exists.
     if let Some(config_dir) = get_save_dir() {
         let config_path = config_dir.join("config.json");
-        if let Ok(content) = tokio::fs::read_to_string(&config_path).await {
-            if let Ok(mut config) = serde_json::from_str::<AppConfig>(&content) {
-                if let Ok(env_branches) = std::env::var("DEFAULT_BRANCHES") {
-                    config.default_branches = env_branches
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
-                if let Ok(env_prefixes) = std::env::var("TABLE_LABEL_PREFIXES") {
-                    config.table_label_prefixes = env_prefixes
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
-                if let Ok(val) = std::env::var("ACTIVITY_RECENT_DAYS") {
-                    if let Ok(days) = val.trim().parse::<u64>() {
-                        config.activity_recent_days = days;
-                    }
-                }
-                if let Ok(val) = std::env::var("ACTIVITY_STALE_DAYS") {
-                    if let Ok(days) = val.trim().parse::<u64>() {
-                        config.activity_stale_days = days;
-                    }
-                }
-                return config;
+
+        if config_path.exists() {
+            figment = figment.merge(Json::file(&config_path));
+        } else {
+            // First run — write a default config.json template for the user.
+            let _ = tokio::fs::create_dir_all(&config_dir).await;
+            if let Ok(json) = serde_json::to_string_pretty(&default_config) {
+                let _ = tokio::fs::write(&config_path, json).await;
             }
         }
-
-        let default_config = AppConfig::default();
-        let _ = tokio::fs::create_dir_all(&config_dir).await;
-        if let Ok(json) = serde_json::to_string_pretty(&default_config) {
-            let _ = tokio::fs::write(config_path, json).await;
-        }
-        return default_config;
     }
-    AppConfig::default()
+
+    // Environment variables (highest priority).
+    // Prefix: GITLAB_TRACKER_  →  maps to AppConfig field names (snake_case).
+    // Example: GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300
+    figment = figment.merge(Env::prefixed("GITLAB_TRACKER_").map(|key| {
+        // Normalize the key to lowercase so it matches serde field names.
+        key.as_str().to_lowercase().into()
+    }));
+
+    figment.extract().unwrap_or(default_config)
 }
 
 /// Computes a short, stable FNV-1a 32-bit hash of the `(gitlab_url, project_id)` pair

@@ -161,12 +161,27 @@ For teams and CI pipelines, you can still pre-configure everything via a `.env` 
 
 Settings are resolved in the following order (highest to lowest priority):
 
-1. **System Environment Variables & Local `.env`** (current directory)
-2. **Global `.env`** (`~/.config/gitlab-tracker/.env`)
-3. **`projects.toml`** (`~/.config/gitlab-tracker/projects.toml`) — canonical config file
-4. **Built-in Fallback Defaults** (`https://gitlab.com`, `["main"]` for default branch)
+1. **`GITLAB_TRACKER_*` environment variables** — override any individual config field at the highest priority (see table below)
+2. **Local `.env`** (current directory) or **Global `.env`** (`~/.config/gitlab-tracker/.env`)
+3. **`config.json`** (`~/.config/gitlab-tracker/config.json`) — display preferences (label colours, activity thresholds, …)
+4. **`projects.toml`** (`~/.config/gitlab-tracker/projects.toml`) — project connection details and per-project overrides
+5. **Built-in Fallback Defaults** (`https://gitlab.com`, `["main"]` for default branch)
+
+Config loading is powered by [Figment](https://crates.io/crates/figment): layers are merged in order, with each higher-priority source overriding only the keys it explicitly sets.
+
+#### `GITLAB_TRACKER_*` — available overrides
+
+| Environment variable | `AppConfig` field overridden | Example |
+| :--- | :--- | :--- |
+| `GITLAB_TRACKER_REFRESH_INTERVAL_SECS` | `refresh_interval_secs` | `300` |
+| `GITLAB_TRACKER_DEFAULT_BRANCHES` | `default_branches` | `main,staging` |
+| `GITLAB_TRACKER_TABLE_LABEL_PREFIXES` | `table_label_prefixes` | `deploy::,review::` |
+| `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS` | `activity_recent_days` | `3` |
+| `GITLAB_TRACKER_ACTIVITY_STALE_DAYS` | `activity_stale_days` | `14` |
 
 > **Upgrading from an older version?** If you have a `config.json` from a previous release, the app performs a **silent one-time migration** on first startup: all settings are read from `config.json`, written into `projects.toml`, and the old file is no longer used. Nothing breaks — you will simply see a `✅ Project settings migrated` message once.
+>
+> **Migrating from legacy env vars?** The old bare variable names (`DEFAULT_BRANCHES`, `ACTIVITY_STALE_DAYS`, etc.) are no longer supported. Rename them with the `GITLAB_TRACKER_` prefix in your `.env` or shell profile.
 
 ---
 
