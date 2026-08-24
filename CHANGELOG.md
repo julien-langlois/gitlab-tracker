@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### ⚙️ Miscellaneous
 
-- **deps**: Migrate config loading to [`figment`](https://crates.io/crates/figment) (JSON file + `GITLAB_TRACKER_*` env vars, layered); switch `reqwest` from `native-tls-vendored` to `rustls-tls` (pure-Rust TLS, no OpenSSL dependency); drop `serde_yml` (replaced by `serde_json` for the one-shot `redmine.yaml` migration)
+- **deps**: Migrate config loading to [`figment`](https://crates.io/crates/figment) (JSON file + `GITLAB_TRACKER_*` env vars, layered); switch `reqwest` from `native-tls-vendored` to `rustls-tls` (pure-Rust TLS, no OpenSSL dependency); drop `serde_yml` (replaced by `serde_json` for the one-shot `redmine.yaml` migration); remove `tokio = full` from `gitlab-tracker-core` — the domain contract library no longer pulls in a full async runtime
 
 ### 📚 Documentation
 
