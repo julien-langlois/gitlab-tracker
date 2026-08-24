@@ -434,22 +434,67 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
 
     let pending = app.pending_initial_fetches + app.pending_refresh_fetches;
 
+    // Build the API call counter label.
+    // GitLab and tracker calls are displayed separately so the user can distinguish
+    // between the two backends. The cold-start estimate (computed from saved state
+    // before the first refresh) is shown in parentheses with a 🚀 suffix.
+    let api_calls_label = {
+        let gl = app.estimated_gitlab_calls;
+        let tr = app.estimated_tracker_calls;
+
+        let gl_startup = app.startup_gitlab_estimate.unwrap_or(gl);
+        let tr_startup = app.startup_tracker_estimate.unwrap_or(tr);
+
+        // GitLab segment — always shown.
+        let gl_part = if gl != gl_startup {
+            format!("GL ~{} ({}🚀)", gl, gl_startup)
+        } else {
+            format!("GL ~{}", gl)
+        };
+
+        // Tracker segment — only shown when a tracker provider is configured.
+        let tr_part = if app.tracker.is_some() {
+            let s = if tr != tr_startup {
+                format!(
+                    " │ {} ~{} ({}🚀)",
+                    app.tracker.as_ref().map(|p| p.name()).unwrap_or("Tracker"),
+                    tr,
+                    tr_startup
+                )
+            } else {
+                format!(
+                    " │ {} ~{}",
+                    app.tracker.as_ref().map(|p| p.name()).unwrap_or("Tracker"),
+                    tr
+                )
+            };
+            s
+        } else {
+            String::new()
+        };
+
+        format!(" │ 🌐 {}{}", gl_part, tr_part)
+    };
+
     let loading_indicator = if pending > 0 {
         // Divide by 3 to slow down the animation to ~7 fps — fast enough to feel smooth,
-
         // slow enough for the braille frames to be readable (not a blur).
-
         let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
-
         format!(" {} Loading ({} pending)…", frame, pending)
     } else {
         String::new()
     };
 
-    let title_text =
-        format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02} │ {} │ Sort: {} {} │ Filter: {}{}",
-        app.base_url, mins, secs, mr_count_label, sort_label, order_label, filter_label,
+    let title_text = format!(
+        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02}{} │ {} │ Sort: {} {} │ Filter: {}{}",
+        app.base_url,
+        mins,
+        secs,
+        api_calls_label,
+        mr_count_label,
+        sort_label,
+        order_label,
+        filter_label,
         loading_indicator,
     );
 

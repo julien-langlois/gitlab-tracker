@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::gitlab::{spawn_mr_fetch, CachedMrData, FetchContext};
+use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
@@ -280,6 +280,18 @@ pub struct App {
     /// Number of MR fetches still pending from the current auto-refresh cycle.
     /// Drives the spinner in the table title; reset to 0 when all fetches complete.
     pub pending_refresh_fetches: usize,
+    /// Estimated GitLab API HTTP calls for the *next* refresh cycle (GitLab only).
+    /// Computed just before fetches are spawned so it reflects the real cache state.
+    pub estimated_gitlab_calls: usize,
+    /// Estimated tracker API calls for the *next* refresh cycle (Redmine, Jira, …).
+    /// Kept separate from GitLab calls so the UI can display them independently.
+    /// `0` when no tracker provider is configured.
+    pub estimated_tracker_calls: usize,
+    /// GitLab call estimate computed once from the saved state on the very first load.
+    /// Shown in parentheses in the table title to give cold-start context.
+    pub startup_gitlab_estimate: Option<usize>,
+    /// Tracker call estimate computed once from the saved state on the very first load.
+    pub startup_tracker_estimate: Option<usize>,
     /// Active tracker provider (Redmine, Jira, Trello, …), shared across async tasks via Arc.
     /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
@@ -363,6 +375,10 @@ impl App {
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
             pending_initial_fetches: 0,
             pending_refresh_fetches: 0,
+            estimated_gitlab_calls: 0,
+            estimated_tracker_calls: 0,
+            startup_gitlab_estimate: None,
+            startup_tracker_estimate: None,
             // Initialised to None — main.rs injects the provider after keyring lookup.
             tracker: None,
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
@@ -430,9 +446,64 @@ impl App {
         self.reset_inspector_scroll();
     }
 
-    /// Returns an iterator over the MRs that pass the current filter.
+    /// Returns an iterator over the MRs that pass the current filter,
+    /// ordered by fuzzy relevance when a search query is active in the input field.
+    ///
+    /// When `app.input` is non-empty (and not a `@milestone` autocomplete), each MR is
+    /// scored against the query using [`crate::utils::fuzzy_score`] on its title, author,
+    /// assignee and ID. MRs with no match are excluded; the rest are yielded in
+    /// descending score order (most relevant first).
+    ///
+    /// When the input is empty the original insertion order is preserved so normal
+    /// sort/filter behaviour is unaffected.
     pub fn visible_mrs(&self) -> impl Iterator<Item = &TrackedMr> {
-        self.mrs.iter().filter(move |mr| self.filter_passes(mr))
+        use crate::utils::fuzzy_score;
+
+        // Only apply fuzzy ranking when the user has typed a plain search query
+        // (not a `@milestone` autocomplete prefix).
+        let query = if !self.input.is_empty() && !self.input.starts_with('@') {
+            Some(self.input.clone())
+        } else {
+            None
+        };
+
+        // Collect filtered MRs with their fuzzy score so we can sort them.
+        // When no query is active we skip scoring entirely for efficiency.
+        let mut scored: Vec<(f64, &TrackedMr)> = self
+            .mrs
+            .iter()
+            .filter(|mr| self.filter_passes(mr))
+            .filter_map(|mr| {
+                if let Some(ref q) = query {
+                    // Score against the most user-visible fields — highest wins.
+                    let best = [
+                        fuzzy_score(q, &mr.title),
+                        fuzzy_score(q, &mr.author),
+                        fuzzy_score(q, &mr.assignee),
+                        fuzzy_score(q, &mr.id),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .fold(f64::NEG_INFINITY, f64::max);
+
+                    if best == f64::NEG_INFINITY {
+                        None // No match on any field → exclude.
+                    } else {
+                        Some((best, mr))
+                    }
+                } else {
+                    // No query — include all, preserve order (score unused).
+                    Some((0.0, mr))
+                }
+            })
+            .collect();
+
+        // Sort by descending relevance only when a query is active.
+        if query.is_some() {
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        }
+
+        scored.into_iter().map(|(_, mr)| mr)
     }
 
     /// Returns a mutable iterator over the MRs that pass the current filter.
@@ -728,6 +799,69 @@ impl TrackedMrExt for Vec<TrackedMr> {
 }
 
 impl App {
+    /// Recomputes `estimated_gitlab_calls` and `estimated_tracker_calls` from the
+    /// current MR list and tracker state.
+    ///
+    /// Must be called whenever the MR list changes (startup, add, remove) or just
+    /// before a refresh cycle is triggered — this ensures the displayed counters are
+    /// always up to date.
+    ///
+    /// # Breakdown
+    /// For each MR that is *not* fully frozen (merged into all branches with a known SHA):
+    ///   - GitLab calls: estimated via `CachedMrData::estimate()` (mirrors fetch logic exactly).
+    ///   - Tracker calls: `estimate_calls_per_ticket()` per MR that already has a linked ticket.
+    ///     New MRs (no linked ticket yet) cost 0 tracker calls — the ticket is only discovered
+    ///     after `MrLoaded` fires and `detect_ticket_id` succeeds.
+    ///
+    /// The two counters are kept separate so the UI can display them independently.
+    pub fn recompute_api_call_estimate(&mut self) {
+        let tracker_calls_per_ticket = self
+            .tracker
+            .as_ref()
+            .map(|p| p.estimate_calls_per_ticket())
+            .unwrap_or(0);
+
+        let mut gitlab_total: usize = 0;
+        let mut tracker_total: usize = 0;
+
+        for mr in &self.mrs {
+            // Mirror the freeze guard from the Tick handler — skip fully-frozen MRs.
+            if let MrStatus::MergedIn(ref found) = mr.status {
+                if self.branches.iter().all(|b| found.contains(b))
+                    && mr.sha.is_some()
+                    && mr.state != GitlabMrState::Opened
+                {
+                    continue;
+                }
+            }
+
+            let cached = CachedMrData {
+                title: Some(mr.title.clone()),
+                description: Some(mr.description.clone()),
+                author: Some(mr.author.clone()),
+                assignee: Some(mr.assignee.clone()),
+                web_url: Some(mr.web_url.clone()),
+                labels: Some(mr.labels.clone()),
+                updated_at: mr.updated_at.clone(),
+                pipelines: mr.pipelines.clone(),
+                diff_stats: mr.diff_stats.clone(),
+                user_notes_count: mr.user_notes_count,
+            };
+            let has_merge_sha = mr.sha.is_some() || mr.state == GitlabMrState::Merged;
+            gitlab_total += cached.estimate(&mr.state, has_merge_sha).total();
+
+            // Tracker calls only for MRs that already have a linked ticket resolved.
+            if mr.linked_ticket.is_some() {
+                tracker_total += tracker_calls_per_ticket;
+            }
+        }
+
+        self.estimated_gitlab_calls = gitlab_total;
+        self.estimated_tracker_calls = tracker_total;
+    }
+}
+
+impl App {
     /// Builds a `FetchContext` from the current application state.
     ///
     /// Centralises the repeated construction of `FetchContext` that was
@@ -842,6 +976,15 @@ impl App {
         if !self.mrs.is_empty() {
             self.table_state.select(Some(0));
         }
+
+        // Compute the startup estimate now that all saved MRs have been pushed.
+        // This is the cold-start baseline — shown in parentheses in the table title.
+        // The tracker provider may not be injected yet at this point (main.rs injects
+        // it after restore_from_saved), so tracker_total will be 0 here and corrected
+        // on the first Tick once the provider is available.
+        self.recompute_api_call_estimate();
+        self.startup_gitlab_estimate = Some(self.estimated_gitlab_calls);
+        self.startup_tracker_estimate = Some(self.estimated_tracker_calls);
     }
 
     /// Applies a single `AppEvent` to the application state.
@@ -943,6 +1086,82 @@ impl App {
                 self.log_time_form.submitting = false;
                 self.log_time_form.error = Some(error);
                 false
+            }
+
+            // ── MR lifecycle mutations ────────────────────────────────────────
+            // All direct mutations of `app.mrs` must go through these events so
+            // that `recompute_api_call_estimate` is always called exactly once,
+            // in a single place, after the list changes.
+            AppEvent::MrAdded(id) => {
+                // Skip if already tracked.
+                if self.mrs.iter().any(|m| m.id == id) {
+                    return false;
+                }
+                self.mrs.push(TrackedMr {
+                    id: id.clone(),
+                    title: "Loading...".to_string(),
+                    status: MrStatus::Loading,
+                    state: GitlabMrState::Opened,
+                    mergeability: MergeabilityStatus::Unknown,
+                    sha: None,
+                    description: String::new(),
+                    author: "Loading".to_string(),
+                    assignee: "Loading".to_string(),
+                    reviewers: vec![],
+                    milestone: "Loading".to_string(),
+                    milestone_due_date: None,
+                    web_url: String::new(),
+                    labels: vec![],
+                    updated_at: None,
+                    source_branch: "unknown".to_string(),
+                    target_branch: "unknown".to_string(),
+                    merged_by: None,
+                    merged_at: None,
+                    pipelines: vec![],
+                    recently_updated: false,
+                    user_notes_count: 0,
+                    flagged: false,
+                    linked_ticket: None,
+                    diff_stats: None,
+                });
+                self.table_state.select(Some(self.mrs.len() - 1));
+                // Spawn the fetch after pushing so the MR exists when MrLoaded arrives.
+                spawn_mr_fetch(
+                    self.fetch_context(),
+                    id,
+                    CachedMrData::default(),
+                    semaphore.clone(),
+                    tx.clone(),
+                );
+                self.recompute_api_call_estimate();
+                true
+            }
+
+            AppEvent::MrRemovedByIndex(index) => {
+                if index >= self.mrs.len() {
+                    return false;
+                }
+                self.mrs.remove(index);
+                if self.mrs.is_empty() {
+                    self.table_state.select(None);
+                } else if index >= self.mrs.len() {
+                    self.table_state.select(Some(self.mrs.len() - 1));
+                }
+                self.recompute_api_call_estimate();
+                true
+            }
+
+            AppEvent::MrRemovedById(id) => {
+                let before = self.mrs.len();
+                self.mrs.retain(|m| m.id != id);
+                if self.mrs.len() == before {
+                    return false; // Nothing removed — no state change.
+                }
+                if self.mrs.is_empty() {
+                    self.table_state.select(None);
+                }
+                self.recompute_api_call_estimate();
+                true
             }
 
             AppEvent::MrLoaded(data) => {
@@ -1222,6 +1441,8 @@ impl App {
                 }
 
                 if added > 0 {
+                    // Recompute the estimate now that new MRs have been added to the list.
+                    self.recompute_api_call_estimate();
                     self.table_state.select(Some(0));
                     true
                 } else {
@@ -1248,6 +1469,10 @@ impl App {
                 // Timer elapsed — trigger a full refresh of all MRs.
                 self.time_left = self.refresh_interval_secs;
                 let ctx = self.fetch_context();
+
+                // Recompute GitLab + tracker estimates *before* spawning fetches so the
+                // counter reflects the actual cache state at trigger time.
+                self.recompute_api_call_estimate();
 
                 for mr in &mut self.mrs {
                     if let MrStatus::MergedIn(ref found) = mr.status {

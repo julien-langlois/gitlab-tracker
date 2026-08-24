@@ -9,6 +9,146 @@ use tokio::sync::Semaphore;
 
 pub const MAX_CONCURRENT_REQUESTS: usize = 3;
 
+/// Estimated number of GitLab API HTTP calls that will be fired for a single MR fetch,
+/// broken down by category so the UI can display a meaningful counter.
+///
+/// The estimate mirrors the exact branching logic of `fetch_gitlab_data` and its
+/// sub-functions (`fetch_notes_count`, `fetch_diff_stats`, `fetch_pipelines`).
+/// Adding a new network call inside those functions should be reflected here.
+#[derive(Debug, Clone, Default)]
+pub struct ApiCallEstimate {
+    /// Always-present calls: `GET /merge_requests/:id` (1 per MR).
+    pub base: usize,
+    /// Discussions endpoint calls (always fired for open MRs, skipped for
+    /// closed/merged with a cached non-zero count). Minimum 1 page per MR.
+    pub discussions: usize,
+    /// Branch-detection call: `GET /commits/:sha/refs` — only when a merge SHA
+    /// is available (i.e. the MR is confirmed merged).
+    pub refs: usize,
+    /// Changes + commits endpoint calls: fired when `updated_at` changed or when
+    /// the diff-stats cache is missing / corrupted.
+    /// 1 call for the changes endpoint + at least 1 for commits pagination.
+    pub diff_stats: usize,
+    /// Pipeline list call (1) + job calls (1 per pipeline, up to 5).
+    /// Fired when cache is missing, stale, or any pipeline is in a transient state.
+    pub pipelines: usize,
+}
+
+impl ApiCallEstimate {
+    /// Total estimated HTTP calls for this MR.
+    pub fn total(&self) -> usize {
+        self.base + self.discussions + self.refs + self.diff_stats + self.pipelines
+    }
+}
+
+/// Implemented by any type that can predict its own API call footprint before
+/// the actual network requests are fired.
+///
+/// This trait is the extension point: if a new fetch function is added to
+/// `fetch_gitlab_data`, implement (or update) this trait so the counter stays
+/// accurate automatically.
+pub trait CountApiCalls {
+    /// Returns the estimated number of HTTP calls that will be made when fetching
+    /// data for an MR with this cached state.
+    ///
+    /// `state` is the current GitLab MR state (`Opened`, `Merged`, `Closed`).
+    /// `has_merge_sha` indicates whether a merge/squash SHA is already known
+    /// (determines whether the `/refs` branch-detection call is needed).
+    fn estimate(
+        &self,
+        state: &crate::models::GitlabMrState,
+        has_merge_sha: bool,
+    ) -> ApiCallEstimate;
+}
+
+impl CountApiCalls for CachedMrData {
+    fn estimate(
+        &self,
+        state: &crate::models::GitlabMrState,
+        has_merge_sha: bool,
+    ) -> ApiCallEstimate {
+        // ── 1. Base MR fetch — always 1 call ─────────────────────────────────
+        let base = 1;
+
+        // ── 2. Discussions — always fired for open MRs; skipped for
+        //       closed/merged when a non-zero count is already cached ──────────
+        // We pessimistically assume 1 page (the common case). Extra pages are
+        // rare and impossible to predict without knowing the actual count.
+        let discussions =
+            if *state != crate::models::GitlabMrState::Opened && self.user_notes_count > 0 {
+                0 // Served from cache — no network call.
+            } else {
+                1 // At least one page fetched.
+            };
+
+        // ── 3. Branch detection via /refs — only when a merge SHA is present ──
+        let refs = if has_merge_sha { 1 } else { 0 };
+
+        // ── 4. Diff stats: changes + commits pagination ───────────────────────
+        // Mirrors the cache-validity check in fetch_gitlab_data:
+        //   • Skip when updated_at is unchanged AND the cached stats are valid.
+        //   • "Valid" means lines_ok && commits_ok (matches `cached_diff_stats_valid`).
+        let diff_stats_cached_valid = self.diff_stats.as_ref().is_some_and(|s| {
+            let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
+            let commits_ok = s.commits_count > 0 || s.files_changed == 0;
+            lines_ok && commits_ok
+        });
+        let diff_stats = if self.updated_at.is_some() && diff_stats_cached_valid {
+            // Cache hit — no calls needed.
+            // (The real guard also checks updated_at == fresh updated_at, which we
+            // cannot know before the base fetch. We optimistically assume it matches.)
+            0
+        } else {
+            // 1 call for /changes + 1 call for /commits (first page).
+            // Additional commit pages are rare and not predictable ahead of time.
+            2
+        };
+
+        // ── 5. Pipelines: list + per-pipeline job fetches ─────────────────────
+        // Mirrors the cache-validity logic in fetch_gitlab_data:
+        //   • Skip when updated_at unchanged, pipelines cached, all have jobs and
+        //     dates, and none is in a transient state.
+        let cached_has_jobs = self.pipelines.iter().any(|p| !p.jobs.is_empty());
+        let cached_has_dates = self.pipelines.iter().all(|p| p.created_at.is_some());
+        let cached_has_transient = self.pipelines.iter().any(|p| {
+            matches!(
+                p.status,
+                crate::models::PipelineState::Running
+                    | crate::models::PipelineState::Pending
+                    | crate::models::PipelineState::Created
+            )
+        });
+        let pipelines_cache_hit = self.updated_at.is_some()
+            && !self.pipelines.is_empty()
+            && cached_has_jobs
+            && cached_has_dates
+            && !cached_has_transient;
+
+        let pipelines = if pipelines_cache_hit {
+            0
+        } else {
+            // 1 call for the pipeline list (up to 5 results) +
+            // 1 call per pipeline for its job list.
+            // We use the cached pipeline count as the best available estimate;
+            // when the cache is empty we assume a conservative 1 pipeline.
+            let pipeline_count = if self.pipelines.is_empty() {
+                1
+            } else {
+                self.pipelines.len()
+            };
+            1 + pipeline_count
+        };
+
+        ApiCallEstimate {
+            base,
+            discussions,
+            refs,
+            diff_stats,
+            pipelines,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct FetchContext {
     pub base_url: String,
@@ -649,9 +789,33 @@ pub async fn fetch_gitlab_data(
         .unwrap_or_else(|| "unknown".to_string());
 
     // Always read the merge SHA from the fresh API response — never from cache.
-    // A MR that was open on the previous fetch (sha = None in cache) may have been
-    // merged since, and the cache would silently keep sha = None, preventing branch
-    // detection from ever running for that MR.
+    //
+    // `merge_sha`: the commit used to detect branch presence via /refs?type=branch.
+    //   Priority: merge_commit_sha → squash_commit_sha → sha (HEAD, fast-forward fallback).
+    //   The HEAD SHA (mr.sha) is only a valid branch-detection signal when the MR has been
+    //   merged via fast-forward: in that case GitLab sets no merge_commit_sha/squash_commit_sha
+    //   but the HEAD commit lands directly on the target branch.
+    //   For still-open MRs the HEAD lives on the source branch only — using it would produce
+    //   false positives (the commit is NOT on develop, it is on the feature branch).
+    //
+    // `stored_sha`: the value persisted into TrackedMr.sha and used by the auto-refresh
+    //   skip guard (`mr.sha.is_some()` in app.rs). We only store a SHA once the MR is
+    //   truly merged (merge_commit_sha or squash_commit_sha present) so open MRs keep
+    //   sha = None and are never incorrectly frozen by the skip guard.
+    let merge_sha = mr
+        .merge_commit_sha
+        .clone()
+        .or_else(|| mr.squash_commit_sha.clone())
+        .or_else(|| {
+            // Use the HEAD SHA only when the MR is confirmed merged by GitLab — this
+            // covers fast-forward merges where no dedicated merge commit is created.
+            if state == GitlabMrState::Merged {
+                mr.sha.clone()
+            } else {
+                None
+            }
+        });
+    // stored_sha: only the "real" merge commit; keeps open-MR sha = None.
     let sha = mr.merge_commit_sha.or(mr.squash_commit_sha);
 
     let (title, description, author, assignee, web_url, labels) = match (
@@ -687,34 +851,84 @@ pub async fn fetch_gitlab_data(
 
     let mut found_branches = HashSet::new();
 
-    if let Some(ref commit_sha) = sha {
-        let refs_url_standard = format!(
+    if let Some(ref commit_sha) = merge_sha {
+        let refs_url = format!(
             "{}/api/v4/projects/{}/repository/commits/{}/refs?type=branch",
             ctx.base_url, ctx.project_id, commit_sha
         );
-        if let Ok(refs_res) = client
-            .get(&refs_url_standard)
+        match client
+            .get(&refs_url)
             .header("PRIVATE-TOKEN", &ctx.token)
             .send()
             .await
         {
-            if refs_res.status().is_success() {
-                if let Ok(refs) = refs_res.json::<Vec<GitLabRef>>().await {
-                    for r in refs {
-                        let cleaned = r.name.replace("refs/heads/", "");
-                        if ctx.branches.contains(&cleaned) {
-                            found_branches.insert(cleaned);
+            Ok(refs_res) if refs_res.status().is_success() => {
+                match refs_res.json::<Vec<GitLabRef>>().await {
+                    Ok(refs) => {
+                        for r in refs {
+                            let cleaned = r.name.replace("refs/heads/", "");
+                            if ctx.branches.contains(&cleaned) {
+                                found_branches.insert(cleaned);
+                            }
                         }
+                        tracing::debug!(
+                            mr_id = %mr_id,
+                            commit_sha = %commit_sha,
+                            found = ?found_branches,
+                            "Branch detection via /refs",
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            mr_id = %mr_id,
+                            commit_sha = %commit_sha,
+                            error = %e,
+                            "Failed to deserialize /refs response — skipping branch detection",
+                        );
                     }
                 }
             }
+            Ok(refs_res) => {
+                // GitLab returns 404 when the commit has been garbage-collected
+                // (e.g. force-push after merge, or squash with no merge commit kept).
+                // Fall back to the MR target_branch as a best-effort signal: if the MR
+                // is confirmed merged by GitLab, it was at least present on its target.
+                let status = refs_res.status();
+                tracing::warn!(
+                    mr_id = %mr_id,
+                    commit_sha = %commit_sha,
+                    http_status = %status,
+                    "Non-2xx on /refs — commit may be garbage-collected; falling back to target_branch",
+                );
+                // `target_branch` is resolved later; use the raw field from the API response
+                // to avoid a forward-reference. Only inject if it is one of the tracked branches.
+                if let Some(ref tb) = mr.target_branch {
+                    if ctx.branches.contains(tb) {
+                        found_branches.insert(tb.clone());
+                        tracing::debug!(
+                            mr_id = %mr_id,
+                            target_branch = %tb,
+                            "Inserted target_branch into found_branches via fallback",
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    mr_id = %mr_id,
+                    commit_sha = %commit_sha,
+                    error = %e,
+                    "Network error on /refs — skipping branch detection",
+                );
+            }
         }
+    } else {
+        tracing::debug!(
+            mr_id = %mr_id,
+            state = ?state,
+            "No merge SHA available — skipping branch detection (MR not yet merged)",
+        );
     }
-
-    // No fallback search needed: if merge_commit_sha (or squash_commit_sha) is absent,
-    // the MR has not been merged yet and cannot be present on any target branch.
-    // The /refs?type=branch call above is the only reliable detection mechanism —
-    // any commit-message search would be guesswork and a source of false positives.
 
     // Fetch diff statistics (files changed, additions, deletions) from the Changes API.
     // We cache this behind the same `updated_at` guard as pipelines to avoid hammering

@@ -1,5 +1,71 @@
 use chrono::{DateTime, Utc};
 
+/// Computes a fuzzy match score between a `query` and a `haystack` string.
+///
+/// The algorithm looks for all query characters in order inside `haystack`
+/// (subsequence match) and scores the result based on three criteria:
+///
+/// 1. **Exact substring bonus** — the full query appears verbatim → highest score.
+/// 2. **Prefix bonus** — every matched character is immediately followed by the next
+///    one (consecutive run starting early in `haystack`).
+/// 3. **Proximity penalty** — gaps between matched characters reduce the score.
+///
+/// Returns `None` when `query` is empty (caller should treat as "always matches")
+/// or when no subsequence match is found (caller should treat as "no match").
+/// Returns `Some(score)` in `[0.0, 1.0]` otherwise — higher is more relevant.
+pub fn fuzzy_score(query: &str, haystack: &str) -> Option<f64> {
+    if query.is_empty() {
+        return None; // Caller decides: empty query always matches.
+    }
+
+    let q = query.to_lowercase();
+    let h = haystack.to_lowercase();
+
+    // Fast path: exact substring → maximum relevance.
+    if h.contains(q.as_str()) {
+        // Boost score based on how early the match appears (earlier = more relevant).
+        let pos = h.find(q.as_str()).unwrap_or(0);
+        let position_bonus = 1.0 - (pos as f64 / h.len() as f64).min(1.0);
+        return Some(0.8 + 0.2 * position_bonus);
+    }
+
+    // Subsequence match: find each query char in order inside haystack.
+    let q_chars: Vec<char> = q.chars().collect();
+    let h_chars: Vec<char> = h.chars().collect();
+
+    let mut q_idx = 0;
+    let mut match_positions: Vec<usize> = Vec::with_capacity(q_chars.len());
+
+    for (h_idx, &hc) in h_chars.iter().enumerate() {
+        if q_idx < q_chars.len() && hc == q_chars[q_idx] {
+            match_positions.push(h_idx);
+            q_idx += 1;
+        }
+    }
+
+    // All query characters must be present as a subsequence.
+    if q_idx < q_chars.len() {
+        return None;
+    }
+
+    // Score: reward consecutive runs, penalise large gaps.
+    let total_span = match_positions.last().unwrap() - match_positions.first().unwrap() + 1;
+    let matched = match_positions.len() as f64;
+    let span = total_span as f64;
+
+    // Compactness: ratio of matched chars to the span they occupy.
+    let compactness = matched / span;
+
+    // Position bonus: earlier first match → higher relevance.
+    let first_pos = *match_positions.first().unwrap() as f64;
+    let position_bonus = 1.0 - (first_pos / h_chars.len() as f64).min(1.0);
+
+    // Combine: compactness weighted 70%, position 30%, capped at 0.79
+    // so subsequence matches always rank below exact substring matches.
+    let score = (0.7 * compactness + 0.3 * position_bonus) * 0.79;
+    Some(score.clamp(0.0, 0.79))
+}
+
 /// Formats an ISO 8601 timestamp string into a human-readable relative date label.
 ///
 /// Returns labels such as "à l'instant", "il y a 5 min", "Hier", "Il y a 3 jours", etc.

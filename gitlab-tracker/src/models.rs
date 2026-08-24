@@ -123,6 +123,11 @@ pub struct GitLabMr {
     pub milestone: Option<GitLabMilestone>,
     pub merge_commit_sha: Option<String>,
     pub squash_commit_sha: Option<String>,
+    /// SHA of the latest commit on the source branch (the MR HEAD).
+    /// Always populated by GitLab regardless of merge state — used as a fallback
+    /// to detect branch presence when merge_commit_sha / squash_commit_sha are absent
+    /// (e.g. MR still open, or merged via fast-forward without a merge commit).
+    pub sha: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     pub updated_at: Option<String>,
@@ -411,6 +416,16 @@ pub enum AppEvent {
         id: String,
         error: String,
     },
+    /// Fired when the user requests adding a new MR to the tracking list (by ID).
+    /// `apply_event` is the single place that pushes to `app.mrs` and recomputes
+    /// the API call estimate — `events.rs` must never mutate `app.mrs` directly.
+    MrAdded(String),
+    /// Fired when the user removes the currently selected MR (Delete key).
+    /// Carries the raw list index so `apply_event` can remove the right entry
+    /// without duplicating the selection-clamping logic.
+    MrRemovedByIndex(usize),
+    /// Fired when the user removes a MR by typing `-<id>` in the input field.
+    MrRemovedById(String),
     /// Fired when the project label list (with colours) has been fetched from GitLab.
     GitlabLabelsLoaded(Vec<GitLabLabelDetail>),
     /// Fired when the milestone list has been fetched from GitLab.

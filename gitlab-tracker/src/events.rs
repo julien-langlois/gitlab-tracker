@@ -149,7 +149,7 @@ pub async fn handle_key_event(
                         app.input_mode = InputMode::Normal;
                     }
                 } else {
-                    handle_enter(app, api_semaphore, tx, last_known_branches).await;
+                    handle_enter(app, api_semaphore, tx).await;
                     // Return to Normal after submitting so shortcuts are available again.
                     app.input_mode = InputMode::Normal;
                 }
@@ -772,19 +772,7 @@ pub async fn handle_key_event(
                 KeyCode::Delete => {
                     if let Some(selected) = app.table_state.selected() {
                         if selected < app.mrs.len() {
-                            app.mrs.remove(selected);
-                            if app.mrs.is_empty() {
-                                app.table_state.select(None);
-                            } else if selected >= app.mrs.len() {
-                                app.table_state.select(Some(app.mrs.len() - 1));
-                            }
-                            save_state_async(
-                                &app.mrs,
-                                last_known_branches,
-                                &app.base_url.clone(),
-                                &app.project_id.clone(),
-                            )
-                            .await;
+                            let _ = tx.send(AppEvent::MrRemovedByIndex(selected));
                         }
                     }
                 }
@@ -803,7 +791,6 @@ async fn handle_enter(
     app: &mut App,
     api_semaphore: &Arc<Semaphore>,
     tx: &UnboundedSender<AppEvent>,
-    last_known_branches: &mut HashMap<String, HashSet<String>>,
 ) {
     let value = app.input.trim().to_string();
     if value.is_empty() {
@@ -814,76 +801,19 @@ async fn handle_enter(
         // Remove an MR (numeric) or a branch (text).
         let to_remove = value.trim_start_matches('-').to_string();
         if to_remove.chars().all(|c| c.is_numeric()) {
-            app.mrs.retain(|m| m.id != to_remove);
-            save_state_async(
-                &app.mrs,
-                last_known_branches,
-                &app.base_url.clone(),
-                &app.project_id.clone(),
-            )
-            .await;
+            // Route through the event bus — apply_event handles the mutation,
+            // recomputes the API call estimate, and persists state.
+            let _ = tx.send(AppEvent::MrRemovedById(to_remove));
         } else {
             app.branches.retain(|b| b != &to_remove);
             // Branches live in projects.toml — persist there, not in tracker_state.json.
             save_branches_async(&app.branches, 0).await;
         }
-        if app.mrs.is_empty() {
-            app.table_state.select(None);
-        }
     } else if value.chars().all(|c| c.is_numeric()) {
-        // Add a new MR to track.
+        // Add a new MR to track — route through the event bus so apply_event
+        // handles the push, the fetch spawn, and the estimate recompute atomically.
         if !app.mrs.iter().any(|m| m.id == value) {
-            app.mrs.push(TrackedMr {
-                id: value.clone(),
-                title: "Loading...".to_string(),
-                status: MrStatus::Loading,
-                state: crate::models::GitlabMrState::Opened,
-                // Mergeability is fetched live — start as Unknown until the first API response.
-                mergeability: crate::models::MergeabilityStatus::Unknown,
-                sha: None,
-                description: String::new(),
-                author: "Loading".to_string(),
-                assignee: "Loading".to_string(),
-                reviewers: vec![],
-                milestone: "Loading".to_string(),
-                milestone_due_date: None,
-                web_url: String::new(),
-                labels: vec![],
-                updated_at: None,
-                source_branch: "unknown".to_string(),
-                target_branch: "unknown".to_string(),
-                merged_by: None,
-                merged_at: None,
-                // Pipelines are fetched on demand when the user presses [P].
-                pipelines: vec![],
-                // New MRs are not highlighted on first load.
-                recently_updated: false,
-                // Notes count is unknown until the first API response.
-                user_notes_count: 0,
-                // New MRs start unflagged.
-                flagged: false,
-                // Ticket resolved live after the first MR fetch — not pre-populated.
-                linked_ticket: None,
-                // Diff stats fetched on the first MR load — not pre-populated.
-                diff_stats: None,
-            });
-            app.table_state.select(Some(app.mrs.len() - 1));
-            save_state_async(
-                &app.mrs,
-                last_known_branches,
-                &app.base_url.clone(),
-                &app.project_id.clone(),
-            )
-            .await;
-
-            let ctx = build_fetch_context(app);
-            spawn_mr_fetch(
-                ctx,
-                value,
-                CachedMrData::default(),
-                api_semaphore.clone(),
-                tx.clone(),
-            );
+            let _ = tx.send(AppEvent::MrAdded(value.clone()));
         }
     } else {
         // Add a new branch to track.

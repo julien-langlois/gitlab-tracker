@@ -333,6 +333,16 @@ pub trait TrackerProvider: Send + Sync {
         LabelColorMaps::default()
     }
 
+    /// Returns the estimated number of HTTP calls fired per `fetch_ticket` invocation.
+    ///
+    /// Used by the UI API-call counter to account for tracker requests alongside
+    /// GitLab calls. The default is `1` (one round-trip per ticket fetch), which
+    /// covers the vast majority of implementations. Override when your provider
+    /// batches multiple requests per ticket (e.g. ticket + time-entries in one shot).
+    fn estimate_calls_per_ticket(&self) -> usize {
+        1
+    }
+
     /// Fetches the list of time-tracking activity categories available in the tracker.
     ///
     /// Called once at startup (or on first popup open) and cached in `App`.
