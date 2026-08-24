@@ -1143,7 +1143,6 @@ dependencies = [
  "inventory",
  "serde",
  "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]
