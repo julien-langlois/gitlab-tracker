@@ -465,3 +465,22 @@ pub enum AppEvent {
     },
     Tick,
 }
+
+impl AppEvent {
+    /// Maps an [`AppEvent`] to the corresponding [`MrLifecycleEvent`], if applicable.
+    ///
+    /// Not every `AppEvent` has a lifecycle meaning (e.g. `Tick`, `ActivitiesLoaded`
+    /// are purely infrastructural). Returns `None` for those cases.
+    pub fn as_lifecycle_event(&self) -> Option<gitlab_tracker_core::MrLifecycleEvent> {
+        use gitlab_tracker_core::MrLifecycleEvent;
+        match self {
+            AppEvent::MrAdded(_) => Some(MrLifecycleEvent::Added),
+            AppEvent::MrRemovedByIndex(_) | AppEvent::MrRemovedById(_) => {
+                Some(MrLifecycleEvent::Deleted)
+            }
+            AppEvent::MrLoaded(_) => Some(MrLifecycleEvent::Refreshed),
+            AppEvent::MrFailed { .. } => Some(MrLifecycleEvent::FetchFailed),
+            _ => None,
+        }
+    }
+}

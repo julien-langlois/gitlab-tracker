@@ -509,6 +509,9 @@ gitlab-tracker-core/             # Library crate — shared trait contracts, zer
     ├── provider.rs      # TrackerProvider trait + all shared domain types
     │                    #   LinkedTicket: flat ticket data (type, priority, version, progress, …)
     │                    #   LabelColorMaps: raw (String, String) badge colour maps — no ratatui
+    ├── lifecycle.rs     # MrLifecycleEvent enum + MrEventPolicy trait + DefaultMrEventPolicy
+    │                    #   Governs reactions to MR state transitions (refetch, remove, notify, persist)
+    │                    #   — fully decoupled from the UI event loop
     ├── filters.rs       # FilterDef contract + MrSnapshot + inventory::collect! registry
     ├── columns.rs       # ColumnDef contract + inventory::collect! registry
     └── shortcuts.rs     # ShortcutBlock / ShortcutFactory + inventory::collect! registry

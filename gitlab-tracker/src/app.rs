@@ -4,7 +4,8 @@ use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
 use gitlab_tracker_core::{
-    collect_all_columns, collect_all_filters, ColumnDef, FilterDef, MrSnapshot,
+    collect_all_columns, collect_all_filters, ColumnDef, DefaultMrEventPolicy, FilterDef,
+    MrEventPolicy, MrLifecycleEvent, MrSnapshot,
 };
 use gitlab_tracker_notify as notify;
 use ratatui::widgets::TableState;
@@ -318,6 +319,11 @@ pub struct App {
     /// provider registration needed in `main.rs`. The help popup iterates this list
     /// in collection order (link order: Core first, optional plugins after).
     pub shortcut_providers: Vec<gitlab_tracker_core::ShortcutBlock>,
+    /// Policy that governs reactions to MR lifecycle events (refetch, remove, notify, persist).
+    ///
+    /// Injected at construction time so tests and future callers can swap in a
+    /// custom policy without touching `apply_event`. Defaults to [`DefaultMrEventPolicy`].
+    pub event_policy: Arc<dyn MrEventPolicy>,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -389,6 +395,7 @@ impl App {
             spinner_frame: 0,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),
+            event_policy: Arc::new(DefaultMrEventPolicy),
         }
     }
 
@@ -992,6 +999,9 @@ impl App {
     /// This is the central event dispatch extracted from `main.rs` to keep the
     /// event loop thin. Returns `true` if the state was mutated in a way that
     /// requires persisting (caller must then call `save_state_async`).
+    ///
+    /// Reactions to MR lifecycle transitions (refetch, remove, notify, persist) are
+    /// governed by `self.event_policy` — no hardcoded booleans here.
     pub async fn apply_event(
         &mut self,
         event: AppEvent,
@@ -999,6 +1009,13 @@ impl App {
         tx: &UnboundedSender<AppEvent>,
         last_known_branches: &mut HashMap<String, HashSet<String>>,
     ) -> bool {
+        // Resolve the lifecycle event once upfront so every arm can query the policy.
+        let lifecycle: Option<MrLifecycleEvent> = event.as_lifecycle_event();
+        let needs_persist = lifecycle
+            .as_ref()
+            .map(|l| self.event_policy.needs_persist(l))
+            .unwrap_or(false);
+
         match event {
             // ── Tracker ticket resolved ───────────────────────────────────────
             AppEvent::TrackerTicketLoaded { mr_id, ticket } => {
@@ -1125,16 +1142,18 @@ impl App {
                     diff_stats: None,
                 });
                 self.table_state.select(Some(self.mrs.len() - 1));
-                // Spawn the fetch after pushing so the MR exists when MrLoaded arrives.
-                spawn_mr_fetch(
-                    self.fetch_context(),
-                    id,
-                    CachedMrData::default(),
-                    semaphore.clone(),
-                    tx.clone(),
-                );
+                // Spawn the fetch only if the policy confirms a refetch is needed for Added.
+                if self.event_policy.needs_refetch(&MrLifecycleEvent::Added) {
+                    spawn_mr_fetch(
+                        self.fetch_context(),
+                        id,
+                        CachedMrData::default(),
+                        semaphore.clone(),
+                        tx.clone(),
+                    );
+                }
                 self.recompute_api_call_estimate();
-                true
+                needs_persist
             }
 
             AppEvent::MrRemovedByIndex(index) => {
@@ -1148,7 +1167,7 @@ impl App {
                     self.table_state.select(Some(self.mrs.len() - 1));
                 }
                 self.recompute_api_call_estimate();
-                true
+                needs_persist
             }
 
             AppEvent::MrRemovedById(id) => {
@@ -1161,7 +1180,7 @@ impl App {
                     self.table_state.select(None);
                 }
                 self.recompute_api_call_estimate();
-                true
+                needs_persist
             }
 
             AppEvent::MrLoaded(data) => {
@@ -1363,7 +1382,8 @@ impl App {
                 }
 
                 self.sort_mrs();
-                true
+                // MrLoaded maps to MrLifecycleEvent::Refreshed — persist driven by policy.
+                needs_persist
             }
 
             AppEvent::MrFailed { id, error } => {
@@ -1372,7 +1392,8 @@ impl App {
                 };
                 mr.title = format!("⚠️ ERROR: {}", error);
                 mr.status = MrStatus::Error;
-                true
+                // FetchFailed → policy returns false (errors are not persisted to disk).
+                needs_persist
             }
 
             AppEvent::GitlabLabelsLoaded(labels) => {
