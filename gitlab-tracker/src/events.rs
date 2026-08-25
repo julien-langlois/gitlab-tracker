@@ -478,6 +478,36 @@ pub async fn handle_key_event(
             app.input_mode = InputMode::Normal;
         }
 
+        // ── Stats overlay ─────────────────────────────────────────────────────
+        #[cfg(feature = "stats")]
+        InputMode::Stats => {
+            match key.code {
+                // Close the overlay.
+                KeyCode::Esc | KeyCode::Char('g') | KeyCode::Char('G') => {
+                    app.input_mode = InputMode::Normal;
+                }
+                // Scroll up/down inside the overlay.
+                KeyCode::Down | KeyCode::Char('j') => {
+                    app.stats_view.scroll = app.stats_view.scroll.saturating_add(1);
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    app.stats_view.scroll = app.stats_view.scroll.saturating_sub(1);
+                }
+                KeyCode::PageDown => {
+                    app.stats_view.scroll = app.stats_view.scroll.saturating_add(10);
+                }
+                KeyCode::PageUp => {
+                    app.stats_view.scroll = app.stats_view.scroll.saturating_sub(10);
+                }
+                // [W] cycles the time window and triggers a fresh aggregation.
+                KeyCode::Char('w') | KeyCode::Char('W') => {
+                    app.stats_view.window = app.stats_view.window.next();
+                    crate::ui::stats::trigger_stats_refresh(app, tx);
+                }
+                _ => {}
+            }
+        }
+
         InputMode::Normal => {
             // When quit confirmation is pending, only Esc/y confirm and any other key cancels.
             if app.quit_confirm {
@@ -720,6 +750,13 @@ pub async fn handle_key_event(
                             }
                         }
                     }
+                }
+
+                // [G] opens the Stats fullscreen overlay (only when the `stats` feature is on).
+                #[cfg(feature = "stats")]
+                KeyCode::Char('g') | KeyCode::Char('G') => {
+                    app.input_mode = crate::app::InputMode::Stats;
+                    crate::ui::stats::trigger_stats_refresh(app, tx);
                 }
 
                 KeyCode::Char('s') => app.cycle_sort_column(),
@@ -1014,6 +1051,30 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
                 app.reset_inspector_scroll();
             }
         },
+
+        // [G] opens the Stats overlay in demo mode — uses the in-memory DB seeded at startup.
+        #[cfg(feature = "stats")]
+        KeyCode::Char('g') | KeyCode::Char('G') => {
+            // Reuse a fake tx — demo mode has no async runtime wired to apply_event,
+            // so we create a throwaway channel and discard the receiver.
+            // trigger_stats_refresh only needs tx to send StatsReportReady back.
+            // In demo mode the rx is held by the main loop in demo.rs which drains it.
+            // We can safely re-use the pattern: the demo loop already has a tx from
+            // the Tick timer channel, but handle_key_event_demo doesn't receive it.
+            // Solution: set mode + mark loading; the report will arrive via the Tick loop.
+            app.input_mode = crate::app::InputMode::Stats;
+            app.stats_view.loading = true;
+            app.stats_view.error = None;
+            app.stats_view.scroll = 0;
+        }
+
+        // [W] cycles the time window inside the Stats overlay in demo mode.
+        #[cfg(feature = "stats")]
+        KeyCode::Char('w') | KeyCode::Char('W')
+            if app.input_mode == crate::app::InputMode::Stats =>
+        {
+            app.stats_view.window = app.stats_view.window.next();
+        }
 
         _ => {}
     }

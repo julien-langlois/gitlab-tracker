@@ -5,6 +5,7 @@ members = [
     "gitlab-tracker-notify",
     "gitlab-tracker-core",
     "gitlab-tracker-redmine",
+    "gitlab-tracker-stats",
 ]
 
 [workspace.package]

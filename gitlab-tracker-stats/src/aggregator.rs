@@ -1,0 +1,293 @@
+use std::collections::HashMap;
+
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+
+use crate::db::{SnapshotQuery, StatsDb, StatsError, StoredSnapshot};
+use crate::metrics::PerMrMetrics;
+
+/// Defines the temporal scope of an aggregation query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeWindow {
+    /// Rolling window: include all snapshots recorded in the last N days.
+    LastDays(u32),
+    /// Milestone-scoped: include all merged/closed snapshots for this milestone title.
+    Milestone(String),
+    /// Explicit date range (ISO 8601 dates, inclusive start, exclusive end).
+    Range { from: String, to: String },
+}
+
+/// Full filter passed to [`aggregate`].
+#[derive(Debug, Clone, Default)]
+pub struct QueryFilter {
+    pub window: Option<TimeWindow>,
+    pub project_id: Option<String>,
+    pub author: Option<String>,
+    pub reviewer: Option<String>,
+    pub target_branch: Option<String>,
+}
+
+/// Aggregated statistics computed over a set of MR snapshots.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregatedStats {
+    // ── Throughput ────────────────────────────────────────────────────────────
+    /// Total number of MRs in the sample.
+    pub total_mrs: usize,
+
+    /// MRs merged within the query window.
+    pub merged_count: usize,
+
+    /// MRs closed (abandoned) within the query window.
+    pub closed_count: usize,
+
+    /// Average number of MRs merged per calendar week in the window.
+    /// `None` when the window duration is unknown or zero.
+    pub throughput_per_week: Option<f64>,
+
+    // ── Cycle time (hours) ────────────────────────────────────────────────────
+    /// Median cycle time across all merged MRs in the sample.
+    pub cycle_time_median_hours: Option<f64>,
+
+    /// 90th-percentile cycle time (captures the "long tail" of stuck MRs).
+    pub cycle_time_p90_hours: Option<f64>,
+
+    /// Average cycle time grouped by MR author.
+    pub cycle_time_by_author: HashMap<String, f64>,
+
+    /// Average cycle time grouped by reviewer (across all reviewers on each MR).
+    pub cycle_time_by_reviewer: HashMap<String, f64>,
+
+    /// Average cycle time grouped by milestone title.
+    pub cycle_time_by_milestone: HashMap<String, f64>,
+
+    // ── Diff and review quality ───────────────────────────────────────────────
+    /// Mean diff size (additions + deletions) across all MRs.
+    pub avg_diff_size: f64,
+
+    /// Mean comment count per MR.
+    pub avg_comments: f64,
+
+    /// Mean pipeline failure rate across all MRs that had at least one pipeline.
+    /// `None` when no MR in the sample had pipeline data.
+    pub avg_pipeline_failure_rate: Option<f64>,
+
+    // ── Backlog health ────────────────────────────────────────────────────────
+    /// Ages (in days) of MRs that are still open at snapshot time.
+    /// Sorted ascending. Empty when no open MRs are in the sample.
+    pub open_mr_ages_days: Vec<f64>,
+
+    /// Throughput (merged MR count) broken down by milestone title.
+    pub throughput_by_milestone: HashMap<String, u32>,
+}
+
+/// Loads snapshots from the DB for the given filter and computes aggregated statistics.
+pub async fn aggregate(
+    db: &dyn StatsDb,
+    filter: &QueryFilter,
+) -> Result<AggregatedStats, StatsError> {
+    let query = build_snapshot_query(filter);
+    let snapshots = db.query(&query).await?;
+    let metrics: Vec<PerMrMetrics> = snapshots.iter().map(PerMrMetrics::from_snapshot).collect();
+
+    Ok(compute_stats(&snapshots, &metrics, filter))
+}
+
+/// Translates a [`QueryFilter`] into a [`SnapshotQuery`] for the DB layer.
+fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
+    let mut q = SnapshotQuery {
+        project_id: filter.project_id.clone(),
+        author: filter.author.clone(),
+        reviewer: filter.reviewer.clone(),
+        target_branch: filter.target_branch.clone(),
+        ..Default::default()
+    };
+
+    match &filter.window {
+        Some(TimeWindow::LastDays(days)) => {
+            let from = Utc::now()
+                .checked_sub_signed(Duration::days(*days as i64))
+                .map(|dt| dt.to_rfc3339());
+            q.from_date = from;
+        }
+        Some(TimeWindow::Range { from, to }) => {
+            q.from_date = Some(from.clone());
+            q.to_date = Some(to.clone());
+        }
+        Some(TimeWindow::Milestone(title)) => {
+            q.milestone = Some(title.clone());
+        }
+        None => {}
+    }
+
+    q
+}
+
+/// Pure computation over already-loaded snapshots and their derived metrics.
+fn compute_stats(
+    snapshots: &[StoredSnapshot],
+    metrics: &[PerMrMetrics],
+    filter: &QueryFilter,
+) -> AggregatedStats {
+    let merged: Vec<&PerMrMetrics> = metrics.iter().filter(|m| m.trigger == "on_merge").collect();
+
+    let closed_count = metrics.iter().filter(|m| m.trigger == "on_close").count();
+
+    // ── Cycle times ───────────────────────────────────────────────────────────
+    let mut cycle_times: Vec<f64> = merged.iter().filter_map(|m| m.cycle_time_hours).collect();
+    cycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let cycle_time_median_hours = percentile(&cycle_times, 50.0);
+    let cycle_time_p90_hours = percentile(&cycle_times, 90.0);
+
+    // ── Cycle time by author ──────────────────────────────────────────────────
+    let cycle_time_by_author = group_average(
+        merged.iter().copied(),
+        |m| m.author.clone(),
+        |m| m.cycle_time_hours,
+    );
+
+    // ── Cycle time by reviewer ────────────────────────────────────────────────
+    let mut reviewer_times: HashMap<String, Vec<f64>> = HashMap::new();
+    for (snap, metric) in snapshots.iter().zip(metrics.iter()) {
+        if let Some(ct) = metric.cycle_time_hours {
+            for reviewer in &snap.snapshot.reviewers {
+                reviewer_times.entry(reviewer.clone()).or_default().push(ct);
+            }
+        }
+    }
+    let cycle_time_by_reviewer: HashMap<String, f64> = reviewer_times
+        .into_iter()
+        .map(|(r, times)| (r, times.iter().sum::<f64>() / times.len() as f64))
+        .collect();
+
+    // ── Cycle time by milestone ───────────────────────────────────────────────
+    let cycle_time_by_milestone = group_average(
+        merged.iter().copied(),
+        |m| m.milestone.clone().unwrap_or_default(),
+        |m| m.cycle_time_hours,
+    );
+
+    // ── Throughput ────────────────────────────────────────────────────────────
+    let throughput_per_week = compute_throughput_per_week(filter, merged.len());
+
+    let mut throughput_by_milestone: HashMap<String, u32> = HashMap::new();
+    for m in &merged {
+        let key = m.milestone.clone().unwrap_or_default();
+        *throughput_by_milestone.entry(key).or_insert(0) += 1;
+    }
+
+    // ── Diff & review quality ─────────────────────────────────────────────────
+    let avg_diff_size = mean(metrics.iter().map(|m| m.diff_size as f64));
+    let avg_comments = mean(metrics.iter().map(|m| m.user_notes_count as f64));
+
+    let failure_rates: Vec<f64> = metrics
+        .iter()
+        .filter_map(|m| m.pipeline_failure_rate)
+        .collect();
+    let avg_pipeline_failure_rate = if failure_rates.is_empty() {
+        None
+    } else {
+        Some(failure_rates.iter().sum::<f64>() / failure_rates.len() as f64)
+    };
+
+    // ── Backlog ages (open MRs) ───────────────────────────────────────────────
+    let now = Utc::now();
+    let mut open_mr_ages_days: Vec<f64> = snapshots
+        .iter()
+        .filter(|s| s.snapshot.state == "opened")
+        .filter_map(|s| {
+            let created: DateTime<Utc> = s.snapshot.created_at.as_deref()?.parse().ok()?;
+            let age = now.signed_duration_since(created).num_seconds() as f64 / 86400.0;
+            if age >= 0.0 {
+                Some(age)
+            } else {
+                None
+            }
+        })
+        .collect();
+    open_mr_ages_days.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    AggregatedStats {
+        total_mrs: metrics.len(),
+        merged_count: merged.len(),
+        closed_count,
+        throughput_per_week,
+        cycle_time_median_hours,
+        cycle_time_p90_hours,
+        cycle_time_by_author,
+        cycle_time_by_reviewer,
+        cycle_time_by_milestone,
+        avg_diff_size,
+        avg_comments,
+        avg_pipeline_failure_rate,
+        open_mr_ages_days,
+        throughput_by_milestone,
+    }
+}
+
+/// Computes the weekly throughput from the number of merged MRs and the query window.
+fn compute_throughput_per_week(filter: &QueryFilter, merged_count: usize) -> Option<f64> {
+    let window_days = match &filter.window {
+        Some(TimeWindow::LastDays(d)) => *d as f64,
+        Some(TimeWindow::Range { from, to }) => {
+            let f: DateTime<Utc> = from.parse().ok()?;
+            let t: DateTime<Utc> = to.parse().ok()?;
+            t.signed_duration_since(f).num_days() as f64
+        }
+        // Milestone windows have no fixed duration.
+        Some(TimeWindow::Milestone(_)) | None => return None,
+    };
+    if window_days <= 0.0 {
+        return None;
+    }
+    Some(merged_count as f64 / window_days * 7.0)
+}
+
+// ── Statistical helpers ───────────────────────────────────────────────────────
+
+/// Returns the p-th percentile of an already-sorted slice, using linear interpolation.
+fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
+    let n = sorted.len();
+    if n == 0 {
+        return None;
+    }
+    let idx = (p / 100.0) * (n - 1) as f64;
+    let lo = idx.floor() as usize;
+    let hi = idx.ceil() as usize;
+    let frac = idx - lo as f64;
+    Some(sorted[lo] + frac * (sorted[hi] - sorted[lo]))
+}
+
+/// Computes the arithmetic mean of an iterator of `f64`.
+/// Returns `0.0` when the iterator is empty.
+fn mean(iter: impl Iterator<Item = f64>) -> f64 {
+    let (sum, count) = iter.fold((0.0f64, 0usize), |(s, c), v| (s + v, c + 1));
+    if count == 0 {
+        0.0
+    } else {
+        sum / count as f64
+    }
+}
+
+/// Groups metrics by a string key and computes the mean of a numeric field per group.
+fn group_average<'a, I, K, V>(iter: I, key_fn: K, val_fn: V) -> HashMap<String, f64>
+where
+    I: Iterator<Item = &'a PerMrMetrics>,
+    K: Fn(&PerMrMetrics) -> String,
+    V: Fn(&PerMrMetrics) -> Option<f64>,
+{
+    let mut groups: HashMap<String, Vec<f64>> = HashMap::new();
+    for m in iter {
+        if let Some(v) = val_fn(m) {
+            groups.entry(key_fn(m)).or_default().push(v);
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(k, vals)| {
+            let avg = vals.iter().sum::<f64>() / vals.len() as f64;
+            (k, avg)
+        })
+        .collect()
+}

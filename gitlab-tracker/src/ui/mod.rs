@@ -1,5 +1,7 @@
 pub mod help_popup;
 pub mod inspector;
+#[cfg(feature = "stats")]
+pub mod stats;
 pub mod table;
 pub mod theme;
 pub mod tracker;
@@ -215,7 +217,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         ),
         InputMode::Normal => (
             format!(
-                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [?]: Help │ [Esc]: Quit ",
+                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [G]: Stats │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [?]: Help │ [Esc]: Quit ",
                 pane_hint, sort_status
             ),
             Style::default(),
@@ -233,6 +235,12 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         // The Help popup covers the full screen — the input bar is hidden behind it.
         InputMode::Help => (
             " HELP │ [any key]: Close ".to_string(),
+            Style::default().fg(Color::Cyan),
+        ),
+        // The Stats overlay covers the full screen — the input bar is hidden behind it.
+        #[cfg(feature = "stats")]
+        InputMode::Stats => (
+            " STATS │ [W]: Window │ [↑/↓]: Scroll │ [G/Esc]: Close ".to_string(),
             Style::default().fg(Color::Cyan),
         ),
     };
@@ -268,6 +276,13 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     // Render the help popup on top of everything when active.
     if app.input_mode == InputMode::Help {
         render_help_popup(f, app);
+    }
+
+    // Render the Stats fullscreen overlay on top of everything when active.
+    // Compiled only when the `stats` feature is enabled.
+    #[cfg(feature = "stats")]
+    if app.input_mode == InputMode::Stats {
+        stats::render_stats_overlay(f, app);
     }
 }
 

@@ -6,9 +6,467 @@ use crate::models::{
     TrackedMr,
 };
 use crate::ui;
+#[cfg(feature = "stats")]
+use chrono;
 use crossterm::event::{self, Event, KeyEventKind};
 use gitlab_tracker_core::{LinkedTicket, LINKED_TICKET_SCHEMA_VERSION};
 use std::time::Duration;
+
+// ── Demo stats seeding ────────────────────────────────────────────────────────
+
+#[cfg(feature = "stats")]
+/// Opens an in-memory SQLite DB and seeds it with realistic MR snapshots so the
+/// Stats overlay renders meaningful data during demo mode (demo.tape / screenshots).
+///
+/// The dataset covers ~90 days, 4 authors, 2 milestones, and enough merged MRs
+/// for Spearman correlations and P50/P90 percentiles to be computed.
+async fn seed_demo_stats_db(
+    project_id: &str,
+) -> Option<std::sync::Arc<gitlab_tracker_stats::SqliteStatsDb>> {
+    use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
+    use gitlab_tracker_stats::{SqliteStatsDb, StatsDb as _};
+    use std::sync::Arc;
+
+    let db = SqliteStatsDb::open(":memory:").await.ok()?;
+
+    // Helper: build a merged snapshot recorded `days_ago` days in the past.
+    // `cycle_days` controls the simulated review/merge cycle time.
+    struct DemoMr<'a> {
+        id: &'a str,
+        title: &'a str,
+        author: &'a str,
+        assignee: Option<&'a str>,
+        reviewers: Vec<&'a str>,
+        milestone: &'a str,
+        labels: Vec<&'a str>,
+        files_changed: u32,
+        additions: u32,
+        deletions: u32,
+        commits: u32,
+        notes: u32,
+        pipeline_count: u32,
+        pipeline_failures: u32,
+        /// Days ago the MR was merged (controls recorded_at).
+        merged_days_ago: i64,
+        /// Simulated cycle time in hours (created_at → merged_at proxy).
+        cycle_hours: f64,
+    }
+
+    // Realistic dataset: mix of fast (hotfix) and slow (feature) MRs across two milestones.
+    let dataset: &[DemoMr] = &[
+        DemoMr {
+            id: "201",
+            title: "feat(api): GraphQL endpoint for MR metadata",
+            author: "marina_gql",
+            assignee: Some("thomas_db"),
+            reviewers: vec!["thomas_db", "alex_dev"],
+            milestone: "v2.4.0",
+            labels: vec!["feature", "size::L"],
+            files_changed: 12,
+            additions: 487,
+            deletions: 53,
+            commits: 8,
+            notes: 5,
+            pipeline_count: 2,
+            pipeline_failures: 1,
+            merged_days_ago: 5,
+            cycle_hours: 72.0,
+        },
+        DemoMr {
+            id: "202",
+            title: "feat(auth): OAuth2 PKCE flow for mobile clients",
+            author: "alex_dev",
+            assignee: Some("sarah_code"),
+            reviewers: vec!["sarah_code"],
+            milestone: "v2.4.0",
+            labels: vec!["feature", "size::M"],
+            files_changed: 4,
+            additions: 89,
+            deletions: 12,
+            commits: 3,
+            notes: 2,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 10,
+            cycle_hours: 48.0,
+        },
+        DemoMr {
+            id: "203",
+            title: "fix(db): Connection pool deadlocks under heavy load",
+            author: "thomas_db",
+            assignee: Some("alex_dev"),
+            reviewers: vec!["sarah_code"],
+            milestone: "v2.4.0",
+            labels: vec!["bug", "size::M"],
+            files_changed: 6,
+            additions: 231,
+            deletions: 18,
+            commits: 5,
+            notes: 8,
+            pipeline_count: 3,
+            pipeline_failures: 1,
+            merged_days_ago: 15,
+            cycle_hours: 96.0,
+        },
+        DemoMr {
+            id: "204",
+            title: "fix(ci): Repair flaky integration tests",
+            author: "sarah_code",
+            assignee: Some("alex_dev"),
+            reviewers: vec![],
+            milestone: "v2.4.0",
+            labels: vec!["bug", "size::S"],
+            files_changed: 2,
+            additions: 34,
+            deletions: 8,
+            commits: 1,
+            notes: 6,
+            pipeline_count: 4,
+            pipeline_failures: 2,
+            merged_days_ago: 20,
+            cycle_hours: 24.0,
+        },
+        DemoMr {
+            id: "205",
+            title: "chore(deps): Bump tokio to 1.37",
+            author: "bot_renovate",
+            assignee: Some("julien_m"),
+            reviewers: vec![],
+            milestone: "v2.4.0",
+            labels: vec!["deps", "size::S"],
+            files_changed: 1,
+            additions: 12,
+            deletions: 12,
+            commits: 2,
+            notes: 0,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 22,
+            cycle_hours: 12.0,
+        },
+        DemoMr {
+            id: "206",
+            title: "feat(notif): Desktop notifications on branch change",
+            author: "julien_m",
+            assignee: Some("marina_gql"),
+            reviewers: vec!["thomas_db"],
+            milestone: "v2.4.0",
+            labels: vec!["feature", "size::M"],
+            files_changed: 7,
+            additions: 312,
+            deletions: 41,
+            commits: 6,
+            notes: 3,
+            pipeline_count: 2,
+            pipeline_failures: 0,
+            merged_days_ago: 25,
+            cycle_hours: 120.0,
+        },
+        DemoMr {
+            id: "207",
+            title: "refactor(ui): Double buffering in render loop",
+            author: "julien_m",
+            assignee: Some("marina_gql"),
+            reviewers: vec!["alex_dev"],
+            milestone: "v2.4.0",
+            labels: vec!["perf", "size::L"],
+            files_changed: 9,
+            additions: 198,
+            deletions: 87,
+            commits: 4,
+            notes: 4,
+            pipeline_count: 2,
+            pipeline_failures: 1,
+            merged_days_ago: 28,
+            cycle_hours: 56.0,
+        },
+        DemoMr {
+            id: "208",
+            title: "fix(auth): Token refresh race condition",
+            author: "alex_dev",
+            assignee: Some("thomas_db"),
+            reviewers: vec!["marina_gql"],
+            milestone: "v2.4.0",
+            labels: vec!["bug", "size::S"],
+            files_changed: 3,
+            additions: 67,
+            deletions: 9,
+            commits: 2,
+            notes: 1,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 30,
+            cycle_hours: 18.0,
+        },
+        DemoMr {
+            id: "209",
+            title: "feat(stats): Spearman correlation engine",
+            author: "marina_gql",
+            assignee: Some("julien_m"),
+            reviewers: vec!["thomas_db", "alex_dev"],
+            milestone: "v2.5.0",
+            labels: vec!["feature", "size::XL"],
+            files_changed: 18,
+            additions: 820,
+            deletions: 120,
+            commits: 12,
+            notes: 11,
+            pipeline_count: 3,
+            pipeline_failures: 1,
+            merged_days_ago: 35,
+            cycle_hours: 168.0,
+        },
+        DemoMr {
+            id: "210",
+            title: "fix(pipeline): Skip deploy on draft MRs",
+            author: "thomas_db",
+            assignee: Some("sarah_code"),
+            reviewers: vec![],
+            milestone: "v2.5.0",
+            labels: vec!["bug", "size::S"],
+            files_changed: 1,
+            additions: 8,
+            deletions: 2,
+            commits: 1,
+            notes: 0,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 38,
+            cycle_hours: 6.0,
+        },
+        DemoMr {
+            id: "211",
+            title: "feat(tracker): Redmine ticket auto-link",
+            author: "julien_m",
+            assignee: Some("thomas_db"),
+            reviewers: vec!["sarah_code"],
+            milestone: "v2.5.0",
+            labels: vec!["feature", "size::L"],
+            files_changed: 10,
+            additions: 390,
+            deletions: 55,
+            commits: 7,
+            notes: 7,
+            pipeline_count: 2,
+            pipeline_failures: 0,
+            merged_days_ago: 42,
+            cycle_hours: 88.0,
+        },
+        DemoMr {
+            id: "212",
+            title: "chore(lint): Enforce clippy::pedantic workspace-wide",
+            author: "sarah_code",
+            assignee: Some("julien_m"),
+            reviewers: vec![],
+            milestone: "v2.5.0",
+            labels: vec!["chore", "size::S"],
+            files_changed: 5,
+            additions: 43,
+            deletions: 38,
+            commits: 2,
+            notes: 1,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 45,
+            cycle_hours: 14.0,
+        },
+        DemoMr {
+            id: "213",
+            title: "feat(api): Rate-limit middleware with token bucket",
+            author: "alex_dev",
+            assignee: Some("marina_gql"),
+            reviewers: vec!["thomas_db"],
+            milestone: "v2.5.0",
+            labels: vec!["feature", "size::M"],
+            files_changed: 8,
+            additions: 276,
+            deletions: 32,
+            commits: 5,
+            notes: 3,
+            pipeline_count: 2,
+            pipeline_failures: 0,
+            merged_days_ago: 50,
+            cycle_hours: 60.0,
+        },
+        DemoMr {
+            id: "214",
+            title: "fix(ui): Colour mismatch on dark themes",
+            author: "marina_gql",
+            assignee: Some("sarah_code"),
+            reviewers: vec![],
+            milestone: "v2.5.0",
+            labels: vec!["bug", "size::XS"],
+            files_changed: 1,
+            additions: 4,
+            deletions: 4,
+            commits: 1,
+            notes: 0,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 52,
+            cycle_hours: 4.0,
+        },
+        DemoMr {
+            id: "215",
+            title: "feat(export): JSON and CSV report generation",
+            author: "thomas_db",
+            assignee: Some("julien_m"),
+            reviewers: vec!["marina_gql", "alex_dev"],
+            milestone: "v2.5.0",
+            labels: vec!["feature", "size::L"],
+            files_changed: 14,
+            additions: 560,
+            deletions: 88,
+            commits: 9,
+            notes: 6,
+            pipeline_count: 2,
+            pipeline_failures: 1,
+            merged_days_ago: 58,
+            cycle_hours: 104.0,
+        },
+        DemoMr {
+            id: "216",
+            title: "fix(db): NULL handling in migration v3",
+            author: "julien_m",
+            assignee: Some("alex_dev"),
+            reviewers: vec![],
+            milestone: "v2.5.0",
+            labels: vec!["bug", "size::S"],
+            files_changed: 2,
+            additions: 18,
+            deletions: 6,
+            commits: 1,
+            notes: 2,
+            pipeline_count: 2,
+            pipeline_failures: 1,
+            merged_days_ago: 62,
+            cycle_hours: 10.0,
+        },
+        DemoMr {
+            id: "217",
+            title: "perf(cache): LRU eviction for diff stats cache",
+            author: "sarah_code",
+            assignee: Some("marina_gql"),
+            reviewers: vec!["thomas_db"],
+            milestone: "v2.5.0",
+            labels: vec!["perf", "size::M"],
+            files_changed: 6,
+            additions: 144,
+            deletions: 29,
+            commits: 4,
+            notes: 4,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 68,
+            cycle_hours: 42.0,
+        },
+        DemoMr {
+            id: "218",
+            title: "chore(release): Bump version to v2.4.4",
+            author: "bot_renovate",
+            assignee: Some("julien_m"),
+            reviewers: vec![],
+            milestone: "v2.4.0",
+            labels: vec!["chore", "size::XS"],
+            files_changed: 2,
+            additions: 6,
+            deletions: 6,
+            commits: 1,
+            notes: 0,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 72,
+            cycle_hours: 2.0,
+        },
+        DemoMr {
+            id: "219",
+            title: "feat(auth): Session invalidation on password change",
+            author: "alex_dev",
+            assignee: Some("thomas_db"),
+            reviewers: vec!["sarah_code"],
+            milestone: "v2.5.0",
+            labels: vec!["feature", "size::M"],
+            files_changed: 5,
+            additions: 178,
+            deletions: 22,
+            commits: 4,
+            notes: 3,
+            pipeline_count: 2,
+            pipeline_failures: 0,
+            merged_days_ago: 75,
+            cycle_hours: 54.0,
+        },
+        DemoMr {
+            id: "220",
+            title: "fix(api): Pagination off-by-one on large datasets",
+            author: "marina_gql",
+            assignee: Some("alex_dev"),
+            reviewers: vec![],
+            milestone: "v2.5.0",
+            labels: vec!["bug", "size::S"],
+            files_changed: 1,
+            additions: 11,
+            deletions: 3,
+            commits: 1,
+            notes: 1,
+            pipeline_count: 1,
+            pipeline_failures: 0,
+            merged_days_ago: 80,
+            cycle_hours: 8.0,
+        },
+    ];
+
+    // Compute a RFC3339 timestamp `days_ago` days before now.
+    let ts_days_ago = |days: i64| -> String {
+        let dt = chrono::Utc::now() - chrono::Duration::days(days);
+        dt.to_rfc3339()
+    };
+
+    for mr in dataset {
+        let recorded_at = ts_days_ago(mr.merged_days_ago);
+        // Approximate created_at by subtracting the cycle time from merged_at.
+        let created_at = {
+            let merged = chrono::Utc::now() - chrono::Duration::days(mr.merged_days_ago);
+            let created = merged - chrono::Duration::hours(mr.cycle_hours as i64);
+            Some(created.to_rfc3339())
+        };
+
+        let snap = MrStatsSnapshot {
+            mr_id: mr.id.to_string(),
+            project_id: project_id.to_string(),
+            title: mr.title.to_string(),
+            trigger: SnapshotTrigger::OnMerge,
+            author: mr.author.to_string(),
+            assignee: mr.assignee.map(str::to_string),
+            reviewers: mr.reviewers.iter().map(|s| s.to_string()).collect(),
+            merged_by: mr.assignee.map(str::to_string),
+            milestone: Some(mr.milestone.to_string()),
+            labels: mr.labels.iter().map(|s| s.to_string()).collect(),
+            target_branch: "main".to_string(),
+            state: "merged".to_string(),
+            created_at,
+            merged_at: Some(recorded_at.clone()),
+            updated_at: Some(recorded_at.clone()),
+            files_changed: mr.files_changed,
+            additions: mr.additions,
+            deletions: mr.deletions,
+            commits_count: mr.commits,
+            diff_difficulty: Some(
+                (mr.files_changed as f64 * 0.4
+                    + (mr.additions + mr.deletions) as f64 * 0.005
+                    + mr.commits as f64 * 0.1)
+                    .min(10.0),
+            ),
+            user_notes_count: mr.notes,
+            pipeline_count: mr.pipeline_count,
+            pipeline_failure_count: mr.pipeline_failures,
+        };
+
+        let _ = db.upsert_snapshot_at(&snap, &recorded_at).await;
+    }
+
+    Some(Arc::new(db))
+}
 
 /// Returns an ISO 8601 UTC timestamp offset by `days_ago` days from now.
 /// Used to produce realistic, relative `updated_at` values in demo mode
@@ -433,6 +891,13 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         },
     ];
 
+    // Seed an in-memory SQLite stats DB so the Stats overlay renders real data
+    // in demo mode instead of "Stats DB not available".
+    #[cfg(feature = "stats")]
+    {
+        app.stats_db = seed_demo_stats_db("123456").await;
+    }
+
     // Apply the default sort (UpdatedAt Descending) so the table order at startup
     // matches exactly what the user sees — MR 104 is given the most recent timestamp
     // so it lands at row 0 after sorting.
@@ -457,12 +922,27 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     loop {
         // Drain the event queue before rendering
         while let Ok(event) = rx.try_recv() {
-            if let AppEvent::Tick = event {
-                if app.time_left > 0 {
-                    app.time_left -= 1;
-                } else {
-                    app.time_left = app.refresh_interval_secs;
+            match event {
+                AppEvent::Tick => {
+                    if app.time_left > 0 {
+                        app.time_left -= 1;
+                    } else {
+                        app.time_left = app.refresh_interval_secs;
+                    }
                 }
+                // Route stats results into app state so the overlay re-renders.
+                #[cfg(feature = "stats")]
+                AppEvent::StatsReportReady(report) => {
+                    app.stats_view.loading = false;
+                    app.stats_view.error = None;
+                    app.stats_view.report = Some(*report);
+                }
+                #[cfg(feature = "stats")]
+                AppEvent::StatsReportFailed(err) => {
+                    app.stats_view.loading = false;
+                    app.stats_view.error = Some(err);
+                }
+                _ => {}
             }
         }
 
@@ -474,12 +954,26 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                     let size = terminal.size()?;
                     handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
                 }
-                // Accept both Press and Repeat so held keys scroll smoothly in demo mode.
+                // Quit on Esc/q (handle_key_event_demo returns true).
                 Event::Key(key)
                     if (key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat)
                         && handle_key_event_demo(key, &mut app) =>
                 {
                     break;
+                }
+                // After a non-quitting key, check if Stats mode was just activated.
+                // handle_key_event_demo is sync so trigger_stats_refresh (which spawns
+                // a Tokio task) must be called here, in the async context.
+                #[cfg(feature = "stats")]
+                Event::Key(key)
+                    if (key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat)
+                        && app.input_mode == crate::app::InputMode::Stats
+                        && app.stats_view.loading =>
+                {
+                    // Key was already handled by the previous arm's side-effect;
+                    // we only need to trigger the async aggregation here.
+                    let _ = key;
+                    crate::ui::stats::trigger_stats_refresh(&mut app, &tx);
                 }
                 _ => {}
             }

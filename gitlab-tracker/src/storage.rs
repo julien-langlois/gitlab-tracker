@@ -56,6 +56,18 @@ pub struct ProjectEntry {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_recent_days: Option<u64>,
+    /// Statistics retention policy for this project.
+    ///
+    /// When the `stats` feature is enabled, snapshots older than this threshold
+    /// are automatically purged from the local SQLite database on startup.
+    /// Defaults to `365` days when absent.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// stats_retention_days = 180
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stats_retention_days: Option<u32>,
     /// Which optional columns are visible in the MR table for this project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visible_columns: Option<crate::config::VisibleColumns>,
@@ -279,6 +291,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         label_colors,
         tracker,
         gitlab_username: None,
+        stats_retention_days: None,
     };
 
     // Write projects.toml with the migrated values.
@@ -508,6 +521,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             label_colors: None,
             tracker: None,
             gitlab_username: None,
+            stats_retention_days: None,
         };
     }
 
@@ -615,6 +629,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         label_colors: None,
         tracker: None,
         gitlab_username: None,
+        stats_retention_days: None,
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;

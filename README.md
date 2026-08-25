@@ -120,6 +120,23 @@
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
+* 📊 **MR Analytics & Velocity Stats (`G`) *(optional — `--features stats`)*:** Press `G` to open a fullscreen analytics overlay powered by the `gitlab-tracker-stats` crate. Snapshots are recorded automatically into a local SQLite database on every merge, close, or daily refresh — no manual action required.
+
+  The overlay is organised into scrollable sections:
+
+  | Section | Content |
+  | :--- | :--- |
+  | **Throughput & Cycle time** | MRs merged/week, median and P90 cycle time, avg diff size, avg comments, pipeline failure rate |
+  | **Open MR backlog** | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance |
+  | **By Author** | Horizontal bar chart of average cycle time per author |
+  | **By Reviewer** | Average cycle time per reviewer — identifies review bottlenecks |
+  | **By Milestone** | Merged MR count per sprint — velocity comparison across releases |
+  | **Spearman correlations** | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
+
+  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Data retention is configurable per-project via `stats_retention_days` in `projects.toml` (default: 365 days).
+
+  See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
+
 * 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all open MRs attached to that milestone** in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
 
   ```text
@@ -488,6 +505,7 @@ Shortcut keys are active. The input field is passive.
 | `S`                    | Toggle sort direction (ascending / descending)                                                                             |
 | `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
 | `F`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |
+| `G`                    | **Open Stats overlay** — velocity metrics & Spearman correlations *(requires `--features stats`)*                          |
 | `Del`                  | Delete selected MR row                                                                                                     |
 | `Esc`                  | Quit dashboard                                                                                                             |
 
@@ -581,6 +599,17 @@ gitlab-tracker-redmine/          # Library crate — optional Redmine integratio
     ├── shortcuts.rs     # inventory::submit! — Redmine keyboard shortcut block
     ├── filters.rs       # inventory::submit! — "Has linked ticket" filter definition
     └── columns.rs       # inventory::submit! — "Tracker" column definition
+
+gitlab-tracker-stats/            # Library crate — optional analytics & velocity engine
+└── src/
+    ├── lib.rs           # Re-exports + crate architecture documentation
+    ├── snapshot.rs      # MrStatsSnapshot + SnapshotTrigger (OnMerge / OnClose / OnRefresh)
+    ├── db.rs            # StatsDb trait + SqliteStatsDb: SQLite schema, migrations, upsert/query/purge
+    ├── metrics.rs       # PerMrMetrics: cycle_time, pipeline_failure_rate, comment_density (pure fns)
+    ├── aggregator.rs    # TimeWindow + AggregatedStats: median, P90, groupings by author/reviewer/milestone
+    ├── correlation.rs   # Spearman ρ with tie-handling, p-value via t-distribution, CorrelationStrength
+    ├── report.rs        # StatReport::build() → to_json() / to_csv_rows()
+    └── shortcuts.rs     # inventory::submit! — Stats keyboard shortcut block ([G], [W], scroll)
 ```
 
 ### Optional Feature Flags
@@ -589,6 +618,7 @@ gitlab-tracker-redmine/          # Library crate — optional Redmine integratio
 | :-------------- | :---------- | :------------------------------------------------------------------------------------------------------------ |
 | `notifications` | ✅ enabled  | Desktop notifications via `notify-rust`                                                                       |
 | `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md)) |
+| `stats`         | ❌ disabled | MR analytics, velocity metrics, and Spearman correlations (see [`gitlab-tracker-stats`](gitlab-tracker-stats/README.md)) |
 
 ### Tracker Plugins
 
@@ -607,6 +637,7 @@ Each plugin lives in its own crate and is activated via a Cargo feature flag. Se
 | Plugin      | Feature flag         | Documentation                                                          |
 | :---------- | :------------------- | :--------------------------------------------------------------------- |
 | **Redmine** | `--features redmine` | [`gitlab-tracker-redmine/README.md`](gitlab-tracker-redmine/README.md) |
+| **Stats**   | `--features stats`   | [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md)     |
 
 ---
 

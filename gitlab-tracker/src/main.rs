@@ -179,6 +179,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Extract tracked_branches before moving project fields.
     let project_tracked_branches = project.tracked_branches.clone();
+    // Extract stats_retention_days before the project fields are partially moved below.
+    #[cfg(feature = "stats")]
+    let stats_retention_days = project.stats_retention_days.unwrap_or(365);
     let base_url = project.gitlab_url;
     let project_id = project.project_id;
     let refresh_interval_secs = resolve_refresh_interval(&config);
@@ -265,6 +268,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (saved_mrs, migrated_branches, mut last_known_branches) =
         load_state_async(&base_url, &project_id).await;
+    // Clone complexity_profile before the move into App::new so the backfill
+    // closure below can still reference it after `config` is consumed.
+    #[cfg(feature = "stats")]
+    let complexity_profile = config.complexity_profile.clone();
+
     let mut app = App::new(
         token,
         project_id.clone(),
@@ -309,6 +317,126 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // plugin only requires linking it (i.e. enabling its feature in Cargo.toml).
     app.shortcut_providers = gitlab_tracker_core::collect_all_blocks();
 
+    // ── Stats DB initialisation ───────────────────────────────────────────────
+    // Opened before `restore_from_saved` so that the very first MrLoaded events
+    // can already record snapshots. The DB file lives alongside tracker_state.json
+    // in the XDG config directory.
+    #[cfg(feature = "stats")]
+    {
+        use gitlab_tracker_stats::StatsDb as _;
+        use std::sync::Arc;
+
+        // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
+        // We pass the plain absolute path — `create_if_missing(true)` handles file creation.
+        let db_path = storage::get_save_dir()
+            .map(|d| d.join("stats.db"))
+            .and_then(|p| p.to_str().map(|s| s.to_string()));
+
+        if let Some(path) = db_path {
+            match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
+                Ok(db) => {
+                    let db = Arc::new(db);
+
+                    // Purge snapshots older than the configured retention threshold.
+                    let retention_days = stats_retention_days;
+                    match db.purge_old_snapshots(&project_id, retention_days).await {
+                        Ok(n) if n > 0 => {
+                            tracing::info!(rows = n, retention_days, "Purged old stats snapshots")
+                        }
+                        Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
+                        _ => {}
+                    }
+
+                    // ── Backfill from tracker_state.json ─────────────────────
+                    // On first run (or after a gap), seed the DB with the MRs
+                    // already persisted on disk so stats are immediately useful
+                    // without waiting for live merge/close events.
+                    //
+                    // Strategy:
+                    //   • Merged/closed MRs  → OnMerge / OnClose snapshot
+                    //     (recorded_at = merged_at / updated_at as best proxy)
+                    //   • Open MRs           → OnRefresh snapshot (today)
+                    //
+                    // All upserts are idempotent: the UNIQUE constraint silently
+                    // ignores duplicates if the DB already has data for today.
+                    {
+                        use crate::models::GitlabMrState;
+                        use gitlab_tracker_stats::db::StatsDb as _;
+                        use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
+
+                        let today = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+                        for mr in &saved_mrs {
+                            let (trigger, recorded_at) = match &mr.state {
+                                GitlabMrState::Merged => (
+                                    SnapshotTrigger::OnMerge,
+                                    mr.merged_at.clone().unwrap_or_else(|| today.clone()),
+                                ),
+                                GitlabMrState::Closed => (
+                                    SnapshotTrigger::OnClose,
+                                    mr.updated_at.clone().unwrap_or_else(|| today.clone()),
+                                ),
+                                GitlabMrState::Opened => {
+                                    (SnapshotTrigger::OnRefresh, today.clone())
+                                }
+                            };
+
+                            let diff = mr.diff_stats.as_ref();
+                            let pipeline_count = mr.pipelines.len() as u32;
+                            let pipeline_failure_count =
+                                mr.pipelines
+                                    .iter()
+                                    .filter(|p| p.status == crate::models::PipelineState::Failed)
+                                    .count() as u32;
+
+                            let snap = MrStatsSnapshot {
+                                mr_id: mr.id.clone(),
+                                project_id: project_id.clone(),
+                                title: mr.title.clone(),
+                                trigger,
+                                author: mr.author.clone().unwrap_or_default(),
+                                assignee: mr.assignee.clone().filter(|s| !s.is_empty()),
+                                reviewers: mr.reviewers.clone(),
+                                merged_by: mr.merged_by.clone(),
+                                milestone: mr.milestone.clone().filter(|s| !s.is_empty()),
+                                labels: mr.labels.clone().unwrap_or_default(),
+                                target_branch: mr.target_branch.clone().unwrap_or_default(),
+                                state: format!("{:?}", mr.state).to_lowercase(),
+                                created_at: None,
+                                merged_at: mr.merged_at.clone(),
+                                updated_at: mr.updated_at.clone(),
+                                files_changed: diff.map(|d| d.files_changed).unwrap_or(0),
+                                additions: diff.map(|d| d.additions).unwrap_or(0),
+                                deletions: diff.map(|d| d.deletions).unwrap_or(0),
+                                commits_count: diff.map(|d| d.commits_count).unwrap_or(0),
+                                diff_difficulty: diff.map(|d| d.difficulty(&complexity_profile)),
+                                user_notes_count: mr.user_notes_count,
+                                pipeline_count,
+                                pipeline_failure_count,
+                            };
+
+                            // Override `recorded_at` via a raw upsert so merged MRs
+                            // appear at their real merge date rather than today.
+                            // We use the standard upsert and accept that open MRs
+                            // will land at today — correct behaviour for OnRefresh.
+                            let _ = db.upsert_snapshot_at(&snap, &recorded_at).await;
+                        }
+
+                        tracing::info!(
+                            count = saved_mrs.len(),
+                            "Stats backfill from tracker_state.json complete"
+                        );
+                    }
+
+                    app.stats_db = Some(db);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, path, "Failed to open stats DB — stats disabled");
+                }
+            }
+        }
+    }
+
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
     app.restore_from_saved(saved_mrs, api_semaphore.clone(), tx.clone());
 
@@ -350,6 +478,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app::InputMode::LogTime => "⏱️  Log Time",
             app::InputMode::Help => "❓ Help",
             app::InputMode::Normal => "Normal",
+            #[cfg(feature = "stats")]
+            app::InputMode::Stats => "📊 Stats",
         };
         let filter_label = app.active_filter.label(&app.filter_defs);
         let window_title = format!(

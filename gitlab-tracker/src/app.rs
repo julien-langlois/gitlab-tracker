@@ -63,6 +63,11 @@ pub enum InputMode {
     /// The help popup is open — lists all registered shortcuts by section.
     /// Any key press closes it and returns to Normal mode.
     Help,
+    /// The Stats fullscreen overlay is open — displays MR analytics and correlations.
+    /// Only compiled and reachable when the `stats` feature is enabled.
+    /// [Esc] or [G] closes it and returns to Normal mode.
+    #[cfg(feature = "stats")]
+    Stats,
 }
 
 /// Which field is focused inside the Log Time popup.
@@ -213,6 +218,70 @@ pub struct FilterPickerState {
     pub input: String,
 }
 
+/// UI state for the Stats fullscreen overlay (only compiled with the `stats` feature).
+///
+/// Decoupled from `StatReport` so the overlay can render a "Loading…" state
+/// while the async aggregation is in flight, and an "Insufficient data" state
+/// when fewer than 3 snapshots are available.
+#[cfg(feature = "stats")]
+#[derive(Debug, Default)]
+pub struct StatsViewState {
+    /// The last successfully computed report, ready to render.
+    pub report: Option<gitlab_tracker_stats::StatReport>,
+    /// Vertical scroll offset inside the stats overlay (in lines).
+    pub scroll: u16,
+    /// Whether an async aggregation is currently in flight.
+    pub loading: bool,
+    /// Human-readable error shown when aggregation fails.
+    pub error: Option<String>,
+    /// The time window currently selected by the user (cycles with [W]).
+    pub window: StatsWindow,
+}
+
+/// Time-window selector cycled by [W] inside the Stats overlay.
+#[cfg(feature = "stats")]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum StatsWindow {
+    #[default]
+    Last30Days,
+    Last90Days,
+    Last365Days,
+    AllTime,
+}
+
+#[cfg(feature = "stats")]
+impl StatsWindow {
+    /// Cycles to the next window in the sequence.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Last30Days => Self::Last90Days,
+            Self::Last90Days => Self::Last365Days,
+            Self::Last365Days => Self::AllTime,
+            Self::AllTime => Self::Last30Days,
+        }
+    }
+
+    /// Returns the corresponding [`gitlab_tracker_stats::TimeWindow`] for DB queries.
+    pub fn to_query_window(self) -> Option<gitlab_tracker_stats::TimeWindow> {
+        match self {
+            Self::Last30Days => Some(gitlab_tracker_stats::TimeWindow::LastDays(30)),
+            Self::Last90Days => Some(gitlab_tracker_stats::TimeWindow::LastDays(90)),
+            Self::Last365Days => Some(gitlab_tracker_stats::TimeWindow::LastDays(365)),
+            Self::AllTime => None,
+        }
+    }
+
+    /// Short label shown in the overlay title bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Last30Days => "Last 30 days",
+            Self::Last90Days => "Last 90 days",
+            Self::Last365Days => "Last 365 days",
+            Self::AllTime => "All time",
+        }
+    }
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -324,6 +393,29 @@ pub struct App {
     /// Injected at construction time so tests and future callers can swap in a
     /// custom policy without touching `apply_event`. Defaults to [`DefaultMrEventPolicy`].
     pub event_policy: Arc<dyn MrEventPolicy>,
+
+    /// UI state for the Stats fullscreen overlay.
+    ///
+    /// Holds the last computed report and the scroll offset.
+    /// `None` until the user opens the Stats view for the first time.
+    #[cfg(feature = "stats")]
+    pub stats_view: StatsViewState,
+
+    /// Handle to the SQLite stats database, injected by `main.rs` after `SqliteStatsDb::open`.
+    ///
+    /// `None` when the `stats` feature is disabled or the DB failed to open at startup.
+    /// All recording calls are guarded by `#[cfg(feature = "stats")]` — no runtime
+    /// overhead when the feature is not compiled in.
+    #[cfg(feature = "stats")]
+    pub stats_db: Option<Arc<gitlab_tracker_stats::SqliteStatsDb>>,
+
+    /// Tracks the calendar date of the last `on_refresh` snapshot per MR id.
+    ///
+    /// Prevents writing more than one `OnRefresh` snapshot per MR per calendar day,
+    /// matching the DB `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` constraint
+    /// without a round-trip query on every `Tick`.
+    #[cfg(feature = "stats")]
+    pub stats_last_refresh_date: std::collections::HashMap<String, String>,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -396,6 +488,12 @@ impl App {
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),
             event_policy: Arc::new(DefaultMrEventPolicy),
+            #[cfg(feature = "stats")]
+            stats_view: StatsViewState::default(),
+            #[cfg(feature = "stats")]
+            stats_db: None,
+            #[cfg(feature = "stats")]
+            stats_last_refresh_date: std::collections::HashMap::new(),
         }
     }
 
@@ -1394,6 +1492,10 @@ impl App {
 
                 mr.diff_stats = data.diff_stats;
 
+                // Capture the MR id before the stats block — `data` is fully consumed above.
+                #[cfg(feature = "stats")]
+                let data_id_for_stats = mr.id.clone();
+
                 // Arm (or re-arm) the global fade countdown.
                 if was_updated {
                     self.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
@@ -1450,6 +1552,99 @@ impl App {
                 }
 
                 self.sort_mrs();
+
+                // ── Stats recording ───────────────────────────────────────────
+                // Record a snapshot into the stats DB when the feature is enabled.
+                // Three triggers are handled here:
+                //   • OnMerge  — when the MR just transitioned to Merged state.
+                //   • OnClose  — when the MR just transitioned to Closed state.
+                //   • OnRefresh — at most once per calendar day for open MRs.
+                #[cfg(feature = "stats")]
+                if let Some(db) = self.stats_db.clone() {
+                    // Re-borrow after all mutations are applied so the snapshot
+                    // captures the final state written to `mr` just above.
+                    if let Some(mr) = self.mrs.find_mut(&data_id_for_stats) {
+                        use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
+
+                        let trigger = match &mr.state {
+                            GitlabMrState::Merged => Some(SnapshotTrigger::OnMerge),
+                            GitlabMrState::Closed => Some(SnapshotTrigger::OnClose),
+                            GitlabMrState::Opened => {
+                                // Record at most once per calendar day.
+                                let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+                                let last = self
+                                    .stats_last_refresh_date
+                                    .get(&mr.id)
+                                    .cloned()
+                                    .unwrap_or_default();
+                                if last == today {
+                                    None
+                                } else {
+                                    self.stats_last_refresh_date.insert(mr.id.clone(), today);
+                                    Some(SnapshotTrigger::OnRefresh)
+                                }
+                            }
+                        };
+
+                        if let Some(trigger) = trigger {
+                            let diff_stats = mr.diff_stats.as_ref();
+                            let pipeline_count = mr.pipelines.len() as u32;
+                            let pipeline_failure_count =
+                                mr.pipelines
+                                    .iter()
+                                    .filter(|p| p.status == crate::models::PipelineState::Failed)
+                                    .count() as u32;
+
+                            let snap = MrStatsSnapshot {
+                                mr_id: mr.id.clone(),
+                                project_id: self.project_id.clone(),
+                                title: mr.title.clone(),
+                                trigger,
+                                author: mr.author.clone(),
+                                assignee: if mr.assignee.is_empty() {
+                                    None
+                                } else {
+                                    Some(mr.assignee.clone())
+                                },
+                                reviewers: mr.reviewers.clone(),
+                                merged_by: mr.merged_by.clone(),
+                                milestone: if mr.milestone.is_empty() {
+                                    None
+                                } else {
+                                    Some(mr.milestone.clone())
+                                },
+                                labels: mr.labels.clone(),
+                                target_branch: mr.target_branch.clone(),
+                                state: format!("{:?}", mr.state).to_lowercase(),
+                                created_at: None, // not stored on TrackedMr — available via GitLab API
+                                merged_at: mr.merged_at.clone(),
+                                updated_at: mr.updated_at.clone(),
+                                files_changed: diff_stats.map(|d| d.files_changed).unwrap_or(0),
+                                additions: diff_stats.map(|d| d.additions).unwrap_or(0),
+                                deletions: diff_stats.map(|d| d.deletions).unwrap_or(0),
+                                commits_count: diff_stats.map(|d| d.commits_count).unwrap_or(0),
+                                diff_difficulty: diff_stats
+                                    .map(|d| d.difficulty(&self.config.complexity_profile)),
+                                user_notes_count: mr.user_notes_count,
+                                pipeline_count,
+                                pipeline_failure_count,
+                            };
+
+                            let project_id = self.project_id.clone();
+                            tokio::spawn(async move {
+                                use gitlab_tracker_stats::StatsDb;
+                                if let Err(e) = db.upsert_snapshot(&snap).await {
+                                    tracing::warn!(
+                                        project_id = %project_id,
+                                        error = %e,
+                                        "Failed to record stats snapshot"
+                                    );
+                                }
+                            });
+                        }
+                    }
+                }
+
                 // MrLoaded maps to MrLifecycleEvent::Refreshed — persist driven by policy.
                 needs_persist
             }
@@ -1462,6 +1657,22 @@ impl App {
                 mr.status = MrStatus::Error;
                 // FetchFailed → policy returns false (errors are not persisted to disk).
                 needs_persist
+            }
+
+            // ── Stats async results ───────────────────────────────────────────
+            #[cfg(feature = "stats")]
+            AppEvent::StatsReportReady(report) => {
+                self.stats_view.loading = false;
+                self.stats_view.error = None;
+                self.stats_view.report = Some(*report);
+                false
+            }
+
+            #[cfg(feature = "stats")]
+            AppEvent::StatsReportFailed(err) => {
+                self.stats_view.loading = false;
+                self.stats_view.error = Some(err);
+                false
             }
 
             AppEvent::GitlabLabelsLoaded(labels) => {

@@ -463,6 +463,13 @@ pub enum AppEvent {
     TimeLogFailed {
         error: String,
     },
+    /// Fired when the async stats aggregation completes successfully.
+    /// Boxed to keep the enum variant size in check (Clippy `large_enum_variant`).
+    #[cfg(feature = "stats")]
+    StatsReportReady(Box<gitlab_tracker_stats::StatReport>),
+    /// Fired when the async stats aggregation fails.
+    #[cfg(feature = "stats")]
+    StatsReportFailed(String),
     Tick,
 }
 
