@@ -198,11 +198,11 @@ pub async fn handle_key_event(
         // for Milestone and Assignee entries; Esc cancels without applying.
         // ------------------------------------------------------------------
         InputMode::FilterPicker => {
-            let last_idx = app.filter_defs.len().saturating_sub(1);
-            let needs_text_input = app
-                .filter_defs
+            let visible_filters = app.visible_filter_defs();
+            let last_idx = visible_filters.len().saturating_sub(1);
+            let needs_text_input = visible_filters
                 .get(app.filter_picker.cursor)
-                .map(|d| d.needs_text_input)
+                .map(|(_, def)| def.needs_text_input)
                 .unwrap_or(false);
 
             match key.code {
@@ -849,11 +849,11 @@ async fn handle_enter(
 pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     // Filter picker popup intercepts all keys when open.
     if app.input_mode == InputMode::FilterPicker {
-        let last_idx = app.filter_defs.len().saturating_sub(1);
-        let needs_text_input = app
-            .filter_defs
+        let visible_filters = app.visible_filter_defs();
+        let last_idx = visible_filters.len().saturating_sub(1);
+        let needs_text_input = visible_filters
             .get(app.filter_picker.cursor)
-            .map(|d| d.needs_text_input)
+            .map(|(_, def)| def.needs_text_input)
             .unwrap_or(false);
         match key.code {
             KeyCode::Esc => {

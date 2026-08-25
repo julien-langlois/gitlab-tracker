@@ -79,10 +79,46 @@
   * **GitLab state** — `Opened`, `Merged`, or `Closed`
   * **Mergeability** — `Mergeable`, `Conflict`, `Needs Rebase`, `Not Approved`, `Requested Changes`, `Draft`, `Discussions`
   * **Has comments** — MRs with at least one note or discussion thread
+  * **CI failing** — MRs whose latest pipeline is in a `Failed` state
+  * **Assigned to me 👤** — MRs assigned to your GitLab account *(only visible when `gitlab_username` is configured — see below)*
+  * **Reviewer: me 👁️** — MRs where you are listed as a reviewer *(only visible when `gitlab_username` is configured — see below)*
+  * **Effort: Easy 🟢** — MRs whose review-difficulty score is below 0.33 (calibrated to your `complexity_profile`)
+  * **Effort: Complex 🔴** — MRs whose review-difficulty score is at or above 0.66
   * **Milestone** — free-text search on the milestone title (case-insensitive)
   * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
 
   The active filter is shown in the table header. Flagged state is **persisted across restarts** via a tenant-scoped state file (`tracker_<hash>.json`, where the hash is derived from your GitLab URL and project ID).
+
+  #### 👤 "Assigned to me" and "Reviewer: me" filters
+
+  These two filters are **only shown in the picker** when `gitlab_username` is set for the active project in `projects.toml`. The value must match the GitLab username exactly (the handle shown after `@` in the GitLab UI).
+
+  The field is **per-project** because you may use a different username on different GitLab instances (e.g. corporate SSO vs personal `gitlab.com` account).
+
+  ```toml
+  [[project]]
+  name       = "My Company — Backend"
+  gitlab_url = "https://gitlab.my-company.com"
+  project_id = "12345678"
+  active     = true
+
+  # Your GitLab username on this instance — enables "Assigned to me" and "Reviewer: me" filters.
+  gitlab_username = "jdoe"
+  ```
+
+  When absent, the two entries simply do not appear in the filter picker — no error, no noop filter.
+
+  #### 🎯 Effort filters
+
+  **Effort: Easy 🟢** and **Effort: Complex 🔴** match against the pre-computed review-difficulty score (the same score shown in the Effort column and the Inspector panel). The score is computed using your project's `complexity_profile`:
+
+  | Filter | Score band | Colour |
+  | :--- | :--- | :--- |
+  | **Effort: Easy** | `score < 0.33` | 🟢 Green |
+  | *(medium — no filter)* | `0.33 ≤ score < 0.66` | 🟡 Yellow |
+  | **Effort: Complex** | `score ≥ 0.66` | 🔴 Red |
+
+  MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
 * 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all open MRs attached to that milestone** in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
 

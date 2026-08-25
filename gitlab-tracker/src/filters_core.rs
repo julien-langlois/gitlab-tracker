@@ -128,6 +128,82 @@ inventory::submit!(FilterDef {
     apply: |mr: MrSnapshot<'_>, _| mr.pipeline_status == Some("Failed"),
 });
 
+// ── "Me" filters — only shown when gitlab_username is configured (priority 14–15) ──
+//
+// These filters match the currently configured GitLab username against the MR's
+// assignee or reviewer list. They are always registered in the inventory but
+// suppressed from the picker UI at runtime by `App::visible_filter_defs()` when
+// `config.gitlab_username` is `None` — so they never appear for users who have
+// not set their username in `projects.toml`.
+//
+// The `query` argument carries the runtime username value (injected by the
+// `App::visible_filter_defs` / `apply_filter` path — see `app.rs`).
+// For non-parametric "me" filters `needs_text_input` is `false`; the predicate
+// reads from `mr.gitlab_username` directly instead.
+
+inventory::submit!(FilterDef {
+    id: "assigned_to_me",
+    label: "Assigned to me 👤",
+    active_label: "Assigned to me 👤",
+    priority: 14,
+    needs_text_input: false,
+    apply: |mr: MrSnapshot<'_>, _| {
+        // Visible only when gitlab_username is configured; predicate is a no-op
+        // otherwise (the filter is hidden from the picker before it can be selected).
+        let Some(username) = mr.gitlab_username else {
+            return false;
+        };
+        // GitLab formats assignee as "Full Name (@username)" — match on "@<username>".
+        let needle = format!("@{}", username);
+        mr.assignee.contains(needle.as_str())
+    },
+});
+
+inventory::submit!(FilterDef {
+    id: "reviewer_me",
+    label: "Reviewer: me 👁️",
+    active_label: "Reviewer: me 👁️",
+    priority: 15,
+    needs_text_input: false,
+    apply: |mr: MrSnapshot<'_>, _| {
+        // Visible only when gitlab_username is configured; predicate is a no-op
+        // otherwise (the filter is hidden from the picker before it can be selected).
+        let Some(username) = mr.gitlab_username else {
+            return false;
+        };
+        // GitLab formats each reviewer as "Full Name (@username)" — match on "@<username>".
+        let needle = format!("@{}", username);
+        mr.reviewers.iter().any(|r| r.contains(needle.as_str()))
+    },
+});
+
+// ── Effort filters (priority 16–17) ──────────────────────────────────────────
+//
+// Match on the pre-computed `diff_difficulty` score in [0.0, 1.0].
+// Thresholds mirror the colour bands rendered in the Inspector panel:
+//   score < 0.33  → Easy  (green)
+//   score < 0.66  → Medium (yellow)
+//   score ≥ 0.66  → Complex (red)
+// MRs whose diff stats have not been fetched yet (score = None) are excluded.
+
+inventory::submit!(FilterDef {
+    id: "effort_easy",
+    label: "Effort: Easy 🟢",
+    active_label: "Effort: Easy 🟢",
+    priority: 16,
+    needs_text_input: false,
+    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.map(|d| d < 0.33).unwrap_or(false) },
+});
+
+inventory::submit!(FilterDef {
+    id: "effort_complex",
+    label: "Effort: Complex 🔴",
+    active_label: "Effort: Complex 🔴",
+    priority: 17,
+    needs_text_input: false,
+    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.map(|d| d >= 0.66).unwrap_or(false) },
+});
+
 // Parametric filters — need_text_input = true, priority 50+
 
 inventory::submit!(FilterDef {

@@ -61,6 +61,14 @@ pub struct MrSnapshot<'a> {
     pub assignee: &'a str,
     pub linked_ticket: Option<&'a LinkedTicket>,
     pub pipeline_status: Option<&'a str>,
+    /// Reviewer display strings for this MR (e.g. "Alice (@alice)").
+    pub reviewers: &'a [String],
+    /// GitLab username of the currently logged-in user, as configured in `projects.toml`.
+    /// `None` when `gitlab_username` is not set for the active project.
+    pub gitlab_username: Option<&'a str>,
+    /// Review-difficulty score in [0.0, 1.0] computed from diff stats, or `None`
+    /// when diff stats have not been fetched yet for this MR.
+    pub diff_difficulty: Option<f64>,
 }
 
 // Global registry — every `inventory::submit!(FilterDef { … })` anywhere in the

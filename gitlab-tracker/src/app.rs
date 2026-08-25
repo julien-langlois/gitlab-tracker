@@ -411,9 +411,19 @@ impl App {
     }
 
     /// Opens the filter picker popup, pre-selecting the currently active filter row.
+    ///
+    /// The cursor is the position of the active filter **within the visible list**
+    /// (not the full `filter_defs` index), so the highlighted row matches what the
+    /// user sees on screen.
     pub fn open_filter_picker(&mut self) {
+        // Find the visible-list position that corresponds to the active full-list index.
+        let visible = self.visible_filter_defs();
+        let cursor = visible
+            .iter()
+            .position(|(full_idx, _)| *full_idx == self.active_filter.index)
+            .unwrap_or(0);
         self.filter_picker = FilterPickerState {
-            cursor: self.active_filter.index,
+            cursor,
             input: self.active_filter.query.clone(),
         };
         self.input_mode = InputMode::FilterPicker;
@@ -421,18 +431,20 @@ impl App {
 
     /// Applies the filter picker selection and closes the popup.
     ///
-    /// When the selected filter requires a text input and the input is empty,
-    /// falls back to index 0 ("All") to avoid an empty parametric filter.
+    /// The picker cursor is a position in the **visible** filter list.
+    /// We resolve it back to the full `filter_defs` index before storing it in
+    /// `active_filter`, so `apply_filter` always finds the correct predicate.
     pub fn apply_filter_picker(&mut self) {
         let input = self.filter_picker.input.trim().to_string();
-        let idx = self.filter_picker.cursor;
+        let cursor = self.filter_picker.cursor;
+        let visible = self.visible_filter_defs();
 
-        // If the chosen filter needs text but the input is empty, reset to "All".
-        let (final_idx, final_query) = if let Some(def) = self.filter_defs.get(idx) {
+        // Resolve cursor → full-list index.  Fall back to 0 ("All") when out of range.
+        let (final_idx, final_query) = if let Some((full_idx, def)) = visible.get(cursor) {
             if def.needs_text_input && input.is_empty() {
                 (0, String::new())
             } else {
-                (idx, input)
+                (*full_idx, input)
             }
         } else {
             (0, String::new())
@@ -517,28 +529,81 @@ impl App {
     fn visible_mrs_mut(&mut self) -> impl Iterator<Item = &mut TrackedMr> {
         let filter_defs = self.filter_defs.clone();
         let active = self.active_filter.clone();
-        self.mrs
-            .iter_mut()
-            .filter(move |mr| Self::apply_filter(&filter_defs, &active, mr))
+        let complexity_profile = self.config.complexity_profile.clone();
+        let gitlab_username = self.config.gitlab_username.clone();
+        self.mrs.iter_mut().filter(move |mr| {
+            Self::apply_filter(
+                &filter_defs,
+                &active,
+                mr,
+                &complexity_profile,
+                &gitlab_username,
+            )
+        })
     }
 
     /// Returns `true` when `mr` passes the currently active filter.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
-        Self::apply_filter(&self.filter_defs, &self.active_filter, mr)
+        Self::apply_filter(
+            &self.filter_defs,
+            &self.active_filter,
+            mr,
+            &self.config.complexity_profile,
+            &self.config.gitlab_username,
+        )
+    }
+
+    /// Returns the subset of registered filter definitions visible in the picker,
+    /// as `(original_index, def)` pairs where `original_index` is the position in
+    /// `self.filter_defs` (the full list).
+    ///
+    /// The cursor in [`FilterPickerState`] and [`ActiveFilter::index`] always refer
+    /// to indices in the **full** `filter_defs` list — never in the visible subset —
+    /// so that `apply_filter` always resolves the correct predicate regardless of
+    /// which filters are hidden.
+    ///
+    /// Filters that require a configured `gitlab_username` ("Assigned to me",
+    /// "Reviewer: me") are excluded when that value is absent in `projects.toml`.
+    pub fn visible_filter_defs(&self) -> Vec<(usize, &'static FilterDef)> {
+        let has_username = self.config.gitlab_username.is_some();
+        self.filter_defs
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, def)| {
+                if matches!(def.id, "assigned_to_me" | "reviewer_me") {
+                    has_username
+                } else {
+                    true
+                }
+            })
+            .collect()
     }
 
     /// Pure predicate — does not borrow `self`, usable inside `iter_mut` closures.
     ///
     /// Builds a [`MrSnapshot`] from the tracked MR and delegates to the registered
     /// `FilterDef::apply` function — no match arm needed when a new filter is added.
+    ///
+    /// `complexity_profile` is used to compute the diff-difficulty score for the
+    /// effort filters. `gitlab_username` is forwarded so "me" filters can match.
     fn apply_filter(
         filter_defs: &[&'static FilterDef],
         active: &ActiveFilter,
         mr: &TrackedMr,
+        complexity_profile: &crate::models::DifficultyProfile,
+        gitlab_username: &Option<String>,
     ) -> bool {
         let Some(def) = filter_defs.get(active.index) else {
             return true; // Unknown index → show all.
         };
+        // Pre-compute the difficulty score using the project's complexity profile.
+        // The filter predicates (effort_easy / effort_complex) only need relative
+        // bands (< 0.33 / >= 0.66) — the profile is passed in from the caller.
+        let diff_difficulty = mr
+            .diff_stats
+            .as_ref()
+            .map(|s| s.difficulty(complexity_profile));
         let snapshot = MrSnapshot {
             flagged: mr.flagged,
             state: match &mr.state {
@@ -575,6 +640,9 @@ impl App {
                 crate::models::PipelineState::Created => "Created",
                 crate::models::PipelineState::Unknown => "Unknown",
             }),
+            reviewers: &mr.reviewers,
+            gitlab_username: gitlab_username.as_deref(),
+            diff_difficulty,
         };
         (def.apply)(snapshot, &active.query)
     }

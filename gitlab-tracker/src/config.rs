@@ -97,6 +97,16 @@ pub struct AppConfig {
     /// Not serialised — always re-fetched from the GitLab API on startup.
     #[serde(skip)]
     pub gitlab_label_colors: HashMap<String, String>,
+    /// GitLab username of the currently logged-in user for this project
+    /// (e.g. `"jdoe"` — without the `@` prefix).
+    ///
+    /// Populated at startup from `projects.toml` via `apply_project_overrides`.
+    /// When `Some`, the **"Assigned to me"** and **"Reviewer: me"** filter entries
+    /// are shown in the filter picker popup. When `None`, those entries are hidden.
+    ///
+    /// Not serialised — always sourced from `projects.toml` at runtime.
+    #[serde(skip)]
+    pub gitlab_username: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -156,6 +166,8 @@ impl Default for AppConfig {
             complexity_profile: crate::models::DifficultyProfile::default(),
             // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.
             gitlab_label_colors: HashMap::new(),
+            // Populated at runtime from projects.toml via apply_project_overrides — None by default.
+            gitlab_username: None,
         }
     }
 }

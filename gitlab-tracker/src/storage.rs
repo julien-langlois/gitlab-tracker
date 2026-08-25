@@ -64,6 +64,24 @@ pub struct ProjectEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label_colors: Option<std::collections::HashMap<String, crate::config::LabelColorConfig>>,
 
+    /// GitLab username of the person running this instance, as it appears in GitLab
+    /// (e.g. `"jdoe"` — without the `@` prefix).
+    ///
+    /// When set, the **"Assigned to me"** and **"Reviewer: me"** filter entries become
+    /// visible in the filter picker popup. These filters match against the `assignee`
+    /// and `reviewers` fields respectively using the `@<username>` pattern that GitLab
+    /// uses in its display strings.
+    ///
+    /// The value is per-project because a developer may use a different username on
+    /// different GitLab instances (e.g. corporate SSO vs personal gitlab.com account).
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// gitlab_username = "jdoe"
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gitlab_username: Option<String>,
+
     /// Optional external tracker integration for this specific project.
     ///
     /// Each project can point to a **different** tracker instance (multi-tenant).
@@ -260,6 +278,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         visible_columns,
         label_colors,
         tracker,
+        gitlab_username: None,
     };
 
     // Write projects.toml with the migrated values.
@@ -488,6 +507,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             visible_columns: None,
             label_colors: None,
             tracker: None,
+            gitlab_username: None,
         };
     }
 
@@ -594,6 +614,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         visible_columns: None,
         label_colors: None,
         tracker: None,
+        gitlab_username: None,
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;

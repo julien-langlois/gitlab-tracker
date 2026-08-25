@@ -142,6 +142,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     if let Some(colors) = &project.label_colors {
         config.label_colors = colors.clone();
     }
+    // Propagate the per-project GitLab username — drives the "Assigned to me" and
+    // "Reviewer: me" filter visibility in the picker popup.
+    config.gitlab_username = project.gitlab_username.clone();
 }
 
 #[tokio::main]

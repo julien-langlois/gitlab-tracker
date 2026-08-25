@@ -419,21 +419,47 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     ];
 
     // ── SECTION 2: People ────────────────────────────────────────────────────
+    //
+    // When `gitlab_username` is configured, any field that refers to the current
+    // user is highlighted with a distinct cyan background badge so it stands out
+    // at a glance — without affecting the Redmine panel.
     lines.push(Line::from(vec![Span::raw("")]));
     lines.push(section_header("People"));
+
+    // Helper: returns `true` when a display string (e.g. "Alice (@jdoe)") belongs
+    // to the configured GitLab user. Matches on the "@<username>" substring so it
+    // is robust against name changes (only the login is authoritative).
+    let is_me = |display: &str| -> bool {
+        config
+            .gitlab_username
+            .as_deref()
+            .map(|u| display.contains(&format!("@{}", u)))
+            .unwrap_or(false)
+    };
+
+    // Returns the styled span for a person field, highlighted when it refers to
+    // the current user.
+    let person_span = |display: String| -> Span<'static> {
+        if is_me(&display) {
+            Span::styled(
+                format!(" {} ", display),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(display, Style::default().add_modifier(Modifier::BOLD))
+        }
+    };
+
     lines.push(Line::from(vec![
         Span::raw("Author   : "),
-        Span::styled(
-            mr.author.clone(),
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
+        person_span(mr.author.clone()),
     ]));
     lines.push(Line::from(vec![
         Span::raw("Assignee : "),
-        Span::styled(
-            mr.assignee.clone(),
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
+        person_span(mr.assignee.clone()),
     ]));
 
     // Reviewers: listed inline, or dimmed "None" if empty.
@@ -447,12 +473,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             let label = if i == 0 { "Reviewers: " } else { "           " };
             lines.push(Line::from(vec![
                 Span::raw(label),
-                Span::styled(
-                    reviewer.clone(),
-                    Style::default()
-                        .fg(Color::LightBlue)
-                        .add_modifier(Modifier::BOLD),
-                ),
+                person_span(reviewer.clone()),
             ]));
         }
     }
@@ -554,7 +575,10 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // merged_by / merged_at — only shown for merged MRs.
     if mr.state == GitlabMrState::Merged {
-        let merged_by_display = mr.merged_by.as_deref().unwrap_or("Unknown");
+        let merged_by_display = mr
+            .merged_by
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
         // Format the merged_at timestamp as "YYYY-MM-DD HH:MM  (relative label)".
         let merged_at_display = mr
             .merged_at
@@ -565,15 +589,26 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 format!("{}  ({})", absolute, relative)
             })
             .unwrap_or_else(|| "Unknown".to_string());
-        lines.push(Line::from(vec![
-            Span::raw("Merged by: "),
+
+        // Highlight "Merged by" when it refers to the current user.
+        let merged_by_span = if is_me(&merged_by_display) {
             Span::styled(
-                merged_by_display.to_string(),
+                format!(" {} ", merged_by_display),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(
+                merged_by_display,
                 Style::default()
                     .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
-            ),
-        ]));
+            )
+        };
+
+        lines.push(Line::from(vec![Span::raw("Merged by: "), merged_by_span]));
         lines.push(Line::from(vec![
             Span::raw("Merged at: "),
             Span::styled(merged_at_display, Style::default().fg(Color::Magenta)),

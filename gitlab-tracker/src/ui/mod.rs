@@ -518,14 +518,20 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
 /// index mapping needed. Plugin filters (e.g. Redmine's "Has linked ticket") appear
 /// automatically when their crate is linked.
 fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
+    // Use only the filters visible for the current project configuration.
+    // Username-gated filters ("Assigned to me", "Reviewer: me") are excluded
+    // when `gitlab_username` is not set in projects.toml.
+    // visible_filters: Vec<(full_list_index, &FilterDef)>
+    // The cursor navigates the *visible* list; full_list_index is used to detect
+    // is_current (the ● marker) and is forwarded to apply_filter_picker.
+    let visible_filters = app.visible_filter_defs();
     let cursor = app.filter_picker.cursor;
-    let needs_text_input = app
-        .filter_defs
+    let needs_text_input = visible_filters
         .get(cursor)
-        .map(|d| d.needs_text_input)
+        .map(|(_, def)| def.needs_text_input)
         .unwrap_or(false);
 
-    let list_height = app.filter_defs.len() as u16;
+    let list_height = visible_filters.len() as u16;
     let input_extra: u16 = if needs_text_input { 3 } else { 0 };
     let popup_height = list_height + 2 + input_extra;
     let popup_width: u16 = 48;
@@ -570,13 +576,13 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     let has_any_linked_ticket = app.mrs.iter().any(|mr| mr.linked_ticket.is_some());
     let has_any_pipeline = app.mrs.iter().any(|mr| !mr.pipelines.is_empty());
 
-    let items: Vec<ListItem> = app
-        .filter_defs
+    let items: Vec<ListItem> = visible_filters
         .iter()
         .enumerate()
-        .map(|(i, def)| {
-            let is_active = i == cursor;
-            let is_current = i == app.active_filter.index;
+        .map(|(visible_i, (full_i, def))| {
+            let is_active = visible_i == cursor;
+            // ● marker: compare against the full-list index stored in active_filter.
+            let is_current = *full_i == app.active_filter.index;
 
             // Dim context-dependent filters when they are not applicable.
             let is_na = match def.id {
@@ -617,10 +623,9 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 
     // Text input field for parametric filters (Milestone, Assignee, …).
     if needs_text_input {
-        let field_label = app
-            .filter_defs
+        let field_label = visible_filters
             .get(cursor)
-            .map(|d| d.active_label)
+            .map(|(_, def)| def.active_label)
             .unwrap_or("Query");
         let input_block = Block::default()
             .borders(Borders::ALL)
