@@ -818,22 +818,42 @@ pub async fn fetch_gitlab_data(
     // stored_sha: only the "real" merge commit; keeps open-MR sha = None.
     let sha = mr.merge_commit_sha.or(mr.squash_commit_sha);
 
-    let (title, description, author, assignee, web_url, labels) = match (
-        cached.title,
-        cached.description,
-        cached.author,
-        cached.assignee,
-        cached.web_url,
-        cached.labels,
-    ) {
-        (Some(t), Some(d), Some(a), Some(asg), Some(w), Some(lbls))
-            if !t.contains("⚠️ ERROR") && !w.is_empty() =>
-        {
-            (t, d, a, asg, w, lbls)
-        }
+    // Title, description and labels: serve from cache when `updated_at` is unchanged
+    // (GitLab bumps `updated_at` on any edit to these fields), refresh otherwise.
+    // This avoids holding a stale "Draft: TITLE" after the draft prefix is removed,
+    // while still saving the extra JSON parsing work on unchanged MRs.
+    let updated_at_unchanged = updated_at.is_some() && updated_at == cached.updated_at;
+
+    let title = if updated_at_unchanged {
+        cached
+            .title
+            .filter(|t| !t.contains("⚠️ ERROR"))
+            .unwrap_or(mr.title)
+    } else {
+        mr.title
+    };
+
+    let description = if updated_at_unchanged {
+        cached
+            .description
+            .unwrap_or_else(|| mr.description.unwrap_or_default())
+    } else {
+        mr.description.unwrap_or_default()
+    };
+
+    let labels = if updated_at_unchanged {
+        cached
+            .labels
+            .unwrap_or_else(|| mr.labels.unwrap_or_default())
+    } else {
+        mr.labels.unwrap_or_default()
+    };
+
+    // Author and web_url are immutable after MR creation — always served from cache
+    // when available to avoid redundant formatting work.
+    let (author, assignee, web_url) = match (cached.author, cached.assignee, cached.web_url) {
+        (Some(a), Some(asg), Some(w)) if !w.is_empty() => (a, asg, w),
         _ => {
-            let title = mr.title;
-            let desc = mr.description.unwrap_or_default();
             let auth = mr
                 .author
                 .map(|u| format!("{} (@{})", u.name, u.username))
@@ -843,9 +863,8 @@ pub async fn fetch_gitlab_data(
                 .map(|u| format!("{} (@{})", u.name, u.username))
                 .unwrap_or_else(|| "none".to_string());
             let web_url = mr.web_url.unwrap_or_default();
-            let labels = mr.labels.unwrap_or_default();
 
-            (title, desc, auth, asg, web_url, labels)
+            (auth, asg, web_url)
         }
     };
 
