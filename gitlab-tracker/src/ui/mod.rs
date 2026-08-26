@@ -232,7 +232,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
 
             // Build the full bar: dynamic hints first, then plugin-contributed hints.
             let mut parts = vec![
-                format!("[i] or [/]: Insert mode"),
+                "[i] or [/]: Insert mode".to_string(),
                 format!("[Tab]: {}", pane_hint),
                 format!("[S/s]: {}", sort_status),
             ];
