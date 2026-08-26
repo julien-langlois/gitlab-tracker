@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.5] - 2026-08-26
+
+### 🚀 Features
+
+- **ui**: Display project name in the table title when configured — shown as `Project Name (URL)`, falling back to the URL alone when no name is set
+- **ui**: Add commits-behind indicator for open MRs — new `Behind` column shows how many commits the source branch is behind its target, colour-coded from light yellow (1–2) to yellow (3–9) to red (10+); displays `✔ Up to date` when the MR is mergeable
+- **shortcuts**: Status bar hints are now plugin-driven via `inventory` — each crate registers its own `ShortcutFactory` independently, no hardcoded list in the orchestrator
+- **filters**: Add `target_branch` filter to the filter picker
+
+### 🐛 Bug Fixes
+
+- **cache**: Refresh title, description and labels on `updated_at` change — fields that can be edited after MR creation are no longer stale between refreshes
+- **ui**: Uniform `Behind` chip width with full background colour — all states (`✔ Up to date`, `N behind`) are padded to a fixed `BEHIND_WIDTH` so the colour fill covers the entire column regardless of the commit count
+
+### 🚀 Features (stats)
+
+- **stats**: Add `gitlab-tracker-stats` crate with TUI overlay and demo integration — exposes an in-app statistics panel accessible via a registered shortcut
+
+### 🚀 Features (filters)
+
+- **filters**: Add "Assigned to me", "Reviewer: me" and Effort filters; highlight "me" entries in the inspector assignee / reviewer lists
+
 ## [0.4.4] - 2026-08-24
 
 ### 🚀 Features
