@@ -12,6 +12,10 @@ use ratatui::{
 /// "CI STILL RUNNING" is 16 chars — add 2 chars of padding (1 each side) → 18.
 pub const BADGE_WIDTH: usize = 18;
 
+/// Fixed width (in chars) for the "Behind" chip, padding included.
+/// "1000 behind" is 11 chars — add 1 char each side → 13. Column constraint must match.
+pub const BEHIND_WIDTH: usize = 13;
+
 /// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
 /// Excess space is distributed evenly left and right (left-biased on odd remainder).
 pub fn badge_label(text: &str) -> String {
@@ -289,7 +293,13 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                     Some(stats) if mr.state == crate::models::GitlabMrState::Opened => {
                         match (stats.commits_behind, &mr.mergeability) {
                             (Some(0), _) | (_, MergeabilityStatus::Mergeable) => {
-                                Cell::from("✔ Up to date").fg(Color::Green)
+                                // Centered plain text — no background colour needed.
+                                Cell::from(format!(
+                                    "{:^width$}",
+                                    "✔ Up to date",
+                                    width = BEHIND_WIDTH
+                                ))
+                                .fg(Color::Green)
                             }
                             (Some(n), _) => {
                                 let (fg, bg) = if n >= 10 {
@@ -299,10 +309,16 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                                 } else {
                                     (Color::Black, Color::LightYellow)
                                 };
-                                Cell::from(Line::from(vec![Span::styled(
-                                    format!(" {} behind ", n),
+                                // The text is padded to BEHIND_WIDTH so the background colour
+                                // fills the entire column width, matching the Status chip style.
+                                Cell::from(Span::styled(
+                                    format!(
+                                        "{:^width$}",
+                                        format!("{} behind", n),
+                                        width = BEHIND_WIDTH
+                                    ),
                                     Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
-                                )]))
+                                ))
                             }
                             // None + non-Mergeable: still loading from the API.
                             (None, _) => Cell::from("…").fg(Color::DarkGray),
@@ -431,7 +447,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         constraints.push(Constraint::Length(14)); // Complexity chip badge (e.g. " 🔴 Complex ")
     }
     if col("commits_behind") {
-        constraints.push(Constraint::Length(14)); // "✔ Up to date" or " 10 behind "
+        constraints.push(Constraint::Length(BEHIND_WIDTH as u16)); // "✔ Up to date " or " NNN behind " (13 chars, fixed width)
     }
     if col("tracker_ticket") {
         constraints.push(Constraint::Fill(2)); // Tracker ticket
