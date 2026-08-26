@@ -13,14 +13,17 @@ fn redmine_shortcuts() -> ShortcutBlock {
             ShortcutEntry {
                 key: "l / L",
                 description: "Open Log Time popup on the linked ticket",
+                status_hint: None,
             },
             ShortcutEntry {
                 key: "p / P",
                 description: "Cycle Tracker pane view (Ticket Info / Time Log)",
+                status_hint: None,
             },
             ShortcutEntry {
                 key: "t / T",
                 description: "Open linked Redmine ticket in browser",
+                status_hint: None,
             },
         ],
     }

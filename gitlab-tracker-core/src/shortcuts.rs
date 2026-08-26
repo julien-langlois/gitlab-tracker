@@ -4,6 +4,12 @@ pub struct ShortcutEntry {
     pub key: &'static str,
     /// Short description of what the shortcut does.
     pub description: &'static str,
+    /// Short label shown in the Normal-mode status bar (e.g. `"[G]: Stats"`).
+    ///
+    /// Set to `Some(…)` only for shortcuts that deserve a permanent slot in the
+    /// bottom bar. Leave `None` for secondary or context-specific shortcuts that
+    /// only belong in the help popup.
+    pub status_hint: Option<&'static str>,
 }
 
 /// A named group of shortcut entries, one per lib (Core, Redmine, …).

@@ -204,7 +204,8 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             Style::default().fg(Color::Yellow),
         ),
         InputMode::Editing => (
-            " INSERT │ MR ID, branch name, or @milestone │ [Enter]: Confirm │ [Esc]: Cancel ".to_string(),
+            " INSERT │ MR ID, branch name, or @milestone │ [Enter]: Confirm │ [Esc]: Cancel "
+                .to_string(),
             Style::default().fg(Color::Yellow),
         ),
         InputMode::ColumnPicker => (
@@ -215,13 +216,33 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             " Quit? Press [Esc] or [y] to confirm, any other key to cancel ".to_string(),
             Style::default().fg(Color::Red),
         ),
-        InputMode::Normal => (
-            format!(
-                " [i] or [/]: Insert mode │ [Tab]: {} │ [S/s]: {} │ [F]: Filter │ [Space]: Flag │ [C]: Columns │ [G]: Stats │ [▲/▼]: Scroll │ [O]: Open │ [R]: Refresh │ [Del]: Delete │ [?]: Help │ [Esc]: Quit ",
-                pane_hint, sort_status
-            ),
-            Style::default(),
-        ),
+        InputMode::Normal => {
+            // Collect static hints registered by all linked crates (Core, Stats, Redmine, …).
+            // Only entries with `status_hint: Some(…)` appear here — optional crates that are
+            // not compiled simply never register, so their hints never show up.
+            let plugin_hints: Vec<&'static str> = app
+                .shortcut_providers
+                .iter()
+                .flat_map(|block| block.entries.iter())
+                .filter_map(|e| e.status_hint)
+                // Skip the static hints we handle dynamically below (Insert, Scroll, Quit, …)
+                // so they don't appear twice. The dynamic ones are injected at fixed positions.
+                .filter(|h| !matches!(*h, "[i]/[/]: Insert" | "[▲/▼]: Scroll" | "[Esc]: Quit"))
+                .collect();
+
+            // Build the full bar: dynamic hints first, then plugin-contributed hints.
+            let mut parts = vec![
+                format!("[i] or [/]: Insert mode"),
+                format!("[Tab]: {}", pane_hint),
+                format!("[S/s]: {}", sort_status),
+            ];
+            parts.extend(plugin_hints.iter().map(|h| h.to_string()));
+            parts.push("[▲/▼]: Scroll".to_string());
+            parts.push("[Esc]: Quit".to_string());
+
+            let title = format!(" {} ", parts.join(" │ "));
+            (title, Style::default())
+        }
         InputMode::FilterPicker => (
             " FILTER │ [↑/↓]: Navigate │ [Enter]: Apply │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Green),
