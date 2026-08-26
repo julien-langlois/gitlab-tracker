@@ -362,9 +362,9 @@ async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Cl
 
 /// Fetches the number of commits the source branch is behind the target branch.
 ///
-/// Uses `GET /projects/:id/repository/compare?from=<target>&to=<source_sha>`.
+/// Uses `GET /projects/:id/repository/compare?from=<source>&to=<target>`.
 /// The `commits` array in the response contains the commits present on `target`
-/// but not yet on `source` — its length is the "behind" count.
+/// but not yet on `source` — its length is the \"behind\" count.
 ///
 /// Returns `None` on any network or parse error — this is a best-effort enrichment.
 async fn fetch_commits_behind(
@@ -373,12 +373,14 @@ async fn fetch_commits_behind(
     target_branch: &str,
 ) -> Option<u32> {
     let client = reqwest::Client::new();
+    // "from=source&to=target" returns commits present on `target` but not on `source`,
+    // which is the number of commits the source branch is *behind* the target branch.
     let url = format!(
         "{}/api/v4/projects/{}/repository/compare?from={}&to={}&straight=true",
         ctx.base_url,
         ctx.project_id,
-        urlencoding::encode(target_branch),
         urlencoding::encode(source_branch),
+        urlencoding::encode(target_branch),
     );
     let res = client
         .get(&url)
