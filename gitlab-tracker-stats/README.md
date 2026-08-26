@@ -56,6 +56,60 @@ Correlations are colour-coded by strength (|ρ|) and filtered for significance (
 | Strong | 0.50 – 0.69 | 🟢 Green |
 | Very strong | ≥ 0.70 | 🔵 Cyan |
 
+### Poisson insights
+
+The **POISSON INSIGHTS** section applies the [Poisson distribution](https://en.wikipedia.org/wiki/Poisson_distribution) to model MR activity as a stream of discrete, independent events arriving at a known mean rate λ. This gives three families of insight:
+
+#### Throughput forecasts
+
+Given the observed λ (mean merges per week), the forecast answers:
+> *"What is the probability we merge at least N MRs in the next 1 or 2 weeks?"*
+
+`P(X ≥ target) = 1 − CDF(target − 1)` under Poisson(λ × forecast_weeks).
+
+| Colour | Meaning |
+| :--- | :--- |
+| 🟢 Green | ≥ 75% probability — pace is sustainable |
+| 🟡 Yellow | 40–74% — achievable but uncertain |
+| 🔴 Red | < 40% — target is unlikely at current pace |
+
+#### Queue model (M/M/1)
+
+Models the MR pipeline as an [M/M/1 queue](https://en.wikipedia.org/wiki/M/M/1_queue):
+
+- **Arrival rate λ** = observed throughput (merges/week)
+- **Service rate μ** = 168 h ÷ median cycle time (MRs/week)
+- **Traffic intensity ρ = λ/μ** — must be < 1 for a stable queue
+
+From ρ, two derived metrics are shown:
+
+| Metric | Formula | Meaning |
+| :--- | :--- | :--- |
+| Expected MRs in system | `L = ρ / (1 − ρ)` | Average number of MRs waiting + in review |
+| Expected wait for next MR | `W = L / λ` (converted to hours) | How long a new MR will wait before being processed |
+
+ρ is colour-coded: 🟢 < 0.60 · 🟡 0.60–0.79 · 🔴 ≥ 0.80 (system under heavy load).
+
+> When λ ≥ μ the queue is theoretically unstable — the model is suppressed and a warning is shown instead.
+
+#### Anomaly signals
+
+Monitors two metrics against a Poisson baseline and surfaces statistically unusual windows:
+
+| Metric | Baseline λ | Flag when |
+| :--- | :--- | :--- |
+| `pipeline_failures` | avg failure rate × total MRs | Observed failures exceed baseline (right-tail p < 0.10) |
+| `comment_volume_per_mr` | avg comments per MR | Average discussion volume is unusually high |
+
+Severity is derived from the right-tail p-value P(X ≥ observed | λ):
+
+| Severity | p-value | Icon |
+| :--- | :--- | :--- |
+| Normal | > 0.10 | ✔ (not shown) |
+| Elevated | 0.05 – 0.10 | ↑ Cyan |
+| Warning | 0.01 – 0.05 | ⚠ Yellow |
+| Critical | ≤ 0.01 | ✘ Red |
+
 ---
 
 ## ⚡ Enabling the feature
@@ -151,7 +205,12 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     ├── correlation.rs       Spearman ρ with tie-handling, p-value via t-distribution
     │                        compute_all_correlations() → Vec<CorrelationResult>
     │
+    ├── poisson.rs           Poisson-based forecasting and anomaly detection
+    │                        ThroughputForecast / AnomalySignal / QueueInsight
+    │                        PoissonInsights::from_stats() → embedded in StatReport
+    │
     ├── report.rs            StatReport::build() → to_json() / to_csv_rows()
+    │                        aggregated + correlations + poisson (three sections)
     │
     └── shortcuts.rs         inventory::submit! — auto-registers Stats shortcuts
                              in the [?] help popup

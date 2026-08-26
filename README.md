@@ -64,15 +64,15 @@
   The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `projects.toml` and persisted across restarts — no manual file editing required. Available optional columns:
 
-  | Column         | Description                                                                                                 |
-  | :------------- | :---------------------------------------------------------------------------------------------------------- |
-  | **Activity**   | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector)          |
-  | **Target**     | The branch the MR is intended to merge into                                                                 |
-  | **Labels**     | Filtered label chips (respects `table_label_prefixes`)                                                      |
-  | **Milestone**  | The associated milestone title                                                                              |
-  | **Notes**      | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise  |
-  | **Effort** | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
-  | **Behind** | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+) |
+  | Column        | Description                                                                                                                                      |
+  | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **Activity**  | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector)                                               |
+  | **Target**    | The branch the MR is intended to merge into                                                                                                      |
+  | **Labels**    | Filtered label chips (respects `table_label_prefixes`)                                                                                           |
+  | **Milestone** | The associated milestone title                                                                                                                   |
+  | **Notes**     | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise                                       |
+  | **Effort**    | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile`                                          |
+  | **Behind**    | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+) |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
@@ -113,11 +113,11 @@
 
   **Effort: Easy 🟢** and **Effort: Complex 🔴** match against the pre-computed review-difficulty score (the same score shown in the Effort column and the Inspector panel). The score is computed using your project's `complexity_profile`:
 
-  | Filter | Score band | Colour |
-  | :--- | :--- | :--- |
-  | **Effort: Easy** | `score < 0.33` | 🟢 Green |
+  | Filter                 | Score band            | Colour     |
+  | :--------------------- | :-------------------- | :--------- |
+  | **Effort: Easy**       | `score < 0.33`        | 🟢 Green  |
   | *(medium — no filter)* | `0.33 ≤ score < 0.66` | 🟡 Yellow |
-  | **Effort: Complex** | `score ≥ 0.66` | 🔴 Red |
+  | **Effort: Complex**    | `score ≥ 0.66`        | 🔴 Red    |
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
@@ -125,14 +125,14 @@
 
   The overlay is organised into scrollable sections:
 
-  | Section | Content |
-  | :--- | :--- |
-  | **Throughput & Cycle time** | MRs merged/week, median and P90 cycle time, avg diff size, avg comments, pipeline failure rate |
-  | **Open MR backlog** | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance |
-  | **By Author** | Horizontal bar chart of average cycle time per author |
-  | **By Reviewer** | Average cycle time per reviewer — identifies review bottlenecks |
-  | **By Milestone** | Merged MR count per sprint — velocity comparison across releases |
-  | **Spearman correlations** | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
+  | Section                     | Content                                                                                                                                    |
+  | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+  | **Throughput & Cycle time** | MRs merged/week, median and P90 cycle time, avg diff size, avg comments, pipeline failure rate                                             |
+  | **Open MR backlog**         | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance                                                              |
+  | **By Author**               | Horizontal bar chart of average cycle time per author                                                                                      |
+  | **By Reviewer**             | Average cycle time per reviewer — identifies review bottlenecks                                                                            |
+  | **By Milestone**            | Merged MR count per sprint — velocity comparison across releases                                                                           |
+  | **Spearman correlations**   | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
 
   Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Data retention is configurable per-project via `stats_retention_days` in `projects.toml` (default: 365 days).
 
@@ -225,13 +225,13 @@ Config loading is powered by [Figment](https://crates.io/crates/figment): layers
 
 #### `GITLAB_TRACKER_*` — available overrides
 
-| Environment variable | `AppConfig` field overridden | Example |
-| :--- | :--- | :--- |
-| `GITLAB_TRACKER_REFRESH_INTERVAL_SECS` | `refresh_interval_secs` | `300` |
-| `GITLAB_TRACKER_DEFAULT_BRANCHES` | `default_branches` | `main,staging` |
-| `GITLAB_TRACKER_TABLE_LABEL_PREFIXES` | `table_label_prefixes` | `deploy::,review::` |
-| `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS` | `activity_recent_days` | `3` |
-| `GITLAB_TRACKER_ACTIVITY_STALE_DAYS` | `activity_stale_days` | `14` |
+| Environment variable                   | `AppConfig` field overridden | Example             |
+| :------------------------------------- | :--------------------------- | :------------------ |
+| `GITLAB_TRACKER_REFRESH_INTERVAL_SECS` | `refresh_interval_secs`      | `300`               |
+| `GITLAB_TRACKER_DEFAULT_BRANCHES`      | `default_branches`           | `main,staging`      |
+| `GITLAB_TRACKER_TABLE_LABEL_PREFIXES`  | `table_label_prefixes`       | `deploy::,review::` |
+| `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS`  | `activity_recent_days`       | `3`                 |
+| `GITLAB_TRACKER_ACTIVITY_STALE_DAYS`   | `activity_stale_days`        | `14`                |
 
 > **Upgrading from an older version?** If you have a `config.json` from a previous release, the app performs a **silent one-time migration** on first startup: all settings are read from `config.json`, written into `projects.toml`, and the old file is no longer used. Nothing breaks — you will simply see a `✅ Project settings migrated` message once.
 >
@@ -617,10 +617,10 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
 
 ### Optional Feature Flags
 
-| Feature flag    | Default     | Effect                                                                                                        |
-| :-------------- | :---------- | :------------------------------------------------------------------------------------------------------------ |
-| `notifications` | ✅ enabled  | Desktop notifications via `notify-rust`                                                                       |
-| `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md)) |
+| Feature flag    | Default     | Effect                                                                                                                   |
+| :-------------- | :---------- | :----------------------------------------------------------------------------------------------------------------------- |
+| `notifications` | ✅ enabled  | Desktop notifications via `notify-rust`                                                                                  |
+| `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md))            |
 | `stats`         | ❌ disabled | MR analytics, velocity metrics, and Spearman correlations (see [`gitlab-tracker-stats`](gitlab-tracker-stats/README.md)) |
 
 ### Tracker Plugins

@@ -18,6 +18,7 @@ pub mod aggregator;
 pub mod correlation;
 pub mod db;
 pub mod metrics;
+pub mod poisson;
 pub mod report;
 pub mod shortcuts;
 pub mod snapshot;
@@ -26,5 +27,8 @@ pub use aggregator::{AggregatedStats, QueryFilter, TimeWindow};
 pub use correlation::{CorrelationResult, CorrelationStrength, MetricPair};
 pub use db::{SqliteStatsDb, StatsDb, StatsError};
 pub use metrics::PerMrMetrics;
+pub use poisson::{
+    AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, ThroughputForecast,
+};
 pub use report::StatReport;
 pub use snapshot::{MrStatsSnapshot, SnapshotTrigger};

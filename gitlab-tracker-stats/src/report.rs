@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::aggregator::{AggregatedStats, QueryFilter, TimeWindow};
 use crate::correlation::{compute_all_correlations, CorrelationResult};
 use crate::metrics::PerMrMetrics;
+use crate::poisson::PoissonInsights;
 
 /// The final, fully-computed analytics report.
 ///
@@ -22,23 +23,28 @@ pub struct StatReport {
 
     /// Spearman correlations between all defined metric pairs.
     pub correlations: Vec<CorrelationResult>,
+
+    /// Poisson-based forecasts, anomaly signals, and queue insights.
+    pub poisson: PoissonInsights,
 }
 
 impl StatReport {
     /// Builds a [`StatReport`] from already-computed aggregated stats and raw metrics.
     ///
-    /// Correlations are computed here from the raw per-MR metrics so that the
-    /// report is self-contained and reproducible from its inputs.
+    /// Correlations and Poisson insights are computed here from the raw per-MR
+    /// metrics so that the report is self-contained and reproducible from its inputs.
     pub fn build(
         aggregated: AggregatedStats,
         metrics: &[PerMrMetrics],
         filter: &QueryFilter,
     ) -> Self {
+        let poisson = PoissonInsights::from_stats(&aggregated);
         Self {
             generated_at: chrono::Utc::now().to_rfc3339(),
             window_label: describe_window(filter),
             aggregated,
             correlations: compute_all_correlations(metrics),
+            poisson,
         }
     }
 
