@@ -741,6 +741,7 @@ impl App {
             reviewers: &mr.reviewers,
             gitlab_username: gitlab_username.as_deref(),
             diff_difficulty,
+            target_branch: &mr.target_branch,
         };
         (def.apply)(snapshot, &active.query)
     }

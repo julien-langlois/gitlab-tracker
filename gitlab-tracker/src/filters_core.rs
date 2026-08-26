@@ -221,6 +221,22 @@ inventory::submit!(FilterDef {
 });
 
 inventory::submit!(FilterDef {
+    id: "target_branch",
+    label: "Target branch… (type below)",
+    active_label: "Branch:",
+    priority: 52,
+    needs_text_input: true,
+    apply: |mr: MrSnapshot<'_>, query: &str| {
+        if query.is_empty() {
+            return true;
+        }
+        mr.target_branch
+            .to_lowercase()
+            .contains(&query.to_lowercase())
+    },
+});
+
+inventory::submit!(FilterDef {
     id: "assignee",
     label: "Assignee… (type below)",
     active_label: "Assignee:",

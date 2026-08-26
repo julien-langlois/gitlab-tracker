@@ -69,6 +69,8 @@ pub struct MrSnapshot<'a> {
     /// Review-difficulty score in [0.0, 1.0] computed from diff stats, or `None`
     /// when diff stats have not been fetched yet for this MR.
     pub diff_difficulty: Option<f64>,
+    /// The Git branch this MR targets (e.g. "main", "develop", "release/1.x").
+    pub target_branch: &'a str,
 }
 
 // Global registry — every `inventory::submit!(FilterDef { … })` anywhere in the
