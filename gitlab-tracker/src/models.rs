@@ -142,6 +142,10 @@ pub struct GitLabMr {
     pub detailed_merge_status: Option<String>,
     /// Whether the MR has unresolved merge conflicts (complementary signal from GitLab).
     pub has_conflicts: Option<bool>,
+    /// Only populated when the MR request includes `include_diverged_commits_count=true`
+    /// (GitLab API parameter). `None` when not requested, not yet computed by GitLab
+    /// or when the MR is already merged/closed.
+    pub diverged_commits_count: Option<u32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -304,7 +308,7 @@ pub struct MrLoadedData {
 /// Diff statistics for a merge request: files changed, lines added, lines deleted.
 ///
 /// Fetched from the GitLab Changes API and used to display a compact summary
-/// (e.g. \"9 files  +545 -32\") alongside a review-difficulty score.
+/// (e.g. \\\"9 files  +545 -32\\\") alongside a review-difficulty score.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DiffStats {
     /// Number of files touched by this MR.
@@ -316,6 +320,16 @@ pub struct DiffStats {
     /// Number of commits in this MR, as returned by the GitLab Changes API.
     #[serde(default)]
     pub commits_count: u32,
+    /// Number of commits the source branch is behind the target branch.
+    ///
+    /// - `None`  → not applicable (MR merged/closed, or status is Mergeable/Unknown)
+    /// - `Some(0)` → up to date (Mergeable)
+    /// - `Some(n)` → n commits behind the target branch
+    ///
+    /// Fetched from `GET /repository/compare?from=<target>&to=<source>` only for
+    /// open MRs whose mergeability is not `Mergeable`.
+    #[serde(default)]
+    pub commits_behind: Option<u32>,
 }
 
 impl DiffStats {

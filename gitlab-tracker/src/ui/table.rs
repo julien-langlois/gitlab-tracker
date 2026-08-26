@@ -133,6 +133,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     if col("diff_stats") {
         header_cells.push(Cell::from("Effort").bold());
     }
+    if col("commits_behind") {
+        header_cells.push(Cell::from("Behind").bold());
+    }
     if col("tracker_ticket") {
         header_cells.push(Cell::from("Tracker").bold());
     }
@@ -278,6 +281,39 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 cells.push(maybe_highlight(complexity_cell, highlight));
             }
 
+            // Optional "commits behind target" column — only meaningful for open MRs
+            // that are not Mergeable. Shows "Up to date" for Mergeable, "N behind" otherwise,
+            // "—" for merged/closed MRs (not applicable).
+            if col("commits_behind") {
+                let behind_cell = match &mr.diff_stats {
+                    Some(stats) if mr.state == crate::models::GitlabMrState::Opened => {
+                        match (stats.commits_behind, &mr.mergeability) {
+                            (Some(0), _) | (_, MergeabilityStatus::Mergeable) => {
+                                Cell::from("✔ Up to date").fg(Color::Green)
+                            }
+                            (Some(n), _) => {
+                                let (fg, bg) = if n >= 10 {
+                                    (Color::White, Color::Red)
+                                } else if n >= 3 {
+                                    (Color::Black, Color::Yellow)
+                                } else {
+                                    (Color::Black, Color::LightYellow)
+                                };
+                                Cell::from(Line::from(vec![Span::styled(
+                                    format!(" {} behind ", n),
+                                    Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+                                )]))
+                            }
+                            // None + non-Mergeable: still loading from the API.
+                            (None, _) => Cell::from("…").fg(Color::DarkGray),
+                        }
+                    }
+                    // Merged / closed or no diff_stats yet.
+                    _ => Cell::from("—").fg(Color::DarkGray),
+                };
+                cells.push(maybe_highlight(behind_cell, highlight));
+            }
+
             // Optional tracker ticket column — visible when a provider is configured.
             if col("tracker_ticket") {
                 let ticket_cell = match &mr.linked_ticket {
@@ -393,6 +429,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     }
     if col("diff_stats") {
         constraints.push(Constraint::Length(14)); // Complexity chip badge (e.g. " 🔴 Complex ")
+    }
+    if col("commits_behind") {
+        constraints.push(Constraint::Length(14)); // "✔ Up to date" or " 10 behind "
     }
     if col("tracker_ticket") {
         constraints.push(Constraint::Fill(2)); // Tracker ticket

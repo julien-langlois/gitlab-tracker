@@ -87,7 +87,7 @@ impl CountApiCalls for CachedMrData {
         // ── 4. Diff stats: changes + commits pagination ───────────────────────
         // Mirrors the cache-validity check in fetch_gitlab_data:
         //   • Skip when updated_at is unchanged AND the cached stats are valid.
-        //   • "Valid" means lines_ok && commits_ok (matches `cached_diff_stats_valid`).
+        //   • \"Valid\" means lines_ok && commits_ok (matches `cached_diff_stats_valid`).
         let diff_stats_cached_valid = self.diff_stats.as_ref().is_some_and(|s| {
             let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
             let commits_ok = s.commits_count > 0 || s.files_changed == 0;
@@ -102,6 +102,29 @@ impl CountApiCalls for CachedMrData {
             // 1 call for /changes + 1 call for /commits (first page).
             // Additional commit pages are rare and not predictable ahead of time.
             2
+        };
+
+        // ── 4b. commits_behind: /compare fallback ────────────────────────────
+        // `diverged_commits_count` is returned for free in the base MR response
+        // (via `include_diverged_commits_count=true` — no extra call).
+        // The `/compare` fallback fires only when GitLab omits that field for a
+        // non-Mergeable open MR. We cannot know ahead of time whether GitLab will
+        // provide the field, but we can use the cached `commits_behind` value as a
+        // signal: if it was already resolved last cycle (Some(_)), the field was
+        // likely provided — no fallback call expected. If it is None for an open
+        // non-merged MR, assume the fallback may fire (conservative +1).
+        let compare_fallback = if *state == crate::models::GitlabMrState::Opened {
+            let already_resolved = self
+                .diff_stats
+                .as_ref()
+                .is_some_and(|s| s.commits_behind.is_some());
+            if already_resolved {
+                0
+            } else {
+                1
+            }
+        } else {
+            0 // Merged / Closed — commits_behind is not fetched at all.
         };
 
         // ── 5. Pipelines: list + per-pipeline job fetches ─────────────────────
@@ -143,7 +166,9 @@ impl CountApiCalls for CachedMrData {
             base,
             discussions,
             refs,
-            diff_stats,
+            // compare_fallback is bundled into diff_stats: same category (diff enrichment),
+            // and avoids adding a dedicated field to ApiCallEstimate for a rare edge case.
+            diff_stats: diff_stats + compare_fallback,
             pipelines,
         }
     }
@@ -335,6 +360,52 @@ async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Cl
     total
 }
 
+/// Fetches the number of commits the source branch is behind the target branch.
+///
+/// Uses `GET /projects/:id/repository/compare?from=<target>&to=<source_sha>`.
+/// The `commits` array in the response contains the commits present on `target`
+/// but not yet on `source` — its length is the "behind" count.
+///
+/// Returns `None` on any network or parse error — this is a best-effort enrichment.
+async fn fetch_commits_behind(
+    ctx: &FetchContext,
+    source_branch: &str,
+    target_branch: &str,
+) -> Option<u32> {
+    let client = reqwest::Client::new();
+    let url = format!(
+        "{}/api/v4/projects/{}/repository/compare?from={}&to={}&straight=true",
+        ctx.base_url,
+        ctx.project_id,
+        urlencoding::encode(target_branch),
+        urlencoding::encode(source_branch),
+    );
+    let res = client
+        .get(&url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() {
+        tracing::warn!(
+            "Compare API returned non-2xx for {source_branch}..{target_branch}: {}",
+            res.status()
+        );
+        return None;
+    }
+
+    let body: serde_json::Value = res.json().await.ok()?;
+
+    // `commits` is the list of commits on `target` but not on `source`.
+    let count = body
+        .get("commits")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.len() as u32)?;
+
+    Some(count)
+}
+
 /// Fetches diff statistics for a merge request from the GitLab Changes API.
 ///
 /// Calls `GET /projects/:id/merge_requests/:iid/changes` and aggregates
@@ -467,6 +538,7 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
         additions,
         deletions,
         commits_count,
+        commits_behind: None,
     })
 }
 
@@ -973,6 +1045,59 @@ pub async fn fetch_gitlab_data(
         } else {
             fetch_diff_stats(ctx, mr_id).await
         };
+
+    // Resolve the number of commits the source branch is behind the target branch.
+    //
+    // Strategy (in priority order):
+    //   1. `diverged_commits_count` from the MR response — free, no extra API call.
+    //      Populated when the request includes `include_diverged_commits_count=true`.
+    //      GitLab may return `null` for this field even with the param when the MR is
+    //      Mergeable or when the computation has not yet been triggered server-side.
+    //   2. Implicit `Some(0)` when mergeability is `Mergeable` — up to date by definition.
+    //   3. `/repository/compare` fallback — one extra call, used only when GitLab did
+    //      not provide `diverged_commits_count` for a non-Mergeable open MR.
+    //   4. `None` for merged/closed MRs — not applicable.
+    let commits_behind: Option<u32> = if state == GitlabMrState::Opened {
+        match mergeability {
+            MergeabilityStatus::Mergeable => Some(0),
+            MergeabilityStatus::Unknown => {
+                // GitLab has not computed the status yet — also skip the compare call
+                // to avoid a spurious request while the MR is still being checked.
+                None
+            }
+            _ => {
+                // Non-Mergeable open MR: prefer the free field from the MR response.
+                // Fall back to /compare only when GitLab did not provide the count.
+                match mr.diverged_commits_count {
+                    Some(n) => {
+                        tracing::debug!(
+                            mr_id = %mr_id,
+                            commits_behind = n,
+                            "Using diverged_commits_count from MR response",
+                        );
+                        Some(n)
+                    }
+                    None => {
+                        tracing::debug!(
+                            mr_id = %mr_id,
+                            "diverged_commits_count absent — falling back to /compare",
+                        );
+                        let tb = mr.target_branch.as_deref().unwrap_or("main");
+                        fetch_commits_behind(ctx, &source_branch, tb).await
+                    }
+                }
+            }
+        }
+    } else {
+        // Merged / Closed — not applicable.
+        None
+    };
+
+    // Inject commits_behind into the diff_stats so it is persisted alongside the rest.
+    let diff_stats = diff_stats.map(|mut s| {
+        s.commits_behind = commits_behind;
+        s
+    });
 
     // Only re-fetch pipelines if the MR has been updated since the last cycle.
     // If `updated_at` is unchanged, reuse the cached pipeline data to avoid

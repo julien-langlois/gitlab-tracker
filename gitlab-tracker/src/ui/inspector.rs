@@ -271,6 +271,56 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
         ])
     };
 
+    // Build the "Behind" line — only for open MRs; not applicable for merged/closed.
+    let behind_line = if mr.state == GitlabMrState::Opened {
+        match stats.commits_behind {
+            Some(0) | None if mr.mergeability == MergeabilityStatus::Mergeable => Line::from(vec![
+                Span::raw("Behind   : "),
+                Span::styled(
+                    "✔ Up to date",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Some(0) => Line::from(vec![
+                Span::raw("Behind   : "),
+                Span::styled(
+                    "✔ Up to date",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Some(n) => {
+                let (fg, bg) = if n >= 10 {
+                    (Color::White, Color::Red)
+                } else if n >= 3 {
+                    (Color::Black, Color::Yellow)
+                } else {
+                    (Color::Black, Color::LightYellow)
+                };
+                Line::from(vec![
+                    Span::raw("Behind   : "),
+                    Span::styled(
+                        format!(" {} commit(s) behind target ", n),
+                        Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
+                    ),
+                ])
+            }
+            None => Line::from(vec![
+                Span::raw("Behind   : "),
+                Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+            ]),
+        }
+    } else {
+        // Not applicable for merged / closed MRs.
+        Line::from(vec![
+            Span::raw("Behind   : "),
+            Span::styled("—", Style::default().fg(theme::MUTED)),
+        ])
+    };
+
     vec![
         Line::from(vec![
             Span::raw("Diff     : "),
@@ -291,6 +341,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
             ),
         ]),
         commits_line,
+        behind_line,
         Line::from(vec![
             Span::raw("Effort   : "),
             Span::styled(

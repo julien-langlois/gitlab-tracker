@@ -30,7 +30,7 @@
 * 💬 **Notes Indicator:** The total number of comments and discussion threads (`user_notes_count`) is fetched from the GitLab API at no extra cost and displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals that comments are awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
 * 🎯 **Review Effort Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded effort indicator calibrated to your tech stack:
   * In the **table**, the optional **Effort** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
-  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a 10-block progress bar, and the effort badge with the active profile name in parentheses.
+  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a "Behind" line showing how many commits the source branch is behind the target, a 10-block progress bar, and the effort badge with the active profile name in parentheses.
 
   The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
 
@@ -72,6 +72,7 @@
   | **Milestone**  | The associated milestone title                                                                              |
   | **Notes**      | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise  |
   | **Effort** | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
+  | **Behind** | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+) |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
@@ -339,6 +340,7 @@ milestone     = true
 notes         = false
 tracker_ticket = true
 diff_stats    = true   # "Effort" column (🟢/🟡/🔴 chip badge based on diff size)
+commits_behind  = false  # "Behind" column — commits the source branch is behind the target
 
 # Label colour overrides — exact names or wildcard patterns (e.g. "deploy::*").
 # Accepted colour values: named colours ("red", "cyan", "dark_gray", …) or hex codes ("#D32F2F").
@@ -380,6 +382,7 @@ diff_stats    = true   # "Effort" column (🟢/🟡/🔴 chip badge based on dif
 > | `milestone` | **Milestone** — the associated milestone title |
 > | `notes` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
 > | `diff_stats` | **Effort** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
+> | `commits_behind` | **Behind** — commits the source branch is behind the target (`✔ Up to date`, `N behind`) |
 > | `tracker_ticket` | **Ticket** — linked tracker ticket ID + status (requires a tracker plugin) |
 
 > **Activity badge thresholds** control the colour-coded indicator next to the `Updated` field in the Context Inspector:

@@ -49,3 +49,11 @@ inventory::submit!(ColumnDef {
     priority: 5,
     requires_feature: None,
 });
+
+inventory::submit!(ColumnDef {
+    id: "commits_behind",
+    label: "Behind",
+    default_visible: false,
+    priority: 6,
+    requires_feature: None,
+});
