@@ -183,6 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "stats")]
     let stats_retention_days = project.stats_retention_days.unwrap_or(365);
     let base_url = project.gitlab_url;
+    let project_name = project.name.clone();
     let project_id = project.project_id;
     let refresh_interval_secs = resolve_refresh_interval(&config);
 
@@ -277,6 +278,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         token,
         project_id.clone(),
         base_url.clone(),
+        project_name,
         refresh_interval_secs,
         config,
     );

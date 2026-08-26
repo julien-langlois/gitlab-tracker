@@ -551,6 +551,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         "demo-token".into(),
         "123456".into(),
         "https://gitlab.com".into(),
+        None,
         900,
         demo_config,
     );

@@ -524,9 +524,15 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         String::new()
     };
 
+    // Show "Project Name (URL)" when a name is configured, otherwise just the URL.
+    let project_label = match &app.project_name {
+        Some(name) if !name.is_empty() => format!("{} ({})", name, app.base_url),
+        _ => app.base_url.clone(),
+    };
+
     let title_text = format!(
         " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02}{} │ {} │ Sort: {} {} │ Filter: {}{}",
-        app.base_url,
+        project_label,
         mins,
         secs,
         api_calls_label,

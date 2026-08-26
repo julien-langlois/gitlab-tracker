@@ -292,6 +292,9 @@ pub struct App {
     pub token: String,
     pub project_id: String,
     pub base_url: String,
+    /// Optional human-readable alias for this project, as set in `projects.toml` (`name` field).
+    /// Displayed in the table title alongside the URL when present.
+    pub project_name: Option<String>,
     pub time_left: u64,
     pub refresh_interval_secs: u64,
     pub table_state: TableState,
@@ -426,6 +429,7 @@ impl App {
         token: String,
         project_id: String,
         base_url: String,
+        project_name: Option<String>,
         refresh_interval_secs: u64,
         mut config: AppConfig,
     ) -> Self {
@@ -445,6 +449,7 @@ impl App {
             token,
             project_id,
             base_url,
+            project_name,
             refresh_interval_secs,
             time_left: refresh_interval_secs,
             table_state,
