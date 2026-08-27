@@ -223,6 +223,13 @@ pub struct SavedState {
     pub branches: Vec<String>,
     #[serde(default)]
     pub last_known_branches: HashMap<String, HashSet<String>>,
+    /// RFC 3339 timestamp recorded the first time discovery runs for this project.
+    /// All subsequent discovery polls use this value as `created_after` so MRs
+    /// that existed before the tool was started are never auto-added.
+    /// Absent in older state files — treated as `None` and initialised to `Utc::now()`
+    /// on the first poll.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discovery_started_at: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

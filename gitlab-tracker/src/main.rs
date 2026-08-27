@@ -280,7 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = ratatui::init();
 
-    let (saved_mrs, migrated_branches, mut last_known_branches) =
+    let (saved_mrs, migrated_branches, mut last_known_branches, saved_discovery_started_at) =
         load_state_async(&base_url, &project_id).await;
     // Clone complexity_profile before the move into App::new so the backfill
     // closure below can still reference it after `config` is consumed.
@@ -314,6 +314,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Inject the discovery flag unconditionally — independent of the stats feature.
     app.discovery_enabled = discover_new_mrs;
+    // Restore the discovery anchor timestamp from the state file so newly opened
+    // MRs are filtered correctly across restarts.
+    app.discovery_started_at = saved_discovery_started_at;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
@@ -501,7 +504,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
                 .await;
             if needs_save {
-                save_state_async(&app.mrs, &last_known_branches, &base_url, &project_id).await;
+                save_state_async(
+                    &app.mrs,
+                    &last_known_branches,
+                    app.discovery_started_at.as_deref(),
+                    &base_url,
+                    &project_id,
+                )
+                .await;
             }
         }
 

@@ -1070,7 +1070,7 @@ async fn migrate_tracker_state_file(
 ///   - Renames `tracker_state.json` to the tenant-scoped `tracker_<hash>.json`
 ///   - Backfills `tracked_branches` from the state file into `projects.toml`
 ///
-/// Returns `(mrs, branches, last_known_branches)`.
+/// Returns `(mrs, branches, last_known_branches, discovery_started_at)`.
 /// `branches` is sourced (in priority order) from:
 ///   1. `tracked_branches` in `projects.toml` (already migrated)
 ///   2. `branches` in the state file (legacy — migrated on the spot)
@@ -1078,9 +1078,14 @@ async fn migrate_tracker_state_file(
 pub async fn load_state_async(
     gitlab_url: &str,
     project_id: &str,
-) -> (Vec<SavedMr>, Vec<String>, HashMap<String, HashSet<String>>) {
+) -> (
+    Vec<SavedMr>,
+    Vec<String>,
+    HashMap<String, HashSet<String>>,
+    Option<String>,
+) {
     let Some(config_dir) = get_save_dir() else {
-        return (vec![], vec![], HashMap::new());
+        return (vec![], vec![], HashMap::new(), None);
     };
 
     // One-shot silent rename: tracker_state.json → tracker_<hash>.json.
@@ -1111,16 +1116,23 @@ pub async fn load_state_async(
                     }
                 }
             }
-            return (state.mrs, state.branches, state.last_known_branches);
+            let discovery_started_at = state.discovery_started_at.clone();
+            return (
+                state.mrs,
+                state.branches,
+                state.last_known_branches,
+                discovery_started_at,
+            );
         }
     }
 
-    (vec![], vec![], HashMap::new())
+    (vec![], vec![], HashMap::new(), None)
 }
 
 pub async fn save_state_async(
     mrs: &[TrackedMr],
     last_known_branches: &HashMap<String, HashSet<String>>,
+    discovery_started_at: Option<&str>,
     gitlab_url: &str,
     project_id: &str,
 ) {
@@ -1160,6 +1172,7 @@ pub async fn save_state_async(
         // branches is no longer persisted here — it lives in projects.toml.
         branches: vec![],
         last_known_branches: last_known_branches.clone(),
+        discovery_started_at: discovery_started_at.map(|s| s.to_string()),
     };
 
     if let Ok(json) = serde_json::to_string_pretty(&state) {

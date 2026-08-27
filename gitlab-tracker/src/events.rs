@@ -777,6 +777,7 @@ pub async fn handle_key_event(
                         save_state_async(
                             &app.mrs,
                             last_known_branches,
+                            app.discovery_started_at.as_deref(),
                             &app.base_url.clone(),
                             &app.project_id.clone(),
                         )

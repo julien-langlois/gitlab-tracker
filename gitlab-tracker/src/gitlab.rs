@@ -657,20 +657,21 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
         .collect()
 }
 
-/// Fetches all currently open MR IIDs for the project (no milestone filter).
-///
-/// Used by the discovery poller to detect new MRs opened by any team member
-/// since the last refresh cycle. Paginates through all pages (100 per page).
+/// Fetches all currently open MR IIDs for the project created on or after
+/// `created_after` (RFC 3339 timestamp). Paginates through all pages (100/page).
 /// Returns an empty vec on any network or parse error — discovery is best-effort.
-pub async fn fetch_open_mr_ids(ctx: &FetchContext) -> Vec<String> {
+pub async fn fetch_open_mr_ids(ctx: &FetchContext, created_after: &str) -> Vec<String> {
     let client = reqwest::Client::new();
     let mut all_ids: Vec<String> = Vec::new();
     let mut page: u32 = 1;
 
+    // URL-encode the timestamp so the `+` offset separator is not lost.
+    let encoded_after = urlencoding::encode(created_after);
+
     loop {
         let url = format!(
-            "{}/api/v4/projects/{}/merge_requests?state=opened&per_page=100&page={}",
-            ctx.base_url, ctx.project_id, page
+            "{}/api/v4/projects/{}/merge_requests?state=opened&created_after={}&per_page=100&page={}",
+            ctx.base_url, ctx.project_id, encoded_after, page
         );
         let res = match client
             .get(&url)
@@ -703,13 +704,22 @@ pub async fn fetch_open_mr_ids(ctx: &FetchContext) -> Vec<String> {
 
 /// Spawns an async discovery task that fetches all open MR IIDs and emits
 /// `AppEvent::NewMrsDiscovered` for any IID not yet in `known_ids`.
+///
+/// `created_after` is an RFC 3339 timestamp used as a lower bound on the
+/// `created_at` field of the MRs returned by GitLab. When `None` (should
+/// never happen in practice after the first poll), falls back to the current
+/// time so the result set is always empty — safe default that avoids flooding.
 pub fn spawn_open_mrs_discovery(
     ctx: FetchContext,
     known_ids: Vec<String>,
+    created_after: Option<String>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        let all_ids = fetch_open_mr_ids(&ctx).await;
+        // Safety net: if the anchor is somehow missing, use `now` so that no
+        // pre-existing MR can slip through.
+        let anchor = created_after.unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+        let all_ids = fetch_open_mr_ids(&ctx, &anchor).await;
         let new_ids: Vec<String> = all_ids
             .into_iter()
             .filter(|id| !known_ids.contains(id))

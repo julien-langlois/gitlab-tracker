@@ -443,6 +443,11 @@ pub struct App {
     /// Set from `discover_new_mrs` in `[project.stats]` of `projects.toml`.
     /// Defaults to `false` — opt-in only.
     pub discovery_enabled: bool,
+    /// RFC 3339 timestamp set the first time the discovery poller runs.
+    /// Passed as `created_after` to the GitLab API so that MRs opened before
+    /// the tool was started are never auto-added to the tracking list.
+    /// `None` until the first poll fires; persisted in the state file afterwards.
+    pub discovery_started_at: Option<String>,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -525,6 +530,7 @@ impl App {
             stats_last_refresh_date: std::collections::HashMap::new(),
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,
+            discovery_started_at: None,
         }
     }
 
@@ -1865,8 +1871,20 @@ impl App {
                 // last refresh cycle. Only active when `discover_new_mrs = true` in
                 // `[project.stats]` of `projects.toml`.
                 if self.discovery_enabled {
+                    // On the very first poll, record the current UTC time as the discovery
+                    // anchor. All subsequent polls pass this value as `created_after` to the
+                    // GitLab API so MRs that existed before the tool was started are never
+                    // auto-added to the tracking list.
+                    if self.discovery_started_at.is_none() {
+                        self.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
+                    }
                     let known_ids: Vec<String> = self.mrs.iter().map(|m| m.id.clone()).collect();
-                    crate::gitlab::spawn_open_mrs_discovery(ctx.clone(), known_ids, tx.clone());
+                    crate::gitlab::spawn_open_mrs_discovery(
+                        ctx.clone(),
+                        known_ids,
+                        self.discovery_started_at.clone(),
+                        tx.clone(),
+                    );
                 }
 
                 // Recompute GitLab + tracker estimates *before* spawning fetches so the
