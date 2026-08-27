@@ -224,7 +224,7 @@ pub struct FilterPickerState {
 /// while the async aggregation is in flight, and an "Insufficient data" state
 /// when fewer than 3 snapshots are available.
 #[cfg(feature = "stats")]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct StatsViewState {
     /// The last successfully computed report, ready to render.
     pub report: Option<gitlab_tracker_stats::StatReport>,
@@ -236,6 +236,23 @@ pub struct StatsViewState {
     pub error: Option<String>,
     /// The time window currently selected by the user (cycles with [W]).
     pub window: StatsWindow,
+    /// Sprint duration in weeks for throughput forecasts — read from
+    /// `stats_sprint_weeks` in `projects.toml`, defaults to 2.
+    pub sprint_weeks: u32,
+}
+
+#[cfg(feature = "stats")]
+impl Default for StatsViewState {
+    fn default() -> Self {
+        Self {
+            report: None,
+            scroll: 0,
+            loading: false,
+            error: None,
+            window: StatsWindow::default(),
+            sprint_weeks: 2,
+        }
+    }
 }
 
 /// Time-window selector cycled by [W] inside the Stats overlay.

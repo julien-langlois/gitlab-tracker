@@ -179,9 +179,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Extract tracked_branches before moving project fields.
     let project_tracked_branches = project.tracked_branches.clone();
-    // Extract stats_retention_days before the project fields are partially moved below.
+    // Extract stats settings before the project fields are partially moved below.
     #[cfg(feature = "stats")]
-    let stats_retention_days = project.stats_retention_days.unwrap_or(365);
+    let stats_retention_days = project
+        .stats
+        .as_ref()
+        .and_then(|s| s.retention_days)
+        .unwrap_or(365);
+    #[cfg(feature = "stats")]
+    let stats_sprint_weeks = project
+        .stats
+        .as_ref()
+        .and_then(|s| s.sprint_weeks)
+        .unwrap_or(2);
     let base_url = project.gitlab_url;
     let project_name = project.name.clone();
     let project_id = project.project_id;
@@ -447,6 +457,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
 
+                    app.stats_view.sprint_weeks = stats_sprint_weeks;
                     app.stats_db = Some(db);
                 }
                 Err(e) => {

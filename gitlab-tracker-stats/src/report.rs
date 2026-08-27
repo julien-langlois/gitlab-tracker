@@ -38,7 +38,8 @@ impl StatReport {
         metrics: &[PerMrMetrics],
         filter: &QueryFilter,
     ) -> Self {
-        let poisson = PoissonInsights::from_stats(&aggregated);
+        let sprint_weeks = filter.sprint_weeks.unwrap_or(2);
+        let poisson = PoissonInsights::from_stats(&aggregated, sprint_weeks);
         Self {
             generated_at: chrono::Utc::now().to_rfc3339(),
             window_label: describe_window(filter),

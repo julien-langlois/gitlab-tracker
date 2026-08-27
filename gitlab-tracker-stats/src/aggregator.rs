@@ -26,6 +26,9 @@ pub struct QueryFilter {
     pub author: Option<String>,
     pub reviewer: Option<String>,
     pub target_branch: Option<String>,
+    /// Sprint duration in weeks — used by throughput forecasts.
+    /// Defaults to 2 when absent.
+    pub sprint_weeks: Option<u32>,
 }
 
 /// Aggregated statistics computed over a set of MR snapshots.

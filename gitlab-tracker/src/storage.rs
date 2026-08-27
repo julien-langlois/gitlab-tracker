@@ -56,18 +56,19 @@ pub struct ProjectEntry {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_recent_days: Option<u64>,
-    /// Statistics retention policy for this project.
+    /// Stats feature settings for this project (retention policy, sprint duration, …).
     ///
-    /// When the `stats` feature is enabled, snapshots older than this threshold
-    /// are automatically purged from the local SQLite database on startup.
-    /// Defaults to `365` days when absent.
+    /// Grouped under a `[project.stats]` sub-table in `projects.toml`, mirroring
+    /// the `[project.tracker]` pattern used for issue-tracker plugins.
     ///
     /// Example in `projects.toml`:
     /// ```toml
-    /// stats_retention_days = 180
+    /// [project.stats]
+    /// retention_days = 180
+    /// sprint_weeks   = 3
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub stats_retention_days: Option<u32>,
+    pub stats: Option<StatsConfig>,
     /// Which optional columns are visible in the MR table for this project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visible_columns: Option<crate::config::VisibleColumns>,
@@ -115,6 +116,23 @@ pub struct ProjectEntry {
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracker: Option<TrackerConfig>,
+}
+
+/// Stats-feature configuration embedded in each `[[project]]` entry.
+///
+/// Grouped under `[project.stats]` in `projects.toml`, keeping all stats-related
+/// knobs isolated from the top-level project fields.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StatsConfig {
+    /// Snapshots older than this many days are purged from the local SQLite
+    /// database on startup. Defaults to `365` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retention_days: Option<u32>,
+
+    /// Sprint duration in weeks used for throughput forecasts.
+    /// Defaults to `2` when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sprint_weeks: Option<u32>,
 }
 
 /// Provider-agnostic tracker configuration embedded in each `[[project]]` entry.
@@ -291,7 +309,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         label_colors,
         tracker,
         gitlab_username: None,
-        stats_retention_days: None,
+        stats: None,
     };
 
     // Write projects.toml with the migrated values.
@@ -521,7 +539,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             label_colors: None,
             tracker: None,
             gitlab_username: None,
-            stats_retention_days: None,
+            stats: None,
         };
     }
 
@@ -629,7 +647,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         label_colors: None,
         tracker: None,
         gitlab_username: None,
-        stats_retention_days: None,
+        stats: None,
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;

@@ -134,7 +134,7 @@
   | **By Milestone**            | Merged MR count per sprint — velocity comparison across releases                                                                           |
   | **Spearman correlations**   | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
 
-  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Data retention is configurable per-project via `stats_retention_days` in `projects.toml` (default: 365 days).
+  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2).
 
   See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
 

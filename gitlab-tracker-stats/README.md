@@ -27,9 +27,9 @@ Automatically records MR snapshots into a local SQLite database and computes vel
 | :--- | :--- |
 | **Throughput** | MRs merged per calendar week |
 | **Cycle time median, P75 & P90** | Central tendency (P50), upper quartile (P75), and long-tail indicator (P90) — all measured from MR creation to merge |
-| **Cycle time by author** | Average cycle time per MR author — highlights who tends to have longer review cycles |
-| **Cycle time by reviewer** | Average cycle time per assigned reviewer — surfaces review bottlenecks |
-| **Cycle time by milestone** | Per-sprint velocity comparison |
+| **Cycle time by author** | **Median** cycle time per MR author — robust to outlier MRs, highlights structural review patterns per contributor |
+| **Cycle time by reviewer** | **Median** cycle time per assigned reviewer — surfaces review bottlenecks without being skewed by one-off long MRs |
+| **Cycle time by milestone** | **Median** cycle time per milestone — per-sprint velocity comparison |
 | **Backlog age** | Age distribution of currently open MRs — identifies stagnant reviews |
 | **Pipeline failure rate** | Average across all MRs in the window |
 
@@ -48,7 +48,7 @@ All correlations use **Spearman's ρ** (rank-based, robust against outliers and 
 
 Correlations are colour-coded by strength (|ρ|) and filtered for significance (p < 0.05):
 
-| Strength | |ρ| range | Colour |
+| Strength | ρ range | Colour |
 | :--- | :--- | :--- |
 | Negligible | < 0.10 | Dimmed |
 | Weak | 0.10 – 0.29 | Muted |
@@ -62,10 +62,17 @@ The **POISSON INSIGHTS** section applies the [Poisson distribution](https://en.w
 
 #### Throughput forecasts
 
-Given the observed λ (mean merges per week), the forecast answers:
-> *"What is the probability we merge at least N MRs in the next 1 or 2 weeks?"*
+Given the observed λ (mean merges per week), five forecasts answer distinct operational questions:
 
 `P(X ≥ target) = 1 − CDF(target − 1)` under Poisson(λ × forecast_weeks).
+
+| Forecast | Window | Question |
+| :--- | :--- | :--- |
+| **At pace** | 1 week | Will we match our usual weekly pace? |
+| **At pace** | 2 weeks | Will we match our usual sprint pace? |
+| **Sprint pace** | 2 weeks | Realistic sprint target (uses `round(λ×2)` instead of `ceil` to avoid near-0% bias on fractional λ) |
+| **Stretch goal** | 2 weeks | How likely are we to beat our average by 20%? |
+| **Floor check** | 1 week | Will we merge at least 1 MR? (sanity floor for slow periods) |
 
 | Colour | Meaning |
 | :--- | :--- |
@@ -179,8 +186,13 @@ Configure per-project data retention in `projects.toml` (defaults to 365 days):
 gitlab_url = "https://gitlab.example.com"
 project_id = "12345678"
 
-# Keep snapshots for 6 months, then purge automatically on startup.
-stats_retention_days = 180
+[project.stats]
+# Keep snapshots for 6 months, then purge automatically on startup. Default: 365.
+retention_days = 180
+
+# Sprint duration in weeks — controls the window used in throughput forecasts
+# ("At pace", "Sprint pace", "Stretch goal" rows). Default: 2.
+sprint_weeks = 3
 ```
 
 ---

@@ -271,8 +271,11 @@ pub struct PoissonInsights {
 
 impl PoissonInsights {
     /// Derives all Poisson insights from already-computed aggregated stats.
-    pub fn from_stats(stats: &AggregatedStats) -> Self {
-        let throughput_forecasts = build_throughput_forecasts(stats);
+    ///
+    /// `sprint_weeks` controls the window used for sprint-pace forecasts —
+    /// read from `stats_sprint_weeks` in `projects.toml`, defaults to 2.
+    pub fn from_stats(stats: &AggregatedStats, sprint_weeks: u32) -> Self {
+        let throughput_forecasts = build_throughput_forecasts(stats, sprint_weeks);
         let anomalies = build_anomaly_signals(stats);
         let queue_insight = QueueInsight::from_stats(stats);
 
@@ -293,7 +296,10 @@ impl PoissonInsights {
 ///    instead of ceil to avoid near-0% probabilities when λ is fractional.
 /// 4. **Stretch goal** — P(≥ λ×2 +20% in 2w): how likely are we to beat our average?
 /// 5. **Floor check** — P(≥ 1 in 1w): sanity floor — are we merging anything at all?
-fn build_throughput_forecasts(stats: &AggregatedStats) -> Vec<ThroughputForecast> {
+fn build_throughput_forecasts(
+    stats: &AggregatedStats,
+    sprint_weeks: u32,
+) -> Vec<ThroughputForecast> {
     let Some(lambda) = stats.throughput_per_week else {
         return vec![];
     };
@@ -301,21 +307,22 @@ fn build_throughput_forecasts(stats: &AggregatedStats) -> Vec<ThroughputForecast
         return vec![];
     }
 
+    let sw = sprint_weeks as f64;
+
     // Original forecasts: exact-pace targets using ceil.
     let target_1w = lambda.ceil() as u32;
-    let target_2w = (lambda * 2.0).ceil() as u32;
+    let target_sprint_ceil = (lambda * sw).ceil() as u32;
 
-    // New forecasts: rounded sprint target avoids the near-0% issue when λ is
-    // fractional (e.g. λ=0.8 → ceil=1 → P(X≥1|λ=0.8)≈55%, fine; but λ=2.1
-    // → ceil(4.2)=5 → very low prob). round() is more representative.
-    let sprint_target = (lambda * 2.0).round().max(1.0) as u32;
-    let stretch_target = (lambda * 2.0 * 1.2).ceil() as u32;
+    // Sprint target with round() avoids near-0% bias on fractional λ.
+    let sprint_target = (lambda * sw).round().max(1.0) as u32;
+    // Stretch: +20% above sprint pace.
+    let stretch_target = (lambda * sw * 1.2).ceil() as u32;
 
     vec![
         ThroughputForecast::new(lambda, 1, target_1w),
-        ThroughputForecast::new(lambda, 2, target_2w),
-        ThroughputForecast::new(lambda, 2, sprint_target),
-        ThroughputForecast::new(lambda, 2, stretch_target),
+        ThroughputForecast::new(lambda, sprint_weeks, target_sprint_ceil),
+        ThroughputForecast::new(lambda, sprint_weeks, sprint_target),
+        ThroughputForecast::new(lambda, sprint_weeks, stretch_target),
         ThroughputForecast::new(lambda, 1, 1),
     ]
 }

@@ -729,15 +729,16 @@ pub fn throughput_forecast_line(f: &ThroughputForecast, index: usize) -> Line<'s
         Color::Red
     };
 
+    let sw = f.forecast_weeks;
     let label = match index {
         // Original forecasts — "will we match our usual pace?"
         0 => format!("At pace      ≥{} this week", f.target_merges),
-        1 => format!("At pace      ≥{} this sprint (2w)", f.target_merges),
+        1 => format!("At pace      ≥{} this sprint ({}w)", f.target_merges, sw),
         // New forecasts — actionable sprint/stretch/floor
-        2 => format!("Sprint pace  ≥{} in 2w (realistic)", f.target_merges),
-        3 => format!("Stretch goal ≥{} in 2w (+20%)", f.target_merges),
+        2 => format!("Sprint pace  ≥{} in {}w (realistic)", f.target_merges, sw),
+        3 => format!("Stretch goal ≥{} in {}w (+20%)", f.target_merges, sw),
         4 => format!("Floor check  ≥1 merge this week"),
-        _ => format!("≥{} in {}w", f.target_merges, f.forecast_weeks),
+        _ => format!("≥{} in {}w", f.target_merges, sw),
     };
 
     Line::from(vec![
@@ -941,12 +942,14 @@ pub fn trigger_stats_refresh(
 
         let window = app.stats_view.window.to_query_window();
         let project_id = app.project_id.clone();
+        let sprint_weeks = app.stats_view.sprint_weeks;
         let tx2 = tx.clone();
 
         tokio::spawn(async move {
             let filter = QueryFilter {
                 window,
                 project_id: Some(project_id),
+                sprint_weeks: Some(sprint_weeks),
                 ..Default::default()
             };
 
