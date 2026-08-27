@@ -404,7 +404,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 labels: mr.labels.clone().unwrap_or_default(),
                                 target_branch: mr.target_branch.clone().unwrap_or_default(),
                                 state: format!("{:?}", mr.state).to_lowercase(),
-                                created_at: None,
+                                created_at: mr.created_at.clone(),
                                 merged_at: mr.merged_at.clone(),
                                 updated_at: mr.updated_at.clone(),
                                 files_changed: diff.map(|d| d.files_changed).unwrap_or(0),
@@ -422,6 +422,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // We use the standard upsert and accept that open MRs
                             // will land at today — correct behaviour for OnRefresh.
                             let _ = db.upsert_snapshot_at(&snap, &recorded_at).await;
+
+                            // Patch `created_at` on rows that were inserted before this
+                            // field was tracked — INSERT OR IGNORE never updates existing
+                            // rows, so we issue an explicit UPDATE for NULL slots.
+                            if let Some(ref ca) = mr.created_at {
+                                let _ = db.backfill_created_at(&project_id, &mr.id, ca).await;
+                            }
                         }
 
                         tracing::info!(

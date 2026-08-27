@@ -127,7 +127,7 @@
 
   | Section                     | Content                                                                                                                                    |
   | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
-  | **Throughput & Cycle time** | MRs merged/week, median and P90 cycle time, avg diff size, avg comments, pipeline failure rate                                             |
+  | **Throughput & Cycle time** | MRs merged/week, median / P75 / P90 cycle time (created → merged), avg diff size, avg comments, pipeline failure rate                     |
   | **Open MR backlog**         | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance                                                              |
   | **By Author**               | Horizontal bar chart of average cycle time per author                                                                                      |
   | **By Reviewer**             | Average cycle time per reviewer — identifies review bottlenecks                                                                            |

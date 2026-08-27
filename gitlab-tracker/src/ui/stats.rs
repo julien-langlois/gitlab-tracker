@@ -110,7 +110,8 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
 
     let author_rows = agg.cycle_time_by_author.len().max(1) as u16 + 2; // +2 for block borders
     let reviewer_rows = agg.cycle_time_by_reviewer.len().max(1) as u16 + 2;
-    let bar_band_h = author_rows.max(reviewer_rows).max(5);
+    let milestone_rows = agg.cycle_time_by_milestone.len().max(1) as u16 + 2;
+    let bar_band_h = author_rows.max(reviewer_rows).max(milestone_rows).max(5);
     let corr_rows = report.correlations.len().max(1) as u16 + 2;
 
     let bands = Layout::default()
@@ -134,10 +135,11 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     render_backlog_block(f, report, left1);
     render_poisson_summary_block(f, report, right1);
 
-    // ── Band 2: By Author | By Reviewer ───────────────────────────────────────
-    let [left2, right2] = split_horizontal(bands[2], 50);
+    // ── Band 2: By Author | By Reviewer | By Milestone ───────────────────────
+    let [left2, mid2, right2] = split_horizontal_thirds(bands[2]);
     render_by_author_block(f, report, left2);
-    render_by_reviewer_block(f, report, right2);
+    render_by_reviewer_block(f, report, mid2);
+    render_by_milestone_block(f, report, right2);
 
     // ── Band 3: Correlations ──────────────────────────────────────────────────
     render_correlations_block(f, report, bands[3]);
@@ -216,55 +218,73 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
 
     let median = agg.cycle_time_median_hours.unwrap_or(0.0);
+    let p75 = agg.cycle_time_p75_hours.unwrap_or(0.0);
     let p90 = agg.cycle_time_p90_hours.unwrap_or(0.0);
     let max = p90.max(1.0);
 
     // We split the inner area into rows for each gauge + a summary line.
-    let block = styled_block(" Cycle Time ");
+    let block = styled_block(" Cycle Time (created → merged) ");
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    if inner.height < 4 {
+    if inner.height < 5 {
         return;
     }
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
+            Constraint::Length(1), // Median gauge
+            Constraint::Length(1), // P75 gauge
+            Constraint::Length(1), // P90 gauge
+            Constraint::Length(1), // empty spacer
+            Constraint::Min(0),    // summary line
         ])
         .split(inner);
 
-    // Median gauge
+    // Label style: white + bold so the text stays readable on both the filled
+    // (coloured) and unfilled (DarkGray) portions of the gauge bar.
+    let label_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+
+    // Median (P50) gauge
     let median_ratio = (median / max).clamp(0.0, 1.0);
-    let median_label = format!("Median  {:.1} h", median);
+    f.render_widget(
+        Gauge::default()
+            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+            .ratio(median_ratio)
+            .label(Span::styled(
+                format!("Median  {:.1} h", median),
+                label_style,
+            )),
+        rows[0],
+    );
+
+    // P75 gauge
+    let p75_ratio = (p75 / max).clamp(0.0, 1.0);
     f.render_widget(
         Gauge::default()
             .gauge_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray))
-            .ratio(median_ratio)
-            .label(median_label),
-        rows[0],
+            .ratio(p75_ratio)
+            .label(Span::styled(format!("P75     {:.1} h", p75), label_style)),
+        rows[1],
     );
 
     // P90 gauge
     let p90_ratio = (p90 / max).clamp(0.0, 1.0);
-    let p90_label = format!("P90     {:.1} h", p90);
     f.render_widget(
         Gauge::default()
             .gauge_style(Style::default().fg(Color::Red).bg(Color::DarkGray))
             .ratio(p90_ratio)
-            .label(p90_label),
+            .label(Span::styled(format!("P90     {:.1} h", p90), label_style)),
         rows[2],
     );
 
-    // Summary line
+    // Summary line: spread between median and P90
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("  Delta  ", Style::default().fg(theme::MUTED)),
+            Span::styled("  Spread  ", Style::default().fg(theme::MUTED)),
             Span::styled(
                 format!("{:.1} h  (P90 − Median)", p90 - median),
                 Style::default().fg(theme::MUTED_DIM),
@@ -402,7 +422,8 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
 /// Horizontal bar chart for cycle time by author.
 fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    let bar_width = (area.width as usize).saturating_sub(26).min(32);
+    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
+    let bar_width = (area.width as usize).saturating_sub(32).max(4);
 
     if agg.cycle_time_by_author.is_empty() {
         f.render_widget(
@@ -438,7 +459,8 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
 /// Horizontal bar chart for cycle time by reviewer.
 fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    let bar_width = (area.width as usize).saturating_sub(26).min(32);
+    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
+    let bar_width = (area.width as usize).saturating_sub(32).max(4);
 
     if agg.cycle_time_by_reviewer.is_empty() {
         f.render_widget(
@@ -467,6 +489,43 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
 
     f.render_widget(
         Paragraph::new(lines).block(styled_block(" Cycle Time by Reviewer ")),
+        area,
+    );
+}
+
+/// Horizontal bar chart for cycle time by milestone.
+fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
+    let agg = &report.aggregated;
+    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
+    let bar_width = (area.width as usize).saturating_sub(32).max(4);
+
+    if agg.cycle_time_by_milestone.is_empty() {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "  No milestone data.",
+                Style::default().fg(theme::MUTED),
+            ))
+            .block(styled_block(" Cycle Time by Milestone ")),
+            area,
+        );
+        return;
+    }
+
+    let mut by_milestone: Vec<(&String, f64)> = agg
+        .cycle_time_by_milestone
+        .iter()
+        .map(|(k, v)| (k, *v))
+        .collect();
+    by_milestone.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let max_val = by_milestone.first().map(|(_, v)| *v).unwrap_or(1.0);
+
+    let lines: Vec<Line<'static>> = by_milestone
+        .iter()
+        .map(|(milestone, hours)| bar_line(milestone, *hours, max_val, bar_width, Color::Yellow))
+        .collect();
+
+    f.render_widget(
+        Paragraph::new(lines).block(styled_block(" Cycle Time by Milestone ")),
         area,
     );
 }
@@ -585,6 +644,19 @@ fn split_horizontal(area: Rect, pct: u16) -> [Rect; 2] {
     [chunks[0], chunks[1]]
 }
 
+/// Splits a rect horizontally into three equal columns (~33% each).
+fn split_horizontal_thirds(area: Rect) -> [Rect; 3] {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+        ])
+        .split(area);
+    [chunks[0], chunks[1], chunks[2]]
+}
+
 /// A uniformly styled inner block used by all panels.
 fn styled_block(title: &str) -> Block<'static> {
     Block::default()
@@ -628,7 +700,7 @@ fn bar_line(
 
     Line::from(vec![
         Span::styled(
-            format!("  {:<14}", truncate(label, 13)),
+            format!("  {:<20}", truncate(label, 19)),
             Style::default().fg(theme::MUTED),
         ),
         Span::styled(bar, Style::default().fg(bar_color)),
@@ -737,20 +809,21 @@ fn correlation_line(cr: &CorrelationResult) -> Line<'static> {
 
     Line::from(vec![
         Span::styled(format!("  {bullet} "), Style::default().fg(bullet_color)),
-        Span::styled(format!("{:<32}", pair_lbl), text_style),
+        // 36 chars fits the longest label "Pipeline failures  ↔  Cycle time" with margin
+        Span::styled(format!("{:<36}", pair_lbl), text_style),
         Span::styled(
-            format!("ρ = {:+.3}  ", cr.rho),
+            format!("ρ = {:+.3}    ", cr.rho),
             Style::default().fg(rho_col).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("p = {:.3}  ", cr.p_value),
+            format!("p = {:.3}    ", cr.p_value),
             Style::default().fg(if cr.p_value < 0.05 {
                 theme::MUTED
             } else {
                 theme::MUTED_DIM
             }),
         ),
-        Span::styled(format!("{direction}  {:<12}", strength_lbl), text_style),
+        Span::styled(format!("{direction}  {:<13}", strength_lbl), text_style),
         Span::styled(
             format!("(n={})", cr.sample_size),
             Style::default().fg(theme::MUTED_DIM),

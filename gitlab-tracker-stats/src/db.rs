@@ -82,6 +82,21 @@ pub trait StatsDb: Send + Sync {
         project_id: &str,
         retention_days: u32,
     ) -> Result<u64, StatsError>;
+
+    /// Patches `created_at` for snapshots where it is currently NULL.
+    ///
+    /// Called during the startup backfill when `tracker_state.json` already
+    /// holds a `created_at` value for MRs whose DB rows were inserted before
+    /// this field was tracked. Only rows where `created_at IS NULL` are updated,
+    /// so the operation is idempotent and safe to call on every startup.
+    ///
+    /// Returns the number of rows updated.
+    async fn backfill_created_at(
+        &self,
+        project_id: &str,
+        mr_id: &str,
+        created_at: &str,
+    ) -> Result<u64, StatsError>;
 }
 
 /// SQLite-backed implementation of [`StatsDb`].
@@ -407,6 +422,25 @@ impl StatsDb for SqliteStatsDb {
                 .bind(&cutoff)
                 .execute(&self.pool)
                 .await?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn backfill_created_at(
+        &self,
+        project_id: &str,
+        mr_id: &str,
+        created_at: &str,
+    ) -> Result<u64, StatsError> {
+        // Only update rows where created_at is currently NULL — never overwrite existing data.
+        let result = sqlx::query(
+            "UPDATE mr_snapshots SET created_at = ? WHERE project_id = ? AND mr_id = ? AND created_at IS NULL",
+        )
+        .bind(created_at)
+        .bind(project_id)
+        .bind(mr_id)
+        .execute(&self.pool)
+        .await?;
 
         Ok(result.rows_affected())
     }

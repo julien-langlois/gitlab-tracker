@@ -26,7 +26,7 @@ Automatically records MR snapshots into a local SQLite database and computes vel
 | Statistic | Description |
 | :--- | :--- |
 | **Throughput** | MRs merged per calendar week |
-| **Cycle time median & P90** | Central tendency + long-tail indicator |
+| **Cycle time median, P75 & P90** | Central tendency (P50), upper quartile (P75), and long-tail indicator (P90) — all measured from MR creation to merge |
 | **Cycle time by author** | Average cycle time per MR author — highlights who tends to have longer review cycles |
 | **Cycle time by reviewer** | Average cycle time per assigned reviewer — surfaces review bottlenecks |
 | **Cycle time by milestone** | Per-sprint velocity comparison |

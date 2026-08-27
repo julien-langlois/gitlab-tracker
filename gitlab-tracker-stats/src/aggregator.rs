@@ -46,8 +46,11 @@ pub struct AggregatedStats {
     pub throughput_per_week: Option<f64>,
 
     // ── Cycle time (hours) ────────────────────────────────────────────────────
-    /// Median cycle time across all merged MRs in the sample.
+    /// Median cycle time (P50) across all merged MRs in the sample.
     pub cycle_time_median_hours: Option<f64>,
+
+    /// 75th-percentile cycle time — upper quartile, useful mid-point between median and P90.
+    pub cycle_time_p75_hours: Option<f64>,
 
     /// 90th-percentile cycle time (captures the "long tail" of stuck MRs).
     pub cycle_time_p90_hours: Option<f64>,
@@ -138,6 +141,7 @@ fn compute_stats(
     cycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let cycle_time_median_hours = percentile(&cycle_times, 50.0);
+    let cycle_time_p75_hours = percentile(&cycle_times, 75.0);
     let cycle_time_p90_hours = percentile(&cycle_times, 90.0);
 
     // ── Cycle time by author ──────────────────────────────────────────────────
@@ -214,6 +218,7 @@ fn compute_stats(
         closed_count,
         throughput_per_week,
         cycle_time_median_hours,
+        cycle_time_p75_hours,
         cycle_time_p90_hours,
         cycle_time_by_author,
         cycle_time_by_reviewer,
