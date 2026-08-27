@@ -47,9 +47,7 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan))
-        .title(format!(
-            " Stats ─ {window_label} ─ [W]: Window ─ [↑/↓]: Scroll ─ [G/Esc]: Close "
-        ));
+        .title(format!(" Stats ─ {window_label} "));
 
     // Loading / error / empty states are rendered inside the outer block.
     if view.loading {
@@ -92,12 +90,22 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     f.render_widget(outer_block, area);
     let inner = inner_area(area);
 
+    // ── Status bar area (bottom, fixed 3 lines like the main input bar) ───────
+    // Split inner vertically: scrollable content on top, fixed status bar at bottom.
+    let [content_area, status_area] = {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(3)])
+            .split(inner);
+        [chunks[0], chunks[1]]
+    };
+
     // ── Vertical bands ────────────────────────────────────────────────────────
     // Band 0: Throughput | Cycle Time        (fixed 7 lines)
     // Band 1: Backlog    | Poisson/Queue     (dynamic, min 7)
     // Band 2: By Author  | By Reviewer       (dynamic, min 5)
     // Band 3: Correlations                   (dynamic)
-    // Band 4: Footer                         (scrollable forecasts + footer line)
+    // Band 4: Footer                         (scrollable forecasts only)
     let agg = &report.aggregated;
 
     let author_rows = agg.cycle_time_by_author.len().max(1) as u16 + 2; // +2 for block borders
@@ -112,9 +120,9 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
             Constraint::Length(7),          // Band 1: Backlog + Poisson
             Constraint::Length(bar_band_h), // Band 2: By Author + By Reviewer
             Constraint::Length(corr_rows),  // Band 3: Correlations
-            Constraint::Min(1),             // Band 4: Footer
+            Constraint::Min(1),             // Band 4: Scrollable forecasts
         ])
-        .split(inner);
+        .split(content_area);
 
     // ── Band 0: Throughput | Cycle Time ───────────────────────────────────────
     let [left0, right0] = split_horizontal(bands[0], 50);
@@ -134,12 +142,32 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     // ── Band 3: Correlations ──────────────────────────────────────────────────
     render_correlations_block(f, report, bands[3]);
 
-    // ── Band 4: Footer (scrollable) ───────────────────────────────────────────
-    // Extract scroll before dropping the immutable borrow on `app.stats_view`,
-    // then write back the clamped value after rendering to avoid E0502.
+    // ── Band 4: Scrollable forecasts ──────────────────────────────────────────
+    // Extract all data needed after the borrow ends while `report` and `agg` are
+    // still in scope, then assign scroll back once the immutable borrow is released.
     let current_scroll = app.stats_view.scroll;
+    let generated_at = report.generated_at.clone();
+    let total_mrs = agg.total_mrs;
+    let window_lbl = window_label.to_string();
     let clamped_scroll = render_footer_band(f, report, bands[4], current_scroll);
+    // `report` / `agg` / `view` borrows end here — safe to mutably write scroll back.
     app.stats_view.scroll = clamped_scroll;
+
+    // ── Fixed status bar (full width, like the main input bar) ────────────────
+    let status_bar = Paragraph::new(format!(
+        " Generated {generated_at}  ·  {total_mrs} MRs in sample  ·  Window: {window_lbl}"
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::MUTED_DIM))
+            .title(Span::styled(
+                " STATS │ [W]: Window │ [R]: Refresh │ [↑/↓]: Scroll │ [G/Esc]: Close ",
+                Style::default().fg(Color::Cyan),
+            )),
+    )
+    .style(Style::default().fg(theme::MUTED_DIM));
+    f.render_widget(status_bar, status_area);
 }
 
 // ── Block renderers ───────────────────────────────────────────────────────────
@@ -481,7 +509,6 @@ fn render_footer_band(f: &mut Frame, report: &StatReport, area: Rect, current_sc
         return current_scroll;
     }
 
-    let agg = &report.aggregated;
     let p = &report.poisson;
 
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -517,15 +544,6 @@ fn render_footer_band(f: &mut Frame, report: &StatReport, area: Rect, current_sc
         }
         lines.push(Line::from(""));
     }
-
-    // ── Footer line ───────────────────────────────────────────────────────────
-    lines.push(Line::from(Span::styled(
-        format!(
-            "  Generated {}  ·  {} MRs in sample",
-            report.generated_at, agg.total_mrs
-        ),
-        Style::default().fg(theme::MUTED_DIM),
-    )));
 
     let total = lines.len() as u16;
     let max_scroll = total.saturating_sub(area.height);

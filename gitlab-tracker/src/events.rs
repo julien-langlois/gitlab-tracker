@@ -504,6 +504,10 @@ pub async fn handle_key_event(
                     app.stats_view.window = app.stats_view.window.next();
                     crate::ui::stats::trigger_stats_refresh(app, tx);
                 }
+                // [R] forces a manual stats refresh without changing the window.
+                KeyCode::Char('r') | KeyCode::Char('R') => {
+                    crate::ui::stats::trigger_stats_refresh(app, tx);
+                }
                 _ => {}
             }
         }
