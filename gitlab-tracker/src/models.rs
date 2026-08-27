@@ -494,6 +494,9 @@ pub enum AppEvent {
     /// Fired when the async stats aggregation fails.
     #[cfg(feature = "stats")]
     StatsReportFailed(String),
+    /// Fired when the MR discovery poll finds new MR IIDs not yet in the tracking list.
+    /// Only emitted when `discover_new_mrs = true` in `[project.stats]`.
+    NewMrsDiscovered(Vec<String>),
     Tick,
 }
 

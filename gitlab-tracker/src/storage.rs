@@ -116,6 +116,25 @@ pub struct ProjectEntry {
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracker: Option<TrackerConfig>,
+
+    /// When `true`, automatically discovers and tracks all newly opened MRs on
+    /// the project at each refresh cycle, even if they were not manually added.
+    ///
+    /// Uses `GET /projects/:id/merge_requests?state=opened` and adds any MR
+    /// whose IID is not yet in the tracking list. Independent of the `stats`
+    /// feature — useful for any reviewer who wants the tool to self-populate,
+    /// with or without analytics enabled.
+    ///
+    /// When the `stats` feature is also active, discovered MRs are automatically
+    /// snapshotted, which improves team-wide coverage of throughput and cycle time
+    /// metrics. Defaults to `false`.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// discover_new_mrs = true
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discover_new_mrs: Option<bool>,
 }
 
 /// Stats-feature configuration embedded in each `[[project]]` entry.
@@ -310,6 +329,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         tracker,
         gitlab_username: None,
         stats: None,
+        discover_new_mrs: None,
     };
 
     // Write projects.toml with the migrated values.
@@ -540,6 +560,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             tracker: None,
             gitlab_username: None,
             stats: None,
+            discover_new_mrs: None,
         };
     }
 
@@ -648,6 +669,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         tracker: None,
         gitlab_username: None,
         stats: None,
+        discover_new_mrs: None,
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;

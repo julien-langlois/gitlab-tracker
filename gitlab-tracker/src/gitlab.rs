@@ -657,6 +657,69 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
         .collect()
 }
 
+/// Fetches all currently open MR IIDs for the project (no milestone filter).
+///
+/// Used by the discovery poller to detect new MRs opened by any team member
+/// since the last refresh cycle. Paginates through all pages (100 per page).
+/// Returns an empty vec on any network or parse error — discovery is best-effort.
+pub async fn fetch_open_mr_ids(ctx: &FetchContext) -> Vec<String> {
+    let client = reqwest::Client::new();
+    let mut all_ids: Vec<String> = Vec::new();
+    let mut page: u32 = 1;
+
+    loop {
+        let url = format!(
+            "{}/api/v4/projects/{}/merge_requests?state=opened&per_page=100&page={}",
+            ctx.base_url, ctx.project_id, page
+        );
+        let res = match client
+            .get(&url)
+            .header("PRIVATE-TOKEN", &ctx.token)
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => r,
+            _ => break,
+        };
+        let mrs: Vec<serde_json::Value> = match res.json().await {
+            Ok(v) => v,
+            Err(_) => break,
+        };
+        let page_len = mrs.len();
+        for mr in mrs {
+            if let Some(id) = mr.get("iid").and_then(|v| v.as_u64()) {
+                all_ids.push(id.to_string());
+            }
+        }
+        // GitLab returns fewer than 100 items on the last page.
+        if page_len < 100 {
+            break;
+        }
+        page += 1;
+    }
+
+    all_ids
+}
+
+/// Spawns an async discovery task that fetches all open MR IIDs and emits
+/// `AppEvent::NewMrsDiscovered` for any IID not yet in `known_ids`.
+pub fn spawn_open_mrs_discovery(
+    ctx: FetchContext,
+    known_ids: Vec<String>,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    tokio::spawn(async move {
+        let all_ids = fetch_open_mr_ids(&ctx).await;
+        let new_ids: Vec<String> = all_ids
+            .into_iter()
+            .filter(|id| !known_ids.contains(id))
+            .collect();
+        if !new_ids.is_empty() {
+            let _ = tx.send(AppEvent::NewMrsDiscovered(new_ids));
+        }
+    });
+}
+
 /// Spawns an async task that fetches all open MR IIDs for the given milestone
 /// and sends them via `tx` as a `MilestoneMrsLoaded` event.
 pub fn spawn_milestone_mrs_fetch(

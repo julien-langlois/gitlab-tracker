@@ -436,6 +436,13 @@ pub struct App {
     /// without a round-trip query on every `Tick`.
     #[cfg(feature = "stats")]
     pub stats_last_refresh_date: std::collections::HashMap<String, String>,
+    /// When `true`, the discovery poller is active: at each refresh cycle the app
+    /// queries `GET /projects/:id/merge_requests?state=opened` and automatically
+    /// adds any MR not yet in the tracking list.
+    ///
+    /// Set from `discover_new_mrs` in `[project.stats]` of `projects.toml`.
+    /// Defaults to `false` — opt-in only.
+    pub discovery_enabled: bool,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -516,6 +523,8 @@ impl App {
             stats_db: None,
             #[cfg(feature = "stats")]
             stats_last_refresh_date: std::collections::HashMap::new(),
+            // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
+            discovery_enabled: false,
         }
     }
 
@@ -1778,6 +1787,60 @@ impl App {
                 }
             }
 
+            AppEvent::NewMrsDiscovered(mr_ids) => {
+                let ctx = self.fetch_context();
+                let mut added = 0u32;
+                for mr_id in mr_ids {
+                    // Guard against races: the MR may have been added between the
+                    // discovery fetch and this event being processed.
+                    if self.mrs.iter().any(|m| m.id == mr_id) {
+                        continue;
+                    }
+                    self.mrs.push(TrackedMr {
+                        id: mr_id.clone(),
+                        title: format!("Loading… ({})", mr_id),
+                        status: MrStatus::Loading,
+                        state: GitlabMrState::Opened,
+                        mergeability: MergeabilityStatus::Unknown,
+                        sha: None,
+                        description: String::new(),
+                        author: "Loading".to_string(),
+                        assignee: "Loading".to_string(),
+                        reviewers: vec![],
+                        milestone: String::new(),
+                        milestone_due_date: None,
+                        web_url: String::new(),
+                        labels: vec![],
+                        updated_at: None,
+                        created_at: None,
+                        source_branch: "unknown".to_string(),
+                        target_branch: "unknown".to_string(),
+                        merged_by: None,
+                        merged_at: None,
+                        pipelines: vec![],
+                        recently_updated: false,
+                        user_notes_count: 0,
+                        flagged: false,
+                        diff_stats: None,
+                        linked_ticket: None,
+                    });
+                    spawn_mr_fetch(
+                        ctx.clone(),
+                        mr_id,
+                        CachedMrData::default(),
+                        semaphore.clone(),
+                        tx.clone(),
+                    );
+                    added += 1;
+                }
+                if added > 0 {
+                    self.recompute_api_call_estimate();
+                    true
+                } else {
+                    false
+                }
+            }
+
             AppEvent::Tick => {
                 // Decrement the highlight fade countdown and clear flags when expired.
                 if self.update_highlight_ticks > 0 {
@@ -1797,6 +1860,14 @@ impl App {
                 // Timer elapsed — trigger a full refresh of all MRs.
                 self.time_left = self.refresh_interval_secs;
                 let ctx = self.fetch_context();
+
+                // Discovery poller: find new MRs opened by any team member since the
+                // last refresh cycle. Only active when `discover_new_mrs = true` in
+                // `[project.stats]` of `projects.toml`.
+                if self.discovery_enabled {
+                    let known_ids: Vec<String> = self.mrs.iter().map(|m| m.id.clone()).collect();
+                    crate::gitlab::spawn_open_mrs_discovery(ctx.clone(), known_ids, tx.clone());
+                }
 
                 // Recompute GitLab + tracker estimates *before* spawning fetches so the
                 // counter reflects the actual cache state at trigger time.

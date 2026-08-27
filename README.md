@@ -134,7 +134,7 @@
   | **By Milestone**            | Merged MR count per sprint — velocity comparison across releases                                                                           |
   | **Spearman correlations**   | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
 
-  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2).
+  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly opened MRs at each refresh cycle, independently of whether the `stats` feature is active.
 
   See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
 
@@ -324,6 +324,12 @@ refresh_interval_secs = 900
 activity_recent_days = 2   # 🟢 Active if updated within N days
 activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 
+# Automatically discover and track all newly opened MRs at each refresh cycle.
+# Independent of the stats feature — useful for any reviewer who wants the tool
+# to self-populate. When stats are also enabled, discovered MRs are snapshotted
+# automatically for team-wide throughput and cycle-time coverage. Default: false.
+discover_new_mrs = true
+
 # Tech-stack calibration for the review-difficulty score.
 # Weighted formula: (additions + deletions) × 0.8 + files_changed × 0.2
 [project.complexity_profile]
@@ -352,6 +358,12 @@ commits_behind  = false  # "Behind" column — commits the source branch is behi
 "review::approved" = { bg = "magenta",  fg = "white" }
 "size::*"          = { bg = "dark_gray", fg = "white" }
 
+# Stats settings — only relevant when the `stats` feature is compiled in.
+[project.stats]
+# Keep snapshots for 6 months, then purge automatically on startup. Default: 365.
+retention_days = 180
+# Sprint duration in weeks — controls the window used in throughput forecasts. Default: 2.
+sprint_weeks = 3
 
 # Add more projects below — only the one with `active = true` is loaded at startup.
 # [[project]]

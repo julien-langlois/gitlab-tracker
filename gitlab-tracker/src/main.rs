@@ -192,6 +192,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .and_then(|s| s.sprint_weeks)
         .unwrap_or(2);
+    // Discovery lives at the project level — independent of the stats feature.
+    // Any reviewer can opt in to automatic MR population without enabling analytics.
+    let discover_new_mrs = project.discover_new_mrs.unwrap_or(false);
     let base_url = project.gitlab_url;
     let project_name = project.name.clone();
     let project_id = project.project_id;
@@ -308,6 +311,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         app.config.default_branches.clone()
     };
+
+    // Inject the discovery flag unconditionally — independent of the stats feature.
+    app.discovery_enabled = discover_new_mrs;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
