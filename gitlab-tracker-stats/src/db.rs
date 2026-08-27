@@ -97,6 +97,16 @@ pub trait StatsDb: Send + Sync {
         mr_id: &str,
         created_at: &str,
     ) -> Result<u64, StatsError>;
+
+    /// Removes duplicate `on_merge` / `on_close` snapshots for the same MR,
+    /// keeping only the row with the highest `id` (most recently inserted).
+    ///
+    /// Duplicates arise when the startup backfill runs on multiple days: the
+    /// UNIQUE constraint prevents same-day duplicates but not cross-day ones.
+    /// Safe to call on every startup — idempotent when no duplicates exist.
+    ///
+    /// Returns the number of rows deleted.
+    async fn deduplicate_snapshots(&self, project_id: &str) -> Result<u64, StatsError>;
 }
 
 /// SQLite-backed implementation of [`StatsDb`].
@@ -439,6 +449,32 @@ impl StatsDb for SqliteStatsDb {
         .bind(created_at)
         .bind(project_id)
         .bind(mr_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn deduplicate_snapshots(&self, project_id: &str) -> Result<u64, StatsError> {
+        // For each (mr_id, trigger) pair, keep only the row with MAX(id) and
+        // delete all others. MAX(id) = most recently inserted = best data quality
+        // (created_at already backfilled, most up-to-date diff stats, etc.).
+        let result = sqlx::query(
+            r#"
+            DELETE FROM mr_snapshots
+            WHERE project_id = ?
+              AND trigger IN ('on_merge', 'on_close')
+              AND id NOT IN (
+                  SELECT MAX(id)
+                  FROM mr_snapshots
+                  WHERE project_id = ?
+                    AND trigger IN ('on_merge', 'on_close')
+                  GROUP BY mr_id, trigger
+              )
+            "#,
+        )
+        .bind(project_id)
+        .bind(project_id)
         .execute(&self.pool)
         .await?;
 

@@ -132,9 +132,29 @@ fn compute_stats(
     metrics: &[PerMrMetrics],
     filter: &QueryFilter,
 ) -> AggregatedStats {
-    let merged: Vec<&PerMrMetrics> = metrics.iter().filter(|m| m.trigger == "on_merge").collect();
+    // Deduplicate by mr_id: keep only the most recent snapshot per MR (last in
+    // recorded_at ASC order, which is the query sort order). Without this, a MR
+    // that was backfilled multiple times across different startup days produces
+    // several on_merge rows and inflates all percentile/average calculations.
+    let merged: Vec<&PerMrMetrics> = {
+        let mut seen = std::collections::HashSet::new();
+        // Snapshots arrive sorted by recorded_at ASC — iterate in reverse so the
+        // first occurrence we encounter for a given mr_id is the most recent one.
+        metrics
+            .iter()
+            .rev()
+            .filter(|m| m.trigger == "on_merge" && seen.insert(m.mr_id.clone()))
+            .collect()
+    };
 
-    let closed_count = metrics.iter().filter(|m| m.trigger == "on_close").count();
+    let closed_count = {
+        let mut seen = std::collections::HashSet::new();
+        metrics
+            .iter()
+            .rev()
+            .filter(|m| m.trigger == "on_close" && seen.insert(m.mr_id.clone()))
+            .count()
+    };
 
     // ── Cycle times ───────────────────────────────────────────────────────────
     let mut cycle_times: Vec<f64> = merged.iter().filter_map(|m| m.cycle_time_hours).collect();
@@ -275,7 +295,11 @@ fn mean(iter: impl Iterator<Item = f64>) -> f64 {
     }
 }
 
-/// Groups metrics by a string key and computes the mean of a numeric field per group.
+/// Groups metrics by a string key and computes the **median** of a numeric field per group.
+///
+/// Median is preferred over mean for cycle-time breakdowns: a single long-running
+/// MR (e.g. a multi-week feature branch) would otherwise dominate the average for
+/// authors or milestones with few MRs, giving a misleading picture.
 fn group_average<'a, I, K, V>(iter: I, key_fn: K, val_fn: V) -> HashMap<String, f64>
 where
     I: Iterator<Item = &'a PerMrMetrics>,
@@ -290,9 +314,10 @@ where
     }
     groups
         .into_iter()
-        .map(|(k, vals)| {
-            let avg = vals.iter().sum::<f64>() / vals.len() as f64;
-            (k, avg)
+        .map(|(k, mut vals)| {
+            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let median = percentile(&vals, 50.0).unwrap_or(0.0);
+            (k, median)
         })
         .collect()
 }

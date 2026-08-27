@@ -284,7 +284,15 @@ impl PoissonInsights {
     }
 }
 
-/// Builds 1-week and 2-week forecasts targeting the observed mean throughput.
+/// Builds actionable throughput forecasts from the observed weekly rate λ.
+///
+/// Five forecasts are produced:
+/// 1. **At-pace 1w** — P(≥ ceil(λ) in 1 week): will we match our usual weekly pace?
+/// 2. **At-pace 2w** — P(≥ ceil(λ×2) in 2 weeks): will we match our usual sprint pace?
+/// 3. **Sprint pace** — P(≥ round(λ×2) in 2w): realistic sprint target using round
+///    instead of ceil to avoid near-0% probabilities when λ is fractional.
+/// 4. **Stretch goal** — P(≥ λ×2 +20% in 2w): how likely are we to beat our average?
+/// 5. **Floor check** — P(≥ 1 in 1w): sanity floor — are we merging anything at all?
 fn build_throughput_forecasts(stats: &AggregatedStats) -> Vec<ThroughputForecast> {
     let Some(lambda) = stats.throughput_per_week else {
         return vec![];
@@ -293,12 +301,22 @@ fn build_throughput_forecasts(stats: &AggregatedStats) -> Vec<ThroughputForecast
         return vec![];
     }
 
-    // Target = ceil(λ) so we ask "will we at least match our average pace?"
-    let target = lambda.ceil() as u32;
+    // Original forecasts: exact-pace targets using ceil.
+    let target_1w = lambda.ceil() as u32;
+    let target_2w = (lambda * 2.0).ceil() as u32;
+
+    // New forecasts: rounded sprint target avoids the near-0% issue when λ is
+    // fractional (e.g. λ=0.8 → ceil=1 → P(X≥1|λ=0.8)≈55%, fine; but λ=2.1
+    // → ceil(4.2)=5 → very low prob). round() is more representative.
+    let sprint_target = (lambda * 2.0).round().max(1.0) as u32;
+    let stretch_target = (lambda * 2.0 * 1.2).ceil() as u32;
 
     vec![
-        ThroughputForecast::new(lambda, 1, target),
-        ThroughputForecast::new(lambda, 2, target * 2),
+        ThroughputForecast::new(lambda, 1, target_1w),
+        ThroughputForecast::new(lambda, 2, target_2w),
+        ThroughputForecast::new(lambda, 2, sprint_target),
+        ThroughputForecast::new(lambda, 2, stretch_target),
+        ThroughputForecast::new(lambda, 1, 1),
     ]
 }
 

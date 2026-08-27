@@ -349,6 +349,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         _ => {}
                     }
 
+                    // Remove cross-day duplicates produced by repeated backfills:
+                    // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
+                    match db.deduplicate_snapshots(&project_id).await {
+                        Ok(n) if n > 0 => {
+                            tracing::info!(rows = n, "Deduplicated stats snapshots")
+                        }
+                        Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
+                        _ => {}
+                    }
+
                     // ── Backfill from tracker_state.json ─────────────────────
                     // On first run (or after a gap), seed the DB with the MRs
                     // already persisted on disk so stats are immediately useful

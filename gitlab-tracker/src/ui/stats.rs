@@ -431,7 +431,7 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
                 "  No author data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Author ")),
+            .block(styled_block(" Cycle Time by Author (median) ")),
             area,
         );
         return;
@@ -451,7 +451,7 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
         .collect();
 
     f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Author ")),
+        Paragraph::new(lines).block(styled_block(" Cycle Time by Author (median) ")),
         area,
     );
 }
@@ -468,7 +468,7 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
                 "  No reviewer data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Reviewer ")),
+            .block(styled_block(" Cycle Time by Reviewer (median) ")),
             area,
         );
         return;
@@ -488,7 +488,7 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
         .collect();
 
     f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Reviewer ")),
+        Paragraph::new(lines).block(styled_block(" Cycle Time by Reviewer (median) ")),
         area,
     );
 }
@@ -505,7 +505,7 @@ fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
                 "  No milestone data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Milestone ")),
+            .block(styled_block(" Cycle Time by Milestone (median) ")),
             area,
         );
         return;
@@ -525,7 +525,7 @@ fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
         .collect();
 
     f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Milestone ")),
+        Paragraph::new(lines).block(styled_block(" Cycle Time by Milestone (median) ")),
         area,
     );
 }
@@ -583,8 +583,8 @@ fn render_footer_band(f: &mut Frame, report: &StatReport, area: Rect, current_sc
             ),
             Span::styled("─".repeat(40), Style::default().fg(theme::MUTED_DIM)),
         ]));
-        for f_item in &p.throughput_forecasts {
-            lines.push(throughput_forecast_line(f_item));
+        for (idx, f_item) in p.throughput_forecasts.iter().enumerate() {
+            lines.push(throughput_forecast_line(f_item, idx));
         }
         // Render all anomalies (first one is already summarised in the Poisson block).
         if p.anomalies.len() > 1 {
@@ -713,7 +713,13 @@ fn bar_line(
 }
 
 /// Throughput forecast row.
-fn throughput_forecast_line(f: &ThroughputForecast) -> Line<'static> {
+///
+/// Labels are derived from the position in the forecasts vec (order matches
+/// `build_throughput_forecasts`):
+///   index 0 → sprint pace  (2w realistic target)
+///   index 1 → stretch goal (2w +20% target)
+///   index 2 → floor check  (≥1 merge/week)
+pub fn throughput_forecast_line(f: &ThroughputForecast, index: usize) -> Line<'static> {
     let pct = f.probability * 100.0;
     let color = if pct >= 75.0 {
         Color::Green
@@ -723,17 +729,20 @@ fn throughput_forecast_line(f: &ThroughputForecast) -> Line<'static> {
         Color::Red
     };
 
+    let label = match index {
+        // Original forecasts — "will we match our usual pace?"
+        0 => format!("At pace      ≥{} this week", f.target_merges),
+        1 => format!("At pace      ≥{} this sprint (2w)", f.target_merges),
+        // New forecasts — actionable sprint/stretch/floor
+        2 => format!("Sprint pace  ≥{} in 2w (realistic)", f.target_merges),
+        3 => format!("Stretch goal ≥{} in 2w (+20%)", f.target_merges),
+        4 => format!("Floor check  ≥1 merge this week"),
+        _ => format!("≥{} in {}w", f.target_merges, f.forecast_weeks),
+    };
+
     Line::from(vec![
         Span::styled(
-            format!(
-                "  {:<32}",
-                format!(
-                    "≥{} merges in {} week{}",
-                    f.target_merges,
-                    f.forecast_weeks,
-                    if f.forecast_weeks > 1 { "s" } else { "" }
-                )
-            ),
+            format!("  {:<36}", label),
             Style::default().fg(theme::MUTED),
         ),
         Span::styled(
@@ -741,7 +750,7 @@ fn throughput_forecast_line(f: &ThroughputForecast) -> Line<'static> {
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("  (expected {:.1})", f.expected_merges),
+            format!("  (λ={:.1}/w)", f.lambda_per_week),
             Style::default().fg(theme::MUTED_DIM),
         ),
     ])
