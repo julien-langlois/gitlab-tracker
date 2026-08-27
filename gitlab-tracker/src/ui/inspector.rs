@@ -666,6 +666,21 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         ]));
     }
 
+    // Created at — always shown for open MRs to give the reviewer a sense of MR age.
+    let created_at_display = mr
+        .created_at
+        .as_deref()
+        .map(|s| {
+            let absolute = s.get(..16).unwrap_or(s).replace('T', " ");
+            let relative = format_relative_date(s);
+            format!("{}  ({})", absolute, relative)
+        })
+        .unwrap_or_else(|| "Unknown".to_string());
+    lines.push(Line::from(vec![
+        Span::raw("Created  : "),
+        Span::styled(created_at_display, Style::default().fg(Color::White)),
+    ]));
+
     lines.push(Line::from(vec![
         Span::raw("Updated  : "),
         Span::styled(updated_at_display, Style::default().fg(Color::Yellow)),

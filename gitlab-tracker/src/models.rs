@@ -140,6 +140,8 @@ pub struct GitLabMr {
     /// Detailed mergeability field (GitLab ≥ 15.6): `"mergeable"`, `"need_rebase"`,
     /// `"conflict"`, `"checking"`, `"not_open"`, etc. Takes priority over `merge_status`.
     pub detailed_merge_status: Option<String>,
+    /// ISO 8601 timestamp when the MR was created — always populated by GitLab.
+    pub created_at: Option<String>,
     /// Whether the MR has unresolved merge conflicts (complementary signal from GitLab).
     pub has_conflicts: Option<bool>,
     /// Only populated when the MR request includes `include_diverged_commits_count=true`
@@ -196,6 +198,10 @@ pub struct SavedMr {
     /// Whether the MR has been manually flagged by the user — persisted across restarts.
     #[serde(default)]
     pub flagged: bool,
+    /// ISO 8601 timestamp when the MR was created — immutable once set, persisted across restarts.
+    /// Populated on first fetch; subsequent restarts restore it from the saved state.
+    #[serde(default)]
+    pub created_at: Option<String>,
     /// Last resolved tracker ticket — persisted to avoid re-fetching the tracker on every restart.
     /// Re-fetched only when the detected ticket ID changes (title/description update).
     /// `None` when no tracker provider is configured or no ticket reference was found.
@@ -252,6 +258,8 @@ pub struct TrackedMr {
     pub merged_at: Option<String>,
     /// Mergeability state for open MRs — drives the animated status badge.
     pub mergeability: MergeabilityStatus,
+    /// ISO 8601 timestamp when the MR was created — immutable once set, persisted across restarts.
+    pub created_at: Option<String>,
     /// Pipelines fetched alongside the MR data and persisted across restarts.
     pub pipelines: Vec<Pipeline>,
     /// Set to `true` when `updated_at` changed during the last refresh cycle.
@@ -296,6 +304,8 @@ pub struct MrLoadedData {
     pub merged_at: Option<String>,
     /// Mergeability resolved from the GitLab API response.
     pub mergeability: MergeabilityStatus,
+    /// ISO 8601 timestamp when the MR was created.
+    pub created_at: Option<String>,
     /// Pipelines fetched in the same request batch as the MR data.
     pub pipelines: Vec<Pipeline>,
     /// Total number of user notes (comments + discussion threads) on this MR.

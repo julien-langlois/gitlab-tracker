@@ -677,6 +677,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 5,
             flagged: true,
             diff_stats: Some(crate::models::DiffStats { files_changed: 12, additions: 487, deletions: 53, commits_count: 8, commits_behind: Some(3) }),
+            created_at: Some("2024-04-20T08:00:00Z".into()),
             // Demo: simulate a linked Redmine ticket with full metadata for the Tracker pane.
             linked_ticket: Some(LinkedTicket {
                 schema_version: LINKED_TICKET_SCHEMA_VERSION,
@@ -725,6 +726,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 0,
             flagged: false,
             diff_stats: Some(crate::models::DiffStats { files_changed: 4, additions: 89, deletions: 12, commits_count: 3, commits_behind: None }),
+            created_at: Some("2024-04-25T10:00:00Z".into()),
             linked_ticket: None,
         },
         TrackedMr {
@@ -754,6 +756,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 3,
             flagged: false,
             diff_stats: Some(crate::models::DiffStats { files_changed: 6, additions: 231, deletions: 18, commits_count: 5, commits_behind: Some(7) }),
+            created_at: Some("2024-04-28T14:30:00Z".into()),
             // Demo: simulate a linked Redmine bug ticket with partial time tracking.
             linked_ticket: Some(LinkedTicket {
                 schema_version: LINKED_TICKET_SCHEMA_VERSION,
@@ -799,6 +802,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 0,
             flagged: false,
             diff_stats: None,
+            created_at: None,
             linked_ticket: None,
         },
         TrackedMr {
@@ -826,6 +830,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 6,
             flagged: false,
             diff_stats: Some(crate::models::DiffStats { files_changed: 2, additions: 34, deletions: 8, commits_count: 1, commits_behind: Some(0) }),
+            created_at: Some("2024-04-10T09:15:00Z".into()),
             linked_ticket: None,
         },
         TrackedMr {
@@ -855,6 +860,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 0,
             flagged: false,
             diff_stats: Some(crate::models::DiffStats { files_changed: 1, additions: 12, deletions: 12, commits_count: 2, commits_behind: Some(2) }),
+            created_at: Some("2024-04-22T11:00:00Z".into()),
             linked_ticket: None,
         },
         TrackedMr {
@@ -888,6 +894,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             user_notes_count: 1,
             flagged: true,
             diff_stats: None,
+            created_at: Some("2024-04-30T16:45:00Z".into()),
             linked_ticket: None,
         },
     ];

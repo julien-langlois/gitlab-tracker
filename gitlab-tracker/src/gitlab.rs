@@ -726,6 +726,7 @@ pub async fn fetch_gitlab_data(
         .map_err(|e| format!("Error reading MR JSON: {}", e))?;
 
     let updated_at = mr.updated_at.clone();
+    let created_at = mr.created_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.clone().unwrap_or_default();
     // Fetch the real human-note count from the discussions endpoint.
@@ -1151,6 +1152,7 @@ pub async fn fetch_gitlab_data(
         web_url,
         labels,
         updated_at,
+        created_at,
         source_branch,
         target_branch,
         state,

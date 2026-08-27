@@ -1112,6 +1112,7 @@ pub async fn save_state_async(
                 pipelines: m.pipelines.clone(),
                 user_notes_count: m.user_notes_count,
                 flagged: m.flagged,
+                created_at: m.created_at.clone(),
                 linked_ticket: m.linked_ticket.clone(),
                 diff_stats: m.diff_stats.clone(),
             })

@@ -1116,6 +1116,9 @@ impl App {
                 merged_at: saved.merged_at.clone(),
                 // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
                 mergeability: MergeabilityStatus::Unknown,
+                // created_at is immutable — restored from the saved state when available,
+                // falls back to None until the first successful fetch populates it.
+                created_at: saved.created_at.clone(),
                 // Restore persisted pipelines — refreshed on each MR fetch.
                 pipelines: saved.pipelines.clone(),
                 // On startup, no MR is considered recently updated.
@@ -1302,6 +1305,7 @@ impl App {
                     web_url: String::new(),
                     labels: vec![],
                     updated_at: None,
+                    created_at: None,
                     source_branch: "unknown".to_string(),
                     target_branch: "unknown".to_string(),
                     merged_by: None,
@@ -1456,6 +1460,7 @@ impl App {
                 mr.web_url = data.web_url;
                 mr.labels = data.labels;
                 mr.updated_at = data.updated_at;
+                mr.created_at = data.created_at;
                 mr.source_branch = data.source_branch;
                 mr.target_branch = data.target_branch;
                 mr.state = data.state;
@@ -1622,7 +1627,7 @@ impl App {
                                 labels: mr.labels.clone(),
                                 target_branch: mr.target_branch.clone(),
                                 state: format!("{:?}", mr.state).to_lowercase(),
-                                created_at: None, // not stored on TrackedMr — available via GitLab API
+                                created_at: mr.created_at.clone(),
                                 merged_at: mr.merged_at.clone(),
                                 updated_at: mr.updated_at.clone(),
                                 files_changed: diff_stats.map(|d| d.files_changed).unwrap_or(0),
@@ -1723,6 +1728,7 @@ impl App {
                         web_url: String::new(),
                         labels: vec![],
                         updated_at: None,
+                        created_at: None,
                         source_branch: "unknown".to_string(),
                         target_branch: "unknown".to_string(),
                         merged_by: None,
@@ -1732,8 +1738,7 @@ impl App {
                         user_notes_count: 0,
                         // New MRs start unflagged.
                         flagged: false,
-                        diff_stats: None,
-                        // Ticket resolved live after each MR fetch — never pre-populated.
+                        diff_stats: None, // Ticket resolved live after each MR fetch — never pre-populated.
                         linked_ticket: None,
                     });
                     spawn_mr_fetch(
