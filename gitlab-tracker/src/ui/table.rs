@@ -546,11 +546,11 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         _ => app.base_url.clone(),
     };
 
-    // Badge shown in the title bar when `discover_new_mrs = true` is set in projects.toml.
+    // Badge shown in the title bar reflecting the `discover_new_mrs` setting in projects.toml.
     let discovery_badge = if app.discovery_enabled {
         " │ 🔍 Auto-polling ON"
     } else {
-        ""
+        " │ 🔍 Auto-polling OFF"
     };
 
     let title_text = format!(
