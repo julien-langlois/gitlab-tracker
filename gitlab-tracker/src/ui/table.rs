@@ -546,12 +546,20 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         _ => app.base_url.clone(),
     };
 
+    // Badge shown in the title bar when `discover_new_mrs = true` is set in projects.toml.
+    let discovery_badge = if app.discovery_enabled {
+        " │ 🔍 Auto-polling ON"
+    } else {
+        ""
+    };
+
     let title_text = format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02}{} │ {} │ Sort: {} {} │ Filter: {}{}",
+        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02}{}{} │ {} │ Sort: {} {} │ Filter: {}{}",
         project_label,
         mins,
         secs,
         api_calls_label,
+        discovery_badge,
         mr_count_label,
         sort_label,
         order_label,
