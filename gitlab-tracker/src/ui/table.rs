@@ -1,4 +1,4 @@
-use crate::app::{App, SortColumn, SortOrder};
+use crate::app::App;
 use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
@@ -457,116 +457,6 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         constraints.push(Constraint::Fill(1));
     }
 
-    let mins = app.time_left / 60;
-    let secs = app.time_left % 60;
-
-    let sort_label = match app.sort_column {
-        SortColumn::UpdatedAt => "Updated ↕",
-        SortColumn::Id => "ID ↕",
-        SortColumn::Milestone => "Milestone ↕",
-        SortColumn::Title => "Title ↕",
-    };
-    let order_label = match app.sort_order {
-        SortOrder::Ascending => "↑",
-        SortOrder::Descending => "↓",
-    };
-
-    let filter_label = app.active_filter.label(&app.filter_defs);
-
-    // Show "X/Y MRs" when a filter is active, plain "Y MRs" otherwise.
-    let total = app.mrs.len();
-    let visible = app.visible_mrs().count();
-    let mr_count_label = if visible < total {
-        format!("{}/{} MRs", visible, total)
-    } else {
-        format!("{} MRs", total)
-    };
-
-    // Spinner frames cycled on every tick while fetches are pending.
-    // Shown both during the initial load (pending_initial_fetches) and auto-refresh cycles
-    // (pending_refresh_fetches) so the user always knows when the data is being refreshed.
-    const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-    let pending = app.pending_initial_fetches + app.pending_refresh_fetches;
-
-    // Build the API call counter label.
-    // GitLab and tracker calls are displayed separately so the user can distinguish
-    // between the two backends. The cold-start estimate (computed from saved state
-    // before the first refresh) is shown in parentheses with a 🚀 suffix.
-    let api_calls_label = {
-        let gl = app.estimated_gitlab_calls;
-        let tr = app.estimated_tracker_calls;
-
-        let gl_startup = app.startup_gitlab_estimate.unwrap_or(gl);
-        let tr_startup = app.startup_tracker_estimate.unwrap_or(tr);
-
-        // GitLab segment — always shown.
-        let gl_part = if gl != gl_startup {
-            format!("GL ~{} ({}🚀)", gl, gl_startup)
-        } else {
-            format!("GL ~{}", gl)
-        };
-
-        // Tracker segment — only shown when a tracker provider is configured.
-        let tr_part = if app.tracker.is_some() {
-            let s = if tr != tr_startup {
-                format!(
-                    " │ {} ~{} ({}🚀)",
-                    app.tracker.as_ref().map(|p| p.name()).unwrap_or("Tracker"),
-                    tr,
-                    tr_startup
-                )
-            } else {
-                format!(
-                    " │ {} ~{}",
-                    app.tracker.as_ref().map(|p| p.name()).unwrap_or("Tracker"),
-                    tr
-                )
-            };
-            s
-        } else {
-            String::new()
-        };
-
-        format!(" │ 🌐 {}{}", gl_part, tr_part)
-    };
-
-    let loading_indicator = if pending > 0 {
-        // Divide by 3 to slow down the animation to ~7 fps — fast enough to feel smooth,
-        // slow enough for the braille frames to be readable (not a blur).
-        let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
-        format!(" {} Loading ({} pending)…", frame, pending)
-    } else {
-        String::new()
-    };
-
-    // Show "Project Name (URL)" when a name is configured, otherwise just the URL.
-    let project_label = match &app.project_name {
-        Some(name) if !name.is_empty() => format!("{} ({})", name, app.base_url),
-        _ => app.base_url.clone(),
-    };
-
-    // Badge shown in the title bar reflecting the `discover_new_mrs` setting in projects.toml.
-    let discovery_badge = if app.discovery_enabled {
-        " │ 🔍 Auto-polling ON"
-    } else {
-        " │ 🔍 Auto-polling OFF"
-    };
-
-    let title_text = format!(
-        " GitLab MR Tracker ({}) │ 🔄 Next refresh: {:02}:{:02}{}{} │ {} │ Sort: {} {} │ Filter: {}{}",
-        project_label,
-        mins,
-        secs,
-        api_calls_label,
-        discovery_badge,
-        mr_count_label,
-        sort_label,
-        order_label,
-        filter_label,
-        loading_indicator,
-    );
-
     Table::new(rows, constraints)
         .header(header)
         .row_highlight_style(
@@ -575,9 +465,5 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("> ")
-        .block(
-            ratatui::widgets::Block::default()
-                .borders(ratatui::widgets::Borders::ALL)
-                .title(title_text),
-        )
+        .block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL))
 }

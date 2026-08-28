@@ -2,6 +2,7 @@ pub mod help_popup;
 pub mod inspector;
 #[cfg(feature = "stats")]
 pub mod stats;
+pub mod status_bar;
 pub mod table;
 pub mod theme;
 pub mod tracker;
@@ -44,9 +45,19 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
         .split(chunks[0]);
 
-    // --- Left Pane: Main Table ---
-    let table = table::render_table(app, main_chunks[0]);
-    f.render_stateful_widget(table, main_chunks[0], &mut app.table_state);
+    // --- Left Pane: status bar (1 line) + main Table ---
+    // The status bar is a dedicated Paragraph row so each segment can be coloured
+    // independently, instead of cramming everything into a plain .title() string.
+    let left_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Min(0)])
+        .split(main_chunks[0]);
+
+    let status_bar = status_bar::render_status_bar(app);
+    f.render_widget(status_bar, left_chunks[0]);
+
+    let table = table::render_table(app, left_chunks[1]);
+    f.render_stateful_widget(table, left_chunks[1], &mut app.table_state);
 
     // --- Right Column: split vertically when a tracker ticket is available ---
     let has_ticket = app
