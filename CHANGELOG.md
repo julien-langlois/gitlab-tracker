@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.6] - 2026-08-28
+
+### 🎨 Theme
+
+- **ui**: Automatic light/dark theme detection via OSC 11 terminal probing at startup — the entire UI palette adapts to the terminal background colour (dark or light). Calibrated on Solarized Light; dark palette unchanged.
+
+### 🚀 Features
+
+- **tracker**: Add opt-in automatic MR discovery via `discover_new_mrs` — when enabled, the app auto-polls GitLab for new MRs targeting watched branches and adds them to the dashboard without manual input
+- **ui**: Always display the auto-polling badge in the table title bar — the `[AUTO-POLL ON]` / `[AUTO-POLL OFF]` indicator is now always visible, not just when the feature is enabled
+- **inspector**: Persist and display MR `created_at` date in the Context Inspector
+- **stats**: Cycle time P75, backfill `created_at`, multi-block dashboard layout with fixed status bar and `[R]` refresh shortcut
+
+### 🐛 Bug Fixes
+
+- **discovery**: Filter auto-polled MRs by creation date to avoid flooding the dashboard with old MRs on first enable
+- **stats**: Fix duplicate snapshots and improve forecast / group metrics accuracy
+
+### 🔨 Refactor
+
+- **ui**: Extract status bar into a dedicated `Paragraph` widget — cleaner separation from the table layout
+- **stats**: Group stats settings under `[project.stats]` sub-table in `projects.toml` — existing flat keys are no longer supported; migrate accordingly
+
+### ⚙️ Miscellaneous
+
+- **refactor**: Replace useless `format!` macro calls with `.to_string()` throughout
+
 ## [0.4.5] - 2026-08-26
 
 ### 🚀 Features

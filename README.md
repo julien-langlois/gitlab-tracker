@@ -583,10 +583,12 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
     ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
     └── ui/
-        ├── mod.rs       # Root layout renderer & input bar (mode-aware)
-        ├── table.rs     # Main MR table widget
-        ├── inspector.rs # Upper-right pane: MR metadata & pipeline history
-        └── tracker.rs   # Lower-right pane: linked ticket details & time log (TrackerLabelColors)
+        ├── mod.rs        # Root layout renderer & input bar (mode-aware)
+        ├── theme.rs      # ThemeMode enum, Palette struct — dark/light colour sets; OSC 11 detection wired in main.rs
+        ├── status_bar.rs # One-line status bar above the table (project, timer, API counts, sort, filter, spinner)
+        ├── table.rs      # Main MR table widget
+        ├── inspector.rs  # Upper-right pane: MR metadata & pipeline history
+        └── tracker.rs    # Lower-right pane: linked ticket details & time log (TrackerLabelColors)
 
 gitlab-tracker-core/             # Library crate — shared trait contracts, zero UI dependency
 └── src/
