@@ -3,7 +3,7 @@ use crate::models::{
     DifficultyProfile, GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr,
 };
 use crate::ui::table::badge_label;
-use crate::ui::theme;
+use crate::ui::theme::Palette;
 use crate::utils::format_relative_date;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
@@ -12,17 +12,17 @@ use ratatui::text::{Line, Span, Text};
 ///
 /// Shows the last fetched pipelines for the selected MR with their jobs,
 /// grouped by pipeline run. Displayed when the user presses [P].
-pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
+pub fn render_pipelines_text(mr: &TrackedMr, palette: Palette) -> Text<'static> {
     let mut lines = vec![
         Line::from(vec![
             Span::styled(
                 format!("Pipelines — MR !{}", mr.id),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             ),
             // Remind the user that only the 5 most recent pipelines are fetched.
-            Span::styled("  (last 5)", Style::default().fg(theme::MUTED_DIM)),
+            Span::styled("  (last 5)", Style::default().fg(palette.muted_dim)),
         ]),
         Line::from(vec![Span::raw("")]),
     ];
@@ -30,11 +30,11 @@ pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
     if mr.pipelines.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No pipelines found for this MR.",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(palette.muted),
         )]));
     } else {
         for pipeline in &mr.pipelines {
-            lines.extend(render_pipeline_block(pipeline));
+            lines.extend(render_pipeline_block(pipeline, palette));
             lines.push(Line::from(vec![Span::raw("")]));
         }
     }
@@ -43,8 +43,8 @@ pub fn render_pipelines_text(mr: &TrackedMr) -> Text<'static> {
 }
 
 /// Renders a single pipeline block with its status header and job list.
-fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
-    let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
+fn render_pipeline_block(pipeline: &Pipeline, palette: Palette) -> Vec<Line<'static>> {
+    let (status_icon, status_color) = pipeline_status_style(&pipeline.status, palette);
 
     // Format the creation timestamp as "YYYY-MM-DD HH:MM  (relative label)".
     let date_display = pipeline
@@ -65,9 +65,7 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
     let mut lines = vec![Line::from(vec![
         Span::styled(
             format!("#{} ", pipeline.id),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(palette.fg).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             status_icon,
@@ -77,15 +75,15 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
         ),
         Span::styled(
             format!("  {}", date_display),
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(palette.muted_dim),
         ),
-        Span::styled(duration_suffix, Style::default().fg(theme::MUTED_DIM)),
+        Span::styled(duration_suffix, Style::default().fg(palette.muted_dim)),
     ])];
 
     if pipeline.jobs.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "  No jobs.",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(palette.muted),
         )]));
         return lines;
     }
@@ -98,12 +96,12 @@ fn render_pipeline_block(pipeline: &Pipeline) -> Vec<Line<'static>> {
             lines.push(Line::from(vec![Span::styled(
                 format!("  ▸ {}", current_stage),
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(palette.accent_yellow)
                     .add_modifier(Modifier::BOLD),
             )]));
         }
 
-        let (job_icon, job_color) = job_status_style(&job.status);
+        let (job_icon, job_color) = job_status_style(&job.status, palette);
         let duration = job
             .duration
             .map(|d| format!(" ({:.0}s)", d))
@@ -153,30 +151,30 @@ fn format_pipeline_duration(secs: f64) -> String {
 }
 
 /// Maps a `PipelineState` to a display icon and its colour.
-fn pipeline_status_style(state: &PipelineState) -> (&'static str, Color) {
+fn pipeline_status_style(state: &PipelineState, palette: Palette) -> (&'static str, Color) {
     match state {
-        PipelineState::Success => ("✔ passed", Color::Green),
-        PipelineState::Failed => ("✘ failed", Color::Red),
-        PipelineState::Running => ("⟳ running", Color::Cyan),
-        PipelineState::Pending => ("◔ pending", Color::Yellow),
-        PipelineState::Canceled => ("⊘ canceled", theme::MUTED_INACTIVE),
-        PipelineState::Skipped => ("⊝ skipped", theme::MUTED_INACTIVE),
-        PipelineState::Created => ("○ created", Color::White),
-        PipelineState::Unknown => ("? unknown", theme::MUTED_INACTIVE),
+        PipelineState::Success => ("✔ passed", palette.accent_green),
+        PipelineState::Failed => ("✘ failed", palette.accent_red),
+        PipelineState::Running => ("⟳ running", palette.accent_cyan),
+        PipelineState::Pending => ("◔ pending", palette.accent_yellow),
+        PipelineState::Canceled => ("⊘ canceled", palette.muted_inactive),
+        PipelineState::Skipped => ("⊝ skipped", palette.muted_inactive),
+        PipelineState::Created => ("○ created", palette.fg),
+        PipelineState::Unknown => ("? unknown", palette.muted_inactive),
     }
 }
 
 /// Maps a job status string (as returned by the GitLab API) to icon + colour.
-fn job_status_style(status: &str) -> (&'static str, Color) {
+fn job_status_style(status: &str, palette: Palette) -> (&'static str, Color) {
     match status {
-        "success" => ("✔", Color::Green),
-        "failed" => ("✘", Color::Red),
-        "running" => ("⟳", Color::Cyan),
-        "pending" => ("◔", Color::Yellow),
-        "canceled" => ("⊘", theme::MUTED_INACTIVE),
-        "skipped" => ("⊝", theme::MUTED_INACTIVE),
-        "created" => ("○", Color::White),
-        _ => ("?", theme::MUTED_INACTIVE),
+        "success" => ("✔", palette.accent_green),
+        "failed" => ("✘", palette.accent_red),
+        "running" => ("⟳", palette.accent_cyan),
+        "pending" => ("◔", palette.accent_yellow),
+        "canceled" => ("⊘", palette.muted_inactive),
+        "skipped" => ("⊝", palette.muted_inactive),
+        "created" => ("○", palette.fg),
+        _ => ("?", palette.muted_inactive),
     }
 }
 
@@ -199,18 +197,18 @@ pub fn create_chip_span(
 }
 
 /// Renders a section header separator with a coloured title.
-fn section_header(title: &'static str) -> Line<'static> {
+fn section_header(title: &'static str, palette: Palette) -> Line<'static> {
     Line::from(vec![
-        Span::styled("── ", Style::default().fg(theme::MUTED_DIM)),
+        Span::styled("── ", Style::default().fg(palette.muted_dim)),
         Span::styled(
             title,
             Style::default()
-                .fg(Color::Yellow)
+                .fg(palette.accent_yellow)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             " ──────────────────────────────",
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(palette.muted_dim),
         ),
     ])
 }
@@ -221,11 +219,15 @@ fn section_header(title: &'static str) -> Line<'static> {
 /// the project's `DifficultyProfile`. Always rendered, even when
 /// `visible_columns.diff_stats` is off — the side panel is the canonical
 /// place for this information.
-fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<Line<'static>> {
+fn render_diff_stats_lines(
+    mr: &TrackedMr,
+    profile: &DifficultyProfile,
+    palette: Palette,
+) -> Vec<Line<'static>> {
     let Some(ref stats) = mr.diff_stats else {
         return vec![Line::from(vec![
             Span::raw("Diff     : "),
-            Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+            Span::styled("Loading…", Style::default().fg(palette.muted)),
         ])];
     };
 
@@ -247,12 +249,19 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
         "░".repeat(10usize.saturating_sub(filled))
     );
 
-    // Singular/plural label — 0 means the field was not yet fetched (stale cache),
-    // so we fall back to "Commits" and show a loading indicator instead.
+    let bar_color = if difficulty_score < 0.33 {
+        palette.accent_green
+    } else if difficulty_score < 0.66 {
+        palette.accent_yellow
+    } else {
+        palette.accent_red
+    };
+
+    // Singular/plural label — 0 means the field was not yet fetched (stale cache).
     let commits_line = if stats.commits_count == 0 {
         Line::from(vec![
             Span::raw("Commits  : "),
-            Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+            Span::styled("Loading…", Style::default().fg(palette.muted)),
         ])
     } else {
         let commit_label = if stats.commits_count == 1 {
@@ -265,7 +274,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
             Span::styled(
                 stats.commits_count.to_string(),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             ),
         ])
@@ -279,7 +288,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
                 Span::styled(
                     "✔ Up to date",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(palette.accent_green)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
@@ -288,7 +297,7 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
                 Span::styled(
                     "✔ Up to date",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(palette.accent_green)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
@@ -310,14 +319,13 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
             }
             None => Line::from(vec![
                 Span::raw("Behind   : "),
-                Span::styled("Loading…", Style::default().fg(theme::MUTED)),
+                Span::styled("Loading…", Style::default().fg(palette.muted)),
             ]),
         }
     } else {
-        // Not applicable for merged / closed MRs.
         Line::from(vec![
             Span::raw("Behind   : "),
-            Span::styled("—", Style::default().fg(theme::MUTED)),
+            Span::styled("—", Style::default().fg(palette.muted)),
         ])
     };
 
@@ -326,34 +334,23 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
             Span::raw("Diff     : "),
             Span::styled(
                 format!("{} files  ", stats.files_changed),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(palette.fg).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("+{}", stats.additions),
-                Style::default().fg(Color::Green),
+                Style::default().fg(palette.accent_green),
             ),
             Span::raw("  "),
             Span::styled(
                 format!("-{}", stats.deletions),
-                Style::default().fg(Color::Red),
+                Style::default().fg(palette.accent_red),
             ),
         ]),
         commits_line,
         behind_line,
         Line::from(vec![
             Span::raw("Effort   : "),
-            Span::styled(
-                bar,
-                Style::default().fg(if difficulty_score < 0.33 {
-                    Color::Green
-                } else if difficulty_score < 0.66 {
-                    Color::Yellow
-                } else {
-                    Color::Red
-                }),
-            ),
+            Span::styled(bar, Style::default().fg(bar_color)),
             Span::raw("  "),
             Span::styled(
                 format!(" {} ", diff_icon),
@@ -364,13 +361,17 @@ fn render_diff_stats_lines(mr: &TrackedMr, profile: &DifficultyProfile) -> Vec<L
             ),
             Span::styled(
                 format!("  ({})", profile.name),
-                Style::default().fg(theme::MUTED_DIM),
+                Style::default().fg(palette.muted_dim),
             ),
         ]),
     ]
 }
 
-pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'static> {
+pub fn render_safe_inspector_text(
+    mr: &TrackedMr,
+    config: &AppConfig,
+    palette: Palette,
+) -> Text<'static> {
     // Format the updated_at timestamp as "YYYY-MM-DD HH:MM  (relative label)".
     let updated_at_display = mr
         .updated_at
@@ -412,11 +413,11 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // ── SECTION 1: Identity ──────────────────────────────────────────────────
     let mut lines = vec![
-        section_header("Identity"),
+        section_header("Identity", palette),
         Line::from(vec![Span::styled(
             format!("MR ID    : !{}", mr.id),
             Style::default()
-                .fg(Color::Cyan)
+                .fg(palette.accent_cyan)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         )]),
         Line::from(vec![
@@ -434,26 +435,26 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             Span::styled(
                 mr.source_branch.clone(),
                 Style::default()
-                    .fg(Color::LightBlue)
+                    .fg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  →  "),
-            Span::styled(mr.target_branch.clone(), Style::default().fg(theme::MUTED)),
+            Span::styled(mr.target_branch.clone(), Style::default().fg(palette.muted)),
         ]),
         Line::from(vec![
             Span::raw("Clone    : "),
-            Span::styled(git_clone_cmd.clone(), Style::default().fg(theme::MUTED)),
+            Span::styled(git_clone_cmd.clone(), Style::default().fg(palette.muted)),
             Span::raw("  "),
             Span::styled(
                 "[Y] copy",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(palette.accent_yellow)
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
             Span::raw("URL      : "),
-            Span::styled(mr.web_url.clone(), Style::default().fg(theme::MUTED)),
+            Span::styled(mr.web_url.clone(), Style::default().fg(palette.muted)),
         ]),
         Line::from(vec![
             Span::raw("HEAD SHA : "),
@@ -461,10 +462,10 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 Some(sha) => Span::styled(
                     sha.get(..8).unwrap_or(sha).to_string(),
                     Style::default()
-                        .fg(Color::LightBlue)
+                        .fg(palette.accent_cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
-                None => Span::styled("—", Style::default().fg(theme::MUTED)),
+                None => Span::styled("—", Style::default().fg(palette.muted)),
             },
         ]),
     ];
@@ -475,7 +476,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     // user is highlighted with a distinct cyan background badge so it stands out
     // at a glance — without affecting the Redmine panel.
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("People"));
+    lines.push(section_header("People", palette));
 
     // Helper: returns `true` when a display string (e.g. "Alice (@jdoe)") belongs
     // to the configured GitLab user. Matches on the "@<username>" substring so it
@@ -496,7 +497,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 format!(" {} ", display),
                 Style::default()
                     .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .bg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             )
         } else {
@@ -517,7 +518,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     if mr.reviewers.is_empty() {
         lines.push(Line::from(vec![
             Span::raw("Reviewers: "),
-            Span::styled("None", Style::default().fg(theme::MUTED)),
+            Span::styled("None", Style::default().fg(palette.muted)),
         ]));
     } else {
         for (i, reviewer) in mr.reviewers.iter().enumerate() {
@@ -531,7 +532,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // Notes / comments indicator — always shown, highlights when non-zero.
     let (notes_text, notes_fg, notes_bg) = if mr.user_notes_count == 0 {
-        ("  ✔ No comments  ".to_string(), theme::MUTED, Color::Black)
+        ("  ✔ No comments  ".to_string(), palette.muted, Color::Black)
     } else {
         (
             format!("  💬 {} comment(s) — review pending  ", mr.user_notes_count),
@@ -552,16 +553,19 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // ── SECTION 3: Planning ──────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Planning"));
+    lines.push(section_header("Planning", palette));
     lines.push(Line::from(vec![
         Span::raw("Milestone: "),
-        Span::styled(mr.milestone.clone(), Style::default().fg(Color::Cyan)),
+        Span::styled(
+            mr.milestone.clone(),
+            Style::default().fg(palette.accent_cyan),
+        ),
     ]));
 
     // Milestone due date — show absolute date + relative label, with urgency colouring.
     // The due_date field is YYYY-MM-DD (date only), so we append T00:00:00Z for parsing.
     let (due_text, due_color) = match mr.milestone_due_date.as_deref() {
-        None | Some("") => ("Not set".to_string(), Color::DarkGray),
+        None | Some("") => ("Not set".to_string(), palette.muted_dim),
         Some(date) => {
             // Colour the date based on proximity: red if past, yellow if within 7 days,
             // green otherwise. Lexicographic comparison works for YYYY-MM-DD format.
@@ -592,7 +596,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // ── SECTION 4: Status ────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Status"));
+    lines.push(section_header("Status", palette));
 
     // Mergeability — only meaningful for open MRs.
     // badge_label() centers the text to BADGE_WIDTH, matching the State badge width.
@@ -647,14 +651,14 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
                 format!(" {} ", merged_by_display),
                 Style::default()
                     .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .bg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             )
         } else {
             Span::styled(
                 merged_by_display,
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             )
         };
@@ -662,7 +666,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         lines.push(Line::from(vec![Span::raw("Merged by: "), merged_by_span]));
         lines.push(Line::from(vec![
             Span::raw("Merged at: "),
-            Span::styled(merged_at_display, Style::default().fg(Color::Magenta)),
+            Span::styled(merged_at_display, Style::default().fg(palette.accent_cyan)),
         ]));
     }
 
@@ -678,12 +682,15 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         .unwrap_or_else(|| "Unknown".to_string());
     lines.push(Line::from(vec![
         Span::raw("Created  : "),
-        Span::styled(created_at_display, Style::default().fg(Color::White)),
+        Span::styled(created_at_display, Style::default().fg(palette.fg)),
     ]));
 
     lines.push(Line::from(vec![
         Span::raw("Updated  : "),
-        Span::styled(updated_at_display, Style::default().fg(Color::Yellow)),
+        Span::styled(
+            updated_at_display,
+            Style::default().fg(palette.accent_yellow),
+        ),
         Span::raw("  "),
         Span::styled(
             badge_icon,
@@ -696,13 +703,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     // Last pipeline summary — shows status + total duration without switching to [P].
     // Only rendered when at least one pipeline is available for this MR.
     if let Some(pipeline) = mr.pipelines.first() {
-        let (status_icon, status_color) = pipeline_status_style(&pipeline.status);
+        let (status_icon, status_color) = pipeline_status_style(&pipeline.status, palette);
 
         // Reuse the shared helper — no duplicated aggregation logic here.
         let duration_span = match pipeline_total_duration(pipeline) {
             Some(secs) => Span::styled(
                 format!("  {}", format_pipeline_duration(secs)),
-                Style::default().fg(theme::MUTED_DIM),
+                Style::default().fg(palette.muted_dim),
             ),
             None => Span::raw(""),
         };
@@ -711,7 +718,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
         let hint_span = Span::styled(
             "  [P] details",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(palette.accent_yellow)
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -719,9 +726,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             Span::raw("Pipeline : "),
             Span::styled(
                 format!("#{} ", pipeline.id),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(palette.fg).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 status_icon,
@@ -736,12 +741,16 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
 
     // ── SECTION 4b: Diff & Effort ─────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Diff & Effort"));
-    lines.extend(render_diff_stats_lines(mr, &config.complexity_profile));
+    lines.push(section_header("Diff & Effort", palette));
+    lines.extend(render_diff_stats_lines(
+        mr,
+        &config.complexity_profile,
+        palette,
+    ));
 
     // ── SECTION 5: Labels ────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Labels"));
+    lines.push(section_header("Labels", palette));
 
     if !mr.labels.is_empty() {
         let mut label_spans: Vec<Span<'static>> = vec![];
@@ -759,19 +768,19 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
     } else {
         lines.push(Line::from(vec![Span::styled(
             "None",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(palette.muted),
         )]));
     }
 
     // ── Description ──────────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
-    lines.push(section_header("Description"));
+    lines.push(section_header("Description", palette));
     lines.push(Line::from(vec![Span::raw("")]));
 
     if mr.description.trim().is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No description text provided.",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(palette.muted),
         )]));
         return Text::from(lines);
     }
@@ -784,7 +793,7 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             lines.push(Line::from(vec![Span::styled(
                 text.to_string(),
                 Style::default()
-                    .fg(ratatui::style::Color::Cyan)
+                    .fg(palette.accent_cyan)
                     .add_modifier(Modifier::BOLD),
             )]));
         } else if trimmed.starts_with("### ") {
@@ -792,13 +801,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             lines.push(Line::from(vec![Span::styled(
                 text.to_string(),
                 Style::default()
-                    .fg(ratatui::style::Color::Yellow)
+                    .fg(palette.accent_yellow)
                     .add_modifier(Modifier::BOLD),
             )]));
         } else if trimmed == "---" {
             lines.push(Line::from(vec![Span::styled(
                 "───────────────────────────────────",
-                Style::default().fg(ratatui::style::Color::DarkGray),
+                Style::default().fg(palette.muted_dim),
             )]));
         } else {
             let mut spans = Vec::new();
@@ -806,13 +815,13 @@ pub fn render_safe_inspector_text(mr: &TrackedMr, config: &AppConfig) -> Text<'s
             if trimmed.starts_with("- ") {
                 spans.push(Span::styled(
                     " • ",
-                    Style::default().fg(ratatui::style::Color::Yellow),
+                    Style::default().fg(palette.accent_yellow),
                 ));
                 line_content = raw_line.replacen("- ", "", 1);
             } else if trimmed.starts_with("* ") {
                 spans.push(Span::styled(
                     " • ",
-                    Style::default().fg(ratatui::style::Color::Yellow),
+                    Style::default().fg(palette.accent_yellow),
                 ));
                 line_content = raw_line.replacen("* ", "", 1);
             }

@@ -436,6 +436,11 @@ pub struct App {
     /// without a round-trip query on every `Tick`.
     #[cfg(feature = "stats")]
     pub stats_last_refresh_date: std::collections::HashMap<String, String>,
+    /// Active colour palette — resolved once at startup from the terminal background
+    /// colour (OSC 11 via `terminal-colorsaurus`). Falls back to the dark palette
+    /// when the terminal does not respond. Forwarded to renderers that need it.
+    pub theme: crate::ui::theme::Palette,
+
     /// When `true`, the discovery poller is active: at each refresh cycle the app
     /// queries `GET /projects/:id/merge_requests?state=opened` and automatically
     /// adds any MR not yet in the tracking list.
@@ -461,6 +466,7 @@ impl App {
         project_name: Option<String>,
         refresh_interval_secs: u64,
         mut config: AppConfig,
+        theme: crate::ui::theme::Palette,
     ) -> Self {
         let mut table_state = TableState::default();
         table_state.select(None);
@@ -518,6 +524,7 @@ impl App {
             time_entries: Vec::new(),
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
+            theme,
             spinner_frame: 0,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),

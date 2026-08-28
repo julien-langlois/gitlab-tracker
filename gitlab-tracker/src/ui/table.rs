@@ -109,6 +109,9 @@ fn state_badge(
 pub fn render_table(app: &App, area: Rect) -> Table<'static> {
     let _ = area; // Reserved for future use (e.g. dynamic column width)
 
+    // Resolve the active palette once — used for header and all row cells.
+    let palette = app.theme;
+
     // Resolve column visibility via the inventory-registered ColumnDef ids.
     // This replaces the old fixed-field `VisibleColumns` struct accesses.
     let col = |id: &str| app.config.visible_columns.is_visible(id);
@@ -192,22 +195,22 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             // Build the title cell — prepend a coloured flag chevron for flagged MRs.
             let title_cell = if mr.flagged {
                 let title_color = match mr.status {
-                    MrStatus::Error => Color::Red,
-                    _ => Color::White,
+                    MrStatus::Error => palette.accent_red,
+                    _ => palette.fg,
                 };
                 Cell::from(Line::from(vec![
                     Span::styled(
                         "★ ",
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(palette.accent_yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(mr.title.clone(), Style::default().fg(title_color)),
                 ]))
             } else {
                 Cell::from(mr.title.clone()).fg(match mr.status {
-                    MrStatus::Error => Color::Red,
-                    _ => Color::White,
+                    MrStatus::Error => palette.accent_red,
+                    _ => palette.fg,
                 })
             };
 

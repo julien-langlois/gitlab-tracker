@@ -547,6 +547,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         ..config
     };
 
+    // Demo mode always uses the dark palette — no terminal query needed.
+    let demo_palette = crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark);
     let mut app = App::new(
         "demo-token".into(),
         "123456".into(),
@@ -554,6 +556,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         None,
         900,
         demo_config,
+        demo_palette,
     );
 
     app.branches = vec!["main".into(), "staging".into(), "production".into()];

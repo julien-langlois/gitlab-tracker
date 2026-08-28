@@ -3,17 +3,23 @@
 //! Each piece of information is a coloured [`Span`] separated by a dim `│` divider,
 //! which allows per-segment colours (e.g. red timer when < 30 s) without cramming
 //! everything into a plain `.title()` string on the [`Block`].
+//!
+//! All colours are sourced from `app.theme` (a [`crate::ui::theme::Palette`]) so
+//! the bar remains readable on both dark and light terminal backgrounds.
+//! No raw `Color::White / Cyan / Green / Yellow / Red` — those are ANSI slots
+//! re-interpreted by the terminal palette and become invisible on Solarized Light.
 
 use crate::app::{App, SortColumn, SortOrder};
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
 
 /// Dim separator used between status bar segments.
-fn sep() -> Span<'static> {
-    Span::styled(" │ ", Style::default().fg(Color::DarkGray))
+/// Colour is taken from the active palette so it adapts to dark/light themes.
+fn sep(muted_dim: ratatui::style::Color) -> Span<'static> {
+    Span::styled(" │ ", Style::default().fg(muted_dim))
 }
 
 /// Renders the one-line status bar shown above the MR table.
@@ -28,6 +34,16 @@ fn sep() -> Span<'static> {
 ///   7. Active filter label
 ///   8. Loading spinner (only while fetches are pending)
 pub fn render_status_bar(app: &App) -> Paragraph<'static> {
+    let palette = app.theme;
+    let fg = palette.fg;
+    let muted = palette.muted;
+    let muted_dim = palette.muted_dim;
+    let muted_inactive = palette.muted_inactive;
+    let accent_cyan = palette.accent_cyan;
+    let accent_green = palette.accent_green;
+    let accent_yellow = palette.accent_yellow;
+    let accent_red = palette.accent_red;
+
     let mut spans: Vec<Span<'static>> = Vec::new();
 
     // ── 1. Project label ──────────────────────────────────────────────────────
@@ -37,23 +53,21 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     };
     spans.push(Span::styled(
         project_label,
-        Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD),
+        Style::default().fg(fg).add_modifier(Modifier::BOLD),
     ));
 
     // ── 2. Next refresh countdown ─────────────────────────────────────────────
     let mins = app.time_left / 60;
     let secs = app.time_left % 60;
     let timer_color = if app.time_left < 30 {
-        Color::Red
+        accent_red
     } else if app.time_left < 60 {
-        Color::Yellow
+        accent_yellow
     } else {
-        Color::Green
+        accent_green
     };
-    spans.push(sep());
-    spans.push(Span::styled("🔄 ", Style::default().fg(Color::DarkGray)));
+    spans.push(sep(muted_dim));
+    spans.push(Span::styled("🔄 ", Style::default().fg(muted)));
     spans.push(Span::styled(
         format!("{:02}:{:02}", mins, secs),
         Style::default()
@@ -65,19 +79,16 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     let gl = app.estimated_gitlab_calls;
     let gl_startup = app.startup_gitlab_estimate.unwrap_or(gl);
 
-    spans.push(sep());
-    spans.push(Span::styled(
-        "🌐 GL ~",
-        Style::default().fg(Color::DarkGray),
-    ));
+    spans.push(sep(muted_dim));
+    spans.push(Span::styled("🌐 GL ~", Style::default().fg(muted)));
     spans.push(Span::styled(
         gl.to_string(),
-        Style::default().fg(Color::Cyan),
+        Style::default().fg(accent_cyan),
     ));
     if gl != gl_startup {
         spans.push(Span::styled(
             format!(" ({}🚀)", gl_startup),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(muted_dim),
         ));
     }
 
@@ -86,45 +97,38 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
         let tr = app.estimated_tracker_calls;
         let tr_startup = app.startup_tracker_estimate.unwrap_or(tr);
 
-        spans.push(sep());
+        spans.push(sep(muted_dim));
         spans.push(Span::styled(
             format!("{} ~", provider.name()),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(muted),
         ));
         spans.push(Span::styled(
             tr.to_string(),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(accent_cyan),
         ));
         if tr != tr_startup {
             spans.push(Span::styled(
                 format!(" ({}🚀)", tr_startup),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(muted_dim),
             ));
         }
     }
 
     // ── 4. Auto-polling badge ─────────────────────────────────────────────────
-    spans.push(sep());
+    spans.push(sep(muted_dim));
+    spans.push(Span::styled("🔍 Auto-polling ", Style::default().fg(muted)));
     if app.discovery_enabled {
-        spans.push(Span::styled(
-            "🔍 Auto-polling ",
-            Style::default().fg(Color::DarkGray),
-        ));
         spans.push(Span::styled(
             "ON",
             Style::default()
-                .fg(Color::Green)
+                .fg(accent_green)
                 .add_modifier(Modifier::BOLD),
         ));
     } else {
         spans.push(Span::styled(
-            "🔍 Auto-polling ",
-            Style::default().fg(Color::DarkGray),
-        ));
-        spans.push(Span::styled(
             "OFF",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(muted_inactive)
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -132,26 +136,24 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     // ── 5. MR count ───────────────────────────────────────────────────────────
     let total = app.mrs.len();
     let visible = app.visible_mrs().count();
-    spans.push(sep());
+    spans.push(sep(muted_dim));
     if visible < total {
         spans.push(Span::styled(
             format!("{}", visible),
             Style::default()
-                .fg(Color::Yellow)
+                .fg(accent_yellow)
                 .add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(
             format!("/{} MRs", total),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(muted),
         ));
     } else {
         spans.push(Span::styled(
             format!("{}", total),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(fg).add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(" MRs", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(" MRs", Style::default().fg(muted)));
     }
 
     // ── 6. Sort ───────────────────────────────────────────────────────────────
@@ -165,24 +167,21 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
         SortOrder::Ascending => "↑",
         SortOrder::Descending => "↓",
     };
-    spans.push(sep());
-    spans.push(Span::styled("Sort: ", Style::default().fg(Color::DarkGray)));
+    spans.push(sep(muted_dim));
+    spans.push(Span::styled("Sort: ", Style::default().fg(muted)));
     spans.push(Span::styled(
         format!("{} {}", sort_col, sort_arrow),
-        Style::default().fg(Color::White),
+        Style::default().fg(fg),
     ));
 
     // ── 7. Active filter ──────────────────────────────────────────────────────
     let filter_label = app.active_filter.label(&app.filter_defs);
-    spans.push(sep());
-    spans.push(Span::styled(
-        "Filter: ",
-        Style::default().fg(Color::DarkGray),
-    ));
+    spans.push(sep(muted_dim));
+    spans.push(Span::styled("Filter: ", Style::default().fg(muted)));
     spans.push(Span::styled(
         filter_label.to_string(),
         Style::default()
-            .fg(Color::LightGreen)
+            .fg(accent_green)
             .add_modifier(Modifier::BOLD),
     ));
 
@@ -191,11 +190,11 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     if pending > 0 {
         const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
-        spans.push(sep());
+        spans.push(sep(muted_dim));
         spans.push(Span::styled(
             format!("{} Loading ({} pending)…", frame, pending),
             Style::default()
-                .fg(Color::Yellow)
+                .fg(accent_yellow)
                 .add_modifier(Modifier::BOLD),
         ));
     }

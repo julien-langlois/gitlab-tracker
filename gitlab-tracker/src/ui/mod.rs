@@ -111,8 +111,10 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         app.table_state.selected().and_then(|i| {
             let mr = app.visible_mrs().nth(i)?;
             let text = match app.inspector_view {
-                InspectorView::MrInfo => inspector::render_safe_inspector_text(mr, &app.config),
-                InspectorView::Pipelines => inspector::render_pipelines_text(mr),
+                InspectorView::MrInfo => {
+                    inspector::render_safe_inspector_text(mr, &app.config, app.theme)
+                }
+                InspectorView::Pipelines => inspector::render_pipelines_text(mr, app.theme),
             };
             let line_count = text.lines.len() as u16;
             Some((text, line_count))
@@ -157,7 +159,9 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
                 let tracker_is_active = app.active_pane == ActivePane::Tracker;
                 let text = match app.tracker_view {
                     TrackerView::TicketInfo => tracker::render_ticket_info(mr, &app.tracker_colors),
-                    TrackerView::TimeLog => tracker::render_time_log(mr, &app.time_entries),
+                    TrackerView::TimeLog => {
+                        tracker::render_time_log(mr, &app.time_entries, app.theme.muted_comment)
+                    }
                 };
                 let line_count = text.lines.len() as u16;
                 Some((text, line_count, tracker_is_active))
@@ -382,11 +386,13 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         .split(inner);
 
     // Helper: border colour based on whether the field is focused.
+    // Uses the active palette so unfocused borders adapt to dark/light themes.
+    let muted_hint = app.theme.muted_hint;
     let field_style = |focused: bool| -> Style {
         if focused {
             Style::default().fg(Color::Yellow)
         } else {
-            Style::default().fg(theme::MUTED_HINT)
+            Style::default().fg(muted_hint)
         }
     };
 
@@ -484,12 +490,12 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         )])
     } else {
         Line::from(vec![
-            Span::styled(" [Tab] ", Style::default().fg(theme::MUTED_HINT)),
-            Span::styled("Next field  ", Style::default().fg(theme::MUTED_HINT)),
-            Span::styled("[Enter] ", Style::default().fg(theme::MUTED_HINT)),
-            Span::styled("Submit  ", Style::default().fg(theme::MUTED_HINT)),
-            Span::styled("[Esc] ", Style::default().fg(theme::MUTED_HINT)),
-            Span::styled("Cancel", Style::default().fg(theme::MUTED_HINT)),
+            Span::styled(" [Tab] ", Style::default().fg(muted_hint)),
+            Span::styled("Next field  ", Style::default().fg(muted_hint)),
+            Span::styled("[Enter] ", Style::default().fg(muted_hint)),
+            Span::styled("Submit  ", Style::default().fg(muted_hint)),
+            Span::styled("[Esc] ", Style::default().fg(muted_hint)),
+            Span::styled("Cancel", Style::default().fg(muted_hint)),
         ])
     };
     f.render_widget(Paragraph::new(bottom_line), zones[3]);

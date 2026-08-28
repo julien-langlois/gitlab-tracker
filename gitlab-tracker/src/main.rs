@@ -275,6 +275,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The guard must stay alive for the duration of the program.
     let _log_guard = init_logging();
 
+    // Detect the terminal colour scheme BEFORE ratatui::init() takes ownership of
+    // the terminal (raw mode). terminal-colorsaurus sends an OSC 11 query and reads
+    // back the background colour; it must run while the terminal is still in cooked
+    // mode. Falls back to Dark when the terminal does not respond (TTY, tmux, etc.).
+    let theme_mode = {
+        use terminal_colorsaurus::{theme_mode, QueryOptions};
+        match theme_mode(QueryOptions::default()) {
+            Ok(terminal_colorsaurus::ThemeMode::Light) => crate::ui::theme::ThemeMode::Light,
+            _ => crate::ui::theme::ThemeMode::Dark,
+        }
+    };
+    let palette = crate::ui::theme::Palette::for_mode(theme_mode);
+    tracing::info!(mode = ?theme_mode, "Terminal theme detected");
+
     // Enable mouse capture so we can detect hover and scroll events per pane.
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
@@ -294,6 +308,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         project_name,
         refresh_interval_secs,
         config,
+        palette,
     );
 
     // Branch resolution priority:

@@ -330,6 +330,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
 pub fn render_time_log(
     mr: &TrackedMr,
     entries: &[gitlab_tracker_core::TimeEntry],
+    muted_comment: ratatui::style::Color,
 ) -> Text<'static> {
     let mut lines = vec![
         Line::from(vec![Span::styled(
@@ -445,7 +446,7 @@ pub fn render_time_log(
                     Span::raw("  "),
                     Span::styled(
                         format!("\"{}\"", entry.comment),
-                        Style::default().fg(theme::MUTED_COMMENT),
+                        Style::default().fg(muted_comment),
                     ),
                 ]));
             }
