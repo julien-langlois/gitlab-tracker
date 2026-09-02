@@ -25,7 +25,7 @@ use gitlab_tracker_stats::correlation::{CorrelationResult, CorrelationStrength};
 use gitlab_tracker_stats::poisson::{AnomalySeverity, AnomalySignal, ThroughputForecast};
 use gitlab_tracker_stats::StatReport;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Gauge, Paragraph, Wrap},
@@ -451,113 +451,179 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
 /// Horizontal bar chart for cycle time by author.
 fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // Pass the inner block width so bar_line can compute all columns dynamically.
-    // Subtract 2 for the block borders.
-    let inner_width = (area.width as usize).saturating_sub(2);
 
+    let block = styled_block(" Cycle Time by Author (median) ");
     if agg.cycle_time_by_author.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No author data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Author (median) ")),
+            .block(block),
             area,
         );
         return;
     }
 
-    let mut by_author: Vec<(&String, f64)> = agg
+    let mut entries: Vec<(&String, f64)> = agg
         .cycle_time_by_author
         .iter()
         .map(|(k, v)| (k, *v))
         .collect();
-    by_author.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let max_val = by_author.first().map(|(_, v)| *v).unwrap_or(1.0);
+    entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let max_val = entries.first().map(|(_, v)| *v).unwrap_or(1.0);
 
-    let lines: Vec<Line<'static>> = by_author
-        .iter()
-        .map(|(author, hours)| bar_line(author, *hours, max_val, inner_width, Color::Cyan))
-        .collect();
-
-    f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Author (median) ")),
-        area,
-    );
+    render_bar_chart_block(f, area, block, &entries, max_val, Color::Cyan);
 }
 
 /// Horizontal bar chart for cycle time by reviewer.
 fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // Pass the inner block width so bar_line can compute all columns dynamically.
-    let inner_width = (area.width as usize).saturating_sub(2);
 
+    let block = styled_block(" Cycle Time by Reviewer (median) ");
     if agg.cycle_time_by_reviewer.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No reviewer data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Reviewer (median) ")),
+            .block(block),
             area,
         );
         return;
     }
 
-    let mut by_reviewer: Vec<(&String, f64)> = agg
+    let mut entries: Vec<(&String, f64)> = agg
         .cycle_time_by_reviewer
         .iter()
         .map(|(k, v)| (k, *v))
         .collect();
-    by_reviewer.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let max_val = by_reviewer.first().map(|(_, v)| *v).unwrap_or(1.0);
+    entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let max_val = entries.first().map(|(_, v)| *v).unwrap_or(1.0);
 
-    let lines: Vec<Line<'static>> = by_reviewer
-        .iter()
-        .map(|(reviewer, hours)| bar_line(reviewer, *hours, max_val, inner_width, Color::Magenta))
-        .collect();
-
-    f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Reviewer (median) ")),
-        area,
-    );
+    render_bar_chart_block(f, area, block, &entries, max_val, Color::Magenta);
 }
 
 /// Horizontal bar chart for cycle time by milestone.
 fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // Pass the inner block width so bar_line can compute all columns dynamically.
-    let inner_width = (area.width as usize).saturating_sub(2);
 
+    let block = styled_block(" Cycle Time by Milestone (median) ");
     if agg.cycle_time_by_milestone.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No milestone data.",
                 Style::default().fg(theme::MUTED),
             ))
-            .block(styled_block(" Cycle Time by Milestone (median) ")),
+            .block(block),
             area,
         );
         return;
     }
 
-    let mut by_milestone: Vec<(&String, f64)> = agg
+    let mut entries: Vec<(&String, f64)> = agg
         .cycle_time_by_milestone
         .iter()
         .map(|(k, v)| (k, *v))
         .collect();
-    by_milestone.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let max_val = by_milestone.first().map(|(_, v)| *v).unwrap_or(1.0);
+    entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let max_val = entries.first().map(|(_, v)| *v).unwrap_or(1.0);
 
-    let lines: Vec<Line<'static>> = by_milestone
-        .iter()
-        .map(|(milestone, hours)| bar_line(milestone, *hours, max_val, inner_width, Color::Yellow))
-        .collect();
+    render_bar_chart_block(f, area, block, &entries, max_val, Color::Yellow);
+}
 
-    f.render_widget(
-        Paragraph::new(lines).block(styled_block(" Cycle Time by Milestone (median) ")),
-        area,
-    );
+/// Generic Flex-based bar chart renderer shared by author / reviewer / milestone blocks.
+///
+/// Each row is split with `Layout::horizontal + Flex::Legacy` into three columns:
+///
+///   ┌─────────────────────────────────────────┐
+///   │ label (Fill) │ bar (Fill) │ value (Max) │
+///   └─────────────────────────────────────────┘
+///
+/// - `Constraint::Fill(2)` → label grows to absorb available space (2× weight).
+/// - `Constraint::Fill(1)` → bar grows proportionally (1× weight).
+/// - `Constraint::Max(22)` → value column capped at 22 chars, never truncated.
+///
+/// Because ratatui resolves Fill constraints after Max/Length/Min ones, the
+/// value column is always satisfied first — labels and bars share what remains.
+fn render_bar_chart_block(
+    f: &mut Frame,
+    area: Rect,
+    block: Block<'static>,
+    entries: &[(&String, f64)],
+    max_val: f64,
+    bar_color: Color,
+) {
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    // One Rect per row (one entry per line).
+    let row_constraints: Vec<Constraint> = entries.iter().map(|_| Constraint::Length(1)).collect();
+
+    let row_rects = Layout::vertical(row_constraints).split(inner);
+
+    for (i, (label, hours)) in entries.iter().enumerate() {
+        let Some(row_rect) = row_rects.get(i) else {
+            break;
+        };
+
+        // Split each row into 3 columns using Flex — value col is satisfied first.
+        let [label_rect, bar_rect, value_rect] = {
+            let cols = Layout::horizontal([
+                Constraint::Fill(2), // label  — grows, absorbs leftover space
+                Constraint::Fill(1), // bar    — grows at half the label's rate
+                Constraint::Max(22), // value  — reserved first, never clipped
+            ])
+            .flex(Flex::Legacy)
+            .split(*row_rect);
+            [cols[0], cols[1], cols[2]]
+        };
+
+        // ── Label column ──────────────────────────────────────────────────────
+        let label_width = (label_rect.width as usize).saturating_sub(2); // 2-char left indent
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    truncate(label, label_width),
+                    Style::default().fg(theme::MUTED),
+                ),
+            ])),
+            label_rect,
+        );
+
+        // ── Bar column ────────────────────────────────────────────────────────
+        let bar_width = bar_rect.width as usize;
+        let filled = if max_val > 0.0 {
+            ((hours / max_val) * bar_width as f64).round() as usize
+        } else {
+            0
+        }
+        .min(bar_width);
+
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("█".repeat(filled), Style::default().fg(bar_color)),
+                Span::styled(
+                    " ".repeat(bar_width - filled),
+                    Style::default().bg(Color::Reset),
+                ),
+            ])),
+            bar_rect,
+        );
+
+        // ── Value column ──────────────────────────────────────────────────────
+        let days = hours / 24.0;
+        let value_str = format!(" {:.1} h ({:.1}d) ", hours, days);
+        f.render_widget(
+            Paragraph::new(Span::styled(value_str, Style::default().fg(theme::MUTED))),
+            value_rect,
+        );
+    }
 }
 
 /// Full-width Spearman correlations table.
@@ -707,70 +773,6 @@ fn kv_line(key: &str, value: &str, value_color: Color) -> Line<'static> {
     Line::from(vec![
         Span::styled(format!("  {:<22}", key), Style::default().fg(theme::MUTED)),
         Span::styled(value.to_string(), Style::default().fg(value_color)),
-    ])
-}
-
-/// Horizontal bar chart row with a fully dynamic layout.
-///
-/// The total `available_width` (inner block width) is split into three columns:
-///
-///   [ label | bar | value ]
-///
-/// - Value column : fixed at `VALUE_COL` chars (widest realistic value string).
-/// - Bar column   : 20 % of available width, clamped to [4, 20].
-/// - Label column : whatever remains (at least 6 chars), truncated with "…"
-///
-/// All rows produced for the same block share the same `available_width`, so
-/// every column lines up perfectly — no manual padding required.
-fn bar_line(
-    label: &str,
-    value: f64,
-    max_val: f64,
-    available_width: usize,
-    bar_color: Color,
-) -> Line<'static> {
-    // "9999.9 h (999.9d)" = 18 chars + 2 left gap + 1 right margin = 21
-    const VALUE_COL: usize = 21;
-    // Indent before the label.
-    const INDENT: usize = 2;
-    // Bar gets 20 % of the available width, clamped so it never dominates.
-    let bar_width = ((available_width as f64 * 0.20).round() as usize).clamp(4, 20);
-
-    // Label gets the remainder; always at least 6 chars so something shows.
-    let label_col = available_width
-        .saturating_sub(INDENT + bar_width + VALUE_COL)
-        .max(6);
-
-    let filled = if max_val > 0.0 {
-        ((value / max_val) * bar_width as f64).round() as usize
-    } else {
-        0
-    }
-    .min(bar_width);
-
-    let bar = "█".repeat(filled);
-    let empty = " ".repeat(bar_width - filled);
-    let days = value / 24.0;
-    let value_str = format!("{:.1} h ({:.1}d)", value, days);
-
-    Line::from(vec![
-        // Left indent + label (dynamic width, truncated).
-        Span::styled(
-            format!(
-                "{}{:<label_col$}",
-                " ".repeat(INDENT),
-                truncate(label, label_col - 1)
-            ),
-            Style::default().fg(theme::MUTED),
-        ),
-        // Bar fill + unfilled remainder.
-        Span::styled(bar, Style::default().fg(bar_color)),
-        Span::styled(empty, Style::default()),
-        // 2-space gap + value left-aligned in its fixed column (provides right margin).
-        Span::styled(
-            format!("  {:<width$}", value_str, width = VALUE_COL - 2),
-            Style::default().fg(theme::MUTED),
-        ),
     ])
 }
 
