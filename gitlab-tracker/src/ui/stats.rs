@@ -451,8 +451,9 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
 /// Horizontal bar chart for cycle time by author.
 fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
-    let bar_width = (area.width as usize).saturating_sub(32).max(4);
+    // Pass the inner block width so bar_line can compute all columns dynamically.
+    // Subtract 2 for the block borders.
+    let inner_width = (area.width as usize).saturating_sub(2);
 
     if agg.cycle_time_by_author.is_empty() {
         f.render_widget(
@@ -476,7 +477,7 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
 
     let lines: Vec<Line<'static>> = by_author
         .iter()
-        .map(|(author, hours)| bar_line(author, *hours, max_val, bar_width, Color::Cyan))
+        .map(|(author, hours)| bar_line(author, *hours, max_val, inner_width, Color::Cyan))
         .collect();
 
     f.render_widget(
@@ -488,8 +489,8 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
 /// Horizontal bar chart for cycle time by reviewer.
 fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
-    let bar_width = (area.width as usize).saturating_sub(32).max(4);
+    // Pass the inner block width so bar_line can compute all columns dynamically.
+    let inner_width = (area.width as usize).saturating_sub(2);
 
     if agg.cycle_time_by_reviewer.is_empty() {
         f.render_widget(
@@ -513,7 +514,7 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
 
     let lines: Vec<Line<'static>> = by_reviewer
         .iter()
-        .map(|(reviewer, hours)| bar_line(reviewer, *hours, max_val, bar_width, Color::Magenta))
+        .map(|(reviewer, hours)| bar_line(reviewer, *hours, max_val, inner_width, Color::Magenta))
         .collect();
 
     f.render_widget(
@@ -525,8 +526,8 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
 /// Horizontal bar chart for cycle time by milestone.
 fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
-    // 2 indent + 20 label + 2 gap + 8 value suffix "999.9 h" = 32 reserved chars
-    let bar_width = (area.width as usize).saturating_sub(32).max(4);
+    // Pass the inner block width so bar_line can compute all columns dynamically.
+    let inner_width = (area.width as usize).saturating_sub(2);
 
     if agg.cycle_time_by_milestone.is_empty() {
         f.render_widget(
@@ -550,7 +551,7 @@ fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
 
     let lines: Vec<Line<'static>> = by_milestone
         .iter()
-        .map(|(milestone, hours)| bar_line(milestone, *hours, max_val, bar_width, Color::Yellow))
+        .map(|(milestone, hours)| bar_line(milestone, *hours, max_val, inner_width, Color::Yellow))
         .collect();
 
     f.render_widget(
@@ -709,14 +710,37 @@ fn kv_line(key: &str, value: &str, value_color: Color) -> Line<'static> {
     ])
 }
 
-/// Horizontal bar chart row.
+/// Horizontal bar chart row with a fully dynamic layout.
+///
+/// The total `available_width` (inner block width) is split into three columns:
+///
+///   [ label | bar | value ]
+///
+/// - Value column : fixed at `VALUE_COL` chars (widest realistic value string).
+/// - Bar column   : 20 % of available width, clamped to [4, 20].
+/// - Label column : whatever remains (at least 6 chars), truncated with "…"
+///
+/// All rows produced for the same block share the same `available_width`, so
+/// every column lines up perfectly — no manual padding required.
 fn bar_line(
     label: &str,
     value: f64,
     max_val: f64,
-    bar_width: usize,
+    available_width: usize,
     bar_color: Color,
 ) -> Line<'static> {
+    // "9999.9 h (999.9d)" = 18 chars + 2 left gap + 1 right margin = 21
+    const VALUE_COL: usize = 21;
+    // Indent before the label.
+    const INDENT: usize = 2;
+    // Bar gets 20 % of the available width, clamped so it never dominates.
+    let bar_width = ((available_width as f64 * 0.20).round() as usize).clamp(4, 20);
+
+    // Label gets the remainder; always at least 6 chars so something shows.
+    let label_col = available_width
+        .saturating_sub(INDENT + bar_width + VALUE_COL)
+        .max(6);
+
     let filled = if max_val > 0.0 {
         ((value / max_val) * bar_width as f64).round() as usize
     } else {
@@ -726,16 +750,25 @@ fn bar_line(
 
     let bar = "█".repeat(filled);
     let empty = " ".repeat(bar_width - filled);
+    let days = value / 24.0;
+    let value_str = format!("{:.1} h ({:.1}d)", value, days);
 
     Line::from(vec![
+        // Left indent + label (dynamic width, truncated).
         Span::styled(
-            format!("  {:<20}", truncate(label, 19)),
+            format!(
+                "{}{:<label_col$}",
+                " ".repeat(INDENT),
+                truncate(label, label_col - 1)
+            ),
             Style::default().fg(theme::MUTED),
         ),
+        // Bar fill + unfilled remainder.
         Span::styled(bar, Style::default().fg(bar_color)),
         Span::styled(empty, Style::default()),
+        // 2-space gap + value left-aligned in its fixed column (provides right margin).
         Span::styled(
-            format!("  {:.1} h", value),
+            format!("  {:<width$}", value_str, width = VALUE_COL - 2),
             Style::default().fg(theme::MUTED),
         ),
     ])
