@@ -248,6 +248,34 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
         .fg(Color::White)
         .add_modifier(Modifier::BOLD);
 
+    // Build the value strings independently so we can measure their widths and
+    // pad every label to the same total length. This guarantees that ratatui
+    // centres all three gauge labels at the exact same horizontal position,
+    // keeping both the name column (left) and the value column (right) aligned.
+    //
+    // Layout per row:  "Median  " + right-aligned hours + " h " + days
+    //                  "P75     " + right-aligned hours + " h " + days
+    //                  "P90     " + right-aligned hours + " h " + days
+    let fmt_value = |hours: f64| -> String {
+        let days = hours / 24.0;
+        format!("{:.1} h ({:.1}d)", hours, days)
+    };
+
+    let median_val = fmt_value(median);
+    let p75_val = fmt_value(p75);
+    let p90_val = fmt_value(p90);
+
+    // Determine the width of the widest value string so all can be right-padded
+    // to the same length, making the trailing characters line up column-wise.
+    let val_width = median_val.len().max(p75_val.len()).max(p90_val.len());
+
+    // Fixed name column: 6 chars ("Median" is the longest label).
+    // Two spaces separate name from value.
+    let fmt_gauge_label = |name: &str, val: &str| -> String {
+        // Right-pad the value string so every label has identical total length.
+        format!("{:<6}  {:<width$}", name, val, width = val_width)
+    };
+
     // Median (P50) gauge
     let median_ratio = (median / max).clamp(0.0, 1.0);
     f.render_widget(
@@ -255,7 +283,7 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
             .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
             .ratio(median_ratio)
             .label(Span::styled(
-                format!("Median  {:.1} h", median),
+                fmt_gauge_label("Median", &median_val),
                 label_style,
             )),
         rows[0],
@@ -267,7 +295,7 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
         Gauge::default()
             .gauge_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray))
             .ratio(p75_ratio)
-            .label(Span::styled(format!("P75     {:.1} h", p75), label_style)),
+            .label(Span::styled(fmt_gauge_label("P75", &p75_val), label_style)),
         rows[1],
     );
 
@@ -277,16 +305,17 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
         Gauge::default()
             .gauge_style(Style::default().fg(Color::Red).bg(Color::DarkGray))
             .ratio(p90_ratio)
-            .label(Span::styled(format!("P90     {:.1} h", p90), label_style)),
+            .label(Span::styled(fmt_gauge_label("P90", &p90_val), label_style)),
         rows[2],
     );
 
     // Summary line: spread between median and P90
+    let spread = p90 - median;
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled("  Spread  ", Style::default().fg(theme::MUTED)),
             Span::styled(
-                format!("{:.1} h  (P90 − Median)", p90 - median),
+                format!("{:>5.1} h ({:.1}d)  (P90 − Median)", spread, spread / 24.0),
                 Style::default().fg(theme::MUTED_DIM),
             ),
         ])),
