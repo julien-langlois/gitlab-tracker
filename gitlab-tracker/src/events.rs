@@ -7,7 +7,9 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 use crate::app::{
     ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm, TrackerView,
 };
-use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachedMrData, FetchContext};
+use crate::gitlab::{
+    spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData, FetchContext,
+};
 use crate::models::{AppEvent, MrStatus, TrackedMr};
 use crate::storage::{save_branches_async, save_state_async, save_visible_columns_async};
 use crate::utils::parse_duration_to_hours;
@@ -651,7 +653,11 @@ pub async fn handle_key_event(
 
                     for mr in &mut app.mrs {
                         mr.status = MrStatus::Loading;
-                        let cached = cached_from_mr(mr);
+                        let mut cached = cached_from_mr(mr);
+                        // Force a full re-sync on manual refresh: bypass all cache guards
+                        // so the user always gets an up-to-date snapshot, even for
+                        // already-merged MRs whose caches would otherwise be permanent.
+                        cached.cache_policy = CachePolicy::ForceAll;
                         spawn_mr_fetch(
                             ctx.clone(),
                             mr.id.clone(),
@@ -1113,5 +1119,11 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         pipelines: mr.pipelines.clone(),
         diff_stats: mr.diff_stats.clone(),
         user_notes_count: mr.user_notes_count,
+        // Persist the state so the fetcher can detect Open → Merged transitions
+        // and invalidate the notes cache accordingly.
+        cached_state: Some(mr.state.clone()),
+        // Normal policy — callers that need a forced re-sync override this after
+        // calling cached_from_mr (e.g. the manual [R] handler sets ForceAll).
+        cache_policy: CachePolicy::Normal,
     }
 }

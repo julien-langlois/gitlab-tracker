@@ -200,6 +200,41 @@ pub struct CachedMrData {
     pub diff_stats: Option<crate::models::DiffStats>,
     /// Human note count from the previous fetch — reused when `updated_at` is unchanged.
     pub user_notes_count: u32,
+    /// GitLab state at the time the cache was last populated.
+    ///
+    /// Used to detect state transitions (e.g. `Opened` → `Merged`) so that any
+    /// cache entry built while the MR was open is unconditionally invalidated on
+    /// the first refresh after the transition.
+    pub cached_state: Option<crate::models::GitlabMrState>,
+    /// Declares which cached fields must be bypassed on this fetch cycle.
+    ///
+    /// The default (`CachePolicy::Normal`) respects all existing cache guards.
+    /// Callers that need to force a full re-sync (e.g. manual `[R]`, post-merge
+    /// housekeeping) set this to `CachePolicy::ForceAll` or a targeted variant.
+    pub cache_policy: CachePolicy,
+}
+
+/// Controls which cached fields are bypassed during a fetch cycle.
+///
+/// Extend this enum whenever a new independently-cacheable field is added to
+/// `CachedMrData`, rather than adding a dedicated `force_*` boolean each time.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub enum CachePolicy {
+    /// Respect all existing cache guards — normal periodic refresh behaviour.
+    #[default]
+    Normal,
+    /// Bypass every cache guard and re-fetch all fields from the GitLab API.
+    ///
+    /// Used by the manual `[R]` refresh so the user always gets a fully
+    /// up-to-date snapshot, even for already-merged MRs.
+    ForceAll,
+}
+
+impl CachePolicy {
+    /// Returns `true` when the notes cache must be bypassed.
+    pub fn notes_stale(&self) -> bool {
+        matches!(self, CachePolicy::ForceAll)
+    }
 }
 
 /// Fetches the last 5 pipelines for the given MR, then enriches each with
@@ -822,7 +857,24 @@ pub async fn fetch_gitlab_data(
     //
     // Exception: merged/closed MRs with a known count are frozen — their discussion
     // history is immutable and will never change.
-    let user_notes_count = if state != GitlabMrState::Opened && cached.user_notes_count > 0 {
+    // Reuse the cached notes count only when ALL of these conditions hold:
+    //   1. The MR is currently non-Open (Merged or Closed) — discussion history is frozen.
+    //   2. A non-zero count was already recorded — zero could mean "never fetched".
+    //   3. The cached state matches the fresh state — if the MR just transitioned from
+    //      Open → Merged we must refetch, because threads may have been resolved or added
+    //      between the last Open refresh and the merge event.
+    let state_unchanged = cached.cached_state.as_ref().is_some_and(|s| s == &state);
+    // Reuse the cached notes count only when ALL conditions hold:
+    //   1. The cache policy does not demand a forced re-fetch (e.g. manual [R]).
+    //   2. The MR is non-Open — discussion history is frozen once merged/closed.
+    //   3. A non-zero count is already recorded — zero could mean "never fetched".
+    //   4. The cached state matches the fresh state — guards against Open → Merged
+    //      transitions where threads may have been resolved just before the merge.
+    let user_notes_count = if !cached.cache_policy.notes_stale()
+        && state != GitlabMrState::Opened
+        && cached.user_notes_count > 0
+        && state_unchanged
+    {
         cached.user_notes_count
     } else {
         fetch_notes_count(ctx, mr_id, &client).await

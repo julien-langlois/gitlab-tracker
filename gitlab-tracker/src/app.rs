@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
+use crate::gitlab::{spawn_mr_fetch, CachePolicy, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
@@ -1064,6 +1064,8 @@ impl App {
                 pipelines: mr.pipelines.clone(),
                 diff_stats: mr.diff_stats.clone(),
                 user_notes_count: mr.user_notes_count,
+                cached_state: Some(mr.state.clone()),
+                cache_policy: CachePolicy::Normal,
             };
             let has_merge_sha = mr.sha.is_some() || mr.state == GitlabMrState::Merged;
             gitlab_total += cached.estimate(&mr.state, has_merge_sha).total();
@@ -1184,6 +1186,10 @@ impl App {
                     pipelines: saved.pipelines,
                     diff_stats: saved.diff_stats,
                     user_notes_count: saved.user_notes_count,
+                    // Restore the persisted state so the notes cache is considered valid
+                    // for already-merged MRs on restart — avoids a useless refetch.
+                    cached_state: Some(saved.state),
+                    cache_policy: CachePolicy::Normal,
                 };
 
                 // Count each pending fetch so we can suppress change notifications
@@ -1922,6 +1928,8 @@ impl App {
                         pipelines: mr.pipelines.clone(),
                         diff_stats: mr.diff_stats.clone(),
                         user_notes_count: mr.user_notes_count,
+                        cached_state: Some(mr.state.clone()),
+                        cache_policy: CachePolicy::Normal,
                     };
                     spawn_mr_fetch(
                         ctx.clone(),
