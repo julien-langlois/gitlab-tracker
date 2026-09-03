@@ -963,6 +963,7 @@ pub async fn fetch_gitlab_data(
     // This is the authoritative source: a MR may be attached or detached from a milestone
     // at any time, and the cache would silently hold a stale value.
     let milestone_due_date = mr.milestone.as_ref().and_then(|m| m.due_date.clone());
+    let milestone_description = mr.milestone.as_ref().and_then(|m| m.description.clone());
     let milestone = mr
         .milestone
         .map(|m| m.title)
@@ -1274,6 +1275,7 @@ pub async fn fetch_gitlab_data(
         reviewers,
         milestone,
         milestone_due_date,
+        milestone_description,
         web_url,
         labels,
         updated_at,

@@ -1141,6 +1141,7 @@ impl App {
                     .clone()
                     .unwrap_or_else(|| "None".to_string()),
                 milestone_due_date: saved.milestone_due_date.clone(),
+                milestone_description: saved.milestone_description.clone(),
                 web_url: saved.web_url.clone().unwrap_or_default(),
                 labels: saved.labels.clone().unwrap_or_default(),
                 updated_at: saved.updated_at.clone(),
@@ -1347,6 +1348,7 @@ impl App {
                     reviewers: vec![],
                     milestone: "Loading".to_string(),
                     milestone_due_date: None,
+                    milestone_description: None,
                     web_url: String::new(),
                     labels: vec![],
                     updated_at: None,
@@ -1502,6 +1504,7 @@ impl App {
                 mr.reviewers = data.reviewers;
                 mr.milestone = data.milestone;
                 mr.milestone_due_date = data.milestone_due_date;
+                mr.milestone_description = data.milestone_description;
                 mr.web_url = data.web_url;
                 mr.labels = data.labels;
                 mr.updated_at = data.updated_at;
@@ -1770,6 +1773,7 @@ impl App {
                         reviewers: vec![],
                         milestone: milestone_title.clone(),
                         milestone_due_date: None,
+                        milestone_description: None,
                         web_url: String::new(),
                         labels: vec![],
                         updated_at: None,
@@ -1828,6 +1832,7 @@ impl App {
                         reviewers: vec![],
                         milestone: String::new(),
                         milestone_due_date: None,
+                        milestone_description: None,
                         web_url: String::new(),
                         labels: vec![],
                         updated_at: None,

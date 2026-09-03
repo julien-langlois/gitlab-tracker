@@ -561,6 +561,16 @@ pub fn render_safe_inspector_text(
             Style::default().fg(palette.accent_cyan),
         ),
     ]));
+    if let Some(desc) = mr
+        .milestone_description
+        .as_deref()
+        .filter(|d| !d.is_empty())
+    {
+        lines.push(Line::from(vec![
+            Span::raw("Description: "),
+            Span::styled(desc.to_string(), Style::default().fg(palette.muted_dim)),
+        ]));
+    }
 
     // Milestone due date — show absolute date + relative label, with urgency colouring.
     // The due_date field is YYYY-MM-DD (date only), so we append T00:00:00Z for parsing.

@@ -1153,6 +1153,7 @@ pub async fn save_state_async(
                 reviewers: m.reviewers.clone(),
                 milestone: Some(m.milestone.clone()),
                 milestone_due_date: m.milestone_due_date.clone(),
+                milestone_description: m.milestone_description.clone(),
                 web_url: Some(m.web_url.clone()),
                 labels: Some(m.labels.clone()),
                 updated_at: m.updated_at.clone(),

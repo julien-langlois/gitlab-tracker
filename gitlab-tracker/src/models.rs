@@ -24,6 +24,8 @@ pub struct GitLabMilestone {
     pub title: String,
     /// Due date in `YYYY-MM-DD` format, or `None` when not set.
     pub due_date: Option<String>,
+    /// Free-text description of the milestone, or `None` when not set.
+    pub description: Option<String>,
 }
 
 /// A single commit as returned by
@@ -171,6 +173,10 @@ pub struct SavedMr {
     /// Milestone due date in `YYYY-MM-DD` format — persisted across restarts.
     #[serde(default)]
     pub milestone_due_date: Option<String>,
+    /// Milestone description — persisted across restarts.
+    /// Invalidated and re-populated whenever the milestone title changes.
+    #[serde(default)]
+    pub milestone_description: Option<String>,
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
     #[serde(default)]
@@ -252,6 +258,9 @@ pub struct TrackedMr {
     pub milestone: String,
     /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
     pub milestone_due_date: Option<String>,
+    /// Milestone description — `None` when not set or when no milestone is attached.
+    /// Persisted across restarts; invalidated when the milestone title changes.
+    pub milestone_description: Option<String>,
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
@@ -298,6 +307,8 @@ pub struct MrLoadedData {
     pub milestone: String,
     /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
     pub milestone_due_date: Option<String>,
+    /// Milestone description — `None` when not set or when no milestone is attached.
+    pub milestone_description: Option<String>,
     pub web_url: String,
     pub labels: Vec<String>,
     pub updated_at: Option<String>,
