@@ -1,3 +1,4 @@
+pub mod cockpit;
 pub mod help_popup;
 pub mod inspector;
 #[cfg(feature = "stats")]
@@ -45,19 +46,35 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
         .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
         .split(chunks[0]);
 
-    // --- Left Pane: status bar (1 line) + main Table ---
-    // The status bar is a dedicated Paragraph row so each segment can be coloured
-    // independently, instead of cramming everything into a plain .title() string.
-    let left_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0)])
-        .split(main_chunks[0]);
+    // --- Left Pane: status bar + MR table + optional cockpit pane ---
+    // Keep the cockpit responsive: on small terminal heights the table keeps all
+    // remaining space, while larger layouts get a tracker-sized operational pane.
+    let show_cockpit = main_chunks[0].height >= 22;
+    let left_chunks = if show_cockpit {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Percentage(67),
+                Constraint::Percentage(33),
+            ])
+            .split(main_chunks[0])
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(0)])
+            .split(main_chunks[0])
+    };
 
     let status_bar = status_bar::render_status_bar(app);
     f.render_widget(status_bar, left_chunks[0]);
 
     let table = table::render_table(app, left_chunks[1]);
     f.render_stateful_widget(table, left_chunks[1], &mut app.table_state);
+
+    if show_cockpit {
+        cockpit::render_cockpit(f, app, left_chunks[2]);
+    }
 
     // --- Right Column: split vertically when a tracker ticket is available ---
     let has_ticket = app

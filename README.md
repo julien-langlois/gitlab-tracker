@@ -21,6 +21,7 @@
 * 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
+* 🧭 **MR Cockpit Pane:** On sufficiently tall terminals, the dashboard adds a compact operational cockpit under the MR table. It summarises flow, attention points, delivery health, and quality/scope signals without requiring the fullscreen Stats overlay. Tracker-specific indicators are shown only when a tracker provider such as Redmine is configured; otherwise they gracefully display as `n/a`.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
@@ -121,6 +122,17 @@
   | **Effort: Complex**    | `score ≥ 0.66`        | 🔴 Red    |
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
+
+* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query.
+
+  | Column                 | Signals                                                                                                                                                                                                                   |
+  | :--------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+  | **Flow**               | Open / mergeable / draft / merged / closed MRs, plus merge cadence: merged today, current calendar week, current calendar month, rolling last 7 days, and rolling last 30 days                                           |
+  | **Attention**          | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, and manually flagged MRs                                  |
+  | **Delivery Health**    | Stale open MRs, oldest open MR age, missing milestones, milestones due in the next 7 days, overdue milestones, MRs behind their target branch, hot threads (`10+` notes), and optional tracker coverage / over-estimate   |
+  | **Quality / Scope**    | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                               |
+
+  Tracker-related metrics (`With ticket`, `No ticket`, `Over estimate`) are no-op safe: they are only computed and displayed when a tracker provider is active. Without Redmine or another tracker plugin, the cockpit shows `Tracker n/a` instead.
 
 * 📊 **MR Analytics & Velocity Stats (`G`) *(optional — `--features stats`)*:** Press `G` to open a fullscreen analytics overlay powered by the `gitlab-tracker-stats` crate. Snapshots are recorded automatically into a local SQLite database on every merge, close, or daily refresh — no manual action required.
 
@@ -587,6 +599,7 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
         ├── theme.rs      # ThemeMode enum, Palette struct — dark/light colour sets; OSC 11 detection wired in main.rs
         ├── status_bar.rs # One-line status bar above the table (project, timer, API counts, sort, filter, spinner)
         ├── table.rs      # Main MR table widget
+        ├── cockpit.rs    # Lower-left MR cockpit pane: flow, attention, delivery health, quality/scope summaries
         ├── inspector.rs  # Upper-right pane: MR metadata & pipeline history
         └── tracker.rs    # Lower-right pane: linked ticket details & time log (TrackerLabelColors)
 

@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Cell, Row, Table},
+    widgets::{Block, Borders, Cell, Row, Table},
 };
 
 /// Fixed width (in chars) for all state badges, padding included.
@@ -468,5 +468,5 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("> ")
-        .block(ratatui::widgets::Block::default().borders(ratatui::widgets::Borders::ALL))
+        .block(Block::default().borders(Borders::ALL).title(" Dashboard "))
 }
