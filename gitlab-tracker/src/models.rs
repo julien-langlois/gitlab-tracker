@@ -236,6 +236,12 @@ pub struct SavedState {
     /// on the first poll.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discovery_started_at: Option<String>,
+    /// MR IIDs manually removed from the dashboard.
+    /// Discovery ignores these ids so auto-polling does not re-add items the user
+    /// explicitly cleaned from the dashboard. Manual re-add removes the id from
+    /// this deny-list.
+    #[serde(default)]
+    pub dismissed_mr_ids: HashSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

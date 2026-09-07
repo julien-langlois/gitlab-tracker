@@ -695,8 +695,12 @@ pub async fn handle_key_event(
                         if app.discovery_started_at.is_none() {
                             app.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
                         }
-                        let known_ids: Vec<String> =
-                            app.mrs.iter().map(|mr| mr.id.clone()).collect();
+                        let known_ids: Vec<String> = app
+                            .mrs
+                            .iter()
+                            .map(|mr| mr.id.clone())
+                            .chain(app.dismissed_mr_ids.iter().cloned())
+                            .collect();
                         crate::gitlab::spawn_mrs_discovery(
                             ctx.clone(),
                             known_ids,
@@ -838,6 +842,7 @@ pub async fn handle_key_event(
                             &app.mrs,
                             last_known_branches,
                             app.discovery_started_at.as_deref(),
+                            &app.dismissed_mr_ids,
                             &app.base_url.clone(),
                             &app.project_id.clone(),
                         )

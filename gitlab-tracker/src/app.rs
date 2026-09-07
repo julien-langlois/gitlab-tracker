@@ -463,6 +463,10 @@ pub struct App {
     /// the tool was started are never auto-added to the tracking list.
     /// `None` until the first poll fires; persisted in the state file afterwards.
     pub discovery_started_at: Option<String>,
+    /// MR IIDs manually removed from the dashboard during the current session.
+    /// Discovery must ignore these ids so auto-polling does not immediately
+    /// re-add items the user explicitly cleaned from the dashboard.
+    pub dismissed_mr_ids: HashSet<String>,
 }
 
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
@@ -564,6 +568,7 @@ impl App {
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,
             discovery_started_at: None,
+            dismissed_mr_ids: HashSet::new(),
         }
     }
 
@@ -1361,6 +1366,8 @@ impl App {
                 if self.mrs.iter().any(|m| m.id == id) {
                     return false;
                 }
+                // Manual re-add is an explicit opt-in: allow discovery to track it again.
+                self.dismissed_mr_ids.remove(&id);
                 self.mrs.push(TrackedMr {
                     id: id.clone(),
                     title: "Loading...".to_string(),
@@ -1409,7 +1416,8 @@ impl App {
                 if index >= self.mrs.len() {
                     return false;
                 }
-                self.mrs.remove(index);
+                let removed = self.mrs.remove(index);
+                self.dismissed_mr_ids.insert(removed.id);
                 if self.mrs.is_empty() {
                     self.table_state.select(None);
                 } else if index >= self.mrs.len() {
@@ -1425,6 +1433,7 @@ impl App {
                 if self.mrs.len() == before {
                     return false; // Nothing removed — no state change.
                 }
+                self.dismissed_mr_ids.insert(id);
                 if self.mrs.is_empty() {
                     self.table_state.select(None);
                 }
@@ -1924,7 +1933,12 @@ impl App {
                     if self.discovery_started_at.is_none() {
                         self.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
                     }
-                    let known_ids: Vec<String> = self.mrs.iter().map(|m| m.id.clone()).collect();
+                    let known_ids: Vec<String> = self
+                        .mrs
+                        .iter()
+                        .map(|m| m.id.clone())
+                        .chain(self.dismissed_mr_ids.iter().cloned())
+                        .collect();
                     crate::gitlab::spawn_mrs_discovery(
                         ctx.clone(),
                         known_ids,
