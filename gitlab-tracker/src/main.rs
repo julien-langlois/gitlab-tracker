@@ -336,7 +336,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Inject the discovery flag unconditionally — independent of the stats feature.
     app.discovery_enabled = discover_new_mrs;
-    // Restore the discovery anchor timestamp from the state file so newly opened
+    // Restore the discovery anchor timestamp from the state file so newly created
     // MRs are filtered correctly across restarts.
     app.discovery_started_at = saved_discovery_started_at;
 

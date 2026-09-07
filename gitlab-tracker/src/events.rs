@@ -697,7 +697,7 @@ pub async fn handle_key_event(
                         }
                         let known_ids: Vec<String> =
                             app.mrs.iter().map(|mr| mr.id.clone()).collect();
-                        crate::gitlab::spawn_open_mrs_discovery(
+                        crate::gitlab::spawn_mrs_discovery(
                             ctx.clone(),
                             known_ids,
                             app.discovery_started_at.clone(),

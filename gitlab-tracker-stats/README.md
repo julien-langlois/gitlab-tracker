@@ -196,9 +196,10 @@ sprint_weeks = 3
 ```
 
 > **Tip — team-wide stats coverage:** enable `discover_new_mrs = true` at the project level
-> (not under `[project.stats]`) to automatically track all newly opened MRs at each refresh
-> cycle. When the `stats` feature is active, discovered MRs are snapshotted automatically,
-> improving throughput and cycle-time coverage across all reviewers.
+> (not under `[project.stats]`) to automatically track all newly created MRs at each refresh
+> cycle, including MRs already merged between two cycles. When the `stats` feature is active,
+> discovered MRs are snapshotted automatically, improving throughput and cycle-time coverage
+> across all reviewers.
 
 ---
 

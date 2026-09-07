@@ -52,7 +52,7 @@ fn discover_new_mrs_setting() -> ProjectSettingDef {
         id: "core.discover_new_mrs",
         section: "Core",
         label: "Discover new MRs",
-        help: "Automatically add newly opened MRs during refresh cycles.",
+        help: "Automatically add newly created MRs during refresh cycles.",
         priority: 20,
         kind: ProjectSettingKind::Bool,
         default_value: ProjectSettingValue::Bool(false),

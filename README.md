@@ -159,7 +159,7 @@
   | **By Milestone**            | Merged MR count per sprint — velocity comparison across releases                                                                           |
   | **Spearman correlations**   | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
 
-  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly opened MRs at each refresh cycle, independently of whether the `stats` feature is active.
+  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly created MRs at each refresh cycle, including MRs already merged between two cycles, independently of whether the `stats` feature is active.
 
   See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
 
@@ -355,10 +355,12 @@ activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 # Default: true. Editable from the in-app settings dashboard with [,].
 show_cockpit = true
 
-# Automatically discover and track all newly opened MRs at each refresh cycle.
-# Independent of the stats feature — useful for any reviewer who wants the tool
-# to self-populate. When stats are also enabled, discovered MRs are snapshotted
-# automatically for team-wide throughput and cycle-time coverage. Default: false.
+# Automatically discover and track all newly created MRs at each refresh cycle.
+# This includes MRs already merged between two cycles, so stats coverage remains
+# complete. Independent of the stats feature — useful for any reviewer who wants
+# the tool to self-populate. When stats are also enabled, discovered MRs are
+# snapshotted automatically for team-wide throughput and cycle-time coverage.
+# Default: false.
 discover_new_mrs = true
 
 # Tech-stack calibration for the review-difficulty score.

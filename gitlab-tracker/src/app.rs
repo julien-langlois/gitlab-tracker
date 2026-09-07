@@ -452,14 +452,14 @@ pub struct App {
     pub theme: crate::ui::theme::Palette,
 
     /// When `true`, the discovery poller is active: at each refresh cycle the app
-    /// queries `GET /projects/:id/merge_requests?state=opened` and automatically
+    /// queries `GET /projects/:id/merge_requests?state=all` and automatically
     /// adds any MR not yet in the tracking list.
     ///
     /// Set from `discover_new_mrs` in `[project.stats]` of `projects.toml`.
     /// Defaults to `false` — opt-in only.
     pub discovery_enabled: bool,
     /// RFC 3339 timestamp set the first time the discovery poller runs.
-    /// Passed as `created_after` to the GitLab API so that MRs opened before
+    /// Passed as `created_after` to the GitLab API so that MRs created before
     /// the tool was started are never auto-added to the tracking list.
     /// `None` until the first poll fires; persisted in the state file afterwards.
     pub discovery_started_at: Option<String>,
@@ -1911,8 +1911,10 @@ impl App {
                 self.time_left = self.refresh_interval_secs;
                 let ctx = self.fetch_context();
 
-                // Discovery poller: find new MRs opened by any team member since the
-                // last refresh cycle. Only active when `discover_new_mrs = true` in
+                // Discovery poller: find new MRs created by any team member since the
+                // discovery anchor, regardless of their current state. This prevents losing
+                // MRs opened and merged between two refresh cycles, which would otherwise
+                // make stats incomplete. Only active when `discover_new_mrs = true` in
                 // `[project.stats]` of `projects.toml`.
                 if self.discovery_enabled {
                     // On the very first poll, record the current UTC time as the discovery
@@ -1923,7 +1925,7 @@ impl App {
                         self.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
                     }
                     let known_ids: Vec<String> = self.mrs.iter().map(|m| m.id.clone()).collect();
-                    crate::gitlab::spawn_open_mrs_discovery(
+                    crate::gitlab::spawn_mrs_discovery(
                         ctx.clone(),
                         known_ids,
                         self.discovery_started_at.clone(),

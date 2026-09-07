@@ -126,13 +126,13 @@ pub struct ProjectEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracker: Option<TrackerConfig>,
 
-    /// When `true`, automatically discovers and tracks all newly opened MRs on
+    /// When `true`, automatically discovers and tracks all newly created MRs on
     /// the project at each refresh cycle, even if they were not manually added.
     ///
-    /// Uses `GET /projects/:id/merge_requests?state=opened` and adds any MR
-    /// whose IID is not yet in the tracking list. Independent of the `stats`
-    /// feature — useful for any reviewer who wants the tool to self-populate,
-    /// with or without analytics enabled.
+    /// Uses `GET /projects/:id/merge_requests?state=all` and adds any MR whose
+    /// IID is not yet in the tracking list. Independent of the `stats` feature —
+    /// useful for any reviewer who wants the tool to self-populate, with or
+    /// without analytics enabled.
     ///
     /// When the `stats` feature is also active, discovered MRs are automatically
     /// snapshotted, which improves team-wide coverage of throughput and cycle time
