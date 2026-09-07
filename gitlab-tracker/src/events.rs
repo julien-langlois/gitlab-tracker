@@ -689,6 +689,22 @@ pub async fn handle_key_event(
                     app.time_left = app.refresh_interval_secs;
                     let ctx = build_fetch_context(app);
 
+                    // Run the discovery poller on manual refresh as well, so [R]
+                    // behaves like the automatic refresh cycle when auto-polling is enabled.
+                    if app.discovery_enabled {
+                        if app.discovery_started_at.is_none() {
+                            app.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
+                        }
+                        let known_ids: Vec<String> =
+                            app.mrs.iter().map(|mr| mr.id.clone()).collect();
+                        crate::gitlab::spawn_open_mrs_discovery(
+                            ctx.clone(),
+                            known_ids,
+                            app.discovery_started_at.clone(),
+                            tx.clone(),
+                        );
+                    }
+
                     for mr in &mut app.mrs {
                         mr.status = MrStatus::Loading;
                         let mut cached = cached_from_mr(mr);
