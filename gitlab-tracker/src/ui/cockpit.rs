@@ -231,15 +231,174 @@ impl DashboardSummary {
 }
 
 pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
+    #[derive(Debug, Default)]
+    struct ReleaseSummary {
+        title: String,
+        due_date: Option<NaiveDate>,
+        merged: usize,
+        in_progress: usize,
+        blocked: usize,
+        waiting_review: usize,
+    }
+
+    impl ReleaseSummary {
+        fn remaining(&self) -> usize {
+            self.in_progress + self.blocked + self.waiting_review
+        }
+
+        fn is_at_risk(&self, today: NaiveDate) -> bool {
+            let Some(due_date) = self.due_date else {
+                return false;
+            };
+
+            let days_left = (due_date - today).num_days();
+            self.remaining() > 0
+                && (days_left < 0
+                    || (days_left <= 3 && self.remaining() >= 2)
+                    || (days_left <= 7 && self.remaining() >= 5))
+        }
+    }
+
+    fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
+        let today = Utc::now().date_naive();
+        let mut releases = std::collections::BTreeMap::<String, ReleaseSummary>::new();
+
+        for mr in app.visible_mrs() {
+            let milestone = mr.milestone.trim();
+            if milestone.is_empty() || milestone == "None" {
+                continue;
+            }
+
+            let entry = releases
+                .entry(milestone.to_string())
+                .or_insert_with(|| ReleaseSummary {
+                    title: milestone.to_string(),
+                    due_date: parse_gitlab_date(mr.milestone_due_date.as_deref()),
+                    ..ReleaseSummary::default()
+                });
+
+            if entry.due_date.is_none() {
+                entry.due_date = parse_gitlab_date(mr.milestone_due_date.as_deref());
+            }
+
+            match mr.state {
+                GitlabMrState::Merged => entry.merged += 1,
+                GitlabMrState::Closed => {}
+                GitlabMrState::Opened => match mr.mergeability {
+                    MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => {
+                        entry.blocked += 1;
+                    }
+                    MergeabilityStatus::NotApproved | MergeabilityStatus::RequestedChanges => {
+                        entry.waiting_review += 1;
+                    }
+                    _ => entry.in_progress += 1,
+                },
+            }
+        }
+
+        let mut releases: Vec<ReleaseSummary> = releases.into_values().collect();
+        releases.sort_by_key(|release| {
+            release
+                .due_date
+                .map(|due_date| ((due_date - today).num_days().abs(), due_date))
+                .unwrap_or((i64::MAX, NaiveDate::MAX))
+        });
+        releases.truncate(3);
+        releases
+    }
+
+    fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
+        let today = Utc::now().date_naive();
+        let mut lines = Vec::new();
+
+        for release in releases {
+            let at_risk = release.is_at_risk(today);
+            let title_color = if at_risk {
+                app.theme.accent_red
+            } else {
+                app.theme.accent_cyan
+            };
+            let due_label = release
+                .due_date
+                .map(|due_date| {
+                    let days_left = (due_date - today).num_days();
+                    if days_left < 0 {
+                        format!("D+{}", days_left.abs())
+                    } else {
+                        format!("D-{}", days_left)
+                    }
+                })
+                .unwrap_or_else(|| "no due date".to_string());
+            let prefix = if at_risk { "⚠ " } else { "  " };
+
+            lines.push(Line::from(vec![
+                Span::styled(prefix.to_string(), Style::default().fg(title_color)),
+                Span::styled(
+                    format!("{} ({})", release.title, due_label),
+                    Style::default()
+                        .fg(title_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+            lines.push(release_metric_line(
+                "Merged",
+                release.merged,
+                app.theme.accent_green,
+                app,
+            ));
+            lines.push(release_metric_line(
+                "WIP",
+                release.in_progress,
+                app.theme.fg,
+                app,
+            ));
+            lines.push(release_metric_line(
+                "Blocked",
+                release.blocked,
+                alert_color(release.blocked, app),
+                app,
+            ));
+            lines.push(release_metric_line(
+                "Review",
+                release.waiting_review,
+                warning_color(release.waiting_review, app),
+                app,
+            ));
+        }
+
+        if lines.is_empty() {
+            lines.push(cockpit_metric_optional(
+                "Releases",
+                Some("n/a".to_string()),
+                app.theme.muted_inactive,
+                app,
+            ));
+        }
+
+        lines
+    }
+
     let summary = DashboardSummary::from_app(app);
+    let releases = release_summaries(app);
+    let has_releases = !releases.is_empty();
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-        ])
+        .constraints(if has_releases {
+            vec![
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+            ]
+        } else {
+            vec![
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ]
+        })
         .split(area);
 
     f.render_widget(
@@ -258,6 +417,13 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
         cockpit_block(" Quality / Scope ", quality_scope_lines(summary, app)),
         columns[3],
     );
+
+    if has_releases {
+        f.render_widget(
+            cockpit_block(" Releases ", release_lines(app, &releases)),
+            columns[4],
+        );
+    }
 }
 
 fn cockpit_block(title: &'static str, lines: Vec<Line<'static>>) -> Paragraph<'static> {
@@ -514,6 +680,24 @@ fn quality_scope_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static
 
 fn cockpit_metric(label: &'static str, value: usize, color: Color, app: &App) -> Line<'static> {
     cockpit_metric_optional(label, Some(value.to_string()), color, app)
+}
+
+fn release_metric_line(
+    label: &'static str,
+    value: usize,
+    color: Color,
+    app: &App,
+) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("    {:<8}", label),
+            Style::default().fg(app.theme.fg),
+        ),
+        Span::styled(
+            value.to_string(),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+    ])
 }
 
 fn cockpit_metric_optional(

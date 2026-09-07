@@ -21,7 +21,7 @@
 * 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
-* 🧭 **MR Cockpit Pane:** On sufficiently tall terminals, the dashboard adds a compact operational cockpit under the MR table. It summarises flow, attention points, delivery health, and quality/scope signals without requiring the fullscreen Stats overlay. Tracker-specific indicators are shown only when a tracker provider such as Redmine is configured; otherwise they gracefully display as `n/a`.
+* 🧭 **MR Cockpit Pane:** On sufficiently tall terminals, the dashboard adds a compact operational cockpit under the MR table. It summarises flow, attention points, delivery health, and quality/scope signals without requiring the fullscreen Stats overlay. When tracked MRs include milestones, it also adds a release-focused column showing the 3 closest milestones by due date, with merged / WIP / blocked / review counts and a warning marker when the deadline is at risk. Tracker-specific indicators are shown only when a tracker provider such as Redmine is configured; otherwise they gracefully display as `n/a`.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
@@ -123,14 +123,25 @@
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
-* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query.
+* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. If at least one visible tracked MR has a milestone, the cockpit automatically adds a fifth **Releases** column.
 
-  | Column                 | Signals                                                                                                                                                                                                                   |
-  | :--------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | **Flow**               | Open / mergeable / draft / merged / closed MRs, plus merge cadence: merged today, current calendar week, current calendar month, rolling last 7 days, and rolling last 30 days                                           |
-  | **Attention**          | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, and manually flagged MRs                                  |
-  | **Delivery Health**    | Stale open MRs, oldest open MR age, missing milestones, milestones due in the next 7 days, overdue milestones, MRs behind their target branch, hot threads (`10+` notes), and optional tracker coverage / over-estimate   |
-  | **Quality / Scope**    | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                               |
+  | Column              | Signals                                                                                                                                                                                                                                  |
+  | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **Flow**            | Open / mergeable / draft / merged / closed MRs, plus merge cadence: merged today, current calendar week, current calendar month, rolling last 7 days, and rolling last 30 days                                                           |
+  | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, and manually flagged MRs                                                  |
+  | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due in the next 7 days, overdue milestones, MRs behind their target branch, hot threads (`10+` notes), and optional tracker coverage / over-estimate                  |
+  | **Quality / Scope** | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                                              |
+  | **Releases**        | The 3 closest known milestones by due date, with per-release counts for merged, WIP, blocked, and waiting-review MRs. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
+
+  Example release summary:
+
+  ```text
+  ⚠ Summer Breeze - 1.2.0 (D-2)
+      Merged   4
+      WIP      3
+      Blocked  2
+      Review   1
+  ```
 
   Tracker-related metrics (`With ticket`, `No ticket`, `Over estimate`) are no-op safe: they are only computed and displayed when a tracker provider is active. Without Redmine or another tracker plugin, the cockpit shows `Tracker n/a` instead.
 
@@ -140,7 +151,7 @@
 
   | Section                     | Content                                                                                                                                    |
   | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
-  | **Throughput & Cycle time** | MRs merged/week, median / P75 / P90 cycle time (created → merged), avg diff size, avg comments, pipeline failure rate                     |
+  | **Throughput & Cycle time** | MRs merged/week, median / P75 / P90 cycle time (created → merged), avg diff size, avg comments, pipeline failure rate                      |
   | **Open MR backlog**         | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance                                                              |
   | **By Author**               | Horizontal bar chart of average cycle time per author                                                                                      |
   | **By Reviewer**             | Average cycle time per reviewer — identifies review bottlenecks                                                                            |
