@@ -77,6 +77,7 @@
   | **Behind**    | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+) |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
+* ⚙️ **Project Settings Dashboard (`,`):** Press `,` to open an interactive settings popup for the active `projects.toml` entry. Use `↑`/`↓` to navigate grouped sections, `Space` to toggle booleans, `←`/`→` to adjust numeric values, text keys to edit text settings, `Enter` to save, and `Esc` to cancel. Built-in settings include cockpit visibility, auto-discovery, refresh interval, and activity thresholds. Optional crates can expose their own settings via the same registry; for example the `stats` feature adds a **Stats** section.
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
   * `Flagged ★` — only your manually flagged MRs
   * **GitLab state** — `Opened`, `Merged`, or `Closed`
@@ -342,6 +343,7 @@ tracked_branches = ["main", "develop", "staging"]
 table_label_prefixes = ["deploy::", "review::"]
 
 # How often the MR list is refreshed from GitLab (in seconds).
+# Editable from the in-app settings dashboard with [,].
 refresh_interval_secs = 900
 
 # Activity badge thresholds (in days) shown in the Context Inspector.
@@ -350,7 +352,7 @@ activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 
 # Show the operational cockpit pane below the MR table when enough vertical space
 # is available. Set to false to keep the dashboard table-only for this project.
-# Default: true.
+# Default: true. Editable from the in-app settings dashboard with [,].
 show_cockpit = true
 
 # Automatically discover and track all newly opened MRs at each refresh cycle.

@@ -690,15 +690,40 @@ pub async fn resolve_active_project() -> ProjectEntry {
     entry
 }
 
+/// Resolves the target project index for legacy save calls.
+///
+/// The TUI currently passes `0` from older call sites. To avoid writing into the
+/// first tenant when another entry is marked active, index `0` is treated as
+/// "active project" when an active entry exists. Explicit non-zero indexes keep
+/// their exact meaning for future multi-tenant flows.
+fn resolve_save_project_idx(cfg: &ProjectsConfig, project_idx: usize) -> Option<usize> {
+    if cfg.projects.is_empty() {
+        return None;
+    }
+
+    if project_idx == 0 {
+        return Some(
+            cfg.projects
+                .iter()
+                .position(|project| project.active)
+                .unwrap_or(0),
+        );
+    }
+
+    (project_idx < cfg.projects.len()).then_some(project_idx)
+}
+
 /// Persists the column visibility settings into `projects.toml` for the given entry index.
 ///
 /// Called whenever the user closes the column picker popup so that the column
 /// selection survives restarts without writing to the legacy `config.json`.
 pub async fn save_visible_columns_async(cols: &crate::config::VisibleColumns, project_idx: usize) {
     let mut cfg = load_projects_toml().await;
-    if let Some(entry) = cfg.projects.get_mut(project_idx) {
-        entry.visible_columns = Some(cols.clone());
-        save_projects_toml(&cfg).await;
+    if let Some(idx) = resolve_save_project_idx(&cfg, project_idx) {
+        if let Some(entry) = cfg.projects.get_mut(idx) {
+            entry.visible_columns = Some(cols.clone());
+            save_projects_toml(&cfg).await;
+        }
     }
 }
 
@@ -708,14 +733,39 @@ pub async fn save_visible_columns_async(cols: &crate::config::VisibleColumns, pr
 /// branch list survives restarts without touching `tracker_state.json`.
 pub async fn save_branches_async(branches: &[String], project_idx: usize) {
     let mut cfg = load_projects_toml().await;
-    if let Some(entry) = cfg.projects.get_mut(project_idx) {
-        entry.tracked_branches = if branches.is_empty() {
-            None
-        } else {
-            Some(branches.to_vec())
-        };
-        save_projects_toml(&cfg).await;
+    if let Some(idx) = resolve_save_project_idx(&cfg, project_idx) {
+        if let Some(entry) = cfg.projects.get_mut(idx) {
+            entry.tracked_branches = if branches.is_empty() {
+                None
+            } else {
+                Some(branches.to_vec())
+            };
+            save_projects_toml(&cfg).await;
+        }
     }
+}
+
+/// Persists a TOML-edited project settings table into `projects.toml`.
+///
+/// The settings dashboard edits a generic TOML table so plugin-provided settings
+/// can be saved without hardcoding their fields in the main crate. The table is
+/// deserialised back into `ProjectEntry` before saving to preserve validation and
+/// the canonical typed storage model.
+pub async fn save_project_settings_async(
+    project_table: &toml::Table,
+    project_idx: usize,
+) -> Option<ProjectEntry> {
+    let mut cfg = load_projects_toml().await;
+    let idx = resolve_save_project_idx(&cfg, project_idx)?;
+    let project: ProjectEntry = toml::Value::Table(project_table.clone()).try_into().ok()?;
+
+    if let Some(entry) = cfg.projects.get_mut(idx) {
+        *entry = project.clone();
+        save_projects_toml(&cfg).await;
+        return Some(project);
+    }
+
+    None
 }
 
 /// Prompts the user interactively for a required config value (read from stdin).

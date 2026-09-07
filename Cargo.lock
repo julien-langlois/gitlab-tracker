@@ -1257,6 +1257,7 @@ dependencies = [
  "inventory",
  "serde",
  "thiserror 1.0.69",
+ "toml",
 ]
 
 [[package]]
@@ -1299,6 +1300,7 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "toml",
 ]
 
 [[package]]

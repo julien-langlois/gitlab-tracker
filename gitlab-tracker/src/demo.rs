@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::app::AppInit;
 use crate::config::{AppConfig, VisibleColumns};
 use crate::events::{handle_key_event_demo, handle_mouse_event};
 use crate::models::{
@@ -549,15 +550,37 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
 
     // Demo mode always uses the dark palette — no terminal query needed.
     let demo_palette = crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark);
-    let mut app = App::new(
-        "demo-token".into(),
-        "123456".into(),
-        "https://gitlab.com".into(),
-        None,
-        900,
-        demo_config,
-        demo_palette,
-    );
+    let demo_project = crate::storage::ProjectEntry {
+        name: Some("Demo".into()),
+        gitlab_url: "https://gitlab.com".into(),
+        project_id: "123456".into(),
+        active: true,
+        default_branches: None,
+        table_label_prefixes: None,
+        complexity_profile: None,
+        tracked_branches: None,
+        refresh_interval_secs: Some(900),
+        activity_stale_days: Some(7),
+        activity_recent_days: Some(2),
+        show_cockpit: Some(true),
+        stats: None,
+        visible_columns: None,
+        label_colors: None,
+        tracker: None,
+        gitlab_username: None,
+        discover_new_mrs: None,
+    };
+
+    let mut app = App::new(AppInit {
+        token: "demo-token".into(),
+        project_id: "123456".into(),
+        base_url: "https://gitlab.com".into(),
+        project_name: None,
+        refresh_interval_secs: 900,
+        config: demo_config,
+        theme: demo_palette,
+        project_settings: demo_project,
+    });
 
     app.branches = vec!["main".into(), "staging".into(), "production".into()];
     app.mrs = vec![

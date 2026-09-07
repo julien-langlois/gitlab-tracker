@@ -3,6 +3,8 @@ use crate::gitlab::{spawn_mr_fetch, CachePolicy, CachedMrData, CountApiCalls, Fe
 use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
+use crate::settings::SettingsEditorState;
+use crate::storage::ProjectEntry;
 use gitlab_tracker_core::{
     collect_all_columns, collect_all_filters, ColumnDef, DefaultMrEventPolicy, FilterDef,
     MrEventPolicy, MrLifecycleEvent, MrSnapshot,
@@ -40,6 +42,7 @@ pub enum SortOrder {
 /// - `Editing`: every printable key feeds the input field; shortcuts are suspended.
 ///   Enter `/` or `i` to enter Editing mode; press `Esc` to leave it.
 /// - `ColumnPicker`: the column visibility popup is open; arrow keys and Space navigate/toggle.
+/// - `Settings`: the project settings popup is open; arrow keys navigate, Space toggles booleans.
 /// - `FilterPicker`: the filter picker popup is open — arrow keys navigate, Enter confirms,
 ///   typing feeds the text input for Milestone/Assignee entries.
 /// - `LogTime`: the Log Time popup is open — Tab navigates fields, Enter submits.
@@ -54,6 +57,8 @@ pub enum InputMode {
     Editing,
     /// The column-picker popup is open — arrow keys and Space toggle columns.
     ColumnPicker,
+    /// The project settings popup is open — arrow keys navigate, Space toggles booleans.
+    Settings,
     /// The filter picker popup is open — arrow keys navigate, Enter confirms.
     /// Typing feeds the text input for Milestone / Assignee entries.
     FilterPicker,
@@ -339,6 +344,11 @@ pub struct App {
     pub tracker_pane_height: u16,
     /// Index of the currently highlighted row in the column-picker popup (0-based).
     pub column_picker_cursor: usize,
+    /// Draft state for the project settings popup.
+    pub settings_editor: SettingsEditorState,
+    /// The active project entry as loaded from `projects.toml`.
+    /// Kept as a TOML-backed settings source for plugin-provided settings.
+    pub project_settings: ProjectEntry,
     /// Countdown (in ticks ~= seconds) during which recently-updated rows stay highlighted.
     /// Reset to `RECENT_UPDATE_FADE_TICKS` each time a MR update is detected.
     /// Decremented on every Tick; rows are highlighted while this is > 0.
@@ -458,16 +468,29 @@ pub struct App {
 /// Duration (in seconds) of the green highlight fade after a MR is updated.
 pub const RECENT_UPDATE_FADE_TICKS: u64 = 10;
 
+pub struct AppInit {
+    pub token: String,
+    pub project_id: String,
+    pub base_url: String,
+    pub project_name: Option<String>,
+    pub refresh_interval_secs: u64,
+    pub config: AppConfig,
+    pub theme: crate::ui::theme::Palette,
+    pub project_settings: ProjectEntry,
+}
+
 impl App {
-    pub fn new(
-        token: String,
-        project_id: String,
-        base_url: String,
-        project_name: Option<String>,
-        refresh_interval_secs: u64,
-        mut config: AppConfig,
-        theme: crate::ui::theme::Palette,
-    ) -> Self {
+    pub fn new(init: AppInit) -> Self {
+        let AppInit {
+            token,
+            project_id,
+            base_url,
+            project_name,
+            refresh_interval_secs,
+            mut config,
+            theme,
+            project_settings,
+        } = init;
         let mut table_state = TableState::default();
         table_state.select(None);
 
@@ -475,6 +498,7 @@ impl App {
         // moving `config` into the struct — avoids a borrow-after-move.
         let column_defs = collect_all_columns();
         config.visible_columns.apply_defaults(&column_defs);
+        let settings_editor = SettingsEditorState::from_project_entry(&project_settings);
 
         Self {
             mrs: Vec::new(),
@@ -501,6 +525,8 @@ impl App {
             tracker_content_lines: 0,
             tracker_pane_height: 0,
             column_picker_cursor: 0,
+            settings_editor,
+            project_settings,
             update_highlight_ticks: 0,
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),

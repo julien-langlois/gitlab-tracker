@@ -11,6 +11,7 @@ pub mod tracker;
 use crate::app::{
     ActivePane, App, InputMode, InspectorView, LogTimeField, SortColumn, SortOrder, TrackerView,
 };
+use gitlab_tracker_core::{ProjectSettingKind, ProjectSettingValue};
 use help_popup::render_help_popup;
 
 use ratatui::{
@@ -244,6 +245,10 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             " COLUMNS │ [↑/↓]: Navigate │ [Space]: Toggle │ [Esc]: Close & Save ".to_string(),
             Style::default().fg(Color::Cyan),
         ),
+        InputMode::Settings => (
+            " SETTINGS │ [↑/↓]: Navigate │ [←/→]: Adjust │ [Space]: Toggle │ [Enter]: Save │ [Esc]: Cancel ".to_string(),
+            Style::default().fg(Color::Cyan),
+        ),
         InputMode::Normal if app.quit_confirm => (
             " Quit? Press [Esc] or [y] to confirm, any other key to cancel ".to_string(),
             Style::default().fg(Color::Red),
@@ -265,6 +270,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
             // Build the full bar: dynamic hints first, then plugin-contributed hints.
             let mut parts = vec![
                 "[i] or [/]: Insert mode".to_string(),
+                "[,]: Settings".to_string(),
                 format!("[Tab]: {}", pane_hint),
                 format!("[S/s]: {}", sort_status),
             ];
@@ -314,6 +320,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     // Render the filter picker popup on top of the UI when active.
     if app.input_mode == InputMode::FilterPicker {
         render_filter_picker(f, app, f.area());
+    }
+
+    // Render the settings popup on top of the UI when active.
+    if app.input_mode == InputMode::Settings {
+        render_settings_popup(f, app, f.area());
     }
 
     // Render the milestone autocomplete dropdown above the input bar when suggestions exist.
@@ -772,4 +783,133 @@ fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     let mut list_state = ListState::default();
     list_state.select(Some(app.column_picker_cursor));
     f.render_stateful_widget(list, popup_area, &mut list_state);
+}
+
+/// Renders the project settings popup centred over the terminal area.
+///
+/// Settings are collected through `inventory`, so optional crates can expose their
+/// own project-level settings without changing this renderer.
+fn render_settings_popup(f: &mut Frame, app: &App, area: Rect) {
+    let popup_width: u16 = area.width.saturating_sub(4).clamp(70, 110);
+    let content_lines = settings_popup_line_count(app) as u16;
+    let desired_height = content_lines.saturating_add(8).max(18);
+    let max_height = (area.height as f32 * 0.95) as u16;
+    let popup_height: u16 = desired_height.min(max_height).max(14);
+
+    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    f.render_widget(Clear, popup_area);
+
+    let zones = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(6), Constraint::Length(4)])
+        .split(popup_area);
+
+    let header_w = zones[0].width.saturating_sub(2) as usize;
+    let mut list_items: Vec<ListItem> = Vec::new();
+    let mut current_section: Option<&str> = None;
+    let mut selected_render_idx: Option<usize> = None;
+
+    for (setting_idx, item) in app.settings_editor.items.iter().enumerate() {
+        if current_section != Some(item.def.section) {
+            current_section = Some(item.def.section);
+            if !list_items.is_empty() {
+                list_items.push(ListItem::new(Line::from(Span::raw(""))));
+            }
+            list_items.push(ListItem::new(Line::from(Span::styled(
+                format!(
+                    "{:^width$}",
+                    item.def.section.to_uppercase(),
+                    width = header_w
+                ),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ))));
+            list_items.push(ListItem::new(Line::from(Span::raw(""))));
+        }
+
+        let is_selected = setting_idx == app.settings_editor.cursor;
+        let style = if is_selected {
+            selected_render_idx = Some(list_items.len());
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let value = render_setting_value(&item.value, &item.def.kind);
+        list_items.push(ListItem::new(Line::from(vec![
+            Span::styled("  ", style),
+            Span::styled(format!("{:<32}", item.def.label), style),
+            Span::styled(value, style),
+        ])));
+    }
+
+    let list = List::new(list_items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" Project Settings — [,]: Open │ [Enter]: Save │ [Esc]: Cancel "),
+    );
+
+    let mut list_state = ListState::default();
+    list_state.select(selected_render_idx);
+    f.render_stateful_widget(list, zones[0], &mut list_state);
+
+    let help = Paragraph::new(format!(
+        "{}\n[↑/↓]: Navigate  [←/→]: Adjust numbers  [Space]: Toggle  [Text]: Type  [Backspace]: Delete",
+        app.settings_editor.selected_help()
+    ))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" Help "),
+    )
+    .wrap(Wrap { trim: true });
+    f.render_widget(help, zones[1]);
+}
+
+fn settings_popup_line_count(app: &App) -> usize {
+    let mut structural_lines = 0;
+    let mut previous_section: Option<&str> = None;
+
+    for item in &app.settings_editor.items {
+        if previous_section != Some(item.def.section) {
+            if structural_lines > 0 {
+                // Blank separator between two sections.
+                structural_lines += 1;
+            }
+            // Section header + blank margin before the first setting.
+            structural_lines += 2;
+            previous_section = Some(item.def.section);
+        }
+    }
+
+    app.settings_editor.items.len() + structural_lines
+}
+
+fn render_setting_value(value: &ProjectSettingValue, kind: &ProjectSettingKind) -> String {
+    match (value, kind) {
+        (ProjectSettingValue::Bool(enabled), _) => if *enabled {
+            "☑ enabled"
+        } else {
+            "☐ disabled"
+        }
+        .to_string(),
+        (ProjectSettingValue::U64(value), ProjectSettingKind::U64 { step, .. }) => {
+            format!("{}  (+/- {})", value, step)
+        }
+        (ProjectSettingValue::U32(value), ProjectSettingKind::U32 { step, .. }) => {
+            format!("{}  (+/- {})", value, step)
+        }
+        (ProjectSettingValue::Text(value), _) if value.is_empty() => "<empty>".to_string(),
+        (ProjectSettingValue::Text(value), _) => value.clone(),
+        _ => "<invalid>".to_string(),
+    }
 }

@@ -20,6 +20,7 @@ pub mod db;
 pub mod metrics;
 pub mod poisson;
 pub mod report;
+pub mod settings;
 pub mod shortcuts;
 pub mod snapshot;
 

@@ -11,7 +11,9 @@ use crate::gitlab::{
     spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData, FetchContext,
 };
 use crate::models::{AppEvent, MrStatus, TrackedMr};
-use crate::storage::{save_branches_async, save_state_async, save_visible_columns_async};
+use crate::storage::{
+    save_branches_async, save_project_settings_async, save_state_async, save_visible_columns_async,
+};
 use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
@@ -301,6 +303,42 @@ pub async fn handle_key_event(
                 _ => {}
             }
         }
+
+        // ------------------------------------------------------------------
+        // Settings mode: the project settings popup is open.
+        // Up/Down navigate; Space toggles booleans; arrows adjust numbers;
+        // printable chars edit text settings; Enter saves; Esc cancels.
+        // ------------------------------------------------------------------
+        InputMode::Settings => match key.code {
+            KeyCode::Esc => {
+                app.settings_editor.cancel();
+                app.input_mode = InputMode::Normal;
+            }
+            KeyCode::Enter => {
+                let project_table = app.settings_editor.to_project_table();
+                if let Some(project) = save_project_settings_async(&project_table, 0).await {
+                    app.project_settings = project;
+                    let editor = std::mem::take(&mut app.settings_editor);
+                    editor.apply_to_app(app);
+                    app.settings_editor = crate::settings::SettingsEditorState::from_project_entry(
+                        &app.project_settings,
+                    );
+                }
+                app.input_mode = InputMode::Normal;
+            }
+            KeyCode::Up | KeyCode::Char('k') => app.settings_editor.move_up(),
+            KeyCode::Down | KeyCode::Char('j') => app.settings_editor.move_down(),
+            KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('-') => {
+                app.settings_editor.decrement_selected()
+            }
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('+') => {
+                app.settings_editor.increment_selected()
+            }
+            KeyCode::Char(' ') => app.settings_editor.toggle_selected(),
+            KeyCode::Backspace => app.settings_editor.backspace(),
+            KeyCode::Char(c) => app.settings_editor.push_char(c),
+            _ => {}
+        },
 
         // ------------------------------------------------------------------
         // Log Time popup mode — only reachable when a tracker provider is configured.
@@ -795,6 +833,15 @@ pub async fn handle_key_event(
                 KeyCode::Char('c') | KeyCode::Char('C') => {
                     app.column_picker_cursor = 0;
                     app.input_mode = InputMode::ColumnPicker;
+                }
+
+                // [,] opens the project settings popup.
+                KeyCode::Char(',') => {
+                    app.settings_editor = crate::settings::SettingsEditorState::from_project_entry(
+                        &app.project_settings,
+                    );
+                    app.settings_editor.reset_cursor();
+                    app.input_mode = InputMode::Settings;
                 }
 
                 // [T] cycles focus to the Tracker pane (or opens the URL when already focused).

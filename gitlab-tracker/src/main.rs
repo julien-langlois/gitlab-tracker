@@ -6,12 +6,14 @@ mod events;
 mod filters_core;
 mod gitlab;
 mod models;
+mod settings;
+mod settings_core;
 mod shortcuts_core;
 mod storage;
 mod ui;
 mod utils;
 
-use app::App;
+use app::{App, AppInit};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyEventKind};
 use events::{handle_key_event, handle_mouse_event};
@@ -179,6 +181,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Project-scoped settings override the global config.json values when present.
     let project = resolve_active_project().await;
     apply_project_overrides(&mut config, &project);
+    let project_settings = project.clone();
 
     // Extract tracked_branches before moving project fields.
     let project_tracked_branches = project.tracked_branches.clone();
@@ -304,15 +307,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "stats")]
     let complexity_profile = config.complexity_profile.clone();
 
-    let mut app = App::new(
+    let mut app = App::new(AppInit {
         token,
-        project_id.clone(),
-        base_url.clone(),
+        project_id: project_id.clone(),
+        base_url: base_url.clone(),
         project_name,
         refresh_interval_secs,
         config,
-        palette,
-    );
+        theme: palette,
+        project_settings,
+    });
 
     // Branch resolution priority:
     //   1. tracked_branches in projects.toml (canonical source after migration)
@@ -538,6 +542,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mode_label = match app.input_mode {
             app::InputMode::Editing => "✏️  Editing",
             app::InputMode::ColumnPicker => "⚙️  Columns",
+            app::InputMode::Settings => "⚙️  Settings",
             app::InputMode::FilterPicker => "🔍 Filter",
             app::InputMode::LogTime => "⏱️  Log Time",
             app::InputMode::Help => "❓ Help",
