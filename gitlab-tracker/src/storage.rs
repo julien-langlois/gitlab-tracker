@@ -56,6 +56,15 @@ pub struct ProjectEntry {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_recent_days: Option<u64>,
+    /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
+    /// Defaults to `true` when omitted.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// show_cockpit = false
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_cockpit: Option<bool>,
     /// Stats feature settings for this project (retention policy, sprint duration, …).
     ///
     /// Grouped under a `[project.stats]` sub-table in `projects.toml`, mirroring
@@ -324,6 +333,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         refresh_interval_secs,
         activity_stale_days,
         activity_recent_days,
+        show_cockpit: None,
         visible_columns,
         label_colors,
         tracker,
@@ -555,6 +565,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             refresh_interval_secs: None,
             activity_stale_days: None,
             activity_recent_days: None,
+            show_cockpit: None,
             visible_columns: None,
             label_colors: None,
             tracker: None,
@@ -664,6 +675,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         refresh_interval_secs: None,
         activity_stale_days: None,
         activity_recent_days: None,
+        show_cockpit: None,
         visible_columns: None,
         label_colors: None,
         tracker: None,

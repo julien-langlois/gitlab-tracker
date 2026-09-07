@@ -49,7 +49,7 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     // --- Left Pane: status bar + MR table + optional cockpit pane ---
     // Keep the cockpit responsive: on small terminal heights the table keeps all
     // remaining space, while larger layouts get a tracker-sized operational pane.
-    let show_cockpit = main_chunks[0].height >= 22;
+    let show_cockpit = app.config.show_cockpit && main_chunks[0].height >= 22;
     let left_chunks = if show_cockpit {
         Layout::default()
             .direction(Direction::Vertical)

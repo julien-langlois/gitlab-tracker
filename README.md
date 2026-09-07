@@ -21,7 +21,7 @@
 * 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
-* 🧭 **MR Cockpit Pane:** On sufficiently tall terminals, the dashboard adds a compact operational cockpit under the MR table. It summarises flow, attention points, delivery health, and quality/scope signals without requiring the fullscreen Stats overlay. When tracked MRs include milestones, it also adds a release-focused column showing the 3 closest milestones by due date, with merged / WIP / blocked / review counts and a warning marker when the deadline is at risk. Tracker-specific indicators are shown only when a tracker provider such as Redmine is configured; otherwise they gracefully display as `n/a`.
+* 🧭 **MR Cockpit Pane:** When enabled for the active project and when the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The pane is enabled by default and can be disabled per project with `show_cockpit = false` in `projects.toml`. If at least one visible tracked MR has a milestone, the cockpit automatically adds a fifth **Releases** column.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
@@ -347,6 +347,11 @@ refresh_interval_secs = 900
 # Activity badge thresholds (in days) shown in the Context Inspector.
 activity_recent_days = 2   # 🟢 Active if updated within N days
 activity_stale_days  = 7   # 🔴 Stale if not updated for N days
+
+# Show the operational cockpit pane below the MR table when enough vertical space
+# is available. Set to false to keep the dashboard table-only for this project.
+# Default: true.
+show_cockpit = true
 
 # Automatically discover and track all newly opened MRs at each refresh cycle.
 # Independent of the stats feature — useful for any reviewer who wants the tool

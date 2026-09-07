@@ -57,6 +57,11 @@ fn default_activity_recent_days() -> u64 {
     2
 }
 
+/// Default cockpit visibility for projects that do not override it.
+fn default_show_cockpit() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabelColorConfig {
     pub bg: String,
@@ -78,6 +83,9 @@ pub struct AppConfig {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(default = "default_activity_recent_days")]
     pub activity_recent_days: u64,
+    /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
+    #[serde(default = "default_show_cockpit")]
+    pub show_cockpit: bool,
     /// Controls which optional columns are visible in the MR table.
     /// All columns are hidden by default — enable them individually in config.json.
     #[serde(default)]
@@ -162,6 +170,7 @@ impl Default for AppConfig {
             label_colors,
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
+            show_cockpit: default_show_cockpit(),
             visible_columns: VisibleColumns::default(),
             complexity_profile: crate::models::DifficultyProfile::default(),
             // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.
