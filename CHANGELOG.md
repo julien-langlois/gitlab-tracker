@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.7] - 2026-09-08
+
+### 🚀 Features
+
+- **cockpit**: Add a configurable release health pane to surface release readiness directly in the MR cockpit
+- **ui**: Add an MR cockpit dashboard pane with a release overview and milestone descriptions in the inspector
+- **tui**: Add an extensible project settings dashboard for richer in-app project configuration
+- **stats**: Reconcile cockpit releases from the stats report
+
+### 🐛 Bug Fixes
+
+- **discovery**: Remember dismissed merge requests so they are not reintroduced by automatic discovery
+- **discovery**: Include all recent MRs during automatic polling
+- **ui**: Trigger MR auto-discovery on manual refresh
+- **gitlab**: Force notes refetch on Open→Merged transitions and manual refreshes
+- **stats**: Fix dynamic `bar_line` layout with hours-to-days conversion
+- **stats**: Align cycle time gauge labels and add days conversion
+
+### 🔨 Refactor
+
+- **stats**: Replace manual `bar_line` padding with a `ratatui` `Flex` layout
+
+### 📚 Documentation
+
+- **readme**: Add CI, crates.io, downloads, license, and Rust version badges to crate READMEs
+
 ## [0.4.6] - 2026-08-28
 
 ### 🎨 Theme
