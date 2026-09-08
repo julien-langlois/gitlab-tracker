@@ -50,13 +50,26 @@ struct DashboardSummary {
     no_diff_stats: usize,
     diff_stats_count: usize,
     total_diff_lines: u64,
+    avg_diff_lines_from_stats: Option<u64>,
     pipeline_unknown: usize,
     ci_skipped: usize,
     recently_updated: usize,
 }
 
 impl DashboardSummary {
+    #[cfg(feature = "stats")]
     fn from_app(app: &App) -> Self {
+        let mut summary = Self::from_visible_mrs(app);
+        summary.enrich_with_stats_report(app);
+        summary
+    }
+
+    #[cfg(not(feature = "stats"))]
+    fn from_app(app: &App) -> Self {
+        Self::from_visible_mrs(app)
+    }
+
+    fn from_visible_mrs(app: &App) -> Self {
         let mut summary = Self::default();
         let now = Utc::now();
         let today = now.date_naive();
@@ -213,6 +226,31 @@ impl DashboardSummary {
         summary
     }
 
+    #[cfg(feature = "stats")]
+    fn enrich_with_stats_report(&mut self, app: &App) {
+        let Some(report) = app.stats_view.report.as_ref() else {
+            return;
+        };
+
+        let stats = &report.aggregated;
+
+        // Persisted stats are the source of truth for lifecycle counters because
+        // visible_mrs() reflects only the current cockpit list. Removing an MR from
+        // the visible list must not rewrite historical flow metrics when stats are
+        // available.
+        self.open = stats.open_mr_ages_days.len();
+        self.merged = stats.merged_count;
+        self.closed = stats.closed_count;
+
+        if let Some(oldest_open_age) = stats.open_mr_ages_days.last() {
+            self.oldest_open_days = Some(oldest_open_age.floor() as i64);
+        }
+
+        if stats.avg_diff_size > 0.0 {
+            self.avg_diff_lines_from_stats = Some(stats.avg_diff_size.round() as u64);
+        }
+    }
+
     fn total_blocked(self) -> usize {
         self.conflicts
             + self.needs_rebase
@@ -222,6 +260,10 @@ impl DashboardSummary {
     }
 
     fn avg_diff_lines(self) -> Option<u64> {
+        if self.avg_diff_lines_from_stats.is_some() {
+            return self.avg_diff_lines_from_stats;
+        }
+
         if self.diff_stats_count == 0 {
             None
         } else {
