@@ -259,10 +259,16 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
+    #[cfg(feature = "stats")]
     fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
+        let Some(report) = app.stats_view.report.as_ref() else {
+            return Vec::new();
+        };
+
         let today = Utc::now().date_naive();
         let mut releases = std::collections::BTreeMap::<String, ReleaseSummary>::new();
 
+        // Current dashboard data is still the source of truth for live, non-persisted signals.
         for mr in app.visible_mrs() {
             let milestone = mr.milestone.trim();
             if milestone.is_empty() || milestone == "None" {
@@ -281,19 +287,37 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
                 entry.due_date = parse_gitlab_date(mr.milestone_due_date.as_deref());
             }
 
-            match mr.state {
-                GitlabMrState::Merged => entry.merged += 1,
-                GitlabMrState::Closed => {}
-                GitlabMrState::Opened => match mr.mergeability {
-                    MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => {
-                        entry.blocked += 1;
-                    }
-                    MergeabilityStatus::NotApproved | MergeabilityStatus::RequestedChanges => {
-                        entry.waiting_review += 1;
-                    }
-                    _ => entry.in_progress += 1,
-                },
+            if mr.state != GitlabMrState::Opened {
+                continue;
             }
+
+            match mr.mergeability {
+                MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => {
+                    entry.blocked += 1;
+                }
+                MergeabilityStatus::NotApproved | MergeabilityStatus::RequestedChanges => {
+                    entry.waiting_review += 1;
+                }
+                _ => entry.in_progress += 1,
+            }
+        }
+
+        // Historical completion data belongs to the stats crate: it is persisted and
+        // deduplicated by gitlab_tracker_stats::aggregator::aggregate instead of being
+        // inferred from the currently visible MR list.
+        for (milestone, merged) in &report.aggregated.throughput_by_milestone {
+            let milestone = milestone.trim();
+            if milestone.is_empty() || milestone == "None" {
+                continue;
+            }
+
+            let entry = releases
+                .entry(milestone.to_string())
+                .or_insert_with(|| ReleaseSummary {
+                    title: milestone.to_string(),
+                    ..ReleaseSummary::default()
+                });
+            entry.merged = *merged as usize;
         }
 
         let mut releases: Vec<ReleaseSummary> = releases.into_values().collect();
@@ -305,6 +329,11 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
         });
         releases.truncate(3);
         releases
+    }
+
+    #[cfg(not(feature = "stats"))]
+    fn release_summaries(_app: &App) -> Vec<ReleaseSummary> {
+        Vec::new()
     }
 
     fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
@@ -379,7 +408,21 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let summary = DashboardSummary::from_app(app);
-    let releases = release_summaries(app);
+    let stats_enabled = {
+        #[cfg(feature = "stats")]
+        {
+            app.stats_db.is_some()
+        }
+        #[cfg(not(feature = "stats"))]
+        {
+            false
+        }
+    };
+    let releases = if stats_enabled {
+        release_summaries(app)
+    } else {
+        Vec::new()
+    };
     let has_releases = !releases.is_empty();
     let columns = Layout::default()
         .direction(Direction::Horizontal)

@@ -21,7 +21,7 @@
 * 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
-* 🧭 **MR Cockpit Pane:** When enabled for the active project and when the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The pane is enabled by default and can be disabled per project with `show_cockpit = false` in `projects.toml`. If at least one visible tracked MR has a milestone, the cockpit automatically adds a fifth **Releases** column.
+* 🧭 **MR Cockpit Pane:** When enabled for the active project and when the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The pane is enabled by default and can be disabled per project with `show_cockpit = false` in `projects.toml`. When built with `--features stats`, the cockpit can add a fifth **Releases** column reconciled from the local stats database for historical merged counts.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
@@ -124,7 +124,7 @@
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
-* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. If at least one visible tracked MR has a milestone, the cockpit automatically adds a fifth **Releases** column.
+* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a four-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. When built with `--features stats`, the cockpit automatically adds a fifth **Releases** column once milestone data exists in the stats report.
 
   | Column              | Signals                                                                                                                                                                                                                                  |
   | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +132,7 @@
   | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, and manually flagged MRs                                                  |
   | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due in the next 7 days, overdue milestones, MRs behind their target branch, hot threads (`10+` notes), and optional tracker coverage / over-estimate                  |
   | **Quality / Scope** | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                                              |
-  | **Releases**        | The 3 closest known milestones by due date, with per-release counts for merged, WIP, blocked, and waiting-review MRs. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
+  | **Releases**        | *(requires `--features stats`)* The 3 closest known milestones by due date, with merged counts reconciled from the local stats database and live WIP / blocked / waiting-review counts from the visible dashboard. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
 
   Example release summary:
 

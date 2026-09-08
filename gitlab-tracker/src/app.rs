@@ -1464,6 +1464,8 @@ impl App {
 
                 // Decrement the startup fence: notifications are suppressed until
                 // all MRs from the saved state have received their first API response.
+                #[cfg(feature = "stats")]
+                let initial_fetches_completed = self.pending_initial_fetches == 1;
                 let notify_allowed = self.pending_initial_fetches == 0;
                 if self.pending_initial_fetches > 0 {
                     self.pending_initial_fetches -= 1;
@@ -1725,14 +1727,49 @@ impl App {
                             };
 
                             let project_id = self.project_id.clone();
+                            let tx2 = if initial_fetches_completed {
+                                Some(tx.clone())
+                            } else {
+                                None
+                            };
+                            let window = self.stats_view.window.to_query_window();
+                            let sprint_weeks = self.stats_view.sprint_weeks;
                             tokio::spawn(async move {
+                                use gitlab_tracker_stats::aggregator::QueryFilter;
                                 use gitlab_tracker_stats::StatsDb;
+
                                 if let Err(e) = db.upsert_snapshot(&snap).await {
                                     tracing::warn!(
                                         project_id = %project_id,
                                         error = %e,
                                         "Failed to record stats snapshot"
                                     );
+                                    return;
+                                }
+
+                                if let Some(tx2) = tx2 {
+                                    let filter = QueryFilter {
+                                        window,
+                                        project_id: Some(project_id),
+                                        sprint_weeks: Some(sprint_weeks),
+                                        ..Default::default()
+                                    };
+
+                                    match gitlab_tracker_stats::StatReport::load(
+                                        db.as_ref(),
+                                        &filter,
+                                    )
+                                    .await
+                                    {
+                                        Ok(report) => {
+                                            let _ = tx2
+                                                .send(AppEvent::StatsReportReady(Box::new(report)));
+                                        }
+                                        Err(e) => {
+                                            let _ = tx2
+                                                .send(AppEvent::StatsReportFailed(e.to_string()));
+                                        }
+                                    }
                                 }
                             });
                         }

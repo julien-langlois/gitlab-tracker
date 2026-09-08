@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::aggregator::{AggregatedStats, QueryFilter, TimeWindow};
+use crate::aggregator::{aggregate, AggregatedStats, QueryFilter, TimeWindow};
 use crate::correlation::{compute_all_correlations, CorrelationResult};
+use crate::db::{SnapshotQuery, StatsDb, StatsError};
 use crate::metrics::PerMrMetrics;
 use crate::poisson::PoissonInsights;
 
@@ -29,6 +30,22 @@ pub struct StatReport {
 }
 
 impl StatReport {
+    /// Loads all required data from the stats store and builds a complete report.
+    pub async fn load(db: &dyn StatsDb, filter: &QueryFilter) -> Result<Self, StatsError> {
+        let aggregated = aggregate(db, filter).await?;
+        let query = SnapshotQuery {
+            project_id: filter.project_id.clone(),
+            ..Default::default()
+        };
+        let snapshots = db.query(&query).await?;
+        let metrics = snapshots
+            .iter()
+            .map(PerMrMetrics::from_snapshot)
+            .collect::<Vec<_>>();
+
+        Ok(Self::build(aggregated, &metrics, filter))
+    }
+
     /// Builds a [`StatReport`] from already-computed aggregated stats and raw metrics.
     ///
     /// Correlations and Poisson insights are computed here from the raw per-MR

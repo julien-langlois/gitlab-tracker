@@ -990,19 +990,41 @@ pub fn trigger_stats_refresh(
     app: &mut App,
     tx: &tokio::sync::mpsc::UnboundedSender<crate::models::AppEvent>,
 ) {
+    trigger_stats_report_refresh(app, tx, true);
+}
+
+/// Refreshes the stats report for cockpit consumers without opening or marking the
+/// fullscreen stats overlay as loading.
+pub fn trigger_background_stats_refresh(
+    app: &mut App,
+    tx: &tokio::sync::mpsc::UnboundedSender<crate::models::AppEvent>,
+) {
+    trigger_stats_report_refresh(app, tx, false);
+}
+
+fn trigger_stats_report_refresh(
+    app: &mut App,
+    tx: &tokio::sync::mpsc::UnboundedSender<crate::models::AppEvent>,
+    mark_overlay_loading: bool,
+) {
     #[cfg(feature = "stats")]
     {
-        use gitlab_tracker_stats::aggregator::{aggregate, QueryFilter};
+        use gitlab_tracker_stats::aggregator::QueryFilter;
 
         let Some(db) = app.stats_db.clone() else {
-            app.stats_view.report = None;
-            app.stats_view.error = Some("Stats DB not available — check startup logs.".to_string());
+            if mark_overlay_loading {
+                app.stats_view.report = None;
+                app.stats_view.error =
+                    Some("Stats DB not available — check startup logs.".to_string());
+            }
             return;
         };
 
-        app.stats_view.loading = true;
-        app.stats_view.error = None;
-        app.stats_view.scroll = 0;
+        if mark_overlay_loading {
+            app.stats_view.loading = true;
+            app.stats_view.error = None;
+            app.stats_view.scroll = 0;
+        }
 
         let window = app.stats_view.window.to_query_window();
         let project_id = app.project_id.clone();
@@ -1017,24 +1039,8 @@ pub fn trigger_stats_refresh(
                 ..Default::default()
             };
 
-            match aggregate(db.as_ref(), &filter).await {
-                Ok(agg) => {
-                    use gitlab_tracker_stats::db::StatsDb;
-                    use gitlab_tracker_stats::metrics::PerMrMetrics;
-
-                    let query = gitlab_tracker_stats::db::SnapshotQuery {
-                        project_id: filter.project_id.clone(),
-                        ..Default::default()
-                    };
-                    let metrics = match db.query(&query).await {
-                        Ok(snaps) => snaps
-                            .iter()
-                            .map(PerMrMetrics::from_snapshot)
-                            .collect::<Vec<_>>(),
-                        Err(_) => vec![],
-                    };
-
-                    let report = gitlab_tracker_stats::StatReport::build(agg, &metrics, &filter);
+            match gitlab_tracker_stats::StatReport::load(db.as_ref(), &filter).await {
+                Ok(report) => {
                     let _ = tx2.send(crate::models::AppEvent::StatsReportReady(Box::new(report)));
                 }
                 Err(e) => {

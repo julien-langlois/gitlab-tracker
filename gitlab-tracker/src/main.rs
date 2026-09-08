@@ -508,6 +508,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
     app.restore_from_saved(saved_mrs, api_semaphore.clone(), tx.clone());
 
+    // Warm the shared stats report on startup so cockpit release data is reconciled
+    // before the user opens the fullscreen stats overlay.
+    #[cfg(feature = "stats")]
+    crate::ui::stats::trigger_background_stats_refresh(&mut app, &tx);
+
     // Fetch active milestones on startup so the autocomplete is ready immediately.
     gitlab::spawn_milestones_fetch(app.fetch_context(), tx.clone());
 
