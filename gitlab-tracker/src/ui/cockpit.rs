@@ -9,6 +9,22 @@ use ratatui::{
     Frame,
 };
 
+const MERGED_LAST_7_DAYS_WINDOW: i64 = 7;
+const MERGED_LAST_30_DAYS_WINDOW: i64 = 30;
+const STALE_DAYS_THRESHOLD: i64 = 7;
+const OLD_OPEN_WARNING_DAYS_THRESHOLD: i64 = 7;
+const OLD_OPEN_ALERT_DAYS_THRESHOLD: i64 = 14;
+const DUE_SOON_DAYS_THRESHOLD: i64 = 7;
+const COMPLEX_SCORE_THRESHOLD: f64 = 0.66;
+const MANY_COMMITS_THRESHOLD: u32 = 10;
+const MANY_FILES_THRESHOLD: u32 = 20;
+const HOT_THREADS_THRESHOLD: u32 = 10;
+const RELEASE_URGENT_DAYS_THRESHOLD: i64 = 3;
+const RELEASE_URGENT_REMAINING_THRESHOLD: usize = 2;
+const RELEASE_SOON_DAYS_THRESHOLD: i64 = 7;
+const RELEASE_SOON_REMAINING_THRESHOLD: usize = 5;
+const MAX_RELEASE_SUMMARIES: usize = 3;
+
 #[derive(Debug, Clone, Copy, Default)]
 struct DashboardSummary {
     open: usize,
@@ -56,6 +72,36 @@ struct DashboardSummary {
     recently_updated: usize,
 }
 
+#[derive(Debug, Default)]
+struct ReleaseSummary {
+    title: String,
+    due_date: Option<NaiveDate>,
+    merged: usize,
+    in_progress: usize,
+    blocked: usize,
+    waiting_review: usize,
+}
+
+impl ReleaseSummary {
+    fn remaining(&self) -> usize {
+        self.in_progress + self.blocked + self.waiting_review
+    }
+
+    fn is_at_risk(&self, today: NaiveDate) -> bool {
+        let Some(due_date) = self.due_date else {
+            return false;
+        };
+
+        let days_left = (due_date - today).num_days();
+        self.remaining() > 0
+            && (days_left < 0
+                || (days_left <= RELEASE_URGENT_DAYS_THRESHOLD
+                    && self.remaining() >= RELEASE_URGENT_REMAINING_THRESHOLD)
+                || (days_left <= RELEASE_SOON_DAYS_THRESHOLD
+                    && self.remaining() >= RELEASE_SOON_REMAINING_THRESHOLD))
+    }
+}
+
 impl DashboardSummary {
     #[cfg(feature = "stats")]
     fn from_app(app: &App) -> Self {
@@ -94,10 +140,10 @@ impl DashboardSummary {
                         if merged_at.year() == current_year && merged_at.month() == current_month {
                             summary.merged_this_month += 1;
                         }
-                        if merged_at >= now - Duration::days(7) {
+                        if merged_at >= now - Duration::days(MERGED_LAST_7_DAYS_WINDOW) {
                             summary.merged_last_7_days += 1;
                         }
-                        if merged_at >= now - Duration::days(30) {
+                        if merged_at >= now - Duration::days(MERGED_LAST_30_DAYS_WINDOW) {
                             summary.merged_last_30_days += 1;
                         }
                     }
@@ -169,7 +215,7 @@ impl DashboardSummary {
             }
 
             if parse_gitlab_datetime(mr.updated_at.as_deref())
-                .is_some_and(|updated_at| updated_at < now - Duration::days(7))
+                .is_some_and(|updated_at| updated_at < now - Duration::days(STALE_DAYS_THRESHOLD))
             {
                 summary.stale_7_days += 1;
             }
@@ -188,16 +234,16 @@ impl DashboardSummary {
                 summary.diff_stats_count += 1;
                 summary.total_diff_lines += diff_lines;
 
-                if stats.difficulty(&app.config.complexity_profile) >= 0.66 {
+                if stats.difficulty(&app.config.complexity_profile) >= COMPLEX_SCORE_THRESHOLD {
                     summary.complex += 1;
                 }
                 if diff_lines >= u64::from(app.config.complexity_profile.hard_threshold) {
                     summary.large_diff += 1;
                 }
-                if stats.commits_count >= 10 {
+                if stats.commits_count >= MANY_COMMITS_THRESHOLD {
                     summary.many_commits += 1;
                 }
-                if stats.files_changed >= 20 {
+                if stats.files_changed >= MANY_FILES_THRESHOLD {
                     summary.many_files += 1;
                 }
                 if stats.commits_behind.is_some_and(|behind| behind > 0) {
@@ -213,12 +259,12 @@ impl DashboardSummary {
             if let Some(due_date) = parse_gitlab_date(mr.milestone_due_date.as_deref()) {
                 if due_date < today {
                     summary.overdue += 1;
-                } else if due_date <= today + Duration::days(7) {
+                } else if due_date <= today + Duration::days(DUE_SOON_DAYS_THRESHOLD) {
                     summary.due_this_week += 1;
                 }
             }
 
-            if mr.user_notes_count >= 10 {
+            if mr.user_notes_count >= HOT_THREADS_THRESHOLD {
                 summary.hot_threads += 1;
             }
         }
@@ -272,68 +318,33 @@ impl DashboardSummary {
     }
 }
 
-pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
-    #[derive(Debug, Default)]
-    struct ReleaseSummary {
-        title: String,
-        due_date: Option<NaiveDate>,
-        merged: usize,
-        in_progress: usize,
-        blocked: usize,
-        waiting_review: usize,
-    }
+fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
+    let today = Utc::now().date_naive();
+    let mut releases = std::collections::BTreeMap::<String, ReleaseSummary>::new();
 
-    impl ReleaseSummary {
-        fn remaining(&self) -> usize {
-            self.in_progress + self.blocked + self.waiting_review
+    // Current dashboard data is the baseline source for release health. Stats, when
+    // compiled and loaded, only enrich historical completion counters below.
+    for mr in app.visible_mrs() {
+        let milestone = mr.milestone.trim();
+        if milestone.is_empty() || milestone == "None" {
+            continue;
         }
 
-        fn is_at_risk(&self, today: NaiveDate) -> bool {
-            let Some(due_date) = self.due_date else {
-                return false;
-            };
+        let entry = releases
+            .entry(milestone.to_string())
+            .or_insert_with(|| ReleaseSummary {
+                title: milestone.to_string(),
+                due_date: parse_gitlab_date(mr.milestone_due_date.as_deref()),
+                ..ReleaseSummary::default()
+            });
 
-            let days_left = (due_date - today).num_days();
-            self.remaining() > 0
-                && (days_left < 0
-                    || (days_left <= 3 && self.remaining() >= 2)
-                    || (days_left <= 7 && self.remaining() >= 5))
+        if entry.due_date.is_none() {
+            entry.due_date = parse_gitlab_date(mr.milestone_due_date.as_deref());
         }
-    }
 
-    #[cfg(feature = "stats")]
-    fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
-        let Some(report) = app.stats_view.report.as_ref() else {
-            return Vec::new();
-        };
-
-        let today = Utc::now().date_naive();
-        let mut releases = std::collections::BTreeMap::<String, ReleaseSummary>::new();
-
-        // Current dashboard data is still the source of truth for live, non-persisted signals.
-        for mr in app.visible_mrs() {
-            let milestone = mr.milestone.trim();
-            if milestone.is_empty() || milestone == "None" {
-                continue;
-            }
-
-            let entry = releases
-                .entry(milestone.to_string())
-                .or_insert_with(|| ReleaseSummary {
-                    title: milestone.to_string(),
-                    due_date: parse_gitlab_date(mr.milestone_due_date.as_deref()),
-                    ..ReleaseSummary::default()
-                });
-
-            if entry.due_date.is_none() {
-                entry.due_date = parse_gitlab_date(mr.milestone_due_date.as_deref());
-            }
-
-            if mr.state != GitlabMrState::Opened {
-                continue;
-            }
-
-            match mr.mergeability {
+        match mr.state {
+            GitlabMrState::Merged => entry.merged += 1,
+            GitlabMrState::Opened => match mr.mergeability {
                 MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => {
                     entry.blocked += 1;
                 }
@@ -341,149 +352,142 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
                     entry.waiting_review += 1;
                 }
                 _ => entry.in_progress += 1,
-            }
+            },
+            GitlabMrState::Closed => {}
         }
-
-        // Historical completion data belongs to the stats crate: it is persisted and
-        // deduplicated by gitlab_tracker_stats::aggregator::aggregate instead of being
-        // inferred from the currently visible MR list.
-        for (milestone, merged) in &report.aggregated.throughput_by_milestone {
-            let milestone = milestone.trim();
-            if milestone.is_empty() || milestone == "None" {
-                continue;
-            }
-
-            let entry = releases
-                .entry(milestone.to_string())
-                .or_insert_with(|| ReleaseSummary {
-                    title: milestone.to_string(),
-                    ..ReleaseSummary::default()
-                });
-            entry.merged = *merged as usize;
-        }
-
-        let mut releases: Vec<ReleaseSummary> = releases.into_values().collect();
-        releases.sort_by_key(|release| {
-            release
-                .due_date
-                .map(|due_date| ((due_date - today).num_days().abs(), due_date))
-                .unwrap_or((i64::MAX, NaiveDate::MAX))
-        });
-        releases.truncate(3);
-        releases
     }
 
-    #[cfg(not(feature = "stats"))]
-    fn release_summaries(_app: &App) -> Vec<ReleaseSummary> {
-        Vec::new()
-    }
+    enrich_release_summaries_with_stats(app, &mut releases);
 
-    fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
-        let today = Utc::now().date_naive();
-        let mut lines = Vec::new();
+    let mut releases: Vec<ReleaseSummary> = releases.into_values().collect();
+    releases.sort_by_key(|release| {
+        release
+            .due_date
+            .map(|due_date| ((due_date - today).num_days().abs(), due_date))
+            .unwrap_or((i64::MAX, NaiveDate::MAX))
+    });
+    releases.truncate(MAX_RELEASE_SUMMARIES);
+    releases
+}
 
-        for release in releases {
-            let at_risk = release.is_at_risk(today);
-            let title_color = if at_risk {
-                app.theme.accent_red
-            } else {
-                app.theme.accent_cyan
-            };
-            let due_label = release
-                .due_date
-                .map(|due_date| {
-                    let days_left = (due_date - today).num_days();
-                    if days_left < 0 {
-                        format!("D+{}", days_left.abs())
-                    } else {
-                        format!("D-{}", days_left)
-                    }
-                })
-                .unwrap_or_else(|| "no due date".to_string());
-            let prefix = if at_risk { "⚠ " } else { "  " };
+#[cfg(feature = "stats")]
+fn enrich_release_summaries_with_stats(
+    app: &App,
+    releases: &mut std::collections::BTreeMap<String, ReleaseSummary>,
+) {
+    let Some(report) = app.stats_view.report.as_ref() else {
+        return;
+    };
 
-            lines.push(Line::from(vec![
-                Span::styled(prefix.to_string(), Style::default().fg(title_color)),
-                Span::styled(
-                    format!("{} ({})", release.title, due_label),
-                    Style::default()
-                        .fg(title_color)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]));
-            lines.push(release_metric_line(
-                "Merged",
-                release.merged,
-                app.theme.accent_green,
-                app,
-            ));
-            lines.push(release_metric_line(
-                "WIP",
-                release.in_progress,
-                app.theme.fg,
-                app,
-            ));
-            lines.push(release_metric_line(
-                "Blocked",
-                release.blocked,
-                alert_color(release.blocked, app),
-                app,
-            ));
-            lines.push(release_metric_line(
-                "Review",
-                release.waiting_review,
-                warning_color(release.waiting_review, app),
-                app,
-            ));
+    // Historical completion data belongs to the stats crate: it is persisted and
+    // deduplicated by gitlab_tracker_stats::aggregator::aggregate instead of being
+    // inferred from the currently visible MR list.
+    for (milestone, merged) in &report.aggregated.throughput_by_milestone {
+        let milestone = milestone.trim();
+        if milestone.is_empty() || milestone == "None" {
+            continue;
         }
 
-        if lines.is_empty() {
-            lines.push(cockpit_metric_optional(
-                "Releases",
-                Some("n/a".to_string()),
-                app.theme.muted_inactive,
-                app,
-            ));
-        }
+        let entry = releases
+            .entry(milestone.to_string())
+            .or_insert_with(|| ReleaseSummary {
+                title: milestone.to_string(),
+                ..ReleaseSummary::default()
+            });
+        entry.merged = *merged as usize;
+    }
+}
 
-        lines
+#[cfg(not(feature = "stats"))]
+fn enrich_release_summaries_with_stats(
+    _app: &App,
+    _releases: &mut std::collections::BTreeMap<String, ReleaseSummary>,
+) {
+}
+
+fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
+    let today = Utc::now().date_naive();
+    let mut lines = Vec::new();
+
+    for release in releases {
+        let at_risk = release.is_at_risk(today);
+        let title_color = if at_risk {
+            app.theme.accent_red
+        } else {
+            app.theme.accent_cyan
+        };
+        let due_label = release
+            .due_date
+            .map(|due_date| {
+                let days_left = (due_date - today).num_days();
+                if days_left < 0 {
+                    format!("D+{}", days_left.abs())
+                } else {
+                    format!("D-{}", days_left)
+                }
+            })
+            .unwrap_or_else(|| "no due date".to_string());
+        let prefix = if at_risk { "⚠ " } else { "  " };
+
+        lines.push(Line::from(vec![
+            Span::styled(prefix.to_string(), Style::default().fg(title_color)),
+            Span::styled(
+                format!("{} ({})", release.title, due_label),
+                Style::default()
+                    .fg(title_color)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+        lines.push(release_metric_line(
+            "Merged",
+            release.merged,
+            app.theme.accent_green,
+            app,
+        ));
+        lines.push(release_metric_line(
+            "WIP",
+            release.in_progress,
+            app.theme.fg,
+            app,
+        ));
+        lines.push(release_metric_line(
+            "Blocked",
+            release.blocked,
+            alert_color(release.blocked, app),
+            app,
+        ));
+        lines.push(release_metric_line(
+            "Review",
+            release.waiting_review,
+            warning_color(release.waiting_review, app),
+            app,
+        ));
     }
 
+    if lines.is_empty() {
+        lines.push(cockpit_metric_optional(
+            "Releases",
+            Some("n/a".to_string()),
+            app.theme.muted_inactive,
+            app,
+        ));
+    }
+
+    lines
+}
+
+pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
     let summary = DashboardSummary::from_app(app);
-    let stats_enabled = {
-        #[cfg(feature = "stats")]
-        {
-            app.stats_db.is_some()
-        }
-        #[cfg(not(feature = "stats"))]
-        {
-            false
-        }
-    };
-    let releases = if stats_enabled {
-        release_summaries(app)
-    } else {
-        Vec::new()
-    };
-    let has_releases = !releases.is_empty();
+    let releases = release_summaries(app);
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(if has_releases {
-            vec![
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-            ]
-        } else {
-            vec![
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-            ]
-        })
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+        ])
         .split(area);
 
     f.render_widget(
@@ -503,12 +507,10 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
         columns[3],
     );
 
-    if has_releases {
-        f.render_widget(
-            cockpit_block(" Releases ", release_lines(app, &releases)),
-            columns[4],
-        );
-    }
+    f.render_widget(
+        cockpit_block(" Releases ", release_lines(app, &releases)),
+        columns[4],
+    );
 }
 
 fn cockpit_block(title: &'static str, lines: Vec<Line<'static>>) -> Paragraph<'static> {
@@ -558,11 +560,13 @@ fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
 }
 
 fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+    let total_blocked = summary.total_blocked();
+
     vec![
         cockpit_metric(
             "Blocked",
-            summary.total_blocked(),
-            alert_color(summary.total_blocked(), app),
+            total_blocked,
+            alert_color(total_blocked, app),
             app,
         ),
         cockpit_metric(
@@ -613,6 +617,12 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
             warning_color(summary.no_reviewer, app),
             app,
         ),
+        cockpit_metric(
+            "No assignee",
+            summary.no_assignee,
+            warning_color(summary.no_assignee, app),
+            app,
+        ),
         cockpit_metric("Flagged", summary.flagged, app.theme.accent_yellow, app),
     ]
 }
@@ -631,9 +641,9 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'stat
             summary
                 .oldest_open_days
                 .map_or(app.theme.muted_inactive, |days| {
-                    if days >= 14 {
+                    if days >= OLD_OPEN_ALERT_DAYS_THRESHOLD {
                         app.theme.accent_red
-                    } else if days >= 7 {
+                    } else if days >= OLD_OPEN_WARNING_DAYS_THRESHOLD {
                         app.theme.accent_yellow
                     } else {
                         app.theme.accent_green
