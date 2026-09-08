@@ -794,7 +794,14 @@ pub fn spawn_mr_fetch(
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        let _permit = semaphore.acquire().await.unwrap();
+        let Ok(_permit) = semaphore.acquire().await else {
+            let _ = tx.send(AppEvent::MrFailed {
+                id: mr_id,
+                error: "MR fetch cancelled: concurrency limiter was closed".to_string(),
+            });
+            return;
+        };
+
         match fetch_gitlab_data(&ctx, &mr_id, cached).await {
             Ok(data) => {
                 let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
