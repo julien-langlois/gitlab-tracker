@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Datelike, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::db::{SnapshotQuery, StatsDb, StatsError, StoredSnapshot};
@@ -43,6 +43,21 @@ pub struct AggregatedStats {
 
     /// MRs closed (abandoned) within the query window.
     pub closed_count: usize,
+
+    /// MRs merged on the current UTC calendar day.
+    pub merged_today: usize,
+
+    /// MRs merged during the current UTC ISO week.
+    pub merged_this_week: usize,
+
+    /// MRs merged during the current UTC calendar month.
+    pub merged_this_month: usize,
+
+    /// MRs merged during the last 7 rolling days.
+    pub merged_last_7_days: usize,
+
+    /// MRs merged during the last 30 rolling days.
+    pub merged_last_30_days: usize,
 
     /// Average number of MRs merged per calendar week in the window.
     /// `None` when the window duration is unknown or zero.
@@ -150,6 +165,9 @@ fn compute_stats(
             .collect()
     };
 
+    let now = Utc::now();
+    let merged_period_counts = compute_merged_period_counts(snapshots.iter(), now);
+
     let closed_count = {
         let mut seen = std::collections::HashSet::new();
         metrics
@@ -219,7 +237,6 @@ fn compute_stats(
     };
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
-    let now = Utc::now();
     let mut open_mr_ages_days: Vec<f64> = snapshots
         .iter()
         .filter(|s| s.snapshot.state == "opened")
@@ -239,6 +256,11 @@ fn compute_stats(
         total_mrs: metrics.len(),
         merged_count: merged.len(),
         closed_count,
+        merged_today: merged_period_counts.today,
+        merged_this_week: merged_period_counts.this_week,
+        merged_this_month: merged_period_counts.this_month,
+        merged_last_7_days: merged_period_counts.last_7_days,
+        merged_last_30_days: merged_period_counts.last_30_days,
         throughput_per_week,
         cycle_time_median_hours,
         cycle_time_p75_hours,
@@ -252,6 +274,62 @@ fn compute_stats(
         open_mr_ages_days,
         throughput_by_milestone,
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct MergedPeriodCounts {
+    today: usize,
+    this_week: usize,
+    this_month: usize,
+    last_7_days: usize,
+    last_30_days: usize,
+}
+
+/// Counts merged MRs across common UTC periods using the actual GitLab merge date.
+fn compute_merged_period_counts<'a, I>(snapshots: I, now: DateTime<Utc>) -> MergedPeriodCounts
+where
+    I: Iterator<Item = &'a StoredSnapshot> + DoubleEndedIterator,
+{
+    let today = now.date_naive();
+    let current_iso_week = now.iso_week();
+    let current_year = now.year();
+    let current_month = now.month();
+    let mut counts = MergedPeriodCounts::default();
+    let mut seen = std::collections::HashSet::new();
+
+    for snap in snapshots.rev() {
+        if snap.snapshot.trigger.as_str() != "on_merge" || !seen.insert(snap.snapshot.mr_id.clone())
+        {
+            continue;
+        }
+
+        let Some(merged_at) = snap
+            .snapshot
+            .merged_at
+            .as_deref()
+            .and_then(|date| date.parse::<DateTime<Utc>>().ok())
+        else {
+            continue;
+        };
+
+        if merged_at.date_naive() == today {
+            counts.today += 1;
+        }
+        if merged_at.iso_week() == current_iso_week {
+            counts.this_week += 1;
+        }
+        if merged_at.year() == current_year && merged_at.month() == current_month {
+            counts.this_month += 1;
+        }
+        if merged_at >= now - Duration::days(7) {
+            counts.last_7_days += 1;
+        }
+        if merged_at >= now - Duration::days(30) {
+            counts.last_30_days += 1;
+        }
+    }
+
+    counts
 }
 
 /// Computes the weekly throughput from the number of merged MRs and the query window.

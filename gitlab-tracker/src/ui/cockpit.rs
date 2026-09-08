@@ -287,6 +287,11 @@ impl DashboardSummary {
         self.open = stats.open_mr_ages_days.len();
         self.merged = stats.merged_count;
         self.closed = stats.closed_count;
+        self.merged_today = stats.merged_today;
+        self.merged_this_week = stats.merged_this_week;
+        self.merged_this_month = stats.merged_this_month;
+        self.merged_last_7_days = stats.merged_last_7_days;
+        self.merged_last_30_days = stats.merged_last_30_days;
 
         if let Some(oldest_open_age) = stats.open_mr_ages_days.last() {
             self.oldest_open_days = Some(oldest_open_age.floor() as i64);
