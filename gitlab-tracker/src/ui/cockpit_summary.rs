@@ -410,3 +410,108 @@ fn parse_gitlab_datetime(value: Option<&str>) -> Option<DateTime<Utc>> {
 fn parse_gitlab_date(value: Option<&str>) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(value?, "%Y-%m-%d").ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_summary_is_not_at_risk_without_due_date() {
+        let release = ReleaseSummary {
+            due_date: None,
+            in_progress: 5,
+            blocked: 2,
+            waiting_review: 1,
+            ..ReleaseSummary::default()
+        };
+
+        let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+
+        assert!(!release.is_at_risk(today));
+    }
+
+    #[test]
+    fn release_summary_is_at_risk_when_overdue_with_remaining_work() {
+        let release = ReleaseSummary {
+            due_date: NaiveDate::from_ymd_opt(2024, 5, 31),
+            in_progress: 1,
+            ..ReleaseSummary::default()
+        };
+
+        let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+
+        assert!(release.is_at_risk(today));
+    }
+
+    #[test]
+    fn release_summary_is_not_at_risk_when_overdue_but_complete() {
+        let release = ReleaseSummary {
+            due_date: NaiveDate::from_ymd_opt(2024, 5, 31),
+            merged: 3,
+            ..ReleaseSummary::default()
+        };
+
+        let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+
+        assert!(!release.is_at_risk(today));
+    }
+
+    #[test]
+    fn release_summary_is_at_risk_when_urgent_threshold_is_met() {
+        let release = ReleaseSummary {
+            due_date: NaiveDate::from_ymd_opt(2024, 6, 4),
+            in_progress: RELEASE_URGENT_REMAINING_THRESHOLD,
+            ..ReleaseSummary::default()
+        };
+
+        let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+
+        assert!(release.is_at_risk(today));
+    }
+
+    #[test]
+    fn dashboard_summary_total_blocked_counts_all_blocking_categories() {
+        let summary = DashboardSummary {
+            conflicts: 1,
+            needs_rebase: 2,
+            ci_failing: 3,
+            discussions: 4,
+            requested_changes: 5,
+            ..DashboardSummary::default()
+        };
+
+        assert_eq!(summary.total_blocked(), 15);
+    }
+
+    #[test]
+    fn dashboard_summary_avg_diff_lines_uses_runtime_diff_stats() {
+        let summary = DashboardSummary {
+            diff_stats_count: 2,
+            total_diff_lines: 101,
+            ..DashboardSummary::default()
+        };
+
+        assert_eq!(summary.avg_diff_lines(), Some(50));
+    }
+
+    #[test]
+    fn dashboard_summary_avg_diff_lines_prefers_persisted_stats_report_value() {
+        let summary = DashboardSummary {
+            diff_stats_count: 2,
+            total_diff_lines: 100,
+            avg_diff_lines_from_stats: Some(42),
+            ..DashboardSummary::default()
+        };
+
+        assert_eq!(summary.avg_diff_lines(), Some(42));
+    }
+
+    #[test]
+    fn over_estimate_requires_positive_estimate_and_spent_above_estimate() {
+        assert!(is_over_estimate(Some(3600), Some(7200)));
+        assert!(!is_over_estimate(Some(3600), Some(3600)));
+        assert!(!is_over_estimate(Some(0), Some(3600)));
+        assert!(!is_over_estimate(None, Some(3600)));
+        assert!(!is_over_estimate(Some(3600), None));
+    }
+}
