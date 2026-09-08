@@ -1,5 +1,11 @@
 # gitlab-tracker-notify
 
+[![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
+[![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-notify)](https://crates.io/crates/gitlab-tracker-notify)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-notify)](https://crates.io/crates/gitlab-tracker-notify)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+
 Optional desktop notification plugin for [gitlab-tracker](../README.md).
 
 Powered by [`notify-rust`](https://crates.io/crates/notify-rust), it surfaces MR state changes as native OS notifications. Build without the `desktop` feature for a zero-dependency stub suitable for headless or CI environments.

@@ -1,5 +1,11 @@
 # gitlab-tracker-core
 
+[![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
+[![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-core)](https://crates.io/crates/gitlab-tracker-core)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-core)](https://crates.io/crates/gitlab-tracker-core)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+
 Shared domain library for [gitlab-tracker](../README.md).
 
 This crate defines **all extension points** of the tracker — trait contracts, domain types,

@@ -1,5 +1,11 @@
 # gitlab-tracker-redmine
 
+[![CI Quality Gate](https://github.com/julien-langlois/gitlab-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/julien-langlois/gitlab-tracker/actions)
+[![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-redmine)](https://crates.io/crates/gitlab-tracker-redmine)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-redmine)](https://crates.io/crates/gitlab-tracker-redmine)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+
 Optional Redmine integration plugin for [gitlab-tracker](../README.md).
 
 Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redmine ticket references in MR titles and descriptions, and enrich the TUI with ticket details and time tracking.
