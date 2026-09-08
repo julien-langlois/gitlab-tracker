@@ -1,5 +1,13 @@
 use chrono::{DateTime, Utc};
 
+/// Returns `true` when a GitLab display string belongs to the configured username.
+///
+/// GitLab user fields are rendered as `Full Name (@username)` in this application.
+/// Matching on `@username` keeps the check stable when the display name changes.
+pub fn matches_gitlab_username(display: &str, username: &str) -> bool {
+    display.contains(format!("@{}", username).as_str())
+}
+
 /// Computes a fuzzy match score between a `query` and a `haystack` string.
 ///
 /// The algorithm looks for all query characters in order inside `haystack`

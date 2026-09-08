@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState};
+use crate::utils::matches_gitlab_username;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use std::collections::BTreeMap;
 
@@ -193,14 +194,13 @@ impl DashboardSummary {
             }
 
             if let Some(username) = username {
-                let needle = format!("@{}", username);
-                if mr.assignee.contains(&needle) {
+                if matches_gitlab_username(&mr.assignee, username) {
                     summary.assigned_to_me += 1;
                 }
                 if mr
                     .reviewers
                     .iter()
-                    .any(|reviewer| reviewer.contains(&needle))
+                    .any(|reviewer| matches_gitlab_username(reviewer, username))
                 {
                     summary.review_by_me += 1;
                 }

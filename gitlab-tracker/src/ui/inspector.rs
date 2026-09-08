@@ -4,7 +4,7 @@ use crate::models::{
 };
 use crate::ui::table::badge_label;
 use crate::ui::theme::Palette;
-use crate::utils::format_relative_date;
+use crate::utils::{format_relative_date, matches_gitlab_username};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -478,14 +478,11 @@ pub fn render_safe_inspector_text(
     lines.push(Line::from(vec![Span::raw("")]));
     lines.push(section_header("People", palette));
 
-    // Helper: returns `true` when a display string (e.g. "Alice (@jdoe)") belongs
-    // to the configured GitLab user. Matches on the "@<username>" substring so it
-    // is robust against name changes (only the login is authoritative).
     let is_me = |display: &str| -> bool {
         config
             .gitlab_username
             .as_deref()
-            .map(|u| display.contains(&format!("@{}", u)))
+            .map(|username| matches_gitlab_username(display, username))
             .unwrap_or(false)
     };
 

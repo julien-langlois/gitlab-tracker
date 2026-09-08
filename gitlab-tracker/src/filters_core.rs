@@ -1,3 +1,4 @@
+use crate::utils::matches_gitlab_username;
 use gitlab_tracker_core::{FilterDef, MrSnapshot};
 
 // ── Built-in GitLab filters — priority 0–99 ───────────────────────────────────
@@ -153,9 +154,7 @@ inventory::submit!(FilterDef {
         let Some(username) = mr.gitlab_username else {
             return false;
         };
-        // GitLab formats assignee as "Full Name (@username)" — match on "@<username>".
-        let needle = format!("@{}", username);
-        mr.assignee.contains(needle.as_str())
+        matches_gitlab_username(mr.assignee, username)
     },
 });
 
@@ -171,9 +170,9 @@ inventory::submit!(FilterDef {
         let Some(username) = mr.gitlab_username else {
             return false;
         };
-        // GitLab formats each reviewer as "Full Name (@username)" — match on "@<username>".
-        let needle = format!("@{}", username);
-        mr.reviewers.iter().any(|r| r.contains(needle.as_str()))
+        mr.reviewers
+            .iter()
+            .any(|reviewer| matches_gitlab_username(reviewer, username))
     },
 });
 
