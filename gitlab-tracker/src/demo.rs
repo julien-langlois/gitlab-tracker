@@ -563,6 +563,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         activity_stale_days: Some(7),
         activity_recent_days: Some(2),
         show_cockpit: Some(true),
+        cockpit_thresholds: None,
         stats: None,
         visible_columns: None,
         label_colors: None,

@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::config::CockpitThresholds;
 use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState};
 use crate::utils::matches_gitlab_username;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
@@ -6,17 +7,6 @@ use std::collections::BTreeMap;
 
 const MERGED_LAST_7_DAYS_WINDOW: i64 = 7;
 const MERGED_LAST_30_DAYS_WINDOW: i64 = 30;
-const STALE_DAYS_THRESHOLD: i64 = 7;
-const DUE_SOON_DAYS_THRESHOLD: i64 = 7;
-const COMPLEX_SCORE_THRESHOLD: f64 = 0.66;
-const MANY_COMMITS_THRESHOLD: u32 = 10;
-const MANY_FILES_THRESHOLD: u32 = 20;
-const HOT_THREADS_THRESHOLD: u32 = 10;
-const RELEASE_URGENT_DAYS_THRESHOLD: i64 = 3;
-const RELEASE_URGENT_REMAINING_THRESHOLD: usize = 2;
-const RELEASE_SOON_DAYS_THRESHOLD: i64 = 7;
-const RELEASE_SOON_REMAINING_THRESHOLD: usize = 5;
-const MAX_RELEASE_SUMMARIES: usize = 3;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(super) struct DashboardSummary {
@@ -80,7 +70,7 @@ impl ReleaseSummary {
         self.in_progress + self.blocked + self.waiting_review
     }
 
-    pub(super) fn is_at_risk(&self, today: NaiveDate) -> bool {
+    pub(super) fn is_at_risk(&self, today: NaiveDate, thresholds: &CockpitThresholds) -> bool {
         let Some(due_date) = self.due_date else {
             return false;
         };
@@ -88,10 +78,10 @@ impl ReleaseSummary {
         let days_left = (due_date - today).num_days();
         self.remaining() > 0
             && (days_left < 0
-                || (days_left <= RELEASE_URGENT_DAYS_THRESHOLD
-                    && self.remaining() >= RELEASE_URGENT_REMAINING_THRESHOLD)
-                || (days_left <= RELEASE_SOON_DAYS_THRESHOLD
-                    && self.remaining() >= RELEASE_SOON_REMAINING_THRESHOLD))
+                || (days_left <= thresholds.release_urgent_days
+                    && self.remaining() >= thresholds.release_urgent_remaining)
+                || (days_left <= thresholds.release_soon_days
+                    && self.remaining() >= thresholds.release_soon_remaining))
     }
 }
 
@@ -117,6 +107,7 @@ impl DashboardSummary {
         let current_month = now.month();
         let username = app.config.gitlab_username.as_deref();
         let tracker_enabled = app.tracker.is_some();
+        let thresholds = &app.config.cockpit_thresholds;
 
         for mr in app.visible_mrs() {
             match mr.state {
@@ -207,7 +198,7 @@ impl DashboardSummary {
             }
 
             if parse_gitlab_datetime(mr.updated_at.as_deref())
-                .is_some_and(|updated_at| updated_at < now - Duration::days(STALE_DAYS_THRESHOLD))
+                .is_some_and(|updated_at| updated_at < now - Duration::days(thresholds.stale_days))
             {
                 summary.stale_7_days += 1;
             }
@@ -226,16 +217,16 @@ impl DashboardSummary {
                 summary.diff_stats_count += 1;
                 summary.total_diff_lines += diff_lines;
 
-                if stats.difficulty(&app.config.complexity_profile) >= COMPLEX_SCORE_THRESHOLD {
+                if stats.difficulty(&app.config.complexity_profile) >= thresholds.complex_score {
                     summary.complex += 1;
                 }
                 if diff_lines >= u64::from(app.config.complexity_profile.hard_threshold) {
                     summary.large_diff += 1;
                 }
-                if stats.commits_count >= MANY_COMMITS_THRESHOLD {
+                if stats.commits_count >= thresholds.many_commits {
                     summary.many_commits += 1;
                 }
-                if stats.files_changed >= MANY_FILES_THRESHOLD {
+                if stats.files_changed >= thresholds.many_files {
                     summary.many_files += 1;
                 }
                 if stats.commits_behind.is_some_and(|behind| behind > 0) {
@@ -251,12 +242,12 @@ impl DashboardSummary {
             if let Some(due_date) = parse_gitlab_date(mr.milestone_due_date.as_deref()) {
                 if due_date < today {
                     summary.overdue += 1;
-                } else if due_date <= today + Duration::days(DUE_SOON_DAYS_THRESHOLD) {
+                } else if due_date <= today + Duration::days(thresholds.due_soon_days) {
                     summary.due_this_week += 1;
                 }
             }
 
-            if mr.user_notes_count >= HOT_THREADS_THRESHOLD {
+            if mr.user_notes_count >= thresholds.hot_threads {
                 summary.hot_threads += 1;
             }
         }
@@ -363,7 +354,7 @@ pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
             .map(|due_date| ((due_date - today).num_days().abs(), due_date))
             .unwrap_or((i64::MAX, NaiveDate::MAX))
     });
-    releases.truncate(MAX_RELEASE_SUMMARIES);
+    releases.truncate(app.config.cockpit_thresholds.max_release_summaries);
     releases
 }
 
@@ -426,8 +417,9 @@ mod tests {
         };
 
         let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+        let thresholds = CockpitThresholds::default();
 
-        assert!(!release.is_at_risk(today));
+        assert!(!release.is_at_risk(today, &thresholds));
     }
 
     #[test]
@@ -439,8 +431,9 @@ mod tests {
         };
 
         let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+        let thresholds = CockpitThresholds::default();
 
-        assert!(release.is_at_risk(today));
+        assert!(release.is_at_risk(today, &thresholds));
     }
 
     #[test]
@@ -452,21 +445,23 @@ mod tests {
         };
 
         let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
+        let thresholds = CockpitThresholds::default();
 
-        assert!(!release.is_at_risk(today));
+        assert!(!release.is_at_risk(today, &thresholds));
     }
 
     #[test]
     fn release_summary_is_at_risk_when_urgent_threshold_is_met() {
+        let thresholds = CockpitThresholds::default();
         let release = ReleaseSummary {
             due_date: NaiveDate::from_ymd_opt(2024, 6, 4),
-            in_progress: RELEASE_URGENT_REMAINING_THRESHOLD,
+            in_progress: thresholds.release_urgent_remaining,
             ..ReleaseSummary::default()
         };
 
         let today = NaiveDate::from_ymd_opt(2024, 6, 1).expect("valid test date");
 
-        assert!(release.is_at_risk(today));
+        assert!(release.is_at_risk(today, &thresholds));
     }
 
     #[test]

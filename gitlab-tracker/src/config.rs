@@ -63,6 +63,56 @@ fn default_show_cockpit() -> bool {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CockpitThresholds {
+    /// Number of days after which an open MR is counted as stale in the cockpit.
+    pub stale_days: i64,
+    /// Number of days after which the oldest open MR metric turns yellow.
+    pub old_open_warning_days: i64,
+    /// Number of days after which the oldest open MR metric turns red.
+    pub old_open_alert_days: i64,
+    /// Number of days before a milestone due date is counted as due soon.
+    pub due_soon_days: i64,
+    /// Difficulty score from which an MR is counted as complex.
+    pub complex_score: f64,
+    /// Commit count from which an MR is counted as having many commits.
+    pub many_commits: u32,
+    /// Changed file count from which an MR is counted as touching many files.
+    pub many_files: u32,
+    /// User note count from which an MR is counted as a hot thread.
+    pub hot_threads: u32,
+    /// Days left threshold for urgent release risk detection.
+    pub release_urgent_days: i64,
+    /// Remaining MR count threshold for urgent release risk detection.
+    pub release_urgent_remaining: usize,
+    /// Days left threshold for soon release risk detection.
+    pub release_soon_days: i64,
+    /// Remaining MR count threshold for soon release risk detection.
+    pub release_soon_remaining: usize,
+    /// Maximum number of release summaries displayed in the cockpit.
+    pub max_release_summaries: usize,
+}
+
+impl Default for CockpitThresholds {
+    fn default() -> Self {
+        Self {
+            stale_days: 7,
+            old_open_warning_days: 7,
+            old_open_alert_days: 14,
+            due_soon_days: 7,
+            complex_score: 0.66,
+            many_commits: 10,
+            many_files: 20,
+            hot_threads: 10,
+            release_urgent_days: 3,
+            release_urgent_remaining: 2,
+            release_soon_days: 7,
+            release_soon_remaining: 5,
+            max_release_summaries: 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LabelColorConfig {
     pub bg: String,
     pub fg: String,
@@ -86,6 +136,9 @@ pub struct AppConfig {
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
+    /// Thresholds used by the operational cockpit metrics and release risk detection.
+    #[serde(default)]
+    pub cockpit_thresholds: CockpitThresholds,
     /// Controls which optional columns are visible in the MR table.
     /// All columns are hidden by default — enable them individually in config.json.
     #[serde(default)]
@@ -171,6 +224,7 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             show_cockpit: default_show_cockpit(),
+            cockpit_thresholds: CockpitThresholds::default(),
             visible_columns: VisibleColumns::default(),
             complexity_profile: crate::models::DifficultyProfile::default(),
             // Populated at runtime by AppEvent::GitlabLabelsLoaded — always starts empty.

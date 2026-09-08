@@ -141,6 +141,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     if let Some(show_cockpit) = project.show_cockpit {
         config.show_cockpit = show_cockpit;
     }
+    if let Some(thresholds) = &project.cockpit_thresholds {
+        config.cockpit_thresholds = thresholds.clone();
+    }
     if let Some(cols) = &project.visible_columns {
         config.visible_columns = cols.clone();
     }

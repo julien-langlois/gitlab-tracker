@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::config::{AppConfig, CockpitThresholds};
 use crate::models::{MrStatus, SavedMr, SavedState, TrackedMr};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -65,6 +65,27 @@ pub struct ProjectEntry {
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_cockpit: Option<bool>,
+    /// Thresholds used by the operational cockpit metrics and release risk detection.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// [project.cockpit_thresholds]
+    /// stale_days = 7
+    /// old_open_warning_days = 7
+    /// old_open_alert_days = 14
+    /// due_soon_days = 7
+    /// complex_score = 0.66
+    /// many_commits = 10
+    /// many_files = 20
+    /// hot_threads = 10
+    /// release_urgent_days = 3
+    /// release_urgent_remaining = 2
+    /// release_soon_days = 7
+    /// release_soon_remaining = 5
+    /// max_release_summaries = 3
+    /// ```
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cockpit_thresholds: Option<CockpitThresholds>,
     /// Stats feature settings for this project (retention policy, sprint duration, …).
     ///
     /// Grouped under a `[project.stats]` sub-table in `projects.toml`, mirroring
@@ -334,6 +355,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         activity_stale_days,
         activity_recent_days,
         show_cockpit: None,
+        cockpit_thresholds: None,
         visible_columns,
         label_colors,
         tracker,
@@ -566,6 +588,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             activity_stale_days: None,
             activity_recent_days: None,
             show_cockpit: None,
+            cockpit_thresholds: None,
             visible_columns: None,
             label_colors: None,
             tracker: None,
@@ -676,6 +699,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         activity_stale_days: None,
         activity_recent_days: None,
         show_cockpit: None,
+        cockpit_thresholds: None,
         visible_columns: None,
         label_colors: None,
         tracker: None,

@@ -124,15 +124,15 @@
 
   MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
 
-* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a five-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The **Releases** column is always shown from live milestone data; when built with `--features stats`, its historical merged counts are enriched from the local stats report.
+* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a five-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The **Releases** column is always shown from live milestone data; when built with `--features stats`, its historical merged counts are enriched from the local stats report. Operational thresholds are configurable per project with `[project.cockpit_thresholds]`.
 
   | Column              | Signals                                                                                                                                                                                                                                  |
   | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | **Flow**            | Open / mergeable / draft / merged / closed MRs, plus merge cadence: merged today, current calendar week, current calendar month, rolling last 7 days, and rolling last 30 days                                                           |
   | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, MRs without assignee, and manually flagged MRs                           |
-  | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due in the next 7 days, overdue milestones, MRs behind their target branch, hot threads (`10+` notes), and optional tracker coverage / over-estimate                  |
+  | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due soon, overdue milestones, MRs behind their target branch, hot threads, and optional tracker coverage / over-estimate                                              |
   | **Quality / Scope** | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                                              |
-  | **Releases**        | The 3 closest known milestones by due date, with live merged / WIP / blocked / waiting-review counts from the visible dashboard. When `--features stats` is enabled, merged counts are reconciled from the local stats database. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
+  | **Releases**        | The closest known milestones by due date, with live merged / WIP / blocked / waiting-review counts from the visible dashboard. When `--features stats` is enabled, merged counts are reconciled from the local stats database. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
 
   Example release summary:
 
@@ -354,6 +354,22 @@ activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 # is available. Set to false to keep the dashboard table-only for this project.
 # Default: true. Editable from the in-app settings dashboard with [,].
 show_cockpit = true
+
+# Operational cockpit thresholds. Omit this table to use the defaults below.
+[project.cockpit_thresholds]
+stale_days = 7                  # Count open MRs as stale after N days without updates
+old_open_warning_days = 7        # Turn oldest-open age yellow at N days
+old_open_alert_days = 14         # Turn oldest-open age red at N days
+due_soon_days = 7                # Count milestones as due soon within N days
+complex_score = 0.66             # Count MRs as complex from this difficulty score
+many_commits = 10                # Count MRs with at least N commits as many-commit MRs
+many_files = 20                  # Count MRs touching at least N files as many-file MRs
+hot_threads = 10                 # Count MRs with at least N notes as hot threads
+release_urgent_days = 3          # Urgent release-risk window in days
+release_urgent_remaining = 2     # Remaining MR threshold for urgent release risk
+release_soon_days = 7            # Soon release-risk window in days
+release_soon_remaining = 5       # Remaining MR threshold for soon release risk
+max_release_summaries = 3        # Maximum releases shown in the cockpit
 
 # Automatically discover and track all newly created MRs at each refresh cycle.
 # This includes MRs already merged between two cycles, so stats coverage remains

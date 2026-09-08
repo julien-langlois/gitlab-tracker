@@ -9,9 +9,6 @@ use ratatui::{
     Frame,
 };
 
-const OLD_OPEN_WARNING_DAYS_THRESHOLD: i64 = 7;
-const OLD_OPEN_ALERT_DAYS_THRESHOLD: i64 = 14;
-
 #[path = "cockpit_summary.rs"]
 mod cockpit_summary;
 
@@ -20,7 +17,7 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     for release in releases {
-        let at_risk = release.is_at_risk(today);
+        let at_risk = release.is_at_risk(today, &app.config.cockpit_thresholds);
         let title_color = if at_risk {
             app.theme.accent_red
         } else {
@@ -238,9 +235,10 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
 }
 
 fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+    let thresholds = &app.config.cockpit_thresholds;
     let mut lines = vec![
-        cockpit_metric(
-            "Stale > 7d",
+        cockpit_metric_dynamic(
+            format!("Stale > {}d", thresholds.stale_days),
             summary.stale_7_days,
             warning_color(summary.stale_7_days, app),
             app,
@@ -251,9 +249,9 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'stat
             summary
                 .oldest_open_days
                 .map_or(app.theme.muted_inactive, |days| {
-                    if days >= OLD_OPEN_ALERT_DAYS_THRESHOLD {
+                    if days >= thresholds.old_open_alert_days {
                         app.theme.accent_red
-                    } else if days >= OLD_OPEN_WARNING_DAYS_THRESHOLD {
+                    } else if days >= thresholds.old_open_warning_days {
                         app.theme.accent_yellow
                     } else {
                         app.theme.accent_green
@@ -267,8 +265,8 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'stat
             warning_color(summary.no_milestone, app),
             app,
         ),
-        cockpit_metric(
-            "Due next 7d",
+        cockpit_metric_dynamic(
+            format!("Due next {}d", thresholds.due_soon_days),
             summary.due_this_week,
             warning_color(summary.due_this_week, app),
             app,
@@ -387,6 +385,10 @@ fn cockpit_metric(label: &'static str, value: usize, color: Color, app: &App) ->
     cockpit_metric_optional(label, Some(value.to_string()), color, app)
 }
 
+fn cockpit_metric_dynamic(label: String, value: usize, color: Color, app: &App) -> Line<'static> {
+    cockpit_metric_optional_dynamic(label, Some(value.to_string()), color, app)
+}
+
 fn release_metric_line(
     label: &'static str,
     value: usize,
@@ -407,6 +409,15 @@ fn release_metric_line(
 
 fn cockpit_metric_optional(
     label: &'static str,
+    value: Option<String>,
+    color: Color,
+    app: &App,
+) -> Line<'static> {
+    cockpit_metric_optional_dynamic(label.to_string(), value, color, app)
+}
+
+fn cockpit_metric_optional_dynamic(
+    label: String,
     value: Option<String>,
     color: Color,
     app: &App,
