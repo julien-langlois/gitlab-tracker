@@ -134,6 +134,24 @@ pub fn ticket_field_changed(
     show_with_url(notification, ticket_url.to_owned());
 }
 
+/// Notify that a linked tracker ticket was automatically transitioned by the app.
+#[cfg(feature = "desktop")]
+pub fn ticket_status_transitioned(
+    ticket_id: &str,
+    mr_title: &str,
+    old_status: &str,
+    new_status: &str,
+    ticket_url: &str,
+) {
+    let notification = notify_rust::Notification::new()
+        .summary(&format!("Ticket #{} — status transitioned", ticket_id))
+        .body(&format!("{}\n{} → {}", mr_title, old_status, new_status))
+        .icon("dialog-information")
+        .action("default", "Open ticket")
+        .finalize();
+    show_with_url(notification, ticket_url.to_owned());
+}
+
 // ── No-op stubs when the `desktop` feature is disabled ───────────────────────
 
 #[cfg(not(feature = "desktop"))]
@@ -165,6 +183,17 @@ pub fn ticket_field_changed(
     _field: &str,
     _old: &str,
     _new: &str,
+    _ticket_url: &str,
+) {
+}
+
+#[cfg(not(feature = "desktop"))]
+#[inline(always)]
+pub fn ticket_status_transitioned(
+    _ticket_id: &str,
+    _mr_title: &str,
+    _old_status: &str,
+    _new_status: &str,
     _ticket_url: &str,
 ) {
 }

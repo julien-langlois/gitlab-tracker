@@ -14,7 +14,7 @@ Powered by [`notify-rust`](https://crates.io/crates/notify-rust), it surfaces MR
 
 ## Events
 
-Nine events trigger a desktop notification:
+Ten events trigger a desktop notification:
 
 **GitLab MR events**
 
@@ -37,6 +37,7 @@ Each notification shows the changed field with a clear **before → after** form
 | 👤 **Assignee changed** | Ticket assignee changed (e.g. `Alice → Bob`, or `→ Unassigned`) |
 | 📦 **Version changed** | Target version/release changed (e.g. `v1.2 → v1.3`, or `→ None`) |
 | 📊 **Progress changed** | Completion percentage changed in either direction (e.g. `50% → 75%` or `75% → 50%`) |
+| ✅ **Automatic status transition** | The app successfully transitioned a linked tracker ticket after a configured workflow mapping (e.g. MR `Opened → Merged` triggers ticket `In Progress → Resolved`) |
 
 Tracker ticket notifications open the **ticket URL** (not the MR) when clicked.
 

@@ -52,7 +52,9 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
 
 * **Log time (`L`):** open a popup to submit a new time entry directly to Redmine — select the activity category, enter a duration (e.g. `1h30`, `90m`, `1.5h`), optionally add a comment, and confirm with `Enter`.
 * **Tracker column** in the main table (toggleable via `C`) — shows ticket ID, status, and spent/estimated time at a glance.
-* **Status discovery CLI:** list Redmine issue status IDs from the terminal via `gitlab-tracker tracker-statuses`, backed by Redmine's `GET /issue_statuses.json` endpoint. This helps configure future GitLab-to-Redmine status transition mappings without guessing numeric IDs.
+* **Status discovery CLI:** list Redmine issue status IDs from the terminal via `gitlab-tracker tracker-statuses`, backed by Redmine's `GET /issue_statuses.json` endpoint. This helps configure GitLab-to-Redmine status transition mappings without guessing numeric IDs.
+* **Safe automatic status transitions:** when configured, a GitLab MR transition from `Opened` to `Merged` or `Closed` can update the linked Redmine issue status. The update is guarded by an optimistic concurrency check: Redmine is changed only if its live status still matches the last status known locally, preventing accidental overwrite of manual workflow changes.
+* **Transition notifications:** after a successful automatic Redmine status transition, the desktop notification plugin emits an "Open ticket" notification showing the old and new statuses.
 
 ---
 
@@ -140,6 +142,13 @@ ticket_patterns = [
 "High"   = { bg = "yellow",    fg = "black" }
 "Urgent" = { bg = "red",       fg = "white" }
 "*"      = { bg = "dark_gray", fg = "white" }
+
+# Optional workflow automation. Values are Redmine status IDs discovered with:
+#   gitlab-tracker --project "My Company — Backend" tracker-statuses
+# Each key is optional: configure only merged, only closed, both, or neither.
+[project.tracker.status_transitions.gitlab_state]
+merged = "3"
+closed = "5"
 ```
 
 #### Multi-tenant example — two projects, two Redmine instances
@@ -179,6 +188,29 @@ Each instance has its own token stored independently in the OS keyring (keyed by
 | `ticket_patterns` | ❌ | Regex list to detect ticket IDs — capture group 1 must match the numeric ID. Defaults to `#1234`, `refs #1234`, and full URL patterns |
 | `tracker_type_colors` | ❌ | Badge colour map for the `tracker.name` field. Keys are case-insensitive; `"*"` is a catch-all. Omit to use the default (dark_gray / white) |
 | `priority_colors` | ❌ | Badge colour map for the `priority.name` field. Same rules as above |
+| `status_transitions.gitlab_state.merged` | ❌ | Redmine `status_id` applied when a tracked MR transitions from `Opened` to `Merged` |
+| `status_transitions.gitlab_state.closed` | ❌ | Redmine `status_id` applied when a tracked MR transitions from `Opened` to `Closed` |
+
+### Automatic Redmine status transitions
+
+Status transitions are opt-in and configured per project. You can map either `merged`, `closed`, both, or neither:
+
+```toml
+[project.tracker.status_transitions.gitlab_state]
+merged = "3"
+closed = "5"
+```
+
+When a tracked MR transitions from `Opened` to `Merged` or `Closed`, the app attempts to transition the linked Redmine issue through `RedmineProvider::transition_ticket_status()`, which delegates to `PUT /issues/{id}.json` with `issue.status_id`.
+
+To avoid overwriting manual workflow changes, the orchestrator performs an optimistic concurrency check before writing:
+
+1. keep the last locally known Redmine status from the cached `LinkedTicket`;
+2. fetch the live Redmine issue before transitioning;
+3. transition only when the live Redmine status still equals the locally known status;
+4. if the live status differs, skip the transition and update the local cache instead.
+
+After a successful transition, the issue is fetched again and the notification plugin emits a desktop notification showing the old and new statuses. Clicking it opens the Redmine ticket.
 
 ### Discover Redmine status IDs from the CLI
 

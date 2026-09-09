@@ -27,6 +27,25 @@ pub struct LabelColorConfig {
     pub fg: String,
 }
 
+/// GitLab lifecycle-state to Redmine status-id mapping.
+///
+/// Values are Redmine `status_id` strings discovered via `gitlab-tracker tracker-statuses`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GitlabStateTransitionConfig {
+    /// Redmine status id applied when a GitLab MR transitions to `Merged`.
+    pub merged: Option<String>,
+    /// Redmine status id applied when a GitLab MR transitions to `Closed`.
+    pub closed: Option<String>,
+}
+
+/// Redmine workflow automation mappings.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StatusTransitionsConfig {
+    /// Mapping from GitLab MR lifecycle states to Redmine status ids.
+    #[serde(default)]
+    pub gitlab_state: GitlabStateTransitionConfig,
+}
+
 /// Per-project Redmine integration configuration embedded in `projects.toml`
 /// under `[project.redmine]`.
 ///
@@ -93,6 +112,14 @@ pub struct RedmineConfig {
     /// ```
     #[serde(default)]
     pub priority_colors: HashMap<String, LabelColorConfig>,
+
+    /// Optional workflow automation mapping from GitLab MR states to Redmine status IDs.
+    ///
+    /// The mapping is guarded by optimistic concurrency in the orchestrator: the issue
+    /// is transitioned only when Redmine still has the same status as the last locally
+    /// cached ticket, preventing accidental overwrite of manual workflow changes.
+    #[serde(default)]
+    pub status_transitions: StatusTransitionsConfig,
 }
 
 impl Default for RedmineConfig {
@@ -102,6 +129,7 @@ impl Default for RedmineConfig {
             ticket_patterns: default_patterns(),
             tracker_type_colors: HashMap::new(),
             priority_colors: HashMap::new(),
+            status_transitions: StatusTransitionsConfig::default(),
         }
     }
 }

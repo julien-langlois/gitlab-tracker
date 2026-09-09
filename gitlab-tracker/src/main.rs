@@ -219,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // crate — adding a new provider (Jira, Linear, …) means adding one `else if`
     // branch here and a new feature-gated crate, without touching any other file.
     #[cfg(feature = "redmine")]
-    let redmine_provider: Option<app::TrackerHandle> = {
+    let redmine_provider: Option<(app::TrackerHandle, app::TicketTransitionHandle)> = {
         use std::sync::Arc;
 
         // Extract the generic tracker config from the active project entry.
@@ -259,11 +259,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Token is keyed by URL — each tenant instance is independent.
                     gitlab_tracker_redmine::keyring::get_or_prompt_token(&redmine_cfg.url).map(
                         |tok| {
-                            let provider = gitlab_tracker_redmine::RedmineProvider::new(
+                            let provider = Arc::new(gitlab_tracker_redmine::RedmineProvider::new(
                                 redmine_cfg,
                                 tok.to_string(),
-                            );
-                            Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
+                            ));
+                            (
+                                Arc::clone(&provider)
+                                    as Arc<dyn gitlab_tracker_core::TrackerProvider>,
+                                provider as Arc<dyn gitlab_tracker_core::TicketTransitionProvider>,
+                            )
                         },
                     )
                 }
@@ -350,9 +354,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This block is generic: any future provider (Jira, Linear, …) gets wired here
     // under its own feature flag without touching the logic below.
     #[cfg(feature = "redmine")]
-    if let Some(ref provider) = redmine_provider {
+    if let Some((provider, transitioner)) = redmine_provider {
         app.tracker_colors = build_tracker_colors(provider.as_ref());
-        app.tracker = redmine_provider;
+        app.tracker = Some(provider);
+        app.ticket_transitioner = Some(transitioner);
     }
 
     // Collect all shortcut blocks registered via inventory::submit! across every

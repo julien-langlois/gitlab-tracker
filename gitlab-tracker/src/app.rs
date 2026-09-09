@@ -7,7 +7,7 @@ use crate::settings::SettingsEditorState;
 use crate::storage::ProjectEntry;
 use gitlab_tracker_core::{
     collect_all_columns, collect_all_filters, ColumnDef, DefaultMrEventPolicy, FilterDef,
-    MrEventPolicy, MrLifecycleEvent, MrSnapshot,
+    LinkedTicket, MrEventPolicy, MrLifecycleEvent, MrSnapshot,
 };
 use gitlab_tracker_notify as notify;
 use ratatui::widgets::TableState;
@@ -21,6 +21,12 @@ use tokio::sync::Semaphore;
 /// Wrapped in `Arc` so it can be cloned cheaply into spawned async tasks.
 /// `None` when no provider is configured or the user skipped the token prompt.
 pub type TrackerHandle = Arc<dyn gitlab_tracker_core::TrackerProvider>;
+
+/// Shared handle to a tracker provider that supports status/workflow transitions.
+///
+/// Kept separate from `TrackerHandle` so read-only providers are not forced to expose
+/// mutating operations. `None` when the active provider has no transition capability.
+pub type TicketTransitionHandle = Arc<dyn gitlab_tracker_core::TicketTransitionProvider>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SortColumn {
@@ -395,6 +401,11 @@ pub struct App {
     /// Active tracker provider (Redmine, Jira, Trello, …), shared across async tasks via Arc.
     /// `None` when no provider is configured or the user skipped the token prompt.
     pub tracker: Option<TrackerHandle>,
+    /// Optional status transition capability exposed by the active tracker provider.
+    ///
+    /// Stored separately from `tracker` to keep read-only providers compatible with the
+    /// base `TrackerProvider` contract while allowing workflow automation when available.
+    pub ticket_transitioner: Option<TicketTransitionHandle>,
     /// Colour maps for tracker badge labels (type and priority).
     /// Populated from the active tracker's config at startup and forwarded to the Tracker pane renderer.
     /// Defaults to empty maps (dark_gray / white fallback) when no provider is configured.
@@ -549,6 +560,7 @@ impl App {
             startup_tracker_estimate: None,
             // Initialised to None — main.rs injects the provider after keyring lookup.
             tracker: None,
+            ticket_transitioner: None,
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
             activities: Vec::new(),
             time_entries: Vec::new(),
@@ -1047,6 +1059,125 @@ impl TrackedMrExt for Vec<TrackedMr> {
     }
 }
 
+fn transition_target_for_state(project: &ProjectEntry, state: &GitlabMrState) -> Option<String> {
+    let key = match state {
+        GitlabMrState::Merged => "merged",
+        GitlabMrState::Closed => "closed",
+        GitlabMrState::Opened => return None,
+    };
+
+    project
+        .tracker
+        .as_ref()?
+        .extra
+        .get("status_transitions")?
+        .as_table()?
+        .get("gitlab_state")?
+        .as_table()?
+        .get(key)?
+        .as_str()
+        .map(str::trim)
+        .filter(|target_id| !target_id.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+struct TicketTransitionRequest<'a> {
+    tracker: Option<&'a TrackerHandle>,
+    transitioner: Option<&'a TicketTransitionHandle>,
+    tx: &'a UnboundedSender<AppEvent>,
+    mr_id: &'a str,
+    mr_title: &'a str,
+    previous_state: &'a GitlabMrState,
+    current_state: &'a GitlabMrState,
+    previous_ticket: Option<LinkedTicket>,
+    target_id: Option<String>,
+}
+
+fn spawn_ticket_transition_if_needed(request: TicketTransitionRequest<'_>) {
+    if !matches!(
+        (request.previous_state, request.current_state),
+        (GitlabMrState::Opened, GitlabMrState::Merged)
+            | (GitlabMrState::Opened, GitlabMrState::Closed)
+    ) {
+        return;
+    }
+
+    let (Some(provider), Some(transitioner), Some(previous_ticket), Some(target_id)) = (
+        request.tracker,
+        request.transitioner,
+        request.previous_ticket,
+        request.target_id,
+    ) else {
+        return;
+    };
+
+    let provider = Arc::clone(provider);
+    let transitioner = Arc::clone(transitioner);
+    let tx = request.tx.clone();
+    let mr_id = request.mr_id.to_string();
+    let mr_title = request.mr_title.to_string();
+    let ticket_id = previous_ticket.id;
+    let expected_status = previous_ticket.status;
+
+    tokio::spawn(async move {
+        let Some(upstream_ticket) = provider.fetch_ticket(&ticket_id).await else {
+            tracing::warn!(ticket_id = %ticket_id, "Skipping tracker transition: ticket refetch failed");
+            return;
+        };
+
+        if upstream_ticket.status != expected_status {
+            tracing::info!(
+                ticket_id = %ticket_id,
+                expected = %expected_status,
+                upstream = %upstream_ticket.status,
+                "Skipping tracker transition: upstream status changed since last local snapshot",
+            );
+            let _ = tx.send(AppEvent::TrackerTicketLoaded {
+                mr_id,
+                ticket: Box::new(upstream_ticket),
+            });
+            return;
+        }
+
+        if let Err(error) = transitioner
+            .transition_ticket_status(&ticket_id, &target_id)
+            .await
+        {
+            tracing::warn!(
+                ticket_id = %ticket_id,
+                target_id = %target_id,
+                error = %error,
+                "Tracker transition failed",
+            );
+            let _ = tx.send(AppEvent::TrackerTicketLoaded {
+                mr_id,
+                ticket: Box::new(upstream_ticket),
+            });
+            return;
+        }
+
+        tracing::info!(
+            ticket_id = %ticket_id,
+            target_id = %target_id,
+            "Tracker transition succeeded",
+        );
+
+        if let Some(refreshed_ticket) = provider.fetch_ticket(&ticket_id).await {
+            notify::ticket_status_transitioned(
+                &ticket_id,
+                &mr_title,
+                &expected_status,
+                &refreshed_ticket.status,
+                &refreshed_ticket.url,
+            );
+            let _ = tx.send(AppEvent::TrackerTicketLoaded {
+                mr_id,
+                ticket: Box::new(refreshed_ticket),
+            });
+        }
+    });
+}
+
 impl App {
     /// Recomputes `estimated_gitlab_calls` and `estimated_tracker_calls` from the
     /// current MR list and tracker state.
@@ -1478,6 +1609,8 @@ impl App {
                 // Detect whether this MR was actually updated since the last refresh.
                 // We compare the old `updated_at` before overwriting it.
                 let was_updated = mr.updated_at.is_some() && mr.updated_at != data.updated_at;
+                let previous_state = mr.state.clone();
+                let previous_ticket = mr.linked_ticket.clone();
 
                 // Trace field-level changes so they are visible in the log file.
                 // All comparisons happen before the fields are overwritten below.
@@ -1587,6 +1720,19 @@ impl App {
                 }
 
                 mr.diff_stats = data.diff_stats;
+
+                let target_id = transition_target_for_state(&self.project_settings, &mr.state);
+                spawn_ticket_transition_if_needed(TicketTransitionRequest {
+                    tracker: self.tracker.as_ref(),
+                    transitioner: self.ticket_transitioner.as_ref(),
+                    tx,
+                    mr_id: &mr.id,
+                    mr_title: &mr.title,
+                    previous_state: &previous_state,
+                    current_state: &mr.state,
+                    previous_ticket: previous_ticket.clone(),
+                    target_id,
+                });
 
                 // Capture the MR id before the stats block — `data` is fully consumed above.
                 #[cfg(feature = "stats")]

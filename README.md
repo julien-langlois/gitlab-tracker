@@ -24,7 +24,7 @@
 * 🧭 **MR Cockpit Pane:** When enabled for the active project and when the left dashboard area has enough vertical space, a five-column cockpit is displayed below the MR table. It is computed from the currently visible rows, so it respects the active filter and search query. The pane is enabled by default and can be disabled per project with `show_cockpit = false` in `projects.toml`. The **Releases** column is always available from live milestone data and is enriched with historical merged counts when built with `--features stats`.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
-* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications **only when an MR's branch status has changed** since the last run — no duplicate alerts on restart or redundant refreshes.
+* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance, MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
 * ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `refresh_interval_secs` in `projects.toml`.
@@ -457,7 +457,9 @@ sprint_weeks = 3
 
 #### 🔔 How Desktop Notifications Work
 
-Notifications fire on four events (new branch, MR updated, mergeability changed, milestone changed) and include a clickable **"Open MR"** button that opens the MR in your default browser. Change notifications are suppressed during the initial sync to avoid spurious alerts on restart.
+Notifications fire for GitLab MR events (new branch, MR updated, mergeability changed, milestone changed, complexity changed) and tracker-ticket events when a provider such as Redmine is active. Tracker notifications include ticket field changes detected during refreshes and successful automatic status transitions triggered by configured workflow mappings.
+
+MR notifications include a clickable **"Open MR"** button; tracker notifications include **"Open ticket"** and open the linked ticket URL instead. Change notifications are suppressed during the initial sync to avoid spurious alerts on restart.
 
 See [`gitlab-tracker-notify/README.md`](gitlab-tracker-notify/README.md) for the full event reference, platform support details, and feature flags.
 
