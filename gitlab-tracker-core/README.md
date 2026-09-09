@@ -51,6 +51,45 @@ The orchestrator receives a `Arc<dyn TrackerProvider>` — it never knows which 
 provider is behind it. See [`gitlab-tracker-redmine`](../gitlab-tracker-redmine/README.md)
 for a full implementation example and wiring instructions.
 
+### `TicketTransitionProvider` — optional workflow automation capability
+
+Implement this trait only when a provider can mutate ticket workflow/status state. It is intentionally separate from `TrackerProvider`: read-only providers can remain simple, while providers with workflow support expose the extra capability explicitly.
+
+```rust
+#[async_trait]
+pub trait TicketTransitionProvider: Send + Sync {
+    /// Lists provider-specific statuses/transitions that users can configure.
+    async fn fetch_transition_targets(&self) -> Result<Vec<TicketTransitionTarget>, TrackerError>;
+
+    /// Transitions one ticket to the provider-native target ID.
+    async fn transition_ticket_status(
+        &self,
+        ticket_id: &str,
+        target_id: &str,
+    ) -> Result<(), TrackerError>;
+}
+```
+
+#### `TicketTransitionTarget`
+
+`TicketTransitionTarget` is the display/configuration shape returned by `fetch_transition_targets()`:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `String` | Provider-native status or transition identifier. Redmine returns numeric IDs as strings; other trackers may return UUIDs, slugs, or transition keys. |
+| `label` | `String` | Human-readable label shown to the user, e.g. `"Resolved"`, `"Done"`, or `"Deployed to production"`. |
+
+The binary uses this contract for the `tracker-statuses` CLI command. With Redmine enabled, `RedmineProvider::fetch_transition_targets()` calls `GET /issue_statuses.json` and prints the returned IDs and labels so users can configure mappings without guessing IDs.
+
+#### Implementation guidance
+
+* Keep `fetch_transition_targets()` side-effect free: it should discover available targets, not mutate tickets.
+* Validate `target_id` inside `transition_ticket_status()` and return `TrackerError` instead of panicking on invalid configuration.
+* Treat workflow refusal as a normal provider error: trackers may reject a transition depending on the current ticket status, tracker type, role permissions, or required fields.
+* Do not hardcode labels such as `"Closed"` or `"Resolved"` in shared code. Labels are instance-specific and may be translated; mappings should use the provider-native `id`.
+
+---
+
 #### `LinkedTicket` — the only data type crossing the boundary
 
 A flat, display-oriented struct. The orchestrator does not need to understand the tracker's

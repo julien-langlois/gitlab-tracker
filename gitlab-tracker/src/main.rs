@@ -1,4 +1,5 @@
 mod app;
+mod cli;
 mod columns_core;
 mod config;
 mod demo;
@@ -23,24 +24,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use storage::{
     get_or_prompt_token, load_or_create_config_async, load_state_async,
-    migrate_legacy_keyring_entry, resolve_active_project, save_state_async, ProjectEntry,
+    migrate_legacy_keyring_entry, save_state_async, ProjectEntry,
 };
 use tokio::sync::Semaphore;
-
-/// A fast terminal TUI dashboard for tracking GitLab Merge Requests across branches
-#[derive(Parser, Debug)]
-#[command(
-    name = "gitlab-tracker",
-    author,
-    version,
-    about,
-    long_about = None
-)]
-struct Args {
-    /// Launch in Demo Mode with mock data (for screenshots & testing)
-    #[arg(long)]
-    demo: bool,
-}
 
 /// Converts a provider's raw `LabelColorMaps` (String pairs) into the ratatui-typed
 /// `TrackerLabelColors` used by the Inspector renderer.
@@ -157,7 +143,7 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    let args = cli::Args::parse();
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -180,10 +166,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return demo::run_demo_mode(config).await;
     }
 
-    // Resolve the active project from projects.toml (env vars > active entry > prompt).
+    // Resolve the selected project from CLI flags, projects.toml, env vars, or prompt.
     // Project-scoped settings override the global config.json values when present.
-    let project = resolve_active_project().await;
+    let project = cli::resolve_project(&args).await;
     apply_project_overrides(&mut config, &project);
+
+    if cli::run_command(args.command.as_ref(), &project).await? {
+        return Ok(());
+    }
+
     let project_settings = project.clone();
 
     // Extract tracked_branches before moving project fields.

@@ -1,4 +1,4 @@
-use gitlab_tracker_core::{Activity, TimeEntry, TimeEntryRequest};
+use gitlab_tracker_core::{Activity, TicketTransitionTarget, TimeEntry, TimeEntryRequest};
 use serde::{Deserialize, Serialize};
 
 /// Minimal Redmine issue fields needed to populate a [`LinkedTicket`].
@@ -51,6 +51,7 @@ pub struct RedmineIssue {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedmineStatus {
+    pub id: u64,
     pub name: String,
 }
 
@@ -58,6 +59,12 @@ pub struct RedmineStatus {
 #[derive(Debug, Deserialize)]
 struct IssueEnvelope {
     issue: RedmineIssue,
+}
+
+/// Envelope returned by `GET /issue_statuses.json`.
+#[derive(Debug, Deserialize)]
+struct IssueStatusesEnvelope {
+    issue_statuses: Vec<RedmineStatus>,
 }
 
 // ── Time entry activity ──────────────────────────────────────────────────────
@@ -152,6 +159,44 @@ pub fn compute_etc(issue: &RedmineIssue, new_hours: f32) -> Option<f32> {
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
+
+/// Fetches all issue statuses configured on the Redmine instance.
+///
+/// Calls `GET /issue_statuses.json`. The returned `(id, label)` pairs are meant to be
+/// surfaced by callers so users can configure GitLab-to-Redmine transition mappings.
+pub async fn fetch_issue_statuses(
+    http: &reqwest::Client,
+    base_url: &str,
+    token: &str,
+) -> Result<Vec<TicketTransitionTarget>, String> {
+    let url = format!("{}/issue_statuses.json", base_url.trim_end_matches('/'));
+
+    tracing::debug!(url = %url, "Fetching Redmine issue statuses");
+
+    let resp = http
+        .get(&url)
+        .header("X-Redmine-API-Key", token)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Redmine API error: HTTP {}", resp.status()));
+    }
+
+    resp.json::<IssueStatusesEnvelope>()
+        .await
+        .map(|env| {
+            env.issue_statuses
+                .into_iter()
+                .map(|status| TicketTransitionTarget {
+                    id: status.id.to_string(),
+                    label: status.name,
+                })
+                .collect()
+        })
+        .map_err(|e| format!("Failed to deserialize Redmine issue statuses: {}", e))
+}
 
 /// Fetches a single Redmine issue by its numeric ID.
 ///
@@ -323,6 +368,58 @@ pub async fn fetch_time_entries(
 ///
 /// Calls `POST /time_entries.json`.
 /// Returns `Ok(())` on success or an error string suitable for inline TUI display.
+/// Updates the Redmine issue status.
+///
+/// Calls `PUT /issues/{id}.json` with a `status_id`. Redmine may still reject the
+/// transition depending on the issue tracker, current status, workflow rules, or API user role.
+pub async fn update_issue_status(
+    http: &reqwest::Client,
+    base_url: &str,
+    token: &str,
+    ticket_id: &str,
+    status_id: u64,
+) -> Result<(), String> {
+    #[derive(Debug, Serialize)]
+    struct PutIssueBody {
+        issue: PutIssue,
+    }
+
+    #[derive(Debug, Serialize)]
+    struct PutIssue {
+        status_id: u64,
+    }
+
+    let url = format!(
+        "{}/issues/{}.json",
+        base_url.trim_end_matches('/'),
+        ticket_id
+    );
+    let body = PutIssueBody {
+        issue: PutIssue { status_id },
+    };
+
+    tracing::debug!(
+        url = %url,
+        ticket_id = %ticket_id,
+        status_id = status_id,
+        "Updating Redmine issue status"
+    );
+
+    let resp = http
+        .put(&url)
+        .header("X-Redmine-API-Key", token)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!("Redmine API error: HTTP {}", resp.status()))
+    }
+}
+
 pub async fn log_time(
     http: &reqwest::Client,
     base_url: &str,

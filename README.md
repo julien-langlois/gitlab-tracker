@@ -545,6 +545,67 @@ gitlab-tracker
 
 ---
 
+## 🧰 CLI Commands
+
+`gitlab-tracker` is primarily a TUI application, but it also exposes utility subcommands for setup and diagnostics. CLI commands run before the TUI starts and can be called from any directory because configuration is loaded from the XDG `projects.toml` file.
+
+### Select a project
+
+By default, CLI commands use the same project resolution as the TUI:
+
+1. `GITLAB_URL` + `GITLAB_PROJECT_ID` environment variables
+2. first `[[project]]` with `active = true` in `projects.toml`
+3. first `[[project]]` in `projects.toml`
+4. first-run prompt when no project exists yet
+
+For multi-project setups, pass `--project` to target a specific entry without changing `active = true`:
+
+```bash
+# Match by projects.toml name
+gitlab-tracker --project "My Company — Backend" tracker-statuses
+
+# Match by GitLab project ID
+gitlab-tracker --project 12345678 tracker-statuses
+
+# Match by 1-based index in projects.toml
+gitlab-tracker --project 2 tracker-statuses
+```
+
+### `tracker-statuses`
+
+Prints the status/transition IDs exposed by the configured tracker provider for the selected project. This is mainly used to discover provider-specific IDs before configuring GitLab-to-tracker workflow automation.
+
+With the Redmine feature enabled, the command calls Redmine's `GET /issue_statuses.json` endpoint and prints each `status_id` with its human-readable label:
+
+```bash
+cargo run -p gitlab-tracker --features redmine -- --project "My Company — Backend" tracker-statuses
+```
+
+Installed binary example:
+
+```bash
+gitlab-tracker --project "My Company — Backend" tracker-statuses
+```
+
+Example output:
+
+```text
+Tracker statuses for provider 'redmine':
+     1  New
+     2  In Progress
+     3  Resolved
+     5  Closed
+```
+
+Requirements:
+
+* the selected project must have a `[project.tracker]` section;
+* the tracker provider must support status discovery through `TicketTransitionProvider`;
+* for Redmine, the binary must be built with `--features redmine`;
+* the Redmine token must be available via `REDMINE_TOKEN`, OS keyring, or the interactive token prompt.
+
+---
+
 ## ⌨️ Dashboard Navigation & Shortcuts
 
 The dashboard operates in two keyboard modes, inspired by vim:

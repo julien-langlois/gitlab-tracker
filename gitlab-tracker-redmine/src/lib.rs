@@ -10,7 +10,8 @@ pub mod shortcuts;
 use async_trait::async_trait;
 use gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION;
 use gitlab_tracker_core::{
-    Activity, LabelColorMaps, LinkedTicket, TimeEntry, TimeEntryRequest, TrackerProvider,
+    Activity, LabelColorMaps, LinkedTicket, TicketTransitionProvider, TicketTransitionTarget,
+    TimeEntry, TimeEntryRequest, TrackerProvider,
 };
 
 pub use config::RedmineConfig;
@@ -38,6 +39,40 @@ impl RedmineProvider {
             token,
             http: reqwest::Client::new(),
         }
+    }
+}
+
+#[async_trait]
+impl TicketTransitionProvider for RedmineProvider {
+    async fn fetch_transition_targets(
+        &self,
+    ) -> Result<Vec<TicketTransitionTarget>, gitlab_tracker_core::TrackerError> {
+        client::fetch_issue_statuses(&self.http, &self.config.url, &self.token)
+            .await
+            .map_err(gitlab_tracker_core::TrackerError::Other)
+    }
+
+    async fn transition_ticket_status(
+        &self,
+        ticket_id: &str,
+        target_id: &str,
+    ) -> Result<(), gitlab_tracker_core::TrackerError> {
+        let status_id = target_id.parse::<u64>().map_err(|_| {
+            gitlab_tracker_core::TrackerError::Other(format!(
+                "Invalid Redmine status id: {}",
+                target_id
+            ))
+        })?;
+
+        client::update_issue_status(
+            &self.http,
+            &self.config.url,
+            &self.token,
+            ticket_id,
+            status_id,
+        )
+        .await
+        .map_err(gitlab_tracker_core::TrackerError::Other)
     }
 }
 

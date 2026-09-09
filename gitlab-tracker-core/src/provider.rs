@@ -271,7 +271,7 @@ impl LinkedTicket {
 /// Raw colour maps for badge labels, expressed as plain `(bg, fg)` string pairs.
 ///
 /// Strings use the same vocabulary as `AppConfig::parse_color` in `gitlab-tracker`:
-/// named colours (`"red"`, `"cyan"`, `"dark_gray"`, …) or 6-digit hex (`"#ff6600"`).
+/// named colours (`"red"`, `"#ff6600"`, …) or 6-digit hex (`"#ff6600"`).
 ///
 /// This type lives in `core` so every provider can return it without depending on
 /// `ratatui`. The orchestrator (`gitlab-tracker`) is responsible for converting the
@@ -284,6 +284,43 @@ pub struct LabelColorMaps {
     /// Colour map for priority labels (e.g. "Normal", "High").
     /// Keys are matched case-insensitively by the renderer; `"*"` is a catch-all fallback.
     pub priority: HashMap<String, (String, String)>,
+}
+
+/// A status/transition target exposed by an external tracker.
+///
+/// The `id` is intentionally a string so providers can expose their native identifier
+/// without leaking provider-specific assumptions into the orchestrator. Redmine uses
+/// numeric status IDs, while other trackers may use UUIDs, slugs, or transition keys.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TicketTransitionTarget {
+    /// Provider-native transition/status identifier to pass back to `transition_ticket_status`.
+    pub id: String,
+    /// Human-readable label shown to the user, e.g. "Resolved" or "Done".
+    pub label: String,
+}
+
+/// Optional capability for tracker providers that can transition ticket statuses.
+///
+/// This trait is deliberately separate from [`TrackerProvider`] so read-only providers
+/// do not need to implement mutating operations. Consumers can depend on this trait only
+/// when they explicitly need workflow automation.
+#[async_trait]
+pub trait TicketTransitionProvider: Send + Sync {
+    /// Lists the provider-specific statuses/transitions that can be configured by users.
+    ///
+    /// The result is suitable for a settings UI or a diagnostic command that helps users
+    /// map GitLab lifecycle events to tracker-specific transition IDs.
+    async fn fetch_transition_targets(&self) -> Result<Vec<TicketTransitionTarget>, TrackerError>;
+
+    /// Transitions the given ticket to the target identified by `target_id`.
+    ///
+    /// Implementations should validate the ID format required by their backend and return
+    /// a typed [`TrackerError`] instead of panicking when the configuration is invalid.
+    async fn transition_ticket_status(
+        &self,
+        ticket_id: &str,
+        target_id: &str,
+    ) -> Result<(), TrackerError>;
 }
 
 /// Contract that every external tracker integration must implement.

@@ -52,6 +52,7 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
 
 * **Log time (`L`):** open a popup to submit a new time entry directly to Redmine — select the activity category, enter a duration (e.g. `1h30`, `90m`, `1.5h`), optionally add a comment, and confirm with `Enter`.
 * **Tracker column** in the main table (toggleable via `C`) — shows ticket ID, status, and spent/estimated time at a glance.
+* **Status discovery CLI:** list Redmine issue status IDs from the terminal via `gitlab-tracker tracker-statuses`, backed by Redmine's `GET /issue_statuses.json` endpoint. This helps configure future GitLab-to-Redmine status transition mappings without guessing numeric IDs.
 
 ---
 
@@ -178,6 +179,44 @@ Each instance has its own token stored independently in the OS keyring (keyed by
 | `ticket_patterns` | ❌ | Regex list to detect ticket IDs — capture group 1 must match the numeric ID. Defaults to `#1234`, `refs #1234`, and full URL patterns |
 | `tracker_type_colors` | ❌ | Badge colour map for the `tracker.name` field. Keys are case-insensitive; `"*"` is a catch-all. Omit to use the default (dark_gray / white) |
 | `priority_colors` | ❌ | Badge colour map for the `priority.name` field. Same rules as above |
+
+### Discover Redmine status IDs from the CLI
+
+Redmine issue statuses are configured per instance and exposed to the API as numeric IDs. The displayed labels (`New`, `Resolved`, `Closed`, `Deployed in production`, etc.) are not enough for workflow automation because Redmine expects a `status_id` when updating an issue.
+
+Use the `tracker-statuses` CLI command to print the full status list for the selected project:
+
+```bash
+# Development build
+gitlab-tracker --project "Client A — Backend" tracker-statuses
+
+# From the workspace, when testing the feature locally
+cargo run -p gitlab-tracker --features redmine -- --project "Client A — Backend" tracker-statuses
+```
+
+The `--project` selector accepts:
+
+* the project `name` from `projects.toml`;
+* the GitLab `project_id`;
+* the 1-based project index in `projects.toml`.
+
+Example output:
+
+```text
+Tracker statuses for provider 'redmine':
+     1  New
+     2  In Progress
+     3  Resolved
+     5  Closed
+```
+
+Under the hood, the command uses:
+
+* `TicketTransitionProvider::fetch_transition_targets()` from `gitlab-tracker-core`;
+* `RedmineProvider::fetch_transition_targets()` from this crate;
+* `GET /issue_statuses.json` on the configured Redmine instance.
+
+The Redmine token is resolved the same way as the TUI: `REDMINE_TOKEN`, then OS keyring keyed by Redmine URL, then interactive prompt.
 
 > **How to discover your Redmine's label values**
 >
