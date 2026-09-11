@@ -809,6 +809,7 @@ impl App {
                 crate::models::MergeabilityStatus::CiMustPass => "CiMustPass",
                 crate::models::MergeabilityStatus::CiStillRunning => "CiStillRunning",
                 crate::models::MergeabilityStatus::NotOpen => "NotOpen",
+                crate::models::MergeabilityStatus::Retrying => "Retrying",
                 crate::models::MergeabilityStatus::Unknown => "Unknown",
             },
             user_notes_count: mr.user_notes_count,
@@ -1570,6 +1571,13 @@ impl App {
                 }
                 self.recompute_api_call_estimate();
                 needs_persist
+            }
+
+            AppEvent::MrMergeabilityRetrying { id } => {
+                if let Some(mr) = self.mrs.find_mut(&id) {
+                    mr.mergeability = MergeabilityStatus::Retrying;
+                }
+                false
             }
 
             AppEvent::MrLoaded(data) => {

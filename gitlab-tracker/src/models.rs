@@ -104,6 +104,8 @@ pub enum MergeabilityStatus {
     NotApproved,
     /// A reviewer has explicitly requested changes before the MR can be merged.
     RequestedChanges,
+    /// GitLab is still computing mergeability; the fetcher will retry within the current run.
+    Retrying,
     /// Status not yet fetched, not applicable, or an unrecognised value.
     #[default]
     Unknown,
@@ -463,6 +465,10 @@ pub enum AppEvent {
     MrFailed {
         id: String,
         error: String,
+    },
+    /// Fired while GitLab is still computing mergeability and the fetcher is retrying.
+    MrMergeabilityRetrying {
+        id: String,
     },
     /// Fired when the user requests adding a new MR to the tracking list (by ID).
     /// `apply_event` is the single place that pushes to `app.mrs` and recomputes

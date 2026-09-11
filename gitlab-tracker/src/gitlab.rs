@@ -6,8 +6,11 @@ use crate::models::{
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use tokio::time::{sleep, Duration};
 
 pub const MAX_CONCURRENT_REQUESTS: usize = 3;
+pub const MERGEABILITY_RETRY_ATTEMPTS: usize = 3;
+const MERGEABILITY_RETRY_DELAY_SECS: u64 = 2;
 
 /// Estimated number of GitLab API HTTP calls that will be fired for a single MR fetch,
 /// broken down by category so the UI can display a meaningful counter.
@@ -802,7 +805,7 @@ pub fn spawn_mr_fetch(
             return;
         };
 
-        match fetch_gitlab_data(&ctx, &mr_id, cached).await {
+        match fetch_gitlab_data(&ctx, &mr_id, cached, tx.clone()).await {
             Ok(data) => {
                 let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
             }
@@ -816,21 +819,13 @@ pub fn spawn_mr_fetch(
     });
 }
 
-pub async fn fetch_gitlab_data(
+async fn fetch_single_mr(
+    client: &reqwest::Client,
     ctx: &FetchContext,
-    mr_id: &str,
-    cached: CachedMrData,
-) -> Result<MrLoadedData, String> {
-    let client = reqwest::Client::new();
-
-    // updated_at is always fetched fresh — never served from cache — so we always
-    // know the real last-update timestamp regardless of the cache hit path.
-    let mr_url = format!(
-        "{}/api/v4/projects/{}/merge_requests/{}",
-        ctx.base_url, ctx.project_id, mr_id
-    );
+    mr_url: &str,
+) -> Result<GitLabMr, String> {
     let mr_res = client
-        .get(&mr_url)
+        .get(mr_url)
         .header("PRIVATE-TOKEN", &ctx.token)
         .send()
         .await
@@ -840,10 +835,53 @@ pub async fn fetch_gitlab_data(
         return Err(format!("HTTP {} on MR", mr_res.status()));
     }
 
-    let mr: GitLabMr = mr_res
+    mr_res
         .json()
         .await
-        .map_err(|e| format!("Error reading MR JSON: {}", e))?;
+        .map_err(|e| format!("Error reading MR JSON: {}", e))
+}
+
+fn is_transient_mergeability_status(status: Option<&str>) -> bool {
+    matches!(status, Some("checking" | "unchecked" | "preparing"))
+}
+
+pub async fn fetch_gitlab_data(
+    ctx: &FetchContext,
+    mr_id: &str,
+    cached: CachedMrData,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) -> Result<MrLoadedData, String> {
+    let client = reqwest::Client::new();
+
+    // updated_at is always fetched fresh — never served from cache — so we always
+    // know the real last-update timestamp regardless of the cache hit path.
+    let mr_url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}?with_merge_status_recheck=true&include_diverged_commits_count=true",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+
+    let mut mr: GitLabMr = fetch_single_mr(&client, ctx, &mr_url).await?;
+
+    for attempt in 0..MERGEABILITY_RETRY_ATTEMPTS {
+        if !is_transient_mergeability_status(mr.detailed_merge_status.as_deref()) {
+            break;
+        }
+
+        let _ = tx.send(AppEvent::MrMergeabilityRetrying {
+            id: mr_id.to_string(),
+        });
+
+        tracing::debug!(
+            mr_id = %mr_id,
+            attempt = attempt + 1,
+            max_attempts = MERGEABILITY_RETRY_ATTEMPTS,
+            detailed_merge_status = ?mr.detailed_merge_status,
+            "GitLab mergeability is still transient — retrying after delay",
+        );
+
+        sleep(Duration::from_secs(MERGEABILITY_RETRY_DELAY_SECS)).await;
+        mr = fetch_single_mr(&client, ctx, &mr_url).await?;
+    }
 
     let updated_at = mr.updated_at.clone();
     let created_at = mr.created_at.clone();
@@ -951,9 +989,12 @@ pub async fn fetch_gitlab_data(
             // A reviewer has explicitly requested changes on the MR.
             Some("requested_changes") => MergeabilityStatus::RequestedChanges,
 
-            // ── Unknown (transient / unactionable states) ────────────────────────────────
-            // GitLab is currently computing the merge status — not yet actionable.
-            Some("checking") | Some("unchecked") | Some("preparing") => MergeabilityStatus::Unknown,
+            // ── Retrying (transient GitLab states) ───────────────────────────────────────
+            // GitLab is currently computing the merge status. The bounded retry loop above
+            // already waited for a final value; if it is still transient, surface that state.
+            Some("checking") | Some("unchecked") | Some("preparing") => {
+                MergeabilityStatus::Retrying
+            }
             // External status checks (e.g. deployment gates) have not yet passed.
             Some("external_status_checks") => MergeabilityStatus::Unknown,
             // A required Jira issue association is missing.
@@ -1201,7 +1242,7 @@ pub async fn fetch_gitlab_data(
     let commits_behind: Option<u32> = if state == GitlabMrState::Opened {
         match mergeability {
             MergeabilityStatus::Mergeable => Some(0),
-            MergeabilityStatus::Unknown => {
+            MergeabilityStatus::Retrying | MergeabilityStatus::Unknown => {
                 // GitLab has not computed the status yet — also skip the compare call
                 // to avoid a spurious request while the MR is still being checked.
                 None

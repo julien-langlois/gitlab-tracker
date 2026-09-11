@@ -621,6 +621,7 @@ pub fn render_safe_inspector_text(
             MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
             MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
             MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
+            MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
             MergeabilityStatus::Unknown => ("UNKNOWN", Color::DarkGray, Color::Black),
         };
         lines.push(Line::from(vec![

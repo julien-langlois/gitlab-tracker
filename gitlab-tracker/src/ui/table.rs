@@ -98,6 +98,7 @@ fn state_badge(
         MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
         MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
         MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
+        MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
         MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
@@ -322,6 +323,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                                     ),
                                     Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
                                 ))
+                            }
+                            (None, MergeabilityStatus::Retrying) => {
+                                Cell::from("RETRYING").fg(Color::Cyan)
                             }
                             // None + non-Mergeable: still loading from the API.
                             (None, _) => Cell::from("…").fg(Color::DarkGray),
