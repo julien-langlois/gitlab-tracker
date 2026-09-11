@@ -99,6 +99,7 @@ fn state_badge(
         MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
         MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
         MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
+        MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
         MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
     };
     Cell::from(Line::from(Span::styled(
@@ -326,6 +327,9 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                             }
                             (None, MergeabilityStatus::Retrying) => {
                                 Cell::from("RETRYING").fg(Color::Cyan)
+                            }
+                            (None, MergeabilityStatus::SyncFailed) => {
+                                Cell::from("SYNC FAILED").fg(Color::Red)
                             }
                             // None + non-Mergeable: still loading from the API.
                             (None, _) => Cell::from("…").fg(Color::DarkGray),

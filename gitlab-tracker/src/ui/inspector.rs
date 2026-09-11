@@ -622,6 +622,7 @@ pub fn render_safe_inspector_text(
             MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
             MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
             MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
+            MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
             MergeabilityStatus::Unknown => ("UNKNOWN", Color::DarkGray, Color::Black),
         };
         lines.push(Line::from(vec![

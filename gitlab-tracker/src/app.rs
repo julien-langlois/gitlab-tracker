@@ -810,6 +810,7 @@ impl App {
                 crate::models::MergeabilityStatus::CiStillRunning => "CiStillRunning",
                 crate::models::MergeabilityStatus::NotOpen => "NotOpen",
                 crate::models::MergeabilityStatus::Retrying => "Retrying",
+                crate::models::MergeabilityStatus::SyncFailed => "SyncFailed",
                 crate::models::MergeabilityStatus::Unknown => "Unknown",
             },
             user_notes_count: mr.user_notes_count,

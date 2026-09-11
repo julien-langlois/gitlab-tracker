@@ -106,6 +106,8 @@ pub enum MergeabilityStatus {
     RequestedChanges,
     /// GitLab is still computing mergeability; the fetcher will retry within the current run.
     Retrying,
+    /// GitLab did not return a resolved mergeability status after the bounded retry window.
+    SyncFailed,
     /// Status not yet fetched, not applicable, or an unrecognised value.
     #[default]
     Unknown,

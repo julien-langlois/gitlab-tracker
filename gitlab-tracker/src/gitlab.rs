@@ -989,11 +989,11 @@ pub async fn fetch_gitlab_data(
             // A reviewer has explicitly requested changes on the MR.
             Some("requested_changes") => MergeabilityStatus::RequestedChanges,
 
-            // ── Retrying (transient GitLab states) ───────────────────────────────────────
-            // GitLab is currently computing the merge status. The bounded retry loop above
-            // already waited for a final value; if it is still transient, surface that state.
+            // ── SyncFailed (unresolved transient GitLab states) ──────────────────────────
+            // GitLab was still computing the merge status after the bounded retry window.
+            // Surface this as a failed sync for this run; the next manual/auto refresh can retry.
             Some("checking") | Some("unchecked") | Some("preparing") => {
-                MergeabilityStatus::Retrying
+                MergeabilityStatus::SyncFailed
             }
             // External status checks (e.g. deployment gates) have not yet passed.
             Some("external_status_checks") => MergeabilityStatus::Unknown,
@@ -1242,7 +1242,9 @@ pub async fn fetch_gitlab_data(
     let commits_behind: Option<u32> = if state == GitlabMrState::Opened {
         match mergeability {
             MergeabilityStatus::Mergeable => Some(0),
-            MergeabilityStatus::Retrying | MergeabilityStatus::Unknown => {
+            MergeabilityStatus::Retrying
+            | MergeabilityStatus::SyncFailed
+            | MergeabilityStatus::Unknown => {
                 // GitLab has not computed the status yet — also skip the compare call
                 // to avoid a spurious request while the MR is still being checked.
                 None
