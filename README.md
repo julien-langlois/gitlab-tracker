@@ -64,6 +64,8 @@
   | 3     | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
 
   The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
+
+  GitLab may temporarily return transient mergeability states (`checking`, `unchecked`, `preparing`) while it recomputes whether an MR can be merged. During that bounded retry window, the badge shows `RETRYING`. If GitLab still does not return a resolved status after the retry attempts, the badge shows `SYNC FAILED`; the next manual or automatic refresh will try again.
 * 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `projects.toml` and persisted across restarts — no manual file editing required. Available optional columns:
 
   | Column        | Description                                                                                                                                      |
@@ -74,14 +76,14 @@
   | **Milestone** | The associated milestone title                                                                                                                   |
   | **Notes**     | Total number of comments and discussion threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise                                       |
   | **Effort**    | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile`                                          |
-  | **Behind**    | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+) |
+  | **Behind**    | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+); may show `RETRYING` or `SYNC FAILED` while GitLab mergeability is unresolved |
 
   All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
 * ⚙️ **Project Settings Dashboard (`,`):** Press `,` to open an interactive settings popup for the active `projects.toml` entry. Use `↑`/`↓` to navigate grouped sections, `Space` to toggle booleans, `←`/`→` to adjust numeric values, text keys to edit text settings, `Enter` to save, and `Esc` to cancel. Built-in settings include cockpit visibility, auto-discovery, refresh interval, and activity thresholds. Optional crates can expose their own settings via the same registry; for example the `stats` feature adds a **Stats** section.
 * ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
   * `Flagged ★` — only your manually flagged MRs
   * **GitLab state** — `Opened`, `Merged`, or `Closed`
-  * **Mergeability** — `Mergeable`, `Conflict`, `Needs Rebase`, `Not Approved`, `Requested Changes`, `Draft`, `Discussions`
+  * **Mergeability** — `Mergeable`, `Conflict`, `Needs Rebase`, `Not Approved`, `Requested Changes`, `Draft`, `Discussions`, plus transient sync states `Retrying` and `SyncFailed`
   * **Has comments** — MRs with at least one note or discussion thread
   * **CI failing** — MRs whose latest pipeline is in a `Failed` state
   * **Assigned to me 👤** — MRs assigned to your GitLab account *(only visible when `gitlab_username` is configured — see below)*
@@ -443,7 +445,7 @@ sprint_weeks = 3
 > | `milestone` | **Milestone** — the associated milestone title |
 > | `notes` | **Notes** — total comment count (`💬 N` in yellow when non-zero) |
 > | `diff_stats` | **Effort** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
-> | `commits_behind` | **Behind** — commits the source branch is behind the target (`✔ Up to date`, `N behind`) |
+> | `commits_behind` | **Behind** — commits the source branch is behind the target (`✔ Up to date`, `N behind`, `RETRYING`, `SYNC FAILED`) |
 > | `tracker_ticket` | **Ticket** — linked tracker ticket ID + status (requires a tracker plugin) |
 
 > **Activity badge thresholds** control the colour-coded indicator next to the `Updated` field in the Context Inspector:
