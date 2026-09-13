@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.8] - 2026-09-13
+
+### 🚀 Features
+
+- **stats**: Split the fullscreen analytics dashboard into navigable tabs for Overview, Flow, Quality, Forecasts, and Correlations
+- **stats**: Add historical-baseline anomaly detection for throughput, pipeline failure rate, comment density, abandon rate, and cycle-time P90 spikes
+- **stats**: Add quality signals, data-confidence indicators, MR size buckets, backlog aging counters, and flow-pressure insights
+- **cockpit**: Always show the release summary column and use the stats report as the source of truth for flow metrics
+- **ui**: Make cockpit risk thresholds configurable
+- **redmine**: Add safe Redmine status transitions driven by MR lifecycle events
+- **tracker**: Add a provider contract for ticket lifecycle transitions
+
+### 🐛 Bug Fixes
+
+- **stats**: Correct Poisson probability calculations
+- **stats**: Deduplicate MR metrics derived from snapshots
+- **stats**: Keep merged-period counters based on persisted snapshots
+- **gitlab**: Retry transient MR mergeability states and surface unresolved mergeability sync failures
+- **gitlab**: Handle closed fetch semaphores without failing the refresh flow
+
+### 🔨 Refactor
+
+- **ui**: Extract cockpit summary logic for clearer separation of dashboard metrics
+- **refactor**: Centralize GitLab username matching
+
+### 🧪 Tests
+
+- **ui**: Cover cockpit summary risk metrics
+
+### 📚 Documentation
+
+- **readme**: Document transient GitLab mergeability states
+
 ## [0.4.7] - 2026-09-08
 
 ### 🚀 Features
