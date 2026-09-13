@@ -15,8 +15,8 @@ pub struct PerMrMetrics {
     pub milestone: Option<String>,
     pub trigger: String,
 
-    /// Total elapsed time from MR creation to merge/close, in hours.
-    /// `None` when `created_at` or `merged_at`/`closed_at` is absent.
+    /// Total elapsed time from MR creation to merge, in hours.
+    /// `None` when `created_at` or `merged_at` is absent.
     pub cycle_time_hours: Option<f64>,
 
     /// Elapsed time from the last pipeline run to merge, in hours.

@@ -86,16 +86,33 @@ impl ReleaseSummary {
 }
 
 impl DashboardSummary {
-    #[cfg(feature = "stats")]
-    pub(super) fn from_app(app: &App) -> Self {
-        let mut summary = Self::from_visible_mrs(app);
-        summary.enrich_with_stats_report(app);
-        summary
-    }
-
-    #[cfg(not(feature = "stats"))]
     pub(super) fn from_app(app: &App) -> Self {
         Self::from_visible_mrs(app)
+    }
+
+    #[cfg(feature = "stats")]
+    pub(super) fn flow_from_stats_report(app: &App) -> Option<Self> {
+        let report = app.stats_view.report.as_ref()?;
+        let stats = &report.aggregated;
+        let mut summary = Self {
+            open: stats.open_mr_ages_days.len(),
+            merged: stats.merged_count,
+            closed: stats.closed_count,
+            merged_today: stats.merged_today,
+            merged_this_week: stats.merged_this_week,
+            merged_this_month: stats.merged_this_month,
+            merged_last_7_days: stats.merged_last_7_days,
+            merged_last_30_days: stats.merged_last_30_days,
+            avg_diff_lines_from_stats: (stats.avg_diff_size > 0.0)
+                .then(|| stats.avg_diff_size.round() as u64),
+            ..Self::default()
+        };
+
+        if let Some(oldest_open_age) = stats.open_mr_ages_days.last() {
+            summary.oldest_open_days = Some(oldest_open_age.floor() as i64);
+        }
+
+        Some(summary)
     }
 
     fn from_visible_mrs(app: &App) -> Self {
@@ -253,36 +270,6 @@ impl DashboardSummary {
         }
 
         summary
-    }
-
-    #[cfg(feature = "stats")]
-    fn enrich_with_stats_report(&mut self, app: &App) {
-        let Some(report) = app.stats_view.report.as_ref() else {
-            return;
-        };
-
-        let stats = &report.aggregated;
-
-        // Persisted stats are the source of truth for lifecycle counters because
-        // visible_mrs() reflects only the current cockpit list. Removing an MR from
-        // the visible list must not rewrite historical flow metrics when stats are
-        // available.
-        self.open = stats.open_mr_ages_days.len();
-        self.merged = stats.merged_count;
-        self.closed = stats.closed_count;
-        self.merged_today = stats.merged_today;
-        self.merged_this_week = stats.merged_this_week;
-        self.merged_this_month = stats.merged_this_month;
-        self.merged_last_7_days = stats.merged_last_7_days;
-        self.merged_last_30_days = stats.merged_last_30_days;
-
-        if let Some(oldest_open_age) = stats.open_mr_ages_days.last() {
-            self.oldest_open_days = Some(oldest_open_age.floor() as i64);
-        }
-
-        if stats.avg_diff_size > 0.0 {
-            self.avg_diff_lines_from_stats = Some(stats.avg_diff_size.round() as u64);
-        }
     }
 
     pub(super) fn total_blocked(self) -> usize {

@@ -86,37 +86,69 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
 pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
     let summary = DashboardSummary::from_app(app);
     let releases = release_summaries(app);
+    #[cfg(feature = "stats")]
+    let flow_summary = DashboardSummary::flow_from_stats_report(app);
+
+    #[cfg(feature = "stats")]
+    let constraints: Vec<Constraint> = if flow_summary.is_some() {
+        vec![
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+        ]
+    } else {
+        vec![
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+        ]
+    };
+    #[cfg(not(feature = "stats"))]
+    let constraints: Vec<Constraint> = vec![
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+        Constraint::Percentage(25),
+    ];
+
     let columns = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-        ])
+        .constraints(constraints)
         .split(area);
 
-    f.render_widget(
-        cockpit_block(" Flow ", flow_lines(summary, app)),
-        columns[0],
-    );
+    let mut column_index = 0;
+
+    #[cfg(feature = "stats")]
+    if let Some(flow_summary) = flow_summary {
+        f.render_widget(
+            cockpit_block(" Flow ", flow_lines(flow_summary, app)),
+            columns[column_index],
+        );
+        column_index += 1;
+    }
+
     f.render_widget(
         cockpit_block(" Attention ", attention_lines(summary, app)),
-        columns[1],
+        columns[column_index],
     );
+    column_index += 1;
     f.render_widget(
         cockpit_block(" Delivery Health ", delivery_health_lines(summary, app)),
-        columns[2],
+        columns[column_index],
     );
+    column_index += 1;
     f.render_widget(
         cockpit_block(" Quality / Scope ", quality_scope_lines(summary, app)),
-        columns[3],
+        columns[column_index],
     );
+    column_index += 1;
 
     f.render_widget(
         cockpit_block(" Releases ", release_lines(app, &releases)),
-        columns[4],
+        columns[column_index],
     );
 }
 
@@ -126,6 +158,7 @@ fn cockpit_block(title: &'static str, lines: Vec<Line<'static>>) -> Paragraph<'s
         .wrap(Wrap { trim: false })
 }
 
+#[cfg(feature = "stats")]
 fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
     vec![
         cockpit_metric("Open", summary.open, app.theme.fg, app),

@@ -150,20 +150,34 @@ fn compute_stats(
     metrics: &[PerMrMetrics],
     filter: &QueryFilter,
 ) -> AggregatedStats {
-    // Deduplicate by mr_id: keep only the most recent snapshot per MR (last in
-    // recorded_at ASC order, which is the query sort order). Without this, a MR
-    // that was backfilled multiple times across different startup days produces
-    // several on_merge rows and inflates all percentile/average calculations.
-    let merged: Vec<&PerMrMetrics> = {
+    // Latest known snapshot per MR is the source of truth for stateful/current
+    // metrics. Queries are ordered by recorded_at ASC, so later inserts overwrite
+    // older snapshots for the same MR.
+    let latest_snapshots_by_mr = {
+        let mut latest = HashMap::<String, &StoredSnapshot>::new();
+        for snap in snapshots {
+            latest.insert(snap.snapshot.mr_id.clone(), snap);
+        }
+        latest
+    };
+    let latest_metrics: Vec<PerMrMetrics> = latest_snapshots_by_mr
+        .values()
+        .map(|snap| PerMrMetrics::from_snapshot(snap))
+        .collect();
+
+    // Deduplicate terminal lifecycle events by mr_id. Backfills may create the
+    // same on_merge/on_close event on different recorded dates; all throughput
+    // and cycle-time metrics must count each MR once.
+    let merged_pairs: Vec<(&StoredSnapshot, &PerMrMetrics)> = {
         let mut seen = std::collections::HashSet::new();
-        // Snapshots arrive sorted by recorded_at ASC — iterate in reverse so the
-        // first occurrence we encounter for a given mr_id is the most recent one.
-        metrics
+        snapshots
             .iter()
+            .zip(metrics.iter())
             .rev()
-            .filter(|m| m.trigger == "on_merge" && seen.insert(m.mr_id.clone()))
+            .filter(|(_, metric)| metric.trigger == "on_merge" && seen.insert(metric.mr_id.clone()))
             .collect()
     };
+    let merged: Vec<&PerMrMetrics> = merged_pairs.iter().map(|(_, metric)| *metric).collect();
 
     let now = Utc::now();
     let merged_period_counts = compute_merged_period_counts(snapshots.iter(), now);
@@ -194,7 +208,7 @@ fn compute_stats(
 
     // ── Cycle time by reviewer ────────────────────────────────────────────────
     let mut reviewer_times: HashMap<String, Vec<f64>> = HashMap::new();
-    for (snap, metric) in snapshots.iter().zip(metrics.iter()) {
+    for (snap, metric) in &merged_pairs {
         if let Some(ct) = metric.cycle_time_hours {
             for reviewer in &snap.snapshot.reviewers {
                 reviewer_times.entry(reviewer.clone()).or_default().push(ct);
@@ -203,7 +217,10 @@ fn compute_stats(
     }
     let cycle_time_by_reviewer: HashMap<String, f64> = reviewer_times
         .into_iter()
-        .map(|(r, times)| (r, times.iter().sum::<f64>() / times.len() as f64))
+        .map(|(reviewer, mut times)| {
+            times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            (reviewer, percentile(&times, 50.0).unwrap_or(0.0))
+        })
         .collect();
 
     // ── Cycle time by milestone ───────────────────────────────────────────────
@@ -223,10 +240,10 @@ fn compute_stats(
     }
 
     // ── Diff & review quality ─────────────────────────────────────────────────
-    let avg_diff_size = mean(metrics.iter().map(|m| m.diff_size as f64));
-    let avg_comments = mean(metrics.iter().map(|m| m.user_notes_count as f64));
+    let avg_diff_size = mean(latest_metrics.iter().map(|m| m.diff_size as f64));
+    let avg_comments = mean(latest_metrics.iter().map(|m| m.user_notes_count as f64));
 
-    let failure_rates: Vec<f64> = metrics
+    let failure_rates: Vec<f64> = latest_metrics
         .iter()
         .filter_map(|m| m.pipeline_failure_rate)
         .collect();
@@ -237,8 +254,8 @@ fn compute_stats(
     };
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
-    let mut open_mr_ages_days: Vec<f64> = snapshots
-        .iter()
+    let mut open_mr_ages_days: Vec<f64> = latest_snapshots_by_mr
+        .values()
         .filter(|s| s.snapshot.state == "opened")
         .filter_map(|s| {
             let created: DateTime<Utc> = s.snapshot.created_at.as_deref()?.parse().ok()?;
@@ -253,7 +270,7 @@ fn compute_stats(
     open_mr_ages_days.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     AggregatedStats {
-        total_mrs: metrics.len(),
+        total_mrs: latest_snapshots_by_mr.len(),
         merged_count: merged.len(),
         closed_count,
         merged_today: merged_period_counts.today,

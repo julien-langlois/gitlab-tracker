@@ -29,15 +29,17 @@ Automatically records MR snapshots into a local SQLite database and computes vel
 
 ### Aggregated statistics (per time window or milestone)
 
+Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state metrics use the latest known snapshot per MR, while merge-related metrics use one deduplicated `on_merge` snapshot per MR.
+
 | Statistic | Description |
 | :--- | :--- |
-| **Throughput** | MRs merged per calendar week |
+| **Throughput** | MRs merged per calendar week, counted once per MR |
 | **Cycle time median, P75 & P90** | Central tendency (P50), upper quartile (P75), and long-tail indicator (P90) — all measured from MR creation to merge |
 | **Cycle time by author** | **Median** cycle time per MR author — robust to outlier MRs, highlights structural review patterns per contributor |
 | **Cycle time by reviewer** | **Median** cycle time per assigned reviewer — surfaces review bottlenecks without being skewed by one-off long MRs |
 | **Cycle time by milestone** | **Median** cycle time per milestone — per-sprint velocity comparison |
-| **Backlog age** | Age distribution of currently open MRs — identifies stagnant reviews |
-| **Pipeline failure rate** | Average across all MRs in the window |
+| **Backlog age** | Age distribution of currently open MRs based on their latest snapshot — identifies stagnant reviews |
+| **Diff size / comments / pipeline failure rate** | Averages across deduplicated MRs in the window |
 
 ### Spearman rank correlations
 
