@@ -129,6 +129,29 @@ impl StatReport {
             rows.push(format!("throughput_by_milestone[{milestone}],{count}"));
         }
 
+        rows.push(String::from(
+            "# size_buckets: label,min_changed_lines,max_changed_lines,total_mrs,merged_mrs,cycle_time_median_hours",
+        ));
+        for bucket in &self.aggregated.size_buckets {
+            let max = bucket
+                .max_changed_lines
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "".to_string());
+            let median = bucket
+                .cycle_time_median_hours
+                .map(|value| format!("{value:.2}"))
+                .unwrap_or_else(|| "".to_string());
+            rows.push(format!(
+                "size_bucket,{},{},{},{},{},{}",
+                bucket.label,
+                bucket.min_changed_lines,
+                max,
+                bucket.total_mrs,
+                bucket.merged_mrs,
+                median
+            ));
+        }
+
         // Correlations section.
         rows.push(String::from(
             "# correlations: pair,rho,p_value,sample_size,strength",

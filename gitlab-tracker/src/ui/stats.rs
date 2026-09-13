@@ -25,7 +25,7 @@ use gitlab_tracker_stats::correlation::{CorrelationResult, CorrelationStrength};
 use gitlab_tracker_stats::poisson::{
     AnomalySeverity, AnomalySignal, QueueStatus, ThroughputForecast,
 };
-use gitlab_tracker_stats::StatReport;
+use gitlab_tracker_stats::{MrSizeBucketStats, StatReport};
 use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -770,6 +770,22 @@ fn render_footer_band(f: &mut Frame, report: &StatReport, area: Rect, current_sc
             for signal in &p.anomalies {
                 lines.push(anomaly_signal_line(signal));
             }
+            lines.push(Line::from(""));
+        }
+    }
+
+    if !report.aggregated.size_buckets.is_empty() {
+        lines.push(Line::from(vec![
+            Span::styled(
+                "  MR size buckets  ",
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("─".repeat(34), Style::default().fg(theme::MUTED_DIM)),
+        ]));
+        for bucket in &report.aggregated.size_buckets {
+            lines.push(size_bucket_line(bucket));
         }
         lines.push(Line::from(""));
     }
@@ -920,6 +936,49 @@ fn anomaly_signal_line(signal: &AnomalySignal) -> Line<'static> {
             Style::default().fg(theme::MUTED),
         ),
     ])
+}
+
+/// MR size bucket row.
+fn size_bucket_line(bucket: &MrSizeBucketStats) -> Line<'static> {
+    let range = match bucket.max_changed_lines {
+        Some(max) => format!("{}-{} lines", bucket.min_changed_lines, max),
+        None => format!("{}+ lines", bucket.min_changed_lines),
+    };
+    let median = bucket
+        .cycle_time_median_hours
+        .map(|hours| format!("P50 {}", format_duration_hours(hours)))
+        .unwrap_or_else(|| "P50 n/a".to_string());
+    let color = match bucket.label.as_str() {
+        "Small" => Color::Green,
+        "Medium" => Color::Cyan,
+        "Large" => Color::Yellow,
+        "Huge" => Color::Red,
+        _ => theme::MUTED,
+    };
+
+    Line::from(vec![
+        Span::styled(
+            format!("  {:<7}", bucket.label),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!("{:<15}", range), Style::default().fg(theme::MUTED)),
+        Span::styled(
+            format!(
+                "total={:<4} merged={:<4}",
+                bucket.total_mrs, bucket.merged_mrs
+            ),
+            Style::default().fg(theme::MUTED),
+        ),
+        Span::styled(format!("  {median}"), Style::default().fg(theme::MUTED_DIM)),
+    ])
+}
+
+fn format_duration_hours(hours: f64) -> String {
+    if hours >= 24.0 {
+        format!("{:.1}d", hours / 24.0)
+    } else {
+        format!("{hours:.1}h")
+    }
 }
 
 /// Spearman correlation row.

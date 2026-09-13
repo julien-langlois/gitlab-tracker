@@ -24,7 +24,7 @@ pub mod settings;
 pub mod shortcuts;
 pub mod snapshot;
 
-pub use aggregator::{AggregatedStats, QueryFilter, TimeWindow};
+pub use aggregator::{AggregatedStats, MrSizeBucketStats, QueryFilter, TimeWindow};
 pub use correlation::{CorrelationResult, CorrelationStrength, MetricPair};
 pub use db::{SqliteStatsDb, StatsDb, StatsError};
 pub use metrics::PerMrMetrics;

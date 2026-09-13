@@ -31,6 +31,28 @@ pub struct QueryFilter {
     pub sprint_weeks: Option<u32>,
 }
 
+/// Cycle-time and volume stats for one MR diff-size bucket.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MrSizeBucketStats {
+    /// Human-readable bucket label.
+    pub label: String,
+
+    /// Inclusive lower bound for changed lines.
+    pub min_changed_lines: u32,
+
+    /// Inclusive upper bound for changed lines. `None` means unbounded.
+    pub max_changed_lines: Option<u32>,
+
+    /// Number of latest MRs in this bucket.
+    pub total_mrs: usize,
+
+    /// Number of merged MRs in this bucket.
+    pub merged_mrs: usize,
+
+    /// Median cycle time for merged MRs in this bucket.
+    pub cycle_time_median_hours: Option<f64>,
+}
+
 /// Aggregated statistics computed over a set of MR snapshots.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedStats {
@@ -103,6 +125,9 @@ pub struct AggregatedStats {
 
     /// Share of MRs in the sample that have pipeline data.
     pub pipeline_data_coverage: f64,
+
+    /// Cycle-time distribution split by changed-line buckets.
+    pub size_buckets: Vec<MrSizeBucketStats>,
 
     // ── Backlog health ────────────────────────────────────────────────────────
     /// Ages (in days) of MRs that are still open at snapshot time.
@@ -287,6 +312,7 @@ fn compute_stats(
     } else {
         failure_rates.len() as f64 / latest_metrics.len() as f64
     };
+    let size_buckets = compute_size_buckets(&latest_metrics, &merged);
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
     let mut open_mr_ages_days: Vec<f64> = latest_snapshots_by_mr
@@ -336,6 +362,7 @@ fn compute_stats(
         avg_comment_density,
         avg_pipeline_failure_rate,
         pipeline_data_coverage,
+        size_buckets,
         open_mr_ages_days,
         stale_open_mrs_7d,
         stale_open_mrs_14d,
@@ -416,6 +443,48 @@ fn compute_throughput_per_week(filter: &QueryFilter, merged_count: usize) -> Opt
         return None;
     }
     Some(merged_count as f64 / window_days * 7.0)
+}
+
+/// Computes cycle-time stats for fixed MR diff-size buckets.
+fn compute_size_buckets(
+    latest_metrics: &[PerMrMetrics],
+    merged_metrics: &[&PerMrMetrics],
+) -> Vec<MrSizeBucketStats> {
+    const BUCKETS: [(&str, u32, Option<u32>); 4] = [
+        ("Small", 0, Some(199)),
+        ("Medium", 200, Some(799)),
+        ("Large", 800, Some(1999)),
+        ("Huge", 2000, None),
+    ];
+
+    BUCKETS
+        .iter()
+        .map(|(label, min, max)| {
+            let includes = |diff_size: u32| -> bool {
+                diff_size >= *min && max.map(|upper| diff_size <= upper).unwrap_or(true)
+            };
+
+            let total_mrs = latest_metrics
+                .iter()
+                .filter(|metric| includes(metric.diff_size))
+                .count();
+            let mut cycle_times = merged_metrics
+                .iter()
+                .filter(|metric| includes(metric.diff_size))
+                .filter_map(|metric| metric.cycle_time_hours)
+                .collect::<Vec<_>>();
+            cycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+            MrSizeBucketStats {
+                label: (*label).to_string(),
+                min_changed_lines: *min,
+                max_changed_lines: *max,
+                total_mrs,
+                merged_mrs: cycle_times.len(),
+                cycle_time_median_hours: percentile(&cycle_times, 50.0),
+            }
+        })
+        .collect()
 }
 
 // ── Statistical helpers ───────────────────────────────────────────────────────
