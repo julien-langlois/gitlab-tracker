@@ -85,6 +85,19 @@ impl StatReport {
                 "pipeline_data_coverage,{:.4}",
                 self.aggregated.pipeline_data_coverage
             ),
+            format!(
+                "cycle_time_sample_size,{}",
+                self.aggregated.cycle_time_sample_size
+            ),
+            format!(
+                "pipeline_sample_size,{}",
+                self.aggregated.pipeline_sample_size
+            ),
+            format!("reviewer_coverage,{:.4}", self.aggregated.reviewer_coverage),
+            format!(
+                "milestone_coverage,{:.4}",
+                self.aggregated.milestone_coverage
+            ),
             format!("stale_open_mrs_7d,{}", self.aggregated.stale_open_mrs_7d),
             format!("stale_open_mrs_14d,{}", self.aggregated.stale_open_mrs_14d),
             format!("stale_open_mrs_30d,{}", self.aggregated.stale_open_mrs_30d),

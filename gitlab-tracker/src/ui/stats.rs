@@ -742,6 +742,18 @@ fn render_footer_band(f: &mut Frame, report: &StatReport, area: Rect, current_sc
 
     let mut lines: Vec<Line<'static>> = Vec::new();
 
+    lines.push(Line::from(vec![
+        Span::styled(
+            "  Data confidence  ",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("─".repeat(32), Style::default().fg(theme::MUTED_DIM)),
+    ]));
+    lines.extend(data_confidence_lines(report));
+    lines.push(Line::from(""));
+
     // ── Throughput forecasts ──────────────────────────────────────────────────
     if !p.throughput_forecasts.is_empty() {
         lines.push(Line::from(vec![
@@ -909,6 +921,83 @@ pub fn throughput_forecast_line(f: &ThroughputForecast, index: usize) -> Line<'s
             Style::default().fg(theme::MUTED_DIM),
         ),
     ])
+}
+
+/// Data confidence summary rows.
+fn data_confidence_lines(report: &StatReport) -> Vec<Line<'static>> {
+    let agg = &report.aggregated;
+    vec![
+        confidence_line(
+            "Overall",
+            confidence_score(report),
+            format!("{} MRs in sample", agg.total_mrs),
+        ),
+        confidence_line(
+            "Cycle time",
+            ratio_score(agg.cycle_time_sample_size, 10),
+            format!("{} merged MRs", agg.cycle_time_sample_size),
+        ),
+        confidence_line(
+            "Pipeline data",
+            agg.pipeline_data_coverage,
+            format!(
+                "{} MRs · {:.0}% coverage",
+                agg.pipeline_sample_size,
+                agg.pipeline_data_coverage * 100.0
+            ),
+        ),
+        confidence_line(
+            "Reviewers",
+            agg.reviewer_coverage,
+            format!("{:.0}% coverage", agg.reviewer_coverage * 100.0),
+        ),
+        confidence_line(
+            "Milestones",
+            agg.milestone_coverage,
+            format!("{:.0}% coverage", agg.milestone_coverage * 100.0),
+        ),
+    ]
+}
+
+fn confidence_score(report: &StatReport) -> f64 {
+    let agg = &report.aggregated;
+    let sample_score = ratio_score(agg.total_mrs, 20);
+    let cycle_score = ratio_score(agg.cycle_time_sample_size, 10);
+    let metadata_score =
+        (agg.pipeline_data_coverage + agg.reviewer_coverage + agg.milestone_coverage) / 3.0;
+    (sample_score * 0.40) + (cycle_score * 0.35) + (metadata_score * 0.25)
+}
+
+fn ratio_score(value: usize, target: usize) -> f64 {
+    if target == 0 {
+        return 1.0;
+    }
+    (value as f64 / target as f64).clamp(0.0, 1.0)
+}
+
+fn confidence_line(label: &str, score: f64, detail: String) -> Line<'static> {
+    let (level, color) = confidence_level(score);
+    Line::from(vec![
+        Span::styled(
+            format!("  {:<14}", label),
+            Style::default().fg(theme::MUTED),
+        ),
+        Span::styled(
+            format!("{:<6}", level),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!("  {detail}"), Style::default().fg(theme::MUTED_DIM)),
+    ])
+}
+
+fn confidence_level(score: f64) -> (&'static str, Color) {
+    if score >= 0.75 {
+        ("HIGH", Color::Green)
+    } else if score >= 0.45 {
+        ("MED", Color::Yellow)
+    } else {
+        ("LOW", Color::Red)
+    }
 }
 
 /// Anomaly signal row.

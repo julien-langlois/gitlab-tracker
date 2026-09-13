@@ -126,6 +126,18 @@ pub struct AggregatedStats {
     /// Share of MRs in the sample that have pipeline data.
     pub pipeline_data_coverage: f64,
 
+    /// Number of MRs with usable merged cycle-time data.
+    pub cycle_time_sample_size: usize,
+
+    /// Number of MRs with usable pipeline data.
+    pub pipeline_sample_size: usize,
+
+    /// Share of latest MRs that have at least one reviewer assigned.
+    pub reviewer_coverage: f64,
+
+    /// Share of latest MRs that have a milestone.
+    pub milestone_coverage: f64,
+
     /// Cycle-time distribution split by changed-line buckets.
     pub size_buckets: Vec<MrSizeBucketStats>,
 
@@ -307,11 +319,18 @@ fn compute_stats(
     } else {
         Some(failure_rates.iter().sum::<f64>() / failure_rates.len() as f64)
     };
+    let pipeline_sample_size = failure_rates.len();
     let pipeline_data_coverage = if latest_metrics.is_empty() {
         0.0
     } else {
-        failure_rates.len() as f64 / latest_metrics.len() as f64
+        pipeline_sample_size as f64 / latest_metrics.len() as f64
     };
+    let cycle_time_sample_size = cycle_times.len();
+    let reviewer_coverage = coverage_ratio(latest_snapshots_by_mr.values(), |snap| {
+        !snap.snapshot.reviewers.is_empty()
+    });
+    let milestone_coverage =
+        coverage_ratio(latest_metrics.iter(), |metric| metric.milestone.is_some());
     let size_buckets = compute_size_buckets(&latest_metrics, &merged);
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
@@ -362,6 +381,10 @@ fn compute_stats(
         avg_comment_density,
         avg_pipeline_failure_rate,
         pipeline_data_coverage,
+        cycle_time_sample_size,
+        pipeline_sample_size,
+        reviewer_coverage,
+        milestone_coverage,
         size_buckets,
         open_mr_ages_days,
         stale_open_mrs_7d,
@@ -510,6 +533,25 @@ fn mean(iter: impl Iterator<Item = f64>) -> f64 {
         0.0
     } else {
         sum / count as f64
+    }
+}
+
+/// Computes the share of items that satisfy a predicate.
+fn coverage_ratio<'a, I, T, F>(iter: I, predicate: F) -> f64
+where
+    I: IntoIterator<Item = &'a T>,
+    T: 'a,
+    F: Fn(&T) -> bool,
+{
+    let (matched, total) = iter
+        .into_iter()
+        .fold((0usize, 0usize), |(matched, total), item| {
+            (matched + usize::from(predicate(item)), total + 1)
+        });
+    if total == 0 {
+        0.0
+    } else {
+        matched as f64 / total as f64
     }
 }
 
