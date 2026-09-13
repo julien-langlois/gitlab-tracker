@@ -78,7 +78,7 @@ fn ln_gamma(x: f64) -> f64 {
         sum += c / (z + i as f64 + 1.0);
     }
     let t = z + 7.5;
-    std::f64::consts::FRAC_2_SQRT_PI.sqrt().ln() + (z + 0.5) * t.ln() + (-t) + sum.ln()
+    0.5 * std::f64::consts::TAU.ln() + (z + 0.5) * t.ln() - t + sum.ln()
 }
 
 // ── Throughput forecast ───────────────────────────────────────────────────────
