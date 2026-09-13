@@ -22,7 +22,9 @@
 //! ```
 
 use gitlab_tracker_stats::correlation::{CorrelationResult, CorrelationStrength};
-use gitlab_tracker_stats::poisson::{AnomalySeverity, AnomalySignal, ThroughputForecast};
+use gitlab_tracker_stats::poisson::{
+    AnomalySeverity, AnomalySignal, QueueStatus, ThroughputForecast,
+};
 use gitlab_tracker_stats::StatReport;
 use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Rect},
@@ -174,7 +176,7 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
 
 // ── Block renderers ───────────────────────────────────────────────────────────
 
-/// Throughput numbers + pipeline failure rate.
+/// Throughput numbers + review quality signals.
 fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let agg = &report.aggregated;
     let throughput = agg
@@ -186,17 +188,45 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
         kv_line("Merged", &agg.merged_count.to_string(), Color::Green),
         kv_line("Closed", &agg.closed_count.to_string(), theme::MUTED),
         kv_line("Throughput", &throughput, Color::Cyan),
-        kv_line(
-            "Avg diff size",
-            &format!("{:.0} lines", agg.avg_diff_size),
-            theme::MUTED,
-        ),
-        kv_line(
-            "Avg comments",
-            &format!("{:.1}", agg.avg_comments),
-            theme::MUTED,
-        ),
     ];
+
+    if let Some(rate) = agg.abandon_rate {
+        lines.push(kv_line(
+            "Abandon rate",
+            &format!("{:.1}%", rate * 100.0),
+            if rate >= 0.25 {
+                Color::Red
+            } else if rate >= 0.10 {
+                Color::Yellow
+            } else {
+                theme::MUTED
+            },
+        ));
+    }
+
+    lines.push(kv_line(
+        "Avg diff size",
+        &format!("{:.0} lines", agg.avg_diff_size),
+        theme::MUTED,
+    ));
+    lines.push(kv_line(
+        "Avg comments",
+        &format!("{:.1}", agg.avg_comments),
+        theme::MUTED,
+    ));
+
+    if let Some(density) = agg.avg_comment_density {
+        lines.push(kv_line(
+            "Comments /100l",
+            &format!("{density:.1}"),
+            if density >= 5.0 {
+                Color::Yellow
+            } else {
+                theme::MUTED
+            },
+        ));
+    }
+
     if let Some(pfr) = agg.avg_pipeline_failure_rate {
         lines.push(kv_line(
             "Pipeline fail rate",
@@ -205,9 +235,19 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
         ));
     }
 
+    lines.push(kv_line(
+        "Pipeline coverage",
+        &format!("{:.0}%", agg.pipeline_data_coverage * 100.0),
+        if agg.pipeline_data_coverage < 0.5 {
+            Color::Yellow
+        } else {
+            theme::MUTED
+        },
+    ));
+
     f.render_widget(
         Paragraph::new(lines)
-            .block(styled_block(" Throughput "))
+            .block(styled_block(" Throughput · Quality "))
             .wrap(Wrap { trim: false }),
         area,
     );
@@ -366,6 +406,33 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
                 theme::MUTED
             },
         ),
+        kv_line(
+            "Stale ≥7d",
+            &agg.stale_open_mrs_7d.to_string(),
+            if agg.stale_open_mrs_7d > 0 {
+                Color::Yellow
+            } else {
+                theme::MUTED
+            },
+        ),
+        kv_line(
+            "Stale ≥14d",
+            &agg.stale_open_mrs_14d.to_string(),
+            if agg.stale_open_mrs_14d > 0 {
+                Color::Yellow
+            } else {
+                theme::MUTED
+            },
+        ),
+        kv_line(
+            "Stale ≥30d",
+            &agg.stale_open_mrs_30d.to_string(),
+            if agg.stale_open_mrs_30d > 0 {
+                Color::Red
+            } else {
+                theme::MUTED
+            },
+        ),
     ];
 
     f.render_widget(
@@ -379,42 +446,49 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
     let p = &report.poisson;
     let mut lines: Vec<Line<'static>> = Vec::new();
 
-    // Queue M/M/1 summary
-    match &p.queue_insight {
-        Some(q) => {
-            let rho_color = if q.traffic_intensity >= 0.80 {
+    // Queue M/M/1-inspired flow pressure summary.
+    let q = &p.queue_insight;
+    match q.status {
+        QueueStatus::Stable => {
+            let rho = q.traffic_intensity.unwrap_or(0.0);
+            let rho_color = if rho >= 0.80 {
                 Color::Red
-            } else if q.traffic_intensity >= 0.60 {
+            } else if rho >= 0.60 {
                 Color::Yellow
             } else {
                 Color::Green
             };
-            lines.push(kv_line(
-                "Traffic ρ (M/M/1)",
-                &format!("{:.2}", q.traffic_intensity),
-                rho_color,
-            ));
-            lines.push(kv_line(
-                "MRs in system",
-                &format!("{:.1}", q.expected_mrs_in_system),
-                theme::MUTED,
-            ));
-            let wait_color = if q.expected_wait_hours > 48.0 {
-                Color::Red
-            } else if q.expected_wait_hours > 24.0 {
-                Color::Yellow
-            } else {
-                Color::Green
-            };
-            lines.push(kv_line(
-                "Expected wait",
-                &format!("{:.1} h", q.expected_wait_hours),
-                wait_color,
-            ));
+            lines.push(kv_line("Flow pressure ρ", &format!("{rho:.2}"), rho_color));
+            if let Some(mrs) = q.expected_mrs_in_system {
+                lines.push(kv_line("MRs in system", &format!("{mrs:.1}"), theme::MUTED));
+            }
+            if let Some(wait_hours) = q.expected_wait_hours {
+                let wait_color = if wait_hours > 48.0 {
+                    Color::Red
+                } else if wait_hours > 24.0 {
+                    Color::Yellow
+                } else {
+                    Color::Green
+                };
+                lines.push(kv_line(
+                    "Expected wait",
+                    &format!("{wait_hours:.1} h"),
+                    wait_color,
+                ));
+            }
         }
-        None => {
+        QueueStatus::OverCapacity => {
             lines.push(Line::from(Span::styled(
-                "  Queue: not enough data.",
+                "  Flow pressure: at or above estimated capacity.",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )));
+            if let Some(rho) = q.traffic_intensity {
+                lines.push(kv_line("Flow pressure ρ", &format!("{rho:.2}"), Color::Red));
+            }
+        }
+        QueueStatus::InsufficientData => {
+            lines.push(Line::from(Span::styled(
+                "  Flow pressure: not enough data.",
                 Style::default().fg(theme::MUTED),
             )));
         }

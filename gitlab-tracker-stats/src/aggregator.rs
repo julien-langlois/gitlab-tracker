@@ -44,6 +44,10 @@ pub struct AggregatedStats {
     /// MRs closed (abandoned) within the query window.
     pub closed_count: usize,
 
+    /// Share of terminal MRs that were closed without being merged.
+    /// `None` when no terminal MR exists in the sample.
+    pub abandon_rate: Option<f64>,
+
     /// MRs merged on the current UTC calendar day.
     pub merged_today: usize,
 
@@ -89,14 +93,30 @@ pub struct AggregatedStats {
     /// Mean comment count per MR.
     pub avg_comments: f64,
 
+    /// Mean comments per 100 changed lines.
+    /// `None` when no MR has a non-empty diff.
+    pub avg_comment_density: Option<f64>,
+
     /// Mean pipeline failure rate across all MRs that had at least one pipeline.
     /// `None` when no MR in the sample had pipeline data.
     pub avg_pipeline_failure_rate: Option<f64>,
+
+    /// Share of MRs in the sample that have pipeline data.
+    pub pipeline_data_coverage: f64,
 
     // ── Backlog health ────────────────────────────────────────────────────────
     /// Ages (in days) of MRs that are still open at snapshot time.
     /// Sorted ascending. Empty when no open MRs are in the sample.
     pub open_mr_ages_days: Vec<f64>,
+
+    /// Number of open MRs older than 7 days.
+    pub stale_open_mrs_7d: usize,
+
+    /// Number of open MRs older than 14 days.
+    pub stale_open_mrs_14d: usize,
+
+    /// Number of open MRs older than 30 days.
+    pub stale_open_mrs_30d: usize,
 
     /// Throughput (merged MR count) broken down by milestone title.
     pub throughput_by_milestone: HashMap<String, u32>,
@@ -115,7 +135,7 @@ pub async fn aggregate(
 }
 
 /// Translates a [`QueryFilter`] into a [`SnapshotQuery`] for the DB layer.
-fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
+pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
     let mut q = SnapshotQuery {
         project_id: filter.project_id.clone(),
         author: filter.author.clone(),
@@ -243,6 +263,16 @@ fn compute_stats(
     let avg_diff_size = mean(latest_metrics.iter().map(|m| m.diff_size as f64));
     let avg_comments = mean(latest_metrics.iter().map(|m| m.user_notes_count as f64));
 
+    let comment_densities: Vec<f64> = latest_metrics
+        .iter()
+        .filter_map(|m| m.comment_density)
+        .collect();
+    let avg_comment_density = if comment_densities.is_empty() {
+        None
+    } else {
+        Some(comment_densities.iter().sum::<f64>() / comment_densities.len() as f64)
+    };
+
     let failure_rates: Vec<f64> = latest_metrics
         .iter()
         .filter_map(|m| m.pipeline_failure_rate)
@@ -251,6 +281,11 @@ fn compute_stats(
         None
     } else {
         Some(failure_rates.iter().sum::<f64>() / failure_rates.len() as f64)
+    };
+    let pipeline_data_coverage = if latest_metrics.is_empty() {
+        0.0
+    } else {
+        failure_rates.len() as f64 / latest_metrics.len() as f64
     };
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
@@ -268,11 +303,22 @@ fn compute_stats(
         })
         .collect();
     open_mr_ages_days.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let stale_open_mrs_7d = open_mr_ages_days.iter().filter(|age| **age >= 7.0).count();
+    let stale_open_mrs_14d = open_mr_ages_days.iter().filter(|age| **age >= 14.0).count();
+    let stale_open_mrs_30d = open_mr_ages_days.iter().filter(|age| **age >= 30.0).count();
+
+    let terminal_count = merged.len() + closed_count;
+    let abandon_rate = if terminal_count == 0 {
+        None
+    } else {
+        Some(closed_count as f64 / terminal_count as f64)
+    };
 
     AggregatedStats {
         total_mrs: latest_snapshots_by_mr.len(),
         merged_count: merged.len(),
         closed_count,
+        abandon_rate,
         merged_today: merged_period_counts.today,
         merged_this_week: merged_period_counts.this_week,
         merged_this_month: merged_period_counts.this_month,
@@ -287,8 +333,13 @@ fn compute_stats(
         cycle_time_by_milestone,
         avg_diff_size,
         avg_comments,
+        avg_comment_density,
         avg_pipeline_failure_rate,
+        pipeline_data_coverage,
         open_mr_ages_days,
+        stale_open_mrs_7d,
+        stale_open_mrs_14d,
+        stale_open_mrs_30d,
         throughput_by_milestone,
     }
 }

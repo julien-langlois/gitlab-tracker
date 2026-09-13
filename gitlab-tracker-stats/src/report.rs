@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::aggregator::{aggregate, AggregatedStats, QueryFilter, TimeWindow};
+use crate::aggregator::{
+    aggregate, build_snapshot_query, AggregatedStats, QueryFilter, TimeWindow,
+};
 use crate::correlation::{compute_all_correlations, CorrelationResult};
-use crate::db::{SnapshotQuery, StatsDb, StatsError};
+use crate::db::{StatsDb, StatsError};
 use crate::metrics::PerMrMetrics;
 use crate::poisson::PoissonInsights;
 
@@ -33,11 +35,7 @@ impl StatReport {
     /// Loads all required data from the stats store and builds a complete report.
     pub async fn load(db: &dyn StatsDb, filter: &QueryFilter) -> Result<Self, StatsError> {
         let aggregated = aggregate(db, filter).await?;
-        let query = SnapshotQuery {
-            project_id: filter.project_id.clone(),
-            ..Default::default()
-        };
-        let snapshots = db.query(&query).await?;
+        let snapshots = db.query(&build_snapshot_query(filter)).await?;
         let metrics = snapshots
             .iter()
             .map(PerMrMetrics::from_snapshot)
@@ -83,13 +81,26 @@ impl StatReport {
             format!("total_mrs,{}", self.aggregated.total_mrs),
             format!("merged_count,{}", self.aggregated.merged_count),
             format!("closed_count,{}", self.aggregated.closed_count),
+            format!(
+                "pipeline_data_coverage,{:.4}",
+                self.aggregated.pipeline_data_coverage
+            ),
+            format!("stale_open_mrs_7d,{}", self.aggregated.stale_open_mrs_7d),
+            format!("stale_open_mrs_14d,{}", self.aggregated.stale_open_mrs_14d),
+            format!("stale_open_mrs_30d,{}", self.aggregated.stale_open_mrs_30d),
         ];
 
+        if let Some(v) = self.aggregated.abandon_rate {
+            rows.push(format!("abandon_rate,{v:.4}"));
+        }
         if let Some(v) = self.aggregated.throughput_per_week {
             rows.push(format!("throughput_per_week,{v:.2}"));
         }
         if let Some(v) = self.aggregated.cycle_time_median_hours {
             rows.push(format!("cycle_time_median_hours,{v:.2}"));
+        }
+        if let Some(v) = self.aggregated.cycle_time_p75_hours {
+            rows.push(format!("cycle_time_p75_hours,{v:.2}"));
         }
         if let Some(v) = self.aggregated.cycle_time_p90_hours {
             rows.push(format!("cycle_time_p90_hours,{v:.2}"));
@@ -101,6 +112,9 @@ impl StatReport {
         ));
         rows.push(format!("avg_comments,{:.2}", self.aggregated.avg_comments));
 
+        if let Some(v) = self.aggregated.avg_comment_density {
+            rows.push(format!("avg_comment_density,{v:.4}"));
+        }
         if let Some(v) = self.aggregated.avg_pipeline_failure_rate {
             rows.push(format!("avg_pipeline_failure_rate,{:.4}", v));
         }

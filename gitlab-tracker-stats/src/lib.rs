@@ -29,7 +29,7 @@ pub use correlation::{CorrelationResult, CorrelationStrength, MetricPair};
 pub use db::{SqliteStatsDb, StatsDb, StatsError};
 pub use metrics::PerMrMetrics;
 pub use poisson::{
-    AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, ThroughputForecast,
+    AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, QueueStatus, ThroughputForecast,
 };
 pub use report::StatReport;
 pub use snapshot::{MrStatsSnapshot, SnapshotTrigger};

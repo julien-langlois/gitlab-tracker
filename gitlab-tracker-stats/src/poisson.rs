@@ -191,60 +191,101 @@ impl AnomalySignal {
 
 // ── Queue / backlog estimation (M/M/1) ───────────────────────────────────────
 
-/// M/M/1 queue model: MRs arrive at rate λ (merges/week), each takes μ hours
-/// to complete on average (= cycle_time_median_hours).
+/// Availability state for the queue pressure estimate.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueueStatus {
+    /// Throughput or cycle-time data is missing.
+    InsufficientData,
+
+    /// The observed flow is above the estimated capacity, so M/M/1 wait-time
+    /// formulas are not valid. This is still useful as a pressure signal.
+    OverCapacity,
+
+    /// The estimate is stable enough to expose queue pressure values.
+    Stable,
+}
+
+/// M/M/1-inspired flow pressure model: λ is the observed merge throughput and μ
+/// is estimated from the median cycle time.
 ///
-/// The model gives the expected number of MRs in the system (waiting + in
-/// review) and the expected additional wait a new MR would face.
-///
-/// Validity: the model assumes λ < μ̂ (throughput < service rate). When this
-/// does not hold the queue is theoretically unstable and `None` is returned.
+/// This is intentionally presented as a pressure heuristic rather than an exact
+/// queueing model: throughput is a departure rate and cycle time includes waiting.
+/// It is still useful to highlight whether the current flow is close to or above
+/// the observed delivery capacity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueInsight {
-    /// Arrival rate in MRs per week.
-    pub arrival_rate_per_week: f64,
+    /// Availability state for the estimate.
+    pub status: QueueStatus,
 
-    /// Service rate in MRs per week (derived from median cycle time).
-    pub service_rate_per_week: f64,
+    /// Arrival/departure proxy in MRs per week.
+    pub arrival_rate_per_week: Option<f64>,
 
-    /// Traffic intensity ρ = λ/μ — must be < 1 for a stable queue.
-    pub traffic_intensity: f64,
+    /// Service-capacity proxy in MRs per week, derived from median cycle time.
+    pub service_rate_per_week: Option<f64>,
 
-    /// Expected number of MRs in the system (L = ρ / (1 - ρ)).
-    pub expected_mrs_in_system: f64,
+    /// Traffic intensity ρ = λ/μ when both values are available.
+    pub traffic_intensity: Option<f64>,
 
-    /// Expected additional wait (in hours) for the next MR (W = L / λ, converted).
-    pub expected_wait_hours: f64,
+    /// Expected number of MRs in the system (L = ρ / (1 - ρ)) for stable flow.
+    pub expected_mrs_in_system: Option<f64>,
+
+    /// Expected additional wait (in hours) for the next MR for stable flow.
+    pub expected_wait_hours: Option<f64>,
 }
 
 impl QueueInsight {
-    /// Derives a queue insight from aggregated stats.
-    ///
-    /// Returns `None` when cycle time or throughput data is unavailable, or
-    /// when the queue would be unstable (throughput ≥ service capacity).
-    pub fn from_stats(stats: &AggregatedStats) -> Option<Self> {
-        let lambda = stats.throughput_per_week?; // MRs / week
-        let cycle_time_hours = stats.cycle_time_median_hours?; // hours / MR
+    /// Derives a queue-pressure insight from aggregated stats.
+    pub fn from_stats(stats: &AggregatedStats) -> Self {
+        let Some(lambda) = stats.throughput_per_week else {
+            return Self::insufficient_data();
+        };
+        let Some(cycle_time_hours) = stats.cycle_time_median_hours else {
+            return Self::insufficient_data();
+        };
 
-        // Convert cycle time to a weekly service rate: μ = (168 hours/week) / cycle_time
-        let mu = 168.0 / cycle_time_hours; // MRs / week
+        // Convert cycle time to a weekly service-capacity proxy:
+        // μ = (168 hours/week) / cycle_time.
+        let mu = 168.0 / cycle_time_hours;
 
-        if lambda <= 0.0 || mu <= 0.0 || lambda >= mu {
-            return None;
+        if lambda <= 0.0 || mu <= 0.0 {
+            return Self::insufficient_data();
         }
 
         let rho = lambda / mu;
-        let l = rho / (1.0 - rho); // Little's Law: expected MRs in system
-                                   // W = L / λ (weeks), converted to hours
+        if lambda >= mu {
+            return Self {
+                status: QueueStatus::OverCapacity,
+                arrival_rate_per_week: Some(lambda),
+                service_rate_per_week: Some(mu),
+                traffic_intensity: Some(rho),
+                expected_mrs_in_system: None,
+                expected_wait_hours: None,
+            };
+        }
+
+        let l = rho / (1.0 - rho);
         let w_hours = (l / lambda) * 168.0;
 
-        Some(Self {
-            arrival_rate_per_week: lambda,
-            service_rate_per_week: mu,
-            traffic_intensity: rho,
-            expected_mrs_in_system: l,
-            expected_wait_hours: w_hours,
-        })
+        Self {
+            status: QueueStatus::Stable,
+            arrival_rate_per_week: Some(lambda),
+            service_rate_per_week: Some(mu),
+            traffic_intensity: Some(rho),
+            expected_mrs_in_system: Some(l),
+            expected_wait_hours: Some(w_hours),
+        }
+    }
+
+    fn insufficient_data() -> Self {
+        Self {
+            status: QueueStatus::InsufficientData,
+            arrival_rate_per_week: None,
+            service_rate_per_week: None,
+            traffic_intensity: None,
+            expected_mrs_in_system: None,
+            expected_wait_hours: None,
+        }
     }
 }
 
@@ -264,9 +305,8 @@ pub struct PoissonInsights {
     /// Only signals with severity ≥ Elevated are included.
     pub anomalies: Vec<AnomalySignal>,
 
-    /// M/M/1 queue insight. `None` when data is insufficient or queue is
-    /// unstable.
-    pub queue_insight: Option<QueueInsight>,
+    /// M/M/1-inspired queue pressure insight.
+    pub queue_insight: QueueInsight,
 }
 
 impl PoissonInsights {
@@ -327,29 +367,78 @@ fn build_throughput_forecasts(
     ]
 }
 
-/// Builds anomaly signals for pipeline failures and comment density.
+/// Builds lightweight pressure signals for metrics that can be interpreted
+/// without a separate historical baseline.
 fn build_anomaly_signals(stats: &AggregatedStats) -> Vec<AnomalySignal> {
     let mut signals = Vec::new();
 
-    // Pipeline failure anomaly: compare observed failure rate to the baseline.
-    // λ = avg_failure_rate × total_mrs gives the expected number of failing MRs.
-    if let Some(avg_failure_rate) = stats.avg_pipeline_failure_rate {
-        let lambda = avg_failure_rate * stats.total_mrs as f64;
-        let observed = (avg_failure_rate * stats.merged_count as f64).round() as u32;
-        let signal = AnomalySignal::new("pipeline_failures", lambda, observed);
-        if signal.is_anomalous() {
-            signals.push(signal);
+    if stats.stale_open_mrs_30d > 0 {
+        signals.push(AnomalySignal {
+            metric: "stale_open_mrs_30d".to_string(),
+            baseline_lambda: 0.0,
+            observed: stats.stale_open_mrs_30d as u32,
+            p_value: 0.0,
+            severity: AnomalySeverity::Critical,
+        });
+    } else if stats.stale_open_mrs_14d > 0 {
+        signals.push(AnomalySignal {
+            metric: "stale_open_mrs_14d".to_string(),
+            baseline_lambda: 0.0,
+            observed: stats.stale_open_mrs_14d as u32,
+            p_value: 0.05,
+            severity: AnomalySeverity::Warning,
+        });
+    } else if stats.stale_open_mrs_7d > 0 {
+        signals.push(AnomalySignal {
+            metric: "stale_open_mrs_7d".to_string(),
+            baseline_lambda: 0.0,
+            observed: stats.stale_open_mrs_7d as u32,
+            p_value: 0.10,
+            severity: AnomalySeverity::Elevated,
+        });
+    }
+
+    if let Some(abandon_rate) = stats.abandon_rate {
+        let severity = if abandon_rate >= 0.25 {
+            Some(AnomalySeverity::Warning)
+        } else if abandon_rate >= 0.10 {
+            Some(AnomalySeverity::Elevated)
+        } else {
+            None
+        };
+
+        if let Some(severity) = severity {
+            signals.push(AnomalySignal {
+                metric: "abandon_rate".to_string(),
+                baseline_lambda: 0.0,
+                observed: (abandon_rate * 100.0).round() as u32,
+                p_value: 0.0,
+                severity,
+            });
         }
     }
 
-    // Comment density anomaly: flag MR batches with unusually high discussion.
-    // λ = avg_comments × total_mrs, observed = total comments in this window.
-    if stats.avg_comments > 0.0 && stats.total_mrs > 0 {
-        let lambda = stats.avg_comments; // expected comments per MR
-        let observed = stats.avg_comments.round() as u32;
-        let signal = AnomalySignal::new("comment_volume_per_mr", lambda, observed);
-        if signal.is_anomalous() {
-            signals.push(signal);
+    if let Some(avg_failure_rate) = stats.avg_pipeline_failure_rate {
+        if stats.pipeline_data_coverage >= 0.5 && avg_failure_rate >= 0.30 {
+            signals.push(AnomalySignal {
+                metric: "pipeline_failure_rate".to_string(),
+                baseline_lambda: 0.0,
+                observed: (avg_failure_rate * 100.0).round() as u32,
+                p_value: 0.0,
+                severity: AnomalySeverity::Warning,
+            });
+        }
+    }
+
+    if let Some(comment_density) = stats.avg_comment_density {
+        if comment_density >= 5.0 {
+            signals.push(AnomalySignal {
+                metric: "comment_density_per_100_lines".to_string(),
+                baseline_lambda: 0.0,
+                observed: comment_density.round() as u32,
+                p_value: 0.0,
+                severity: AnomalySeverity::Elevated,
+            });
         }
     }
 
@@ -419,46 +508,74 @@ mod tests {
             total_mrs: 10,
             merged_count: 8,
             closed_count: 1,
+            abandon_rate: Some(1.0 / 9.0),
+            merged_today: 0,
+            merged_this_week: 0,
+            merged_this_month: 0,
+            merged_last_7_days: 0,
+            merged_last_30_days: 0,
             throughput_per_week: Some(4.0),      // λ = 4 MRs/week
             cycle_time_median_hours: Some(24.0), // μ = 168/24 = 7 MRs/week
+            cycle_time_p75_hours: None,
             cycle_time_p90_hours: None,
             cycle_time_by_author: HashMap::new(),
             cycle_time_by_reviewer: HashMap::new(),
             cycle_time_by_milestone: HashMap::new(),
             avg_diff_size: 100.0,
             avg_comments: 2.0,
+            avg_comment_density: Some(2.0),
             avg_pipeline_failure_rate: None,
+            pipeline_data_coverage: 0.0,
             open_mr_ages_days: vec![],
+            stale_open_mrs_7d: 0,
+            stale_open_mrs_14d: 0,
+            stale_open_mrs_30d: 0,
             throughput_by_milestone: HashMap::new(),
         };
-        let insight = QueueInsight::from_stats(&stats).expect("should produce insight");
+        let insight = QueueInsight::from_stats(&stats);
+        assert_eq!(insight.status, QueueStatus::Stable);
         // ρ = 4/7 ≈ 0.571
-        assert!((insight.traffic_intensity - 4.0 / 7.0).abs() < 1e-6);
+        assert!((insight.traffic_intensity.unwrap() - 4.0 / 7.0).abs() < 1e-6);
         // L = ρ/(1-ρ) ≈ 1.333
         let expected_l = (4.0 / 7.0) / (1.0 - 4.0 / 7.0);
-        assert!((insight.expected_mrs_in_system - expected_l).abs() < 1e-6);
+        assert!((insight.expected_mrs_in_system.unwrap() - expected_l).abs() < 1e-6);
     }
 
     #[test]
-    fn queue_insight_unstable_returns_none() {
+    fn queue_insight_over_capacity_is_explicit() {
         use std::collections::HashMap;
-        // λ > μ → unstable queue
+        // λ > μ → unstable queue pressure.
         let stats = AggregatedStats {
             total_mrs: 10,
             merged_count: 10,
             closed_count: 0,
+            abandon_rate: Some(0.0),
+            merged_today: 0,
+            merged_this_week: 0,
+            merged_this_month: 0,
+            merged_last_7_days: 0,
+            merged_last_30_days: 0,
             throughput_per_week: Some(10.0),      // λ = 10 MRs/week
-            cycle_time_median_hours: Some(168.0), // μ = 1 MR/week → unstable
+            cycle_time_median_hours: Some(168.0), // μ = 1 MR/week → over capacity
+            cycle_time_p75_hours: None,
             cycle_time_p90_hours: None,
             cycle_time_by_author: HashMap::new(),
             cycle_time_by_reviewer: HashMap::new(),
             cycle_time_by_milestone: HashMap::new(),
             avg_diff_size: 0.0,
             avg_comments: 0.0,
+            avg_comment_density: None,
             avg_pipeline_failure_rate: None,
+            pipeline_data_coverage: 0.0,
             open_mr_ages_days: vec![],
+            stale_open_mrs_7d: 0,
+            stale_open_mrs_14d: 0,
+            stale_open_mrs_30d: 0,
             throughput_by_milestone: HashMap::new(),
         };
-        assert!(QueueInsight::from_stats(&stats).is_none());
+        let insight = QueueInsight::from_stats(&stats);
+        assert_eq!(insight.status, QueueStatus::OverCapacity);
+        assert!(insight.traffic_intensity.unwrap() >= 1.0);
+        assert!(insight.expected_wait_hours.is_none());
     }
 }
