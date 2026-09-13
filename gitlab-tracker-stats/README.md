@@ -39,6 +39,12 @@ Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state m
 | **Cycle time by reviewer** | **Median** cycle time per assigned reviewer — surfaces review bottlenecks without being skewed by one-off long MRs |
 | **Cycle time by milestone** | **Median** cycle time per milestone — per-sprint velocity comparison |
 | **Backlog age** | Age distribution of currently open MRs based on their latest snapshot — identifies stagnant reviews |
+| **Backlog aging buckets** | Counts of open MRs older than 7, 14, and 30 days |
+| **Abandon rate** | Share of terminal MRs that were closed without being merged |
+| **Comment density** | Average comments per 100 changed lines — normalises discussion volume by MR size |
+| **Pipeline data coverage** | Share of MRs with pipeline data, used to qualify pipeline-related metrics |
+| **Data confidence** | Sample-size and metadata coverage indicators for total MRs, merged cycle-time sample, pipelines, reviewers, and milestones |
+| **MR size buckets** | Small / Medium / Large / Huge diff-size buckets with total MRs, merged MRs, and median cycle time |
 | **Diff size / comments / pipeline failure rate** | Averages across deduplicated MRs in the window |
 
 ### Spearman rank correlations
@@ -66,7 +72,7 @@ Correlations are colour-coded by strength (|ρ|) and filtered for significance (
 
 ### Poisson insights
 
-The **POISSON INSIGHTS** section applies the [Poisson distribution](https://en.wikipedia.org/wiki/Poisson_distribution) to model MR activity as a stream of discrete, independent events arriving at a known mean rate λ. This gives three families of insight:
+The **Forecasts** tab uses Poisson probabilities for throughput forecasts and baseline-aware anomaly signals. Queue metrics are presented as a flow-pressure heuristic rather than an exact queueing model: they use observed merge throughput and median cycle time to estimate whether delivery is approaching capacity.
 
 #### Throughput forecasts
 
@@ -88,35 +94,42 @@ Given the observed λ (mean merges per week), five forecasts answer distinct ope
 | 🟡 Yellow | 40–74% — achievable but uncertain |
 | 🔴 Red | < 40% — target is unlikely at current pace |
 
-#### Queue model (M/M/1)
+#### Flow pressure
 
-Models the MR pipeline as an [M/M/1 queue](https://en.wikipedia.org/wiki/M/M/1_queue):
+The Overview tab exposes a lightweight M/M/1-inspired pressure estimate:
 
-- **Arrival rate λ** = observed throughput (merges/week)
-- **Service rate μ** = 168 h ÷ median cycle time (MRs/week)
-- **Traffic intensity ρ = λ/μ** — must be < 1 for a stable queue
+- **Throughput proxy λ** = observed merge throughput (merges/week)
+- **Capacity proxy μ** = 168 h ÷ median cycle time (MRs/week)
+- **Flow pressure ρ = λ/μ**
 
-From ρ, two derived metrics are shown:
+Because throughput is a departure rate and cycle time includes waiting time, this should be read as an operational pressure signal, not a precise queueing model.
 
-| Metric | Formula | Meaning |
+| `QueueStatus` | Meaning |
+| :--- | :--- |
+| `Stable` | λ and μ are available and λ < μ; expected MRs in system and expected wait can be shown |
+| `OverCapacity` | λ ≥ μ; wait-time formulas are not valid, but the dashboard highlights capacity pressure |
+| `InsufficientData` | Throughput or cycle-time data is missing |
+
+ρ is colour-coded: 🟢 < 0.60 · 🟡 0.60–0.79 · 🔴 ≥ 0.80.
+
+#### Pressure and baseline anomaly signals
+
+Signals are split into two families:
+
+| Family | Source | Examples |
 | :--- | :--- | :--- |
-| Expected MRs in system | `L = ρ / (1 − ρ)` | Average number of MRs waiting + in review |
-| Expected wait for next MR | `W = L / λ` (converted to hours) | How long a new MR will wait before being processed |
+| **Pressure signals** | Deterministic thresholds on the current window | stale open MRs ≥7/14/30 days, high abandon rate, high pipeline failure rate, high comment density |
+| **Historical-baseline anomalies** | Poisson right-tail probability against the previous equivalent time window | throughput spike, pipeline failure rate spike, comment density spike, abandon rate spike, cycle-time P90 spike |
 
-ρ is colour-coded: 🟢 < 0.60 · 🟡 0.60–0.79 · 🔴 ≥ 0.80 (system under heavy load).
+Baseline selection is automatic when the active report has a duration:
 
-> When λ ≥ μ the queue is theoretically unstable — the model is suppressed and a warning is shown instead.
+| Current window | Baseline window |
+| :--- | :--- |
+| `LastDays(N)` | The previous `N` days immediately before the current window |
+| `Range { from, to }` | The same duration immediately before `from` |
+| `Milestone` / `All time` | No automatic baseline; only pressure signals are shown |
 
-#### Anomaly signals
-
-Monitors two metrics against a Poisson baseline and surfaces statistically unusual windows:
-
-| Metric | Baseline λ | Flag when |
-| :--- | :--- | :--- |
-| `pipeline_failures` | avg failure rate × total MRs | Observed failures exceed baseline (right-tail p < 0.10) |
-| `comment_volume_per_mr` | avg comments per MR | Average discussion volume is unusually high |
-
-Severity is derived from the right-tail p-value P(X ≥ observed | λ):
+Severity is derived from the right-tail p-value P(X ≥ observed | λ) for baseline anomalies:
 
 | Severity | p-value | Icon |
 | :--- | :--- | :--- |
@@ -124,6 +137,8 @@ Severity is derived from the right-tail p-value P(X ≥ observed | λ):
 | Elevated | 0.05 – 0.10 | ↑ Cyan |
 | Warning | 0.01 – 0.05 | ⚠ Yellow |
 | Critical | ≤ 0.01 | ✘ Red |
+
+Pressure signals are displayed as `pressure signal`; baseline anomalies show `observed`, `baseline`, and `p`.
 
 ---
 
@@ -153,7 +168,10 @@ default = ["notifications", "stats"]
 | Key | Action |
 | :--- | :--- |
 | `g` / `G` | **Open / close** the Stats fullscreen overlay |
+| `Tab` / `Shift+Tab` | Cycle Stats tabs forward / backward |
+| `1`–`5` | Jump directly to Overview, Flow, Quality, Forecasts, or Correlations |
 | `w` / `W` | **Cycle time window** — Last 30 days → 90 days → 365 days → All time |
+| `r` / `R` | Refresh the current stats report |
 | `j` / `↓` | Scroll content down |
 | `k` / `↑` | Scroll content up |
 | `PgDn` / `PgUp` | Scroll by 10 lines |
@@ -227,19 +245,29 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     │
     ├── aggregator.rs        TimeWindow (LastDays / Milestone / Range)
     │                        aggregate() → AggregatedStats
+    │                        flow, quality, confidence, stale backlog, size buckets
     │
     ├── correlation.rs       Spearman ρ with tie-handling, p-value via t-distribution
     │                        compute_all_correlations() → Vec<CorrelationResult>
     │
-    ├── poisson.rs           Poisson-based forecasting and anomaly detection
-    │                        ThroughputForecast / AnomalySignal / QueueInsight
-    │                        PoissonInsights::from_stats() → embedded in StatReport
+    ├── poisson.rs           Poisson forecasts, flow pressure, pressure signals,
+    │                        historical-baseline anomalies, QueueStatus
     │
-    ├── report.rs            StatReport::build() → to_json() / to_csv_rows()
-    │                        aggregated + correlations + poisson (three sections)
+    ├── report.rs            StatReport::load() / build_with_baseline()
+    │                        to_json() / to_csv_rows()
     │
     └── shortcuts.rs         inventory::submit! — auto-registers Stats shortcuts
                              in the [?] help popup
+
+gitlab-tracker/src/ui/stats.rs                 (TUI shell in the binary crate)
+    │
+    └── stats/
+        ├── common.rs       Shared layout, blocks, scrolling, formatting helpers
+        ├── overview.rs     Overview tab: throughput, cycle time, backlog, pressure
+        ├── flow.rs         Flow tab: author/reviewer/milestone cycle-time bars
+        ├── quality.rs      Quality tab: data confidence and MR size buckets
+        ├── forecasts.rs    Forecasts tab: throughput forecasts and signals
+        └── correlations.rs Correlations tab: Spearman rows and significance styling
 ```
 
 **Design constraints (same as `gitlab-tracker-core`):**
@@ -248,7 +276,7 @@ gitlab-tracker-stats         (library — zero TUI dependency)
 - ✅ All public types implement `serde::{Serialize, Deserialize}` — ready for future CLI export
 - ✅ `StatsDb` is a trait — swappable with an in-memory implementation for unit tests
 
-The TUI rendering lives in `gitlab-tracker/src/ui/stats.rs`, which depends on this crate but not vice-versa — the separation mirrors `gitlab-tracker-core` ↔ `gitlab-tracker/src/ui/inspector.rs`.
+The analytics engine lives in `gitlab-tracker-stats` and has no TUI dependency. The TUI rendering lives in `gitlab-tracker/src/ui/stats.rs` and its `stats/` submodules, which depend on this crate but not vice-versa — the separation mirrors `gitlab-tracker-core` ↔ `gitlab-tracker/src/ui/inspector.rs`.
 
 ---
 

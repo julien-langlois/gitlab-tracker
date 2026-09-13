@@ -247,6 +247,8 @@ pub struct StatsViewState {
     pub error: Option<String>,
     /// The time window currently selected by the user (cycles with [W]).
     pub window: StatsWindow,
+    /// The currently selected stats dashboard tab.
+    pub tab: StatsTab,
     /// Sprint duration in weeks for throughput forecasts — read from
     /// `stats_sprint_weeks` in `projects.toml`, defaults to 2.
     pub sprint_weeks: u32,
@@ -261,7 +263,64 @@ impl Default for StatsViewState {
             loading: false,
             error: None,
             window: StatsWindow::default(),
+            tab: StatsTab::default(),
             sprint_weeks: 2,
+        }
+    }
+}
+
+/// Stats overlay tab selector.
+#[cfg(feature = "stats")]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum StatsTab {
+    #[default]
+    Overview,
+    Flow,
+    Quality,
+    Forecasts,
+    Correlations,
+}
+
+#[cfg(feature = "stats")]
+impl StatsTab {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Overview => Self::Flow,
+            Self::Flow => Self::Quality,
+            Self::Quality => Self::Forecasts,
+            Self::Forecasts => Self::Correlations,
+            Self::Correlations => Self::Overview,
+        }
+    }
+
+    pub fn previous(self) -> Self {
+        match self {
+            Self::Overview => Self::Correlations,
+            Self::Flow => Self::Overview,
+            Self::Quality => Self::Flow,
+            Self::Forecasts => Self::Quality,
+            Self::Correlations => Self::Forecasts,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Overview => "Overview",
+            Self::Flow => "Flow",
+            Self::Quality => "Quality",
+            Self::Forecasts => "Forecasts",
+            Self::Correlations => "Correlations",
+        }
+    }
+
+    pub fn from_digit(c: char) -> Option<Self> {
+        match c {
+            '1' => Some(Self::Overview),
+            '2' => Some(Self::Flow),
+            '3' => Some(Self::Quality),
+            '4' => Some(Self::Forecasts),
+            '5' => Some(Self::Correlations),
+            _ => None,
         }
     }
 }

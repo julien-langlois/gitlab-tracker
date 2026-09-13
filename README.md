@@ -150,18 +150,17 @@
 
 * 📊 **MR Analytics & Velocity Stats (`G`) *(optional — `--features stats`)*:** Press `G` to open a fullscreen analytics overlay powered by the `gitlab-tracker-stats` crate. Snapshots are recorded automatically into a local SQLite database on every merge, close, or daily refresh — no manual action required.
 
-  The overlay is organised into scrollable sections:
+  The overlay is organised into navigable tabs:
 
-  | Section                     | Content                                                                                                                                    |
-  | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
-  | **Throughput & Cycle time** | MRs merged/week, median / P75 / P90 cycle time (created → merged), avg diff size, avg comments, pipeline failure rate                      |
-  | **Open MR backlog**         | Count, median age, and oldest open MR — surfaces stagnant reviews at a glance                                                              |
-  | **By Author**               | Horizontal bar chart of average cycle time per author                                                                                      |
-  | **By Reviewer**             | Average cycle time per reviewer — identifies review bottlenecks                                                                            |
-  | **By Milestone**            | Merged MR count per sprint — velocity comparison across releases                                                                           |
-  | **Spearman correlations**   | Six metric pairs (diff size, comments, pipeline failures, difficulty vs cycle time) ranked by \|ρ\| with p-values and significance bullets |
+  | Tab | Content |
+  | :--- | :--- |
+  | **Overview** | Throughput, cycle time P50/P75/P90, backlog aging, flow-pressure status, and top delivery signal |
+  | **Flow** | Median cycle time by author, reviewer, and milestone using horizontal bar charts |
+  | **Quality** | Data-confidence indicators, pipeline/reviewer/milestone coverage, and MR size buckets with median cycle time |
+  | **Forecasts** | Poisson throughput forecasts plus pressure and historical-baseline anomaly signals |
+  | **Correlations** | Spearman metric correlations ranked by \|ρ\| with p-values, strength labels, and sample sizes |
 
-  Use `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time) and `↑`/`↓` or `j`/`k` to scroll. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly created MRs at each refresh cycle, including MRs already merged between two cycles, independently of whether the `stats` feature is active.
+  Use `Tab` / `Shift+Tab` to switch tabs, `1`–`5` to jump directly to a tab, `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time), `R` to refresh, and `↑`/`↓`, `j`/`k`, or `PgUp`/`PgDn` to scroll the active tab. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly created MRs at each refresh cycle, including MRs already merged between two cycles, independently of whether the `stats` feature is active.
 
   See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
 
@@ -738,10 +737,20 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
     ├── snapshot.rs      # MrStatsSnapshot + SnapshotTrigger (OnMerge / OnClose / OnRefresh)
     ├── db.rs            # StatsDb trait + SqliteStatsDb: SQLite schema, migrations, upsert/query/purge
     ├── metrics.rs       # PerMrMetrics: cycle_time, pipeline_failure_rate, comment_density (pure fns)
-    ├── aggregator.rs    # TimeWindow + AggregatedStats: median, P90, groupings by author/reviewer/milestone
+    ├── aggregator.rs    # TimeWindow + AggregatedStats: percentiles, flow, quality, confidence, size buckets
     ├── correlation.rs   # Spearman ρ with tie-handling, p-value via t-distribution, CorrelationStrength
-    ├── report.rs        # StatReport::build() → to_json() / to_csv_rows()
+    ├── poisson.rs       # Forecasts, flow-pressure status, pressure signals, historical-baseline anomalies
+    ├── report.rs        # StatReport::load/build_with_baseline() → to_json() / to_csv_rows()
     └── shortcuts.rs     # inventory::submit! — Stats keyboard shortcut block ([G], [W], scroll)
+
+gitlab-tracker/src/ui/stats.rs                 # Stats overlay shell: tabs, status bar, refresh trigger
+└── stats/
+    ├── common.rs       # Shared stats layout, blocks, scroll, formatting helpers
+    ├── overview.rs     # Overview tab: throughput, cycle time, backlog, flow pressure
+    ├── flow.rs         # Flow tab: author/reviewer/milestone cycle-time bars
+    ├── quality.rs      # Quality tab: confidence indicators and MR size buckets
+    ├── forecasts.rs    # Forecasts tab: throughput forecasts and signals
+    └── correlations.rs # Correlations tab: Spearman rows and significance styling
 ```
 
 ### Optional Feature Flags

@@ -539,6 +539,14 @@ pub async fn handle_key_event(
                 KeyCode::PageUp => {
                     app.stats_view.scroll = app.stats_view.scroll.saturating_sub(10);
                 }
+                KeyCode::Tab => {
+                    app.stats_view.tab = app.stats_view.tab.next();
+                    app.stats_view.scroll = 0;
+                }
+                KeyCode::BackTab => {
+                    app.stats_view.tab = app.stats_view.tab.previous();
+                    app.stats_view.scroll = 0;
+                }
                 // [W] cycles the time window and triggers a fresh aggregation.
                 KeyCode::Char('w') | KeyCode::Char('W') => {
                     app.stats_view.window = app.stats_view.window.next();
@@ -547,6 +555,12 @@ pub async fn handle_key_event(
                 // [R] forces a manual stats refresh without changing the window.
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     crate::ui::stats::trigger_stats_refresh(app, tx);
+                }
+                KeyCode::Char(c) => {
+                    if let Some(tab) = crate::app::StatsTab::from_digit(c) {
+                        app.stats_view.tab = tab;
+                        app.stats_view.scroll = 0;
+                    }
                 }
                 _ => {}
             }
