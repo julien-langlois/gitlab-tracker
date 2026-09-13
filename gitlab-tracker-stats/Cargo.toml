@@ -11,7 +11,7 @@ repository.workspace = true
 [dependencies]
 async-trait          = "0.1"
 chrono               = { version = "0.4", features = ["serde"] }
-gitlab-tracker-core  = { version = "0.4.7", path = "../gitlab-tracker-core" }
+gitlab-tracker-core  = { version = "0.4.8", path = "../gitlab-tracker-core" }
 inventory            = "0.3"
 serde                = { version = "1", features = ["derive"] }
 serde_json           = "1"
