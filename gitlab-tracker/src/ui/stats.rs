@@ -1008,6 +1008,15 @@ fn anomaly_signal_line(signal: &AnomalySignal) -> Line<'static> {
         AnomalySeverity::Elevated => ("↑ ELEVATED", Color::Cyan),
         AnomalySeverity::Normal => ("✔ NORMAL  ", Color::Green),
     };
+    let detail = if signal.baseline_lambda > 0.0 {
+        format!(
+            "observed={:<5} baseline={:.1}  p={:.3}",
+            signal.observed, signal.baseline_lambda, signal.p_value
+        )
+    } else {
+        format!("value={:<5} pressure signal", signal.observed)
+    };
+
     Line::from(vec![
         Span::styled(
             format!("  {} ", icon),
@@ -1017,13 +1026,7 @@ fn anomaly_signal_line(signal: &AnomalySignal) -> Line<'static> {
             format!("{:<30}", signal.metric),
             Style::default().fg(Color::White),
         ),
-        Span::styled(
-            format!(
-                "observed={:<5} λ={:.1}  p={:.3}",
-                signal.observed, signal.baseline_lambda, signal.p_value
-            ),
-            Style::default().fg(theme::MUTED),
-        ),
+        Span::styled(detail, Style::default().fg(theme::MUTED)),
     ])
 }
 

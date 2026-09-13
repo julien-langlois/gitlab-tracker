@@ -315,8 +315,17 @@ impl PoissonInsights {
     /// `sprint_weeks` controls the window used for sprint-pace forecasts —
     /// read from `stats_sprint_weeks` in `projects.toml`, defaults to 2.
     pub fn from_stats(stats: &AggregatedStats, sprint_weeks: u32) -> Self {
+        Self::from_stats_with_baseline(stats, None, sprint_weeks)
+    }
+
+    /// Derives Poisson insights using an optional historical baseline.
+    pub fn from_stats_with_baseline(
+        stats: &AggregatedStats,
+        baseline: Option<&AggregatedStats>,
+        sprint_weeks: u32,
+    ) -> Self {
         let throughput_forecasts = build_throughput_forecasts(stats, sprint_weeks);
-        let anomalies = build_anomaly_signals(stats);
+        let anomalies = build_anomaly_signals(stats, baseline);
         let queue_insight = QueueInsight::from_stats(stats);
 
         Self {
@@ -367,35 +376,76 @@ fn build_throughput_forecasts(
     ]
 }
 
-/// Builds lightweight pressure signals for metrics that can be interpreted
-/// without a separate historical baseline.
-fn build_anomaly_signals(stats: &AggregatedStats) -> Vec<AnomalySignal> {
+/// Builds anomaly signals from the current window and, when available, a
+/// historical baseline. Without a baseline, this falls back to deterministic
+/// pressure signals that do not pretend to be statistically significant.
+fn build_anomaly_signals(
+    stats: &AggregatedStats,
+    baseline: Option<&AggregatedStats>,
+) -> Vec<AnomalySignal> {
+    let mut signals = build_pressure_signals(stats);
+
+    let Some(baseline) = baseline else {
+        return signals;
+    };
+
+    push_rate_anomaly(
+        &mut signals,
+        "throughput_spike",
+        baseline.throughput_per_week,
+        stats.throughput_per_week,
+    );
+    push_rate_anomaly(
+        &mut signals,
+        "pipeline_failure_rate_spike",
+        baseline.avg_pipeline_failure_rate,
+        stats
+            .avg_pipeline_failure_rate
+            .filter(|_| stats.pipeline_data_coverage >= 0.5),
+    );
+    push_rate_anomaly(
+        &mut signals,
+        "comment_density_spike",
+        baseline.avg_comment_density,
+        stats.avg_comment_density,
+    );
+    push_rate_anomaly(
+        &mut signals,
+        "abandon_rate_spike",
+        baseline.abandon_rate,
+        stats.abandon_rate,
+    );
+    push_rate_anomaly(
+        &mut signals,
+        "cycle_time_p90_spike",
+        baseline.cycle_time_p90_hours,
+        stats.cycle_time_p90_hours,
+    );
+
+    signals
+}
+
+fn build_pressure_signals(stats: &AggregatedStats) -> Vec<AnomalySignal> {
     let mut signals = Vec::new();
 
     if stats.stale_open_mrs_30d > 0 {
-        signals.push(AnomalySignal {
-            metric: "stale_open_mrs_30d".to_string(),
-            baseline_lambda: 0.0,
-            observed: stats.stale_open_mrs_30d as u32,
-            p_value: 0.0,
-            severity: AnomalySeverity::Critical,
-        });
+        signals.push(pressure_signal(
+            "stale_open_mrs_30d",
+            stats.stale_open_mrs_30d as u32,
+            AnomalySeverity::Critical,
+        ));
     } else if stats.stale_open_mrs_14d > 0 {
-        signals.push(AnomalySignal {
-            metric: "stale_open_mrs_14d".to_string(),
-            baseline_lambda: 0.0,
-            observed: stats.stale_open_mrs_14d as u32,
-            p_value: 0.05,
-            severity: AnomalySeverity::Warning,
-        });
+        signals.push(pressure_signal(
+            "stale_open_mrs_14d",
+            stats.stale_open_mrs_14d as u32,
+            AnomalySeverity::Warning,
+        ));
     } else if stats.stale_open_mrs_7d > 0 {
-        signals.push(AnomalySignal {
-            metric: "stale_open_mrs_7d".to_string(),
-            baseline_lambda: 0.0,
-            observed: stats.stale_open_mrs_7d as u32,
-            p_value: 0.10,
-            severity: AnomalySeverity::Elevated,
-        });
+        signals.push(pressure_signal(
+            "stale_open_mrs_7d",
+            stats.stale_open_mrs_7d as u32,
+            AnomalySeverity::Elevated,
+        ));
     }
 
     if let Some(abandon_rate) = stats.abandon_rate {
@@ -408,41 +458,90 @@ fn build_anomaly_signals(stats: &AggregatedStats) -> Vec<AnomalySignal> {
         };
 
         if let Some(severity) = severity {
-            signals.push(AnomalySignal {
-                metric: "abandon_rate".to_string(),
-                baseline_lambda: 0.0,
-                observed: (abandon_rate * 100.0).round() as u32,
-                p_value: 0.0,
+            signals.push(pressure_signal(
+                "abandon_rate",
+                (abandon_rate * 100.0).round() as u32,
                 severity,
-            });
+            ));
         }
     }
 
     if let Some(avg_failure_rate) = stats.avg_pipeline_failure_rate {
         if stats.pipeline_data_coverage >= 0.5 && avg_failure_rate >= 0.30 {
-            signals.push(AnomalySignal {
-                metric: "pipeline_failure_rate".to_string(),
-                baseline_lambda: 0.0,
-                observed: (avg_failure_rate * 100.0).round() as u32,
-                p_value: 0.0,
-                severity: AnomalySeverity::Warning,
-            });
+            signals.push(pressure_signal(
+                "pipeline_failure_rate",
+                (avg_failure_rate * 100.0).round() as u32,
+                AnomalySeverity::Warning,
+            ));
         }
     }
 
     if let Some(comment_density) = stats.avg_comment_density {
         if comment_density >= 5.0 {
-            signals.push(AnomalySignal {
-                metric: "comment_density_per_100_lines".to_string(),
-                baseline_lambda: 0.0,
-                observed: comment_density.round() as u32,
-                p_value: 0.0,
-                severity: AnomalySeverity::Elevated,
-            });
+            signals.push(pressure_signal(
+                "comment_density_per_100_lines",
+                comment_density.round() as u32,
+                AnomalySeverity::Elevated,
+            ));
         }
     }
 
     signals
+}
+
+fn pressure_signal(
+    metric: impl Into<String>,
+    observed: u32,
+    severity: AnomalySeverity,
+) -> AnomalySignal {
+    AnomalySignal {
+        metric: metric.into(),
+        baseline_lambda: 0.0,
+        observed,
+        p_value: 0.0,
+        severity,
+    }
+}
+
+fn push_rate_anomaly(
+    signals: &mut Vec<AnomalySignal>,
+    metric: &'static str,
+    baseline_rate: Option<f64>,
+    current_rate: Option<f64>,
+) {
+    let Some(baseline_rate) = baseline_rate else {
+        return;
+    };
+    let Some(current_rate) = current_rate else {
+        return;
+    };
+    if baseline_rate <= 0.0 || current_rate <= baseline_rate {
+        return;
+    }
+
+    let observed = current_rate.ceil() as u32;
+    let baseline_lambda = baseline_rate.max(0.1);
+    let p_value = exceedance_probability(baseline_lambda, observed);
+    let severity = AnomalySeverity::from_p_value(p_value);
+    if severity.is_anomalous() {
+        signals.push(AnomalySignal {
+            metric: metric.to_string(),
+            baseline_lambda,
+            observed,
+            p_value,
+            severity,
+        });
+    }
+}
+
+trait AnomalySeverityExt {
+    fn is_anomalous(&self) -> bool;
+}
+
+impl AnomalySeverityExt for AnomalySeverity {
+    fn is_anomalous(&self) -> bool {
+        *self != AnomalySeverity::Normal
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

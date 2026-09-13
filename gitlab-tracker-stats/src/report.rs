@@ -1,3 +1,4 @@
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::aggregator::{
@@ -35,13 +36,22 @@ impl StatReport {
     /// Loads all required data from the stats store and builds a complete report.
     pub async fn load(db: &dyn StatsDb, filter: &QueryFilter) -> Result<Self, StatsError> {
         let aggregated = aggregate(db, filter).await?;
+        let baseline = match build_baseline_filter(filter) {
+            Some(baseline_filter) => Some(aggregate(db, &baseline_filter).await?),
+            None => None,
+        };
         let snapshots = db.query(&build_snapshot_query(filter)).await?;
         let metrics = snapshots
             .iter()
             .map(PerMrMetrics::from_snapshot)
             .collect::<Vec<_>>();
 
-        Ok(Self::build(aggregated, &metrics, filter))
+        Ok(Self::build_with_baseline(
+            aggregated,
+            baseline.as_ref(),
+            &metrics,
+            filter,
+        ))
     }
 
     /// Builds a [`StatReport`] from already-computed aggregated stats and raw metrics.
@@ -53,8 +63,19 @@ impl StatReport {
         metrics: &[PerMrMetrics],
         filter: &QueryFilter,
     ) -> Self {
+        Self::build_with_baseline(aggregated, None, metrics, filter)
+    }
+
+    /// Builds a [`StatReport`] using an optional historical baseline for anomaly detection.
+    pub fn build_with_baseline(
+        aggregated: AggregatedStats,
+        baseline: Option<&AggregatedStats>,
+        metrics: &[PerMrMetrics],
+        filter: &QueryFilter,
+    ) -> Self {
         let sprint_weeks = filter.sprint_weeks.unwrap_or(2);
-        let poisson = PoissonInsights::from_stats(&aggregated, sprint_weeks);
+        let poisson =
+            PoissonInsights::from_stats_with_baseline(&aggregated, baseline, sprint_weeks);
         Self {
             generated_at: chrono::Utc::now().to_rfc3339(),
             window_label: describe_window(filter),
@@ -178,6 +199,44 @@ impl StatReport {
 
         rows
     }
+}
+
+/// Builds a previous-period baseline filter for rolling and explicit date windows.
+fn build_baseline_filter(filter: &QueryFilter) -> Option<QueryFilter> {
+    let baseline_window = match &filter.window {
+        Some(TimeWindow::LastDays(days)) => {
+            let now = Utc::now();
+            let current_start = now.checked_sub_signed(Duration::days(*days as i64))?;
+            let baseline_start = current_start.checked_sub_signed(Duration::days(*days as i64))?;
+            Some(TimeWindow::Range {
+                from: baseline_start.to_rfc3339(),
+                to: current_start.to_rfc3339(),
+            })
+        }
+        Some(TimeWindow::Range { from, to }) => {
+            let from_dt: DateTime<Utc> = from.parse().ok()?;
+            let to_dt: DateTime<Utc> = to.parse().ok()?;
+            let duration = to_dt.signed_duration_since(from_dt);
+            if duration <= Duration::zero() {
+                return None;
+            }
+            let baseline_start = from_dt.checked_sub_signed(duration)?;
+            Some(TimeWindow::Range {
+                from: baseline_start.to_rfc3339(),
+                to: from_dt.to_rfc3339(),
+            })
+        }
+        Some(TimeWindow::Milestone(_)) | None => None,
+    }?;
+
+    Some(QueryFilter {
+        window: Some(baseline_window),
+        project_id: filter.project_id.clone(),
+        author: filter.author.clone(),
+        reviewer: filter.reviewer.clone(),
+        target_branch: filter.target_branch.clone(),
+        sprint_weeks: filter.sprint_weeks,
+    })
 }
 
 /// Produces a human-readable label describing the active query window and filters.
