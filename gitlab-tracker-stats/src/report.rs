@@ -2,7 +2,7 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::aggregator::{
-    aggregate, build_snapshot_query, AggregatedStats, QueryFilter, TimeWindow,
+    aggregate, build_snapshot_query, compute_stats, AggregatedStats, QueryFilter, TimeWindow,
 };
 use crate::correlation::{compute_all_correlations, CorrelationResult};
 use crate::db::{StatsDb, StatsError};
@@ -35,16 +35,18 @@ pub struct StatReport {
 impl StatReport {
     /// Loads all required data from the stats store and builds a complete report.
     pub async fn load(db: &dyn StatsDb, filter: &QueryFilter) -> Result<Self, StatsError> {
-        let aggregated = aggregate(db, filter).await?;
-        let baseline = match build_baseline_filter(filter) {
-            Some(baseline_filter) => Some(aggregate(db, &baseline_filter).await?),
-            None => None,
-        };
+        // The current window is loaded once and shared by the aggregation and the
+        // correlations; only the baseline needs its own query.
         let snapshots = db.query(&build_snapshot_query(filter)).await?;
         let metrics = snapshots
             .iter()
             .map(PerMrMetrics::from_snapshot)
             .collect::<Vec<_>>();
+        let aggregated = compute_stats(&snapshots, &metrics, filter);
+        let baseline = match build_baseline_filter(filter) {
+            Some(baseline_filter) => Some(aggregate(db, &baseline_filter).await?),
+            None => None,
+        };
 
         Ok(Self::build_with_baseline(
             aggregated,

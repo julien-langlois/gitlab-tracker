@@ -168,6 +168,19 @@ pub struct AppConfig {
     /// Not serialised — always sourced from `projects.toml` at runtime.
     #[serde(skip)]
     pub gitlab_username: Option<String>,
+    /// `label_colors` parsed once on first use, instead of re-parsing every colour
+    /// on every frame. `label_colors` is only set during startup (`main.rs`),
+    /// before the first render.
+    #[serde(skip)]
+    pub(crate) resolved_label_colors: std::sync::OnceLock<ResolvedLabelColors>,
+}
+
+/// Pre-parsed `label_colors`: exact keys plus wildcard prefixes, longest prefix
+/// first so the most specific wildcard wins deterministically.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ResolvedLabelColors {
+    exact: HashMap<String, (Color, Color)>,
+    prefixes: Vec<(String, (Color, Color))>,
 }
 
 impl Default for AppConfig {
@@ -231,6 +244,7 @@ impl Default for AppConfig {
             gitlab_label_colors: HashMap::new(),
             // Populated at runtime from projects.toml via apply_project_overrides — None by default.
             gitlab_username: None,
+            resolved_label_colors: std::sync::OnceLock::new(),
         }
     }
 }
@@ -285,19 +299,35 @@ impl AppConfig {
     /// 4. Default dark-gray background with white foreground
     pub fn get_label_style(&self, label: &str, gitlab_color: Option<&str>) -> (Color, Color) {
         let label_lower = label.to_lowercase();
+        let resolved = self.resolved_label_colors.get_or_init(|| {
+            let mut resolved = ResolvedLabelColors::default();
+            for (key, cfg) in &self.label_colors {
+                let style = (parse_color(&cfg.bg), parse_color(&cfg.fg));
+                match key.strip_suffix('*') {
+                    Some(prefix) => resolved.prefixes.push((prefix.to_lowercase(), style)),
+                    None => {
+                        resolved.exact.insert(key.clone(), style);
+                    }
+                }
+            }
+            resolved
+                .prefixes
+                .sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.0.cmp(&b.0)));
+            resolved
+        });
 
         // 1. Exact match override from config.json
-        if let Some(cfg) = self.label_colors.get(&label_lower) {
-            return (parse_color(&cfg.bg), parse_color(&cfg.fg));
+        if let Some(style) = resolved.exact.get(&label_lower) {
+            return *style;
         }
 
         // 2. Wildcard prefix override from config.json
-        for (key, cfg) in &self.label_colors {
-            if let Some(prefix) = key.strip_suffix('*') {
-                if label_lower.starts_with(&prefix.to_lowercase()) {
-                    return (parse_color(&cfg.bg), parse_color(&cfg.fg));
-                }
-            }
+        if let Some((_, style)) = resolved
+            .prefixes
+            .iter()
+            .find(|(prefix, _)| label_lower.starts_with(prefix.as_str()))
+        {
+            return *style;
         }
 
         // 3. GitLab-provided colour (hex) — compute a legible foreground automatically

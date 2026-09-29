@@ -164,8 +164,7 @@ pub async fn aggregate(
     db: &dyn StatsDb,
     filter: &QueryFilter,
 ) -> Result<AggregatedStats, StatsError> {
-    let query = build_snapshot_query(filter);
-    let snapshots = db.query(&query).await?;
+    let snapshots = db.query(&build_snapshot_query(filter)).await?;
     let metrics: Vec<PerMrMetrics> = snapshots.iter().map(PerMrMetrics::from_snapshot).collect();
 
     Ok(compute_stats(&snapshots, &metrics, filter))
@@ -202,7 +201,7 @@ pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
 }
 
 /// Pure computation over already-loaded snapshots and their derived metrics.
-fn compute_stats(
+pub(crate) fn compute_stats(
     snapshots: &[StoredSnapshot],
     metrics: &[PerMrMetrics],
     filter: &QueryFilter,

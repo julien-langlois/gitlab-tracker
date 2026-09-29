@@ -28,8 +28,8 @@ gitlab-tracker-redmine = { version = "0.4.8", path = "../gitlab-tracker-redmine"
 gitlab-tracker-stats = { version = "0.4.8", path = "../gitlab-tracker-stats", optional = true }
 
 inventory = "0.3"
-ratatui = { version = "0.30", features = ["crossterm_0_28"] }
-crossterm = "0.28"
+ratatui = "0.30"
+crossterm = "0.29"
 terminal-colorsaurus = "1.0.3"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = [

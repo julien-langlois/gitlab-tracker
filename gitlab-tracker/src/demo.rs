@@ -7,8 +7,6 @@ use crate::models::{
     TrackedMr,
 };
 use crate::ui;
-#[cfg(feature = "stats")]
-use chrono;
 use crossterm::event::{self, Event, KeyEventKind};
 use gitlab_tracker_core::{LinkedTicket, LINKED_TICKET_SCHEMA_VERSION};
 use std::time::Duration;

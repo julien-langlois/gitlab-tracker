@@ -1,5 +1,20 @@
 use regex::Regex;
 
+/// Compiles the configured ticket patterns once. Invalid patterns are logged
+/// and skipped so a single typo does not disable detection entirely.
+pub fn compile_patterns(patterns: &[String]) -> Vec<Regex> {
+    patterns
+        .iter()
+        .filter_map(|pattern| match Regex::new(pattern) {
+            Ok(re) => Some(re),
+            Err(e) => {
+                tracing::warn!(pattern = %pattern, error = %e, "Invalid ticket detection regex — skipped");
+                None
+            }
+        })
+        .collect()
+}
+
 /// Attempts to extract a Redmine ticket ID from the MR title and/or description.
 ///
 /// Patterns are evaluated in order; the first match wins. The title is always
@@ -9,32 +24,20 @@ use regex::Regex;
 /// ticket ID string (numeric for Redmine, but kept as `String` for genericity).
 ///
 /// Returns `None` when no pattern matches either source.
-pub fn detect_ticket_id(title: &str, description: &str, patterns: &[String]) -> Option<String> {
-    for source in [title, description] {
-        for pattern in patterns {
-            match Regex::new(pattern) {
-                Ok(re) => {
-                    if let Some(caps) = re.captures(source) {
-                        if let Some(m) = caps.get(1) {
-                            return Some(m.as_str().to_string());
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(pattern = %pattern, error = %e, "Invalid ticket detection regex — skipped");
-                }
-            }
-        }
-    }
-    None
+pub fn detect_ticket_id(title: &str, description: &str, patterns: &[Regex]) -> Option<String> {
+    [title, description].into_iter().find_map(|source| {
+        patterns
+            .iter()
+            .find_map(|re| re.captures(source)?.get(1).map(|m| m.as_str().to_string()))
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn hash_pattern() -> Vec<String> {
-        vec![r"#(\d+)".to_string()]
+    fn hash_pattern() -> Vec<Regex> {
+        compile_patterns(&[r"#(\d+)".to_string()])
     }
 
     #[test]
@@ -74,7 +77,7 @@ mod tests {
         let bad_patterns = vec!["[invalid".to_string(), r"#(\d+)".to_string()];
         // Should still return a match from the valid second pattern.
         assert_eq!(
-            detect_ticket_id("#99", "", &bad_patterns),
+            detect_ticket_id("#99", "", &compile_patterns(&bad_patterns)),
             Some("99".to_string())
         );
     }

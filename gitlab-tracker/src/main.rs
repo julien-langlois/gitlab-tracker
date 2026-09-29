@@ -425,6 +425,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         let today = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
+                        let mut backfill = Vec::with_capacity(saved_mrs.len());
                         for mr in &saved_mrs {
                             let (trigger, recorded_at) = match &mr.state {
                                 GitlabMrState::Merged => (
@@ -474,24 +475,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 pipeline_failure_count,
                             };
 
-                            // Override `recorded_at` via a raw upsert so merged MRs
-                            // appear at their real merge date rather than today.
-                            // We use the standard upsert and accept that open MRs
-                            // will land at today — correct behaviour for OnRefresh.
-                            let _ = db.upsert_snapshot_at(&snap, &recorded_at).await;
-
-                            // Patch `created_at` on rows that were inserted before this
-                            // field was tracked — INSERT OR IGNORE never updates existing
-                            // rows, so we issue an explicit UPDATE for NULL slots.
-                            if let Some(ref ca) = mr.created_at {
-                                let _ = db.backfill_created_at(&project_id, &mr.id, ca).await;
-                            }
+                            // `recorded_at` is explicit so merged MRs appear at their real
+                            // merge date rather than today; open MRs land at today —
+                            // correct behaviour for OnRefresh.
+                            backfill.push((snap, recorded_at));
                         }
 
-                        tracing::info!(
-                            count = saved_mrs.len(),
-                            "Stats backfill from tracker_state.json complete"
-                        );
+                        // Single transaction: one fsync for the whole backfill instead of
+                        // one per snapshot / label / reviewer. It also patches `created_at`
+                        // on rows inserted before that field was tracked.
+                        match db.backfill_snapshots(&backfill).await {
+                            Ok(()) => tracing::info!(
+                                count = backfill.len(),
+                                "Stats backfill from tracker_state.json complete"
+                            ),
+                            Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
+                        }
                     }
 
                     app.stats_view.sprint_weeks = stats_sprint_weeks;
@@ -530,53 +529,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // ── Main event loop ───────────────────────────────────────────────────────
+    // Redraw only when something changed (async event, terminal input/resize) or
+    // while the loading spinner is visible — an idle tracker costs ~0 CPU.
+    let mut dirty = true;
+    let mut last_title = String::new();
     loop {
-        // Drain all pending async events before rendering.
+        // Drain all pending async events before rendering. State is persisted and
+        // the MR list re-sorted once per drain rather than once per event: at
+        // startup N `MrLoaded` events would otherwise mean N full JSON rewrites.
+        let mut needs_save = false;
         while let Ok(event) = rx.try_recv() {
-            let needs_save = app
+            dirty = true;
+            needs_save |= app
                 .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
                 .await;
-            if needs_save {
-                save_state_async(
-                    &app.mrs,
-                    &last_known_branches,
-                    app.discovery_started_at.as_deref(),
-                    &app.dismissed_mr_ids,
-                    &base_url,
-                    &project_id,
-                )
-                .await;
-            }
+        }
+        app.flush_pending_sort();
+        if needs_save {
+            save_state_async(
+                &app.mrs,
+                &last_known_branches,
+                app.discovery_started_at.as_deref(),
+                &app.dismissed_mr_ids,
+                &base_url,
+                &project_id,
+            )
+            .await;
         }
 
-        // Update the terminal window title with live stats.
-        // Uses the OSC 0 escape sequence supported by all modern terminal emulators.
-        let mode_label = match app.input_mode {
-            app::InputMode::Editing => "✏️  Editing",
-            app::InputMode::ColumnPicker => "⚙️  Columns",
-            app::InputMode::Settings => "⚙️  Settings",
-            app::InputMode::FilterPicker => "🔍 Filter",
-            app::InputMode::LogTime => "⏱️  Log Time",
-            app::InputMode::Help => "❓ Help",
-            app::InputMode::Normal => "Normal",
-            #[cfg(feature = "stats")]
-            app::InputMode::Stats => "📊 Stats",
-        };
-        let filter_label = app.active_filter.label(&app.filter_defs);
-        let window_title = format!(
-            "GitLab Tracker │ {} MRs │ {} │ {}",
-            app.mrs.len(),
-            mode_label,
-            filter_label,
-        );
-        crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::SetTitle(&window_title)
-        )?;
+        let spinner_visible = app.pending_initial_fetches + app.pending_refresh_fetches > 0;
+        if dirty || spinner_visible {
+            // Update the terminal window title with live stats (OSC 0), only when
+            // it actually changes.
+            let mode_label = match app.input_mode {
+                app::InputMode::Editing => "✏️  Editing",
+                app::InputMode::ColumnPicker => "⚙️  Columns",
+                app::InputMode::Settings => "⚙️  Settings",
+                app::InputMode::FilterPicker => "🔍 Filter",
+                app::InputMode::LogTime => "⏱️  Log Time",
+                app::InputMode::Help => "❓ Help",
+                app::InputMode::Normal => "Normal",
+                #[cfg(feature = "stats")]
+                app::InputMode::Stats => "📊 Stats",
+            };
+            let filter_label = app.active_filter.label(&app.filter_defs);
+            let window_title = format!(
+                "GitLab Tracker │ {} MRs │ {} │ {}",
+                app.mrs.len(),
+                mode_label,
+                filter_label,
+            );
+            if window_title != last_title {
+                crossterm::execute!(
+                    std::io::stdout(),
+                    crossterm::terminal::SetTitle(&window_title)
+                )?;
+                last_title = window_title;
+            }
 
-        terminal.draw(|f| ui::render_ui(f, &mut app))?;
+            terminal.draw(|f| ui::render_ui(f, &mut app))?;
+            dirty = false;
+        }
 
         if event::poll(Duration::from_millis(50))? {
+            dirty = true;
             match event::read()? {
                 Event::Mouse(mouse) => {
                     let size = terminal.size()?;

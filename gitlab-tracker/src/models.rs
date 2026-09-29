@@ -526,6 +526,9 @@ pub enum AppEvent {
     /// Fired when the async stats aggregation fails.
     #[cfg(feature = "stats")]
     StatsReportFailed(String),
+    /// Fired after a snapshot was written to the stats DB; marks the report stale.
+    #[cfg(feature = "stats")]
+    StatsSnapshotRecorded,
     /// Fired when the MR discovery poll finds new MR IIDs not yet in the tracking list.
     /// Only emitted when `discover_new_mrs = true` in `[project.stats]`.
     NewMrsDiscovered(Vec<String>),

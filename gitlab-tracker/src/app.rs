@@ -482,6 +482,8 @@ pub struct App {
     /// Monotonically incrementing counter bumped on every render frame (~20 fps).
     /// Used to animate the spinner independently of the 1-second tick timer.
     pub spinner_frame: usize,
+    /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
+    pub needs_sort: bool,
     /// Shortcut blocks collected at startup via `inventory` from every linked crate.
     ///
     /// Populated once by `gitlab_tracker_core::collect_all_blocks()` — no explicit
@@ -516,6 +518,10 @@ pub struct App {
     /// without a round-trip query on every `Tick`.
     #[cfg(feature = "stats")]
     pub stats_last_refresh_date: std::collections::HashMap<String, String>,
+    /// Set when a snapshot was recorded; the report is recomputed at most once
+    /// per `Tick` instead of once per recorded snapshot.
+    #[cfg(feature = "stats")]
+    pub stats_report_dirty: bool,
     /// Active colour palette — resolved once at startup from the terminal background
     /// colour (OSC 11 via `terminal-colorsaurus`). Falls back to the dark palette
     /// when the terminal does not respond. Forwarded to renderers that need it.
@@ -627,6 +633,7 @@ impl App {
             quit_confirm: false,
             theme,
             spinner_frame: 0,
+            needs_sort: false,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),
             event_policy: Arc::new(DefaultMrEventPolicy),
@@ -636,6 +643,8 @@ impl App {
             stats_db: None,
             #[cfg(feature = "stats")]
             stats_last_refresh_date: std::collections::HashMap::new(),
+            #[cfg(feature = "stats")]
+            stats_report_dirty: false,
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,
             discovery_started_at: None,
@@ -1051,6 +1060,13 @@ impl App {
             SortOrder::Descending => SortOrder::Ascending,
         };
         self.sort_mrs();
+    }
+
+    /// Applies a sort requested by `MrLoaded` during the last event drain.
+    pub fn flush_pending_sort(&mut self) {
+        if std::mem::take(&mut self.needs_sort) {
+            self.sort_mrs();
+        }
     }
 
     pub fn sort_mrs(&mut self) {
@@ -1861,7 +1877,9 @@ impl App {
                     }
                 }
 
-                self.sort_mrs();
+                // Sorting is deferred to the end of the event drain (see
+                // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
+                self.needs_sort = true;
 
                 // ── Stats recording ───────────────────────────────────────────
                 // Record a snapshot into the stats DB when the feature is enabled.
@@ -1946,10 +1964,7 @@ impl App {
                             } else {
                                 None
                             };
-                            let window = self.stats_view.window.to_query_window();
-                            let sprint_weeks = self.stats_view.sprint_weeks;
                             tokio::spawn(async move {
-                                use gitlab_tracker_stats::aggregator::QueryFilter;
                                 use gitlab_tracker_stats::StatsDb;
 
                                 if let Err(e) = db.upsert_snapshot(&snap).await {
@@ -1961,29 +1976,10 @@ impl App {
                                     return;
                                 }
 
+                                // The report itself is recomputed on the next Tick
+                                // (debounced), not once per recorded snapshot.
                                 if let Some(tx2) = tx2 {
-                                    let filter = QueryFilter {
-                                        window,
-                                        project_id: Some(project_id),
-                                        sprint_weeks: Some(sprint_weeks),
-                                        ..Default::default()
-                                    };
-
-                                    match gitlab_tracker_stats::StatReport::load(
-                                        db.as_ref(),
-                                        &filter,
-                                    )
-                                    .await
-                                    {
-                                        Ok(report) => {
-                                            let _ = tx2
-                                                .send(AppEvent::StatsReportReady(Box::new(report)));
-                                        }
-                                        Err(e) => {
-                                            let _ = tx2
-                                                .send(AppEvent::StatsReportFailed(e.to_string()));
-                                        }
-                                    }
+                                    let _ = tx2.send(AppEvent::StatsSnapshotRecorded);
                                 }
                             });
                         }
@@ -2010,6 +2006,12 @@ impl App {
                 self.stats_view.loading = false;
                 self.stats_view.error = None;
                 self.stats_view.report = Some(*report);
+                false
+            }
+
+            #[cfg(feature = "stats")]
+            AppEvent::StatsSnapshotRecorded => {
+                self.stats_report_dirty = true;
                 false
             }
 
@@ -2152,6 +2154,11 @@ impl App {
             }
 
             AppEvent::Tick => {
+                #[cfg(feature = "stats")]
+                if std::mem::take(&mut self.stats_report_dirty) {
+                    crate::ui::stats::trigger_background_stats_refresh(self, tx);
+                }
+
                 // Decrement the highlight fade countdown and clear flags when expired.
                 if self.update_highlight_ticks > 0 {
                     self.update_highlight_ticks -= 1;

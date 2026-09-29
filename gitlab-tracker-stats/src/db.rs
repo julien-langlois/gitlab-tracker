@@ -71,6 +71,16 @@ pub trait StatsDb: Send + Sync {
         recorded_at: &str,
     ) -> Result<(), StatsError>;
 
+    /// Startup backfill: for each `(snapshot, recorded_at)` runs
+    /// [`upsert_snapshot_at`](Self::upsert_snapshot_at), then fills `created_at`
+    /// on that MR's rows where it is still NULL (rows inserted before the field
+    /// was tracked — INSERT OR IGNORE never updates them). Everything runs in a
+    /// single transaction: one fsync instead of one per row. Idempotent.
+    async fn backfill_snapshots(
+        &self,
+        items: &[(MrStatsSnapshot, String)],
+    ) -> Result<(), StatsError>;
+
     /// Returns all stored snapshots matching the given filter, ordered by `recorded_at` ASC.
     async fn query(&self, filter: &SnapshotQuery) -> Result<Vec<StoredSnapshot>, StatsError>;
 
@@ -81,21 +91,6 @@ pub trait StatsDb: Send + Sync {
         &self,
         project_id: &str,
         retention_days: u32,
-    ) -> Result<u64, StatsError>;
-
-    /// Patches `created_at` for snapshots where it is currently NULL.
-    ///
-    /// Called during the startup backfill when `tracker_state.json` already
-    /// holds a `created_at` value for MRs whose DB rows were inserted before
-    /// this field was tracked. Only rows where `created_at IS NULL` are updated,
-    /// so the operation is idempotent and safe to call on every startup.
-    ///
-    /// Returns the number of rows updated.
-    async fn backfill_created_at(
-        &self,
-        project_id: &str,
-        mr_id: &str,
-        created_at: &str,
     ) -> Result<u64, StatsError>;
 
     /// Removes duplicate `on_merge` / `on_close` snapshots for the same MR,
@@ -193,6 +188,14 @@ impl SqliteStatsDb {
 
             CREATE INDEX IF NOT EXISTS idx_snapshots_milestone
                 ON mr_snapshots(milestone);
+
+            -- Label / reviewer lookups are keyed by snapshot_id; without these
+            -- every lookup is a full table scan.
+            CREATE INDEX IF NOT EXISTS idx_labels_snapshot
+                ON mr_labels(snapshot_id);
+
+            CREATE INDEX IF NOT EXISTS idx_reviewers_snapshot
+                ON mr_reviewers(snapshot_id);
             "#,
         )
         .execute(pool)
@@ -213,81 +216,30 @@ impl StatsDb for SqliteStatsDb {
         snap: &MrStatsSnapshot,
         recorded_at: &str,
     ) -> Result<(), StatsError> {
-        let trigger = snap.trigger.as_str();
+        // One transaction: the snapshot and its labels/reviewers land atomically.
+        let mut tx = self.pool.begin().await?;
+        insert_snapshot(&mut tx, snap, recorded_at).await?;
+        tx.commit().await?;
+        Ok(())
+    }
 
-        // Derive the calendar date (YYYY-MM-DD) from recorded_at so it can be used
-        // directly in the UNIQUE constraint column without relying on DATE() expressions,
-        // which are not allowed in UNIQUE constraints on SQLite < 3.37.
-        let recorded_date = recorded_at.get(..10).unwrap_or(recorded_at);
-
-        let row = sqlx::query(
-            r#"
-            INSERT OR IGNORE INTO mr_snapshots (
-                recorded_at, recorded_date, trigger, mr_id, project_id, title, author, assignee,
-                merged_by, milestone, target_branch, state,
-                created_at, merged_at, updated_at,
-                files_changed, additions, deletions, commits_count, diff_difficulty,
-                user_notes_count, pipeline_count, pipeline_failure_count
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?, ?,
-                ?, ?, ?, ?
-            )
-            RETURNING id
-            "#,
-        )
-        .bind(recorded_at)
-        .bind(recorded_date)
-        .bind(trigger)
-        .bind(&snap.mr_id)
-        .bind(&snap.project_id)
-        .bind(&snap.title)
-        .bind(&snap.author)
-        .bind(&snap.assignee)
-        .bind(&snap.merged_by)
-        .bind(&snap.milestone)
-        .bind(&snap.target_branch)
-        .bind(&snap.state)
-        .bind(&snap.created_at)
-        .bind(&snap.merged_at)
-        .bind(&snap.updated_at)
-        .bind(snap.files_changed)
-        .bind(snap.additions)
-        .bind(snap.deletions)
-        .bind(snap.commits_count)
-        .bind(snap.diff_difficulty)
-        .bind(snap.user_notes_count)
-        .bind(snap.pipeline_count)
-        .bind(snap.pipeline_failure_count)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        // INSERT OR IGNORE returns no row when the UNIQUE constraint fires —
-        // that means this snapshot already exists for this day+trigger, which is correct.
-        let Some(row) = row else { return Ok(()) };
-
-        let snapshot_id: i64 = sqlx::Row::get(&row, "id");
-
-        // Insert labels.
-        for label in &snap.labels {
-            sqlx::query("INSERT INTO mr_labels (snapshot_id, label) VALUES (?, ?)")
-                .bind(snapshot_id)
-                .bind(label)
-                .execute(&self.pool)
-                .await?;
+    async fn backfill_snapshots(
+        &self,
+        items: &[(MrStatsSnapshot, String)],
+    ) -> Result<(), StatsError> {
+        let mut tx = self.pool.begin().await?;
+        for (snap, recorded_at) in items {
+            insert_snapshot(&mut tx, snap, recorded_at).await?;
+            if let Some(created_at) = &snap.created_at {
+                sqlx::query(BACKFILL_CREATED_AT_SQL)
+                    .bind(created_at)
+                    .bind(&snap.project_id)
+                    .bind(&snap.mr_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
         }
-
-        // Insert reviewers.
-        for reviewer in &snap.reviewers {
-            sqlx::query("INSERT INTO mr_reviewers (snapshot_id, reviewer) VALUES (?, ?)")
-                .bind(snapshot_id)
-                .bind(reviewer)
-                .execute(&self.pool)
-                .await?;
-        }
-
+        tx.commit().await?;
         Ok(())
     }
 
@@ -326,21 +278,25 @@ impl StatsDb for SqliteStatsDb {
             dynamic.push(trigger.clone());
         }
 
+        // Reviewer sub-filter requires an EXISTS sub-query. It is pushed last so its
+        // placeholder is bound after the `dynamic` values below.
+        if filter.reviewer.is_some() {
+            conditions.push(
+                "EXISTS (SELECT 1 FROM mr_reviewers r WHERE r.snapshot_id = s.id AND r.reviewer = ?)",
+            );
+        }
+
         let where_clause = if conditions.is_empty() {
             String::new()
         } else {
             format!("WHERE {}", conditions.join(" AND "))
         };
 
-        // Reviewer sub-filter requires a separate EXISTS sub-query.
-        let reviewer_clause = if filter.reviewer.is_some() {
-            "AND EXISTS (SELECT 1 FROM mr_reviewers r WHERE r.snapshot_id = s.id AND r.reviewer = ?)"
-        } else {
-            ""
-        };
-
         let sql = format!(
-            "SELECT s.* FROM mr_snapshots s {where_clause} {reviewer_clause} ORDER BY s.recorded_at ASC"
+            "SELECT s.*, \
+                (SELECT json_group_array(label) FROM mr_labels WHERE snapshot_id = s.id) AS labels_json, \
+                (SELECT json_group_array(reviewer) FROM mr_reviewers WHERE snapshot_id = s.id) AS reviewers_json \
+             FROM mr_snapshots s {where_clause} ORDER BY s.recorded_at ASC"
         );
 
         // sqlx does not support fully dynamic binding without a query builder, so we
@@ -356,24 +312,15 @@ impl StatsDb for SqliteStatsDb {
 
         let rows = q.fetch_all(&self.pool).await?;
 
-        // Map raw rows back to StoredSnapshot. Labels and reviewers are loaded separately
-        // per snapshot to avoid a cartesian product in the main query.
+        // Map raw rows back to StoredSnapshot. Labels and reviewers come back as JSON
+        // arrays from correlated sub-selects: one round-trip instead of 1 + 2N queries,
+        // and no cartesian product.
         let mut results = Vec::with_capacity(rows.len());
         for row in rows {
             use sqlx::Row;
             let id: i64 = row.get("id");
-
-            let labels: Vec<String> =
-                sqlx::query_scalar("SELECT label FROM mr_labels WHERE snapshot_id = ?")
-                    .bind(id)
-                    .fetch_all(&self.pool)
-                    .await?;
-
-            let reviewers: Vec<String> =
-                sqlx::query_scalar("SELECT reviewer FROM mr_reviewers WHERE snapshot_id = ?")
-                    .bind(id)
-                    .fetch_all(&self.pool)
-                    .await?;
+            let labels = parse_json_list(row.get("labels_json"))?;
+            let reviewers = parse_json_list(row.get("reviewers_json"))?;
 
             let trigger_str: String = row.get("trigger");
             let trigger = match trigger_str.as_str() {
@@ -436,25 +383,6 @@ impl StatsDb for SqliteStatsDb {
         Ok(result.rows_affected())
     }
 
-    async fn backfill_created_at(
-        &self,
-        project_id: &str,
-        mr_id: &str,
-        created_at: &str,
-    ) -> Result<u64, StatsError> {
-        // Only update rows where created_at is currently NULL — never overwrite existing data.
-        let result = sqlx::query(
-            "UPDATE mr_snapshots SET created_at = ? WHERE project_id = ? AND mr_id = ? AND created_at IS NULL",
-        )
-        .bind(created_at)
-        .bind(project_id)
-        .bind(mr_id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected())
-    }
-
     async fn deduplicate_snapshots(&self, project_id: &str) -> Result<u64, StatsError> {
         // For each (mr_id, trigger) pair, keep only the row with MAX(id) and
         // delete all others. MAX(id) = most recently inserted = best data quality
@@ -479,5 +407,156 @@ impl StatsDb for SqliteStatsDb {
         .await?;
 
         Ok(result.rows_affected())
+    }
+}
+
+/// Only fills `created_at` where it is NULL — never overwrites existing data.
+const BACKFILL_CREATED_AT_SQL: &str =
+    "UPDATE mr_snapshots SET created_at = ? WHERE project_id = ? AND mr_id = ? AND created_at IS NULL";
+
+/// Inserts one snapshot (ignored when it already exists for this day + trigger)
+/// plus its labels and reviewers, on the caller's transaction.
+async fn insert_snapshot(
+    conn: &mut sqlx::SqliteConnection,
+    snap: &MrStatsSnapshot,
+    recorded_at: &str,
+) -> Result<(), StatsError> {
+    // Derive the calendar date (YYYY-MM-DD) from recorded_at so it can be used
+    // directly in the UNIQUE constraint column without relying on DATE() expressions,
+    // which are not allowed in UNIQUE constraints on SQLite < 3.37.
+    let recorded_date = recorded_at.get(..10).unwrap_or(recorded_at);
+
+    let row = sqlx::query(
+        r#"
+        INSERT OR IGNORE INTO mr_snapshots (
+            recorded_at, recorded_date, trigger, mr_id, project_id, title, author, assignee,
+            merged_by, milestone, target_branch, state,
+            created_at, merged_at, updated_at,
+            files_changed, additions, deletions, commits_count, diff_difficulty,
+            user_notes_count, pipeline_count, pipeline_failure_count
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?
+        )
+        RETURNING id
+        "#,
+    )
+    .bind(recorded_at)
+    .bind(recorded_date)
+    .bind(snap.trigger.as_str())
+    .bind(&snap.mr_id)
+    .bind(&snap.project_id)
+    .bind(&snap.title)
+    .bind(&snap.author)
+    .bind(&snap.assignee)
+    .bind(&snap.merged_by)
+    .bind(&snap.milestone)
+    .bind(&snap.target_branch)
+    .bind(&snap.state)
+    .bind(&snap.created_at)
+    .bind(&snap.merged_at)
+    .bind(&snap.updated_at)
+    .bind(snap.files_changed)
+    .bind(snap.additions)
+    .bind(snap.deletions)
+    .bind(snap.commits_count)
+    .bind(snap.diff_difficulty)
+    .bind(snap.user_notes_count)
+    .bind(snap.pipeline_count)
+    .bind(snap.pipeline_failure_count)
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    // INSERT OR IGNORE returns no row when the UNIQUE constraint fires —
+    // that means this snapshot already exists for this day+trigger, which is correct.
+    let Some(row) = row else { return Ok(()) };
+    let snapshot_id: i64 = sqlx::Row::get(&row, "id");
+
+    for label in &snap.labels {
+        sqlx::query("INSERT INTO mr_labels (snapshot_id, label) VALUES (?, ?)")
+            .bind(snapshot_id)
+            .bind(label)
+            .execute(&mut *conn)
+            .await?;
+    }
+    for reviewer in &snap.reviewers {
+        sqlx::query("INSERT INTO mr_reviewers (snapshot_id, reviewer) VALUES (?, ?)")
+            .bind(snapshot_id)
+            .bind(reviewer)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
+
+/// Decodes a `json_group_array(...)` column into a list of strings.
+fn parse_json_list(json: String) -> Result<Vec<String>, StatsError> {
+    serde_json::from_str(&json).map_err(|e| StatsError::InvalidData(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshot::SnapshotTrigger;
+
+    fn snap(mr_id: &str, created_at: Option<&str>) -> MrStatsSnapshot {
+        MrStatsSnapshot {
+            mr_id: mr_id.into(),
+            project_id: "p".into(),
+            title: "t".into(),
+            trigger: SnapshotTrigger::OnMerge,
+            author: "a".into(),
+            assignee: None,
+            reviewers: vec!["r1".into(), "r2".into()],
+            merged_by: None,
+            milestone: None,
+            labels: vec!["bug".into()],
+            target_branch: "main".into(),
+            state: "merged".into(),
+            created_at: created_at.map(Into::into),
+            merged_at: Some("2024-01-02T00:00:00Z".into()),
+            updated_at: None,
+            files_changed: 1,
+            additions: 2,
+            deletions: 3,
+            commits_count: 1,
+            diff_difficulty: None,
+            user_notes_count: 0,
+            pipeline_count: 0,
+            pipeline_failure_count: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn backfill_roundtrip_and_created_at_patch() {
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        let at = "2024-01-02T00:00:00Z".to_string();
+
+        // First run: created_at unknown. Second run: same row (ignored) but created_at patched.
+        db.backfill_snapshots(&[(snap("1", None), at.clone()), (snap("2", None), at.clone())])
+            .await
+            .unwrap();
+        db.backfill_snapshots(&[(snap("1", Some("2024-01-01T00:00:00Z")), at)])
+            .await
+            .unwrap();
+
+        let rows = db.query(&SnapshotQuery::default()).await.unwrap();
+        assert_eq!(rows.len(), 2);
+        let one = rows.iter().find(|r| r.snapshot.mr_id == "1").unwrap();
+        assert_eq!(one.snapshot.labels, vec!["bug".to_string()]);
+        assert_eq!(one.snapshot.reviewers.len(), 2);
+        assert_eq!(one.snapshot.created_at.as_deref(), Some("2024-01-01T00:00:00Z"));
+
+        let by_reviewer = db
+            .query(&SnapshotQuery {
+                reviewer: Some("r2".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(by_reviewer.len(), 2);
     }
 }

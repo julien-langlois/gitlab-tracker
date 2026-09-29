@@ -12,6 +12,20 @@ pub const MAX_CONCURRENT_REQUESTS: usize = 3;
 pub const MERGEABILITY_RETRY_ATTEMPTS: usize = 3;
 const MERGEABILITY_RETRY_DELAY_SECS: u64 = 2;
 
+/// Process-wide HTTP client: one connection pool (keep-alive + TLS session reuse)
+/// shared by every GitLab call, with timeouts so a hung server cannot hold a
+/// semaphore permit forever.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap_or_default()
+    })
+}
+
 /// Estimated number of GitLab API HTTP calls that will be fired for a single MR fetch,
 /// broken down by category so the UI can display a meaningful counter.
 ///
@@ -246,7 +260,7 @@ impl CachePolicy {
 /// Returns an empty vec on any network or parse error — pipelines are
 /// best-effort and must not block the MR data from being displayed.
 async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     // Fetch the last 5 pipeline runs for this MR.
     let pipelines_url = format!(
@@ -410,7 +424,7 @@ async fn fetch_commits_behind(
     source_branch: &str,
     target_branch: &str,
 ) -> Option<u32> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     // "from=source&to=target" returns commits present on `target` but not on `source`,
     // which is the number of commits the source branch is *behind* the target branch.
     let url = format!(
@@ -454,7 +468,7 @@ async fn fetch_commits_behind(
 /// Returns `None` on any network or parse error — diff stats are best-effort
 /// and must not block the MR data from being displayed.
 async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let url = format!(
         "{}/api/v4/projects/{}/merge_requests/{}/changes",
         ctx.base_url, ctx.project_id, mr_id
@@ -588,7 +602,7 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
 /// Results are sorted by title for display in the autocomplete widget.
 /// Returns an empty vec on any error — milestones are best-effort.
 pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let url = format!(
         "{}/api/v4/projects/{}/milestones?state=active&per_page=100",
         ctx.base_url, ctx.project_id
@@ -615,7 +629,7 @@ pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
 /// Used to provide a fallback colour for labels not overridden in `config.json`.
 /// Returns an empty vec on any error — labels are best-effort.
 pub async fn fetch_gitlab_labels(ctx: &FetchContext) -> Vec<GitLabLabelDetail> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let url = format!(
         "{}/api/v4/projects/{}/labels?per_page=100",
         ctx.base_url, ctx.project_id
@@ -665,7 +679,7 @@ pub fn spawn_milestones_fetch(ctx: FetchContext, tx: tokio::sync::mpsc::Unbounde
 /// The GitLab MRs API filters by milestone **title** (not numeric ID) via the
 /// `milestone` query parameter — hence we URL-encode the title.
 pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -> Vec<String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     // No `state` filter — a release manager needs to track all MRs regardless of
     // their state (opened, merged, closed) to verify full branch coverage for a release.
     let url = format!(
@@ -704,7 +718,7 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
 /// (100/page). Returns an empty vec on any network or parse error — discovery is
 /// best-effort.
 pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Vec<String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut all_ids: Vec<String> = Vec::new();
     let mut page: u32 = 1;
 
@@ -841,6 +855,20 @@ async fn fetch_single_mr(
         .map_err(|e| format!("Error reading MR JSON: {}", e))
 }
 
+const REFS_PER_PAGE: usize = 100;
+/// Upper bound on `/refs` pages fetched per MR (10 000 branches).
+const REFS_MAX_PAGES: usize = 100;
+
+/// Adds every ref from `refs` that is one of the tracked `branches` to `found`.
+fn collect_tracked_refs(refs: Vec<GitLabRef>, branches: &[String], found: &mut HashSet<String>) {
+    for r in refs {
+        let cleaned = r.name.replace("refs/heads/", "");
+        if branches.contains(&cleaned) {
+            found.insert(cleaned);
+        }
+    }
+}
+
 fn is_transient_mergeability_status(status: Option<&str>) -> bool {
     matches!(status, Some("checking" | "unchecked" | "preparing"))
 }
@@ -851,7 +879,7 @@ pub async fn fetch_gitlab_data(
     cached: CachedMrData,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) -> Result<MrLoadedData, String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     // updated_at is always fetched fresh — never served from cache — so we always
     // know the real last-update timestamp regardless of the cache hit path.
@@ -860,7 +888,7 @@ pub async fn fetch_gitlab_data(
         ctx.base_url, ctx.project_id, mr_id
     );
 
-    let mut mr: GitLabMr = fetch_single_mr(&client, ctx, &mr_url).await?;
+    let mut mr: GitLabMr = fetch_single_mr(client, ctx, &mr_url).await?;
 
     for attempt in 0..MERGEABILITY_RETRY_ATTEMPTS {
         if !is_transient_mergeability_status(mr.detailed_merge_status.as_deref()) {
@@ -880,7 +908,7 @@ pub async fn fetch_gitlab_data(
         );
 
         sleep(Duration::from_secs(MERGEABILITY_RETRY_DELAY_SECS)).await;
-        mr = fetch_single_mr(&client, ctx, &mr_url).await?;
+        mr = fetch_single_mr(client, ctx, &mr_url).await?;
     }
 
     let updated_at = mr.updated_at.clone();
@@ -927,7 +955,7 @@ pub async fn fetch_gitlab_data(
     {
         cached.user_notes_count
     } else {
-        fetch_notes_count(ctx, mr_id, &client).await
+        fetch_notes_count(ctx, mr_id, client).await
     };
 
     // Resolve mergeability with the following priority:
@@ -1126,7 +1154,7 @@ pub async fn fetch_gitlab_data(
 
     if let Some(ref commit_sha) = merge_sha {
         let refs_url = format!(
-            "{}/api/v4/projects/{}/repository/commits/{}/refs?type=branch",
+            "{}/api/v4/projects/{}/repository/commits/{}/refs?type=branch&per_page={REFS_PER_PAGE}",
             ctx.base_url, ctx.project_id, commit_sha
         );
         match client
@@ -1138,11 +1166,32 @@ pub async fn fetch_gitlab_data(
             Ok(refs_res) if refs_res.status().is_success() => {
                 match refs_res.json::<Vec<GitLabRef>>().await {
                     Ok(refs) => {
-                        for r in refs {
-                            let cleaned = r.name.replace("refs/heads/", "");
-                            if ctx.branches.contains(&cleaned) {
-                                found_branches.insert(cleaned);
-                            }
+                        // The endpoint is paginated: an old commit can be contained in
+                        // many branches, so a tracked one may sit beyond page 1. Keep
+                        // paging while pages are full and some tracked branch is missing.
+                        let mut page_len = refs.len();
+                        collect_tracked_refs(refs, &ctx.branches, &mut found_branches);
+                        let mut page = 2;
+                        while page_len == REFS_PER_PAGE
+                            && found_branches.len() < ctx.branches.len()
+                            && page <= REFS_MAX_PAGES
+                        {
+                            let Some(next) = client
+                                .get(format!("{refs_url}&page={page}"))
+                                .header("PRIVATE-TOKEN", &ctx.token)
+                                .send()
+                                .await
+                                .ok()
+                                .filter(|r| r.status().is_success())
+                            else {
+                                break;
+                            };
+                            let Ok(refs) = next.json::<Vec<GitLabRef>>().await else {
+                                break;
+                            };
+                            page_len = refs.len();
+                            collect_tracked_refs(refs, &ctx.branches, &mut found_branches);
+                            page += 1;
                         }
                         tracing::debug!(
                             mr_id = %mr_id,

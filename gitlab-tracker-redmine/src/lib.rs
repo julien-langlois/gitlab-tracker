@@ -27,6 +27,8 @@ pub struct RedmineProvider {
     /// requires `Sync`, and `Zeroizing<String>` is `Sync`. We clone it from the
     /// `Zeroizing` wrapper immediately after the keyring lookup in the caller.
     token: String,
+    /// `config.ticket_patterns` compiled once at construction.
+    ticket_patterns: Vec<regex::Regex>,
     /// Pre-built HTTP client — reused across all requests (connection pooling).
     http: reqwest::Client,
 }
@@ -35,9 +37,14 @@ impl RedmineProvider {
     /// Creates a new [`RedmineProvider`] from a loaded config and a token.
     pub fn new(config: RedmineConfig, token: String) -> Self {
         Self {
+            ticket_patterns: detector::compile_patterns(&config.ticket_patterns),
             config,
             token,
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default(),
         }
     }
 }
@@ -83,7 +90,7 @@ impl TrackerProvider for RedmineProvider {
     }
 
     fn detect_ticket_id(&self, title: &str, description: &str) -> Option<String> {
-        detector::detect_ticket_id(title, description, &self.config.ticket_patterns)
+        detector::detect_ticket_id(title, description, &self.ticket_patterns)
     }
 
     /// Exposes the colour maps configured in `redmine.yaml` to the orchestrator.
