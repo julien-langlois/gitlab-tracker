@@ -548,7 +548,10 @@ mod tests {
         let one = rows.iter().find(|r| r.snapshot.mr_id == "1").unwrap();
         assert_eq!(one.snapshot.labels, vec!["bug".to_string()]);
         assert_eq!(one.snapshot.reviewers.len(), 2);
-        assert_eq!(one.snapshot.created_at.as_deref(), Some("2024-01-01T00:00:00Z"));
+        assert_eq!(
+            one.snapshot.created_at.as_deref(),
+            Some("2024-01-01T00:00:00Z")
+        );
 
         let by_reviewer = db
             .query(&SnapshotQuery {

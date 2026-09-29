@@ -529,9 +529,13 @@ pub enum AppEvent {
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,
-    /// Fired when the MR discovery poll finds new MR IIDs not yet in the tracking list.
+    /// Fired when an MR discovery poll completes: `mr_ids` are the IIDs not yet in the
+    /// tracking list (possibly none), `next_anchor` the advanced `created_after` anchor.
     /// Only emitted when `discover_new_mrs = true` in `[project.stats]`.
-    NewMrsDiscovered(Vec<String>),
+    NewMrsDiscovered {
+        mr_ids: Vec<String>,
+        next_anchor: String,
+    },
     Tick,
 }
 

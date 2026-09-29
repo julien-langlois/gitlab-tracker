@@ -1,6 +1,6 @@
 use crate::models::{
-    AppEvent, DiffStats, GitLabCommit, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef,
-    GitlabMrState, MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
+    AppEvent, DiffStats, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef, GitlabMrState,
+    MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
 };
 
 use std::collections::HashSet;
@@ -78,7 +78,9 @@ pub trait CountApiCalls {
     ) -> ApiCallEstimate;
 }
 
-impl CountApiCalls for CachedMrData {
+/// Implemented on the tracked MR itself: the estimate only reads its cache-relevant
+/// fields, so no `CachedMrData` (with cloned description, pipelines, …) is needed.
+impl CountApiCalls for crate::models::TrackedMr {
     fn estimate(
         &self,
         state: &crate::models::GitlabMrState,
@@ -550,9 +552,31 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     }
 
     // Fetch the commit count via the dedicated commits endpoint —
-    // GET /projects/:id/merge_requests/:iid/commits returns a paginated list;
-    // we iterate through all pages (100 per page) and sum the counts.
-    let commits_count = {
+    // GET /projects/:id/merge_requests/:iid/commits returns a paginated list.
+    // Fast path: one 1-item page and the `X-Total` header. GitLab omits that header
+    // for very large collections, so fall back to counting all pages (100 per page).
+    let commits_total_url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/commits?per_page=1",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let header_total = client
+        .get(&commits_total_url)
+        .header("PRIVATE-TOKEN", &ctx.token)
+        .send()
+        .await
+        .ok()
+        .filter(|r| r.status().is_success())
+        .and_then(|r| {
+            r.headers()
+                .get("x-total")?
+                .to_str()
+                .ok()?
+                .parse::<u32>()
+                .ok()
+        });
+    let commits_count = if let Some(total) = header_total {
+        total
+    } else {
         let mut total: u32 = 0;
         let mut page: u32 = 1;
         loop {
@@ -567,7 +591,8 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
                 .await;
             match res {
                 Ok(r) if r.status().is_success() => {
-                    match r.json::<Vec<GitLabCommit>>().await {
+                    // Only the count matters: skip deserialising commit bodies.
+                    match r.json::<Vec<serde::de::IgnoredAny>>().await {
                         Ok(page_commits) if !page_commits.is_empty() => {
                             total += page_commits.len() as u32;
                             // If fewer than 100 results, this is the last page.
@@ -717,7 +742,9 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
 /// recorder persist an `OnMerge` snapshot. Paginates through all pages
 /// (100/page). Returns an empty vec on any network or parse error — discovery is
 /// best-effort.
-pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Vec<String> {
+/// Returns every MR IID created after `created_after`, or `None` when any page
+/// fails — a partial result must not be mistaken for a complete poll.
+pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Option<Vec<String>> {
     let client = http_client();
     let mut all_ids: Vec<String> = Vec::new();
     let mut page: u32 = 1;
@@ -737,12 +764,9 @@ pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Vec
             .await
         {
             Ok(r) if r.status().is_success() => r,
-            _ => break,
+            _ => return None,
         };
-        let mrs: Vec<serde_json::Value> = match res.json().await {
-            Ok(v) => v,
-            Err(_) => break,
-        };
+        let mrs: Vec<serde_json::Value> = res.json().await.ok()?;
         let page_len = mrs.len();
         for mr in mrs {
             if let Some(id) = mr.get("iid").and_then(|v| v.as_u64()) {
@@ -756,34 +780,50 @@ pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Vec
         page += 1;
     }
 
-    all_ids
+    Some(all_ids)
 }
 
-/// Spawns an async discovery task that fetches all recent MR IIDs and emits
-/// `AppEvent::NewMrsDiscovered` for any IID not yet in `known_ids`.
+/// Safety margin applied when advancing the discovery anchor, absorbing clock
+/// skew between this machine and the GitLab server.
+const DISCOVERY_ANCHOR_MARGIN: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
+/// Next `created_after` anchor once a poll that started at `polled_at` completed.
 ///
-/// `created_after` is an RFC 3339 timestamp used as a lower bound on the
-/// `created_at` field of the MRs returned by GitLab. When `None` (should
-/// never happen in practice after the first poll), falls back to the current
-/// time so the result set is always empty — safe default that avoids flooding.
+/// Everything created before `polled_at` has been seen, so later polls only need
+/// to look from there (minus a clock-skew margin) instead of re-paginating every
+/// MR since the first launch. The anchor never moves backwards: MRs created before
+/// the tool was first started must never be auto-added.
+fn next_discovery_anchor(anchor: &str, polled_at: chrono::DateTime<chrono::Utc>) -> String {
+    let candidate = polled_at - DISCOVERY_ANCHOR_MARGIN;
+    match chrono::DateTime::parse_from_rfc3339(anchor) {
+        Ok(current) if current >= candidate => anchor.to_string(),
+        Ok(_) => candidate.to_rfc3339(),
+        Err(_) => anchor.to_string(),
+    }
+}
+
+/// Spawns an async discovery task that fetches the MR IIDs created after `anchor`
+/// and emits `AppEvent::NewMrsDiscovered` with the ones not in `known_ids`, plus
+/// the advanced anchor. Nothing is emitted when the poll fails.
 pub fn spawn_mrs_discovery(
     ctx: FetchContext,
-    known_ids: Vec<String>,
-    created_after: Option<String>,
+    known_ids: HashSet<String>,
+    anchor: String,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        // Safety net: if the anchor is somehow missing, use `now` so that no
-        // pre-existing MR can slip through.
-        let anchor = created_after.unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
-        let all_ids = fetch_recent_mr_ids(&ctx, &anchor).await;
-        let new_ids: Vec<String> = all_ids
+        let polled_at = chrono::Utc::now();
+        let Some(all_ids) = fetch_recent_mr_ids(&ctx, &anchor).await else {
+            return;
+        };
+        let mr_ids = all_ids
             .into_iter()
             .filter(|id| !known_ids.contains(id))
             .collect();
-        if !new_ids.is_empty() {
-            let _ = tx.send(AppEvent::NewMrsDiscovered(new_ids));
-        }
+        let _ = tx.send(AppEvent::NewMrsDiscovered {
+            mr_ids,
+            next_anchor: next_discovery_anchor(&anchor, polled_at),
+        });
     });
 }
 
@@ -811,15 +851,7 @@ pub fn spawn_mr_fetch(
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        let Ok(_permit) = semaphore.acquire().await else {
-            let _ = tx.send(AppEvent::MrFailed {
-                id: mr_id,
-                error: "MR fetch cancelled: concurrency limiter was closed".to_string(),
-            });
-            return;
-        };
-
-        match fetch_gitlab_data(&ctx, &mr_id, cached, tx.clone()).await {
+        match fetch_gitlab_data(&ctx, &mr_id, cached, &semaphore, tx.clone()).await {
             Ok(data) => {
                 let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
             }
@@ -873,12 +905,25 @@ fn is_transient_mergeability_status(status: Option<&str>) -> bool {
     matches!(status, Some("checking" | "unchecked" | "preparing"))
 }
 
+/// Fetches everything the UI needs for one MR.
+///
+/// A `semaphore` permit is held for the whole fetch (bounding concurrent API
+/// traffic), except while sleeping between mergeability retries: an idle wait
+/// must not block other MRs from being fetched.
 pub async fn fetch_gitlab_data(
     ctx: &FetchContext,
     mr_id: &str,
     cached: CachedMrData,
+    semaphore: &Semaphore,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) -> Result<MrLoadedData, String> {
+    let acquire = || async {
+        semaphore
+            .acquire()
+            .await
+            .map_err(|_| "MR fetch cancelled: concurrency limiter was closed".to_string())
+    };
+    let mut _permit = acquire().await?;
     let client = http_client();
 
     // updated_at is always fetched fresh — never served from cache — so we always
@@ -907,7 +952,9 @@ pub async fn fetch_gitlab_data(
             "GitLab mergeability is still transient — retrying after delay",
         );
 
+        drop(_permit);
         sleep(Duration::from_secs(MERGEABILITY_RETRY_DELAY_SECS)).await;
+        _permit = acquire().await?;
         mr = fetch_single_mr(client, ctx, &mr_url).await?;
     }
 
@@ -1394,4 +1441,29 @@ pub async fn fetch_gitlab_data(
         user_notes_count,
         diff_stats,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discovery_anchor_advances_but_never_moves_back() {
+        let at = |s: &str| s.parse::<chrono::DateTime<chrono::Utc>>().unwrap();
+        // First poll right after startup: now - margin is before the anchor → unchanged.
+        assert_eq!(
+            next_discovery_anchor("2026-09-29T10:00:00+00:00", at("2026-09-29T10:00:05Z")),
+            "2026-09-29T10:00:00+00:00"
+        );
+        // A day later: advances to poll start minus the margin.
+        assert_eq!(
+            next_discovery_anchor("2026-09-29T10:00:00+00:00", at("2026-09-30T10:00:00Z")),
+            "2026-09-30T09:00:00+00:00"
+        );
+        // Unparseable anchor is kept as-is.
+        assert_eq!(
+            next_discovery_anchor("garbage", at("2026-09-30T10:00:00Z")),
+            "garbage"
+        );
+    }
 }

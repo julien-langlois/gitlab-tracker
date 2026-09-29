@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::db::StoredSnapshot;
+use crate::snapshot::SnapshotTrigger;
 
 /// Per-MR metrics derived from a single [`StoredSnapshot`].
 ///
@@ -13,7 +14,7 @@ pub struct PerMrMetrics {
     pub project_id: String,
     pub author: String,
     pub milestone: Option<String>,
-    pub trigger: String,
+    pub trigger: SnapshotTrigger,
 
     /// Total elapsed time from MR creation to merge, in hours.
     /// `None` when `created_at` or `merged_at` is absent.
@@ -69,7 +70,7 @@ impl PerMrMetrics {
             project_id: snap.snapshot.project_id.clone(),
             author: snap.snapshot.author.clone(),
             milestone: snap.snapshot.milestone.clone(),
-            trigger: snap.snapshot.trigger.as_str().to_string(),
+            trigger: snap.snapshot.trigger,
             cycle_time_hours,
             // Lead time requires pipeline data that is not yet stored as a precise
             // "last pipeline finished_at" timestamp — approximated as None until

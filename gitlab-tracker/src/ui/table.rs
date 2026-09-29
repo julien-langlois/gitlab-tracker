@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
-    layout::{Constraint, Rect},
+    layout::Constraint,
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Row, Table},
@@ -108,9 +108,9 @@ fn state_badge(
     )))
 }
 
-pub fn render_table(app: &App, area: Rect) -> Table<'static> {
-    let _ = area; // Reserved for future use (e.g. dynamic column width)
-
+/// Builds the MR table. Cells borrow their text from `app` instead of cloning
+/// every title / branch / milestone on each frame.
+pub fn render_table(app: &App) -> Table<'_> {
     // Resolve the active palette once — used for header and all row cells.
     let palette = app.theme;
 
@@ -149,7 +149,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
         header_cells.push(Cell::from("Tracker").bold());
     }
     for b in &app.branches {
-        header_cells.push(Cell::from(b.clone()).bold());
+        header_cells.push(Cell::from(b.as_str()).bold());
     }
     let header = Row::new(header_cells).bottom_margin(1).underlined();
 
@@ -186,7 +186,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
 
             /// Applies the update-highlight background to a cell when active.
             /// The foreground is left untouched so each cell keeps its own colour.
-            fn maybe_highlight(cell: Cell<'static>, highlight: bool) -> Cell<'static> {
+            fn maybe_highlight(cell: Cell<'_>, highlight: bool) -> Cell<'_> {
                 if highlight {
                     cell.bg(Color::Rgb(0, 90, 40))
                 } else {
@@ -207,10 +207,10 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
                             .fg(palette.accent_yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(mr.title.clone(), Style::default().fg(title_color)),
+                    Span::styled(mr.title.as_str(), Style::default().fg(title_color)),
                 ]))
             } else {
-                Cell::from(mr.title.clone()).fg(match mr.status {
+                Cell::from(mr.title.as_str()).fg(match mr.status {
                     MrStatus::Error => palette.accent_red,
                     _ => palette.fg,
                 })
@@ -233,7 +233,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             }
             if col("target_branch") {
                 cells.push(maybe_highlight(
-                    Cell::from(mr.target_branch.clone()).fg(Color::LightBlue),
+                    Cell::from(mr.target_branch.as_str()).fg(Color::LightBlue),
                     highlight,
                 ));
             }
@@ -242,7 +242,7 @@ pub fn render_table(app: &App, area: Rect) -> Table<'static> {
             }
             if col("milestone") {
                 cells.push(maybe_highlight(
-                    Cell::from(mr.milestone.clone()).fg(Color::Cyan),
+                    Cell::from(mr.milestone.as_str()).fg(Color::Cyan),
                     highlight,
                 ));
             }

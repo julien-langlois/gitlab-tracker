@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Stored as a TEXT column in SQLite so historical data remains readable
 /// without schema migrations when new variants are added.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotTrigger {
     /// MR transitioned to the `Merged` state — snapshot contains complete timing data.

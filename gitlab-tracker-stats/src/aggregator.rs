@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::{SnapshotQuery, StatsDb, StatsError, StoredSnapshot};
 use crate::metrics::PerMrMetrics;
+use crate::snapshot::SnapshotTrigger;
 
 /// Defines the temporal scope of an aggregation query.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,17 +210,18 @@ pub(crate) fn compute_stats(
     // Latest known snapshot per MR is the source of truth for stateful/current
     // metrics. Queries are ordered by recorded_at ASC, so later inserts overwrite
     // older snapshots for the same MR.
-    let latest_snapshots_by_mr = {
-        let mut latest = HashMap::<String, &StoredSnapshot>::new();
-        for snap in snapshots {
-            latest.insert(snap.snapshot.mr_id.clone(), snap);
+    // `snapshots` and `metrics` are parallel slices, so the latest entry per MR is
+    // tracked by index and both views borrow it — no metric is computed twice.
+    let latest_indices: Vec<usize> = {
+        let mut latest = HashMap::<&str, usize>::new();
+        for (i, snap) in snapshots.iter().enumerate() {
+            latest.insert(snap.snapshot.mr_id.as_str(), i);
         }
-        latest
+        latest.into_values().collect()
     };
-    let latest_metrics: Vec<PerMrMetrics> = latest_snapshots_by_mr
-        .values()
-        .map(|snap| PerMrMetrics::from_snapshot(snap))
-        .collect();
+    let latest_snapshots: Vec<&StoredSnapshot> =
+        latest_indices.iter().map(|&i| &snapshots[i]).collect();
+    let latest_metrics: Vec<&PerMrMetrics> = latest_indices.iter().map(|&i| &metrics[i]).collect();
 
     // Deduplicate terminal lifecycle events by mr_id. Backfills may create the
     // same on_merge/on_close event on different recorded dates; all throughput
@@ -230,7 +232,9 @@ pub(crate) fn compute_stats(
             .iter()
             .zip(metrics.iter())
             .rev()
-            .filter(|(_, metric)| metric.trigger == "on_merge" && seen.insert(metric.mr_id.clone()))
+            .filter(|(_, metric)| {
+                metric.trigger == SnapshotTrigger::OnMerge && seen.insert(metric.mr_id.as_str())
+            })
             .collect()
     };
     let merged: Vec<&PerMrMetrics> = merged_pairs.iter().map(|(_, metric)| *metric).collect();
@@ -243,7 +247,7 @@ pub(crate) fn compute_stats(
         metrics
             .iter()
             .rev()
-            .filter(|m| m.trigger == "on_close" && seen.insert(m.mr_id.clone()))
+            .filter(|m| m.trigger == SnapshotTrigger::OnClose && seen.insert(m.mr_id.as_str()))
             .count()
     };
 
@@ -325,7 +329,7 @@ pub(crate) fn compute_stats(
         pipeline_sample_size as f64 / latest_metrics.len() as f64
     };
     let cycle_time_sample_size = cycle_times.len();
-    let reviewer_coverage = coverage_ratio(latest_snapshots_by_mr.values(), |snap| {
+    let reviewer_coverage = coverage_ratio(latest_snapshots.iter(), |snap| {
         !snap.snapshot.reviewers.is_empty()
     });
     let milestone_coverage =
@@ -333,8 +337,8 @@ pub(crate) fn compute_stats(
     let size_buckets = compute_size_buckets(&latest_metrics, &merged);
 
     // ── Backlog ages (open MRs) ───────────────────────────────────────────────
-    let mut open_mr_ages_days: Vec<f64> = latest_snapshots_by_mr
-        .values()
+    let mut open_mr_ages_days: Vec<f64> = latest_snapshots
+        .iter()
         .filter(|s| s.snapshot.state == "opened")
         .filter_map(|s| {
             let created: DateTime<Utc> = s.snapshot.created_at.as_deref()?.parse().ok()?;
@@ -359,7 +363,7 @@ pub(crate) fn compute_stats(
     };
 
     AggregatedStats {
-        total_mrs: latest_snapshots_by_mr.len(),
+        total_mrs: latest_snapshots.len(),
         merged_count: merged.len(),
         closed_count,
         abandon_rate,
@@ -415,7 +419,8 @@ where
     let mut seen = std::collections::HashSet::new();
 
     for snap in snapshots.rev() {
-        if snap.snapshot.trigger.as_str() != "on_merge" || !seen.insert(snap.snapshot.mr_id.clone())
+        if snap.snapshot.trigger != SnapshotTrigger::OnMerge
+            || !seen.insert(snap.snapshot.mr_id.as_str())
         {
             continue;
         }
@@ -469,7 +474,7 @@ fn compute_throughput_per_week(filter: &QueryFilter, merged_count: usize) -> Opt
 
 /// Computes cycle-time stats for fixed MR diff-size buckets.
 fn compute_size_buckets(
-    latest_metrics: &[PerMrMetrics],
+    latest_metrics: &[&PerMrMetrics],
     merged_metrics: &[&PerMrMetrics],
 ) -> Vec<MrSizeBucketStats> {
     const BUCKETS: [(&str, u32, Option<u32>); 4] = [
@@ -579,4 +584,83 @@ where
             (k, median)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snapshot::MrStatsSnapshot;
+
+    fn stored(
+        id: i64,
+        mr_id: &str,
+        trigger: SnapshotTrigger,
+        state: &str,
+        lines: u32,
+    ) -> StoredSnapshot {
+        StoredSnapshot {
+            id,
+            recorded_at: format!("2024-01-{:02}T00:00:00Z", id),
+            snapshot: MrStatsSnapshot {
+                mr_id: mr_id.into(),
+                project_id: "p".into(),
+                title: "t".into(),
+                trigger,
+                author: "a".into(),
+                assignee: None,
+                reviewers: if mr_id == "1" {
+                    vec!["r".into()]
+                } else {
+                    vec![]
+                },
+                merged_by: None,
+                milestone: None,
+                labels: vec![],
+                target_branch: "main".into(),
+                state: state.into(),
+                created_at: Some("2024-01-01T00:00:00Z".into()),
+                merged_at: (trigger == SnapshotTrigger::OnMerge)
+                    .then(|| "2024-01-01T10:00:00Z".into()),
+                updated_at: None,
+                files_changed: 1,
+                additions: lines,
+                deletions: 0,
+                commits_count: 1,
+                diff_difficulty: None,
+                user_notes_count: 2,
+                pipeline_count: 0,
+                pipeline_failure_count: 0,
+            },
+        }
+    }
+
+    #[test]
+    fn latest_snapshot_per_mr_and_deduplicated_terminal_events() {
+        use SnapshotTrigger::*;
+        // MR 1: refreshed then merged twice (backfill duplicate). MR 2: refreshed, then closed.
+        // MR 3: still open. Latest diff sizes: 1 → 300, 2 → 50, 3 → 2500.
+        let snapshots = vec![
+            stored(1, "1", OnRefresh, "opened", 100),
+            stored(2, "2", OnRefresh, "opened", 50),
+            stored(3, "1", OnMerge, "merged", 300),
+            stored(4, "1", OnMerge, "merged", 300),
+            stored(5, "3", OnRefresh, "opened", 2500),
+            stored(6, "2", OnClose, "closed", 50),
+        ];
+        let metrics: Vec<PerMrMetrics> =
+            snapshots.iter().map(PerMrMetrics::from_snapshot).collect();
+        let stats = compute_stats(&snapshots, &metrics, &QueryFilter::default());
+
+        assert_eq!(stats.total_mrs, 3);
+        assert_eq!(stats.merged_count, 1);
+        assert_eq!(stats.closed_count, 1);
+        assert_eq!(stats.abandon_rate, Some(0.5));
+        assert_eq!(stats.cycle_time_sample_size, 1);
+        assert_eq!(stats.cycle_time_median_hours, Some(10.0));
+        assert!((stats.avg_diff_size - (300.0 + 50.0 + 2500.0) / 3.0).abs() < 1e-9);
+        assert!((stats.reviewer_coverage - 1.0 / 3.0).abs() < 1e-9);
+        assert_eq!(stats.open_mr_ages_days.len(), 1);
+        let totals: Vec<usize> = stats.size_buckets.iter().map(|b| b.total_mrs).collect();
+        assert_eq!(totals, [1, 1, 0, 1]); // Small(50), Medium(300), Large, Huge(2500)
+    }
 }

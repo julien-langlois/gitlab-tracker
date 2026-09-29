@@ -34,6 +34,12 @@ fn pane_border_style(is_active: bool) -> Style {
 }
 
 pub fn render_ui(f: &mut Frame, app: &mut App) {
+    app.begin_render_cache();
+    render_frame(f, app);
+    app.end_render_cache();
+}
+
+fn render_frame(f: &mut Frame, app: &mut App) {
     // Bump the frame counter on every render so the spinner animates at full frame rate,
     // independently of the 1-second tick timer.
     app.spinner_frame = app.spinner_frame.wrapping_add(1);
@@ -70,8 +76,11 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
     let status_bar = status_bar::render_status_bar(app);
     f.render_widget(status_bar, left_chunks[0]);
 
-    let table = table::render_table(app, left_chunks[1]);
-    f.render_stateful_widget(table, left_chunks[1], &mut app.table_state);
+    // The table borrows `app`, so render against a copy of the (tiny) table state
+    // and write it back once the table widget has been consumed.
+    let mut table_state = app.table_state;
+    f.render_stateful_widget(table::render_table(app), left_chunks[1], &mut table_state);
+    app.table_state = table_state;
 
     if show_cockpit {
         cockpit::render_cockpit(f, app, left_chunks[2]);
@@ -268,15 +277,14 @@ pub fn render_ui(f: &mut Frame, app: &mut App) {
                 .collect();
 
             // Build the full bar: dynamic hints first, then plugin-contributed hints.
-            let mut parts = vec![
-                "[i] or [/]: Insert mode".to_string(),
-                "[,]: Settings".to_string(),
-                format!("[Tab]: {}", pane_hint),
-                format!("[S/s]: {}", sort_status),
-            ];
-            parts.extend(plugin_hints.iter().map(|h| h.to_string()));
-            parts.push("[▲/▼]: Scroll".to_string());
-            parts.push("[Esc]: Quit".to_string());
+            // Borrowed `&str` parts: only the two dynamic hints and the joined title allocate.
+            let tab_hint = format!("[Tab]: {pane_hint}");
+            let sort_hint = format!("[S/s]: {sort_status}");
+            let parts: Vec<&str> = ["[i] or [/]: Insert mode", "[,]: Settings", &tab_hint, &sort_hint]
+                .into_iter()
+                .chain(plugin_hints)
+                .chain(["[▲/▼]: Scroll", "[Esc]: Quit"])
+                .collect();
 
             let title = format!(" {} ", parts.join(" │ "));
             (title, Style::default())

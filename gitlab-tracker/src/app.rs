@@ -488,6 +488,8 @@ pub struct App {
     pub spinner_frame: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
+    /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
+    visible_cache: Option<Vec<usize>>,
     /// Shortcut blocks collected at startup via `inventory` from every linked crate.
     ///
     /// Populated once by `gitlab_tracker_core::collect_all_blocks()` — no explicit
@@ -538,10 +540,12 @@ pub struct App {
     /// Set from `discover_new_mrs` in `[project.stats]` of `projects.toml`.
     /// Defaults to `false` — opt-in only.
     pub discovery_enabled: bool,
-    /// RFC 3339 timestamp set the first time the discovery poller runs.
-    /// Passed as `created_after` to the GitLab API so that MRs created before
-    /// the tool was started are never auto-added to the tracking list.
-    /// `None` until the first poll fires; persisted in the state file afterwards.
+    /// Discovery anchor (RFC 3339), passed as `created_after` to the GitLab API.
+    /// Set to "now" the first time the poller runs, so MRs created before the tool
+    /// was started are never auto-added; then advanced after each complete poll
+    /// (see `gitlab::next_discovery_anchor`) so polls don't re-paginate every MR
+    /// since the first launch. `None` until the first poll; persisted in the state
+    /// file (the field name is kept for state-file compatibility).
     pub discovery_started_at: Option<String>,
     /// MR IIDs manually removed from the dashboard during the current session.
     /// Discovery must ignore these ids so auto-polling does not immediately
@@ -638,6 +642,7 @@ impl App {
             theme,
             spinner_frame: 0,
             needs_sort: false,
+            visible_cache: None,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),
             event_policy: Arc::new(DefaultMrEventPolicy),
@@ -733,6 +738,37 @@ impl App {
     /// When the input is empty the original insertion order is preserved so normal
     /// sort/filter behaviour is unaffected.
     pub fn visible_mrs(&self) -> impl Iterator<Item = &TrackedMr> {
+        let computed;
+        let indices: &[usize] = match &self.visible_cache {
+            Some(cached) => cached,
+            None => {
+                computed = self.compute_visible_indices();
+                &computed
+            }
+        };
+        indices
+            .iter()
+            .map(|&i| &self.mrs[i])
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    /// Freezes the visible list for the duration of one render: `render_ui` calls
+    /// `visible_mrs()` from ~6 widgets, and each call would otherwise re-run the
+    /// filters, difficulty scoring and fuzzy ranking. Rendering never mutates the
+    /// MR list, input or filters, so the snapshot cannot go stale within a frame.
+    pub fn begin_render_cache(&mut self) {
+        self.visible_cache = Some(self.compute_visible_indices());
+    }
+
+    /// Drops the per-render snapshot; outside rendering `visible_mrs()` is live.
+    pub fn end_render_cache(&mut self) {
+        self.visible_cache = None;
+    }
+
+    /// Indices into `self.mrs` of the MRs that pass the active filter, fuzzy-ranked
+    /// when a search query is active (see [`App::visible_mrs`]).
+    fn compute_visible_indices(&self) -> Vec<usize> {
         use crate::utils::fuzzy_score;
 
         // Only apply fuzzy ranking when the user has typed a plain search query
@@ -745,11 +781,12 @@ impl App {
 
         // Collect filtered MRs with their fuzzy score so we can sort them.
         // When no query is active we skip scoring entirely for efficiency.
-        let mut scored: Vec<(f64, &TrackedMr)> = self
+        let mut scored: Vec<(f64, usize)> = self
             .mrs
             .iter()
-            .filter(|mr| self.filter_passes(mr))
-            .filter_map(|mr| {
+            .enumerate()
+            .filter(|(_, mr)| self.filter_passes(mr))
+            .filter_map(|(i, mr)| {
                 if let Some(ref q) = query {
                     // Score against the most user-visible fields — highest wins.
                     let best = [
@@ -765,11 +802,11 @@ impl App {
                     if best == f64::NEG_INFINITY {
                         None // No match on any field → exclude.
                     } else {
-                        Some((best, mr))
+                        Some((best, i))
                     }
                 } else {
                     // No query — include all, preserve order (score unused).
-                    Some((0.0, mr))
+                    Some((0.0, i))
                 }
             })
             .collect();
@@ -779,7 +816,7 @@ impl App {
             scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         }
 
-        scored.into_iter().map(|(_, mr)| mr)
+        scored.into_iter().map(|(_, i)| i).collect()
     }
 
     /// Returns a mutable iterator over the MRs that pass the current filter.
@@ -1067,16 +1104,34 @@ impl App {
     }
 
     /// Marks the fetch of MR `id` as finished (loaded or failed).
-    ///
-    /// Returns `(notify_allowed, initial_sync_just_completed)`: notifications are
-    /// allowed only once the startup load was already over before this event, and
-    /// the second flag is `true` for the event that completes the startup load.
-    pub fn complete_fetch(&mut self, id: &str) -> (bool, bool) {
+    pub fn complete_fetch(&mut self, id: &str) -> FetchCompletion {
         let notify_allowed = self.pending_initial_fetches.is_empty();
         let initial_sync_just_completed =
             self.pending_initial_fetches.remove(id) && self.pending_initial_fetches.is_empty();
-        self.pending_refresh_fetches.remove(id);
-        (notify_allowed, initial_sync_just_completed)
+        FetchCompletion {
+            notify_allowed,
+            initial_sync_just_completed,
+            from_refresh_cycle: self.pending_refresh_fetches.remove(id),
+        }
+    }
+
+    /// Starts an MR discovery poll (auto-refresh cycle and manual `[R]`).
+    ///
+    /// On the very first poll the anchor is set to "now", so MRs that existed
+    /// before the tool was started are never auto-added. Tracked and dismissed
+    /// ids are passed as known so they are never re-added.
+    pub fn spawn_discovery(&mut self, ctx: FetchContext, tx: &UnboundedSender<AppEvent>) {
+        let anchor = self
+            .discovery_started_at
+            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339())
+            .clone();
+        let known_ids = self
+            .mrs
+            .iter()
+            .map(|m| m.id.clone())
+            .chain(self.dismissed_mr_ids.iter().cloned())
+            .collect();
+        crate::gitlab::spawn_mrs_discovery(ctx, known_ids, anchor, tx.clone());
     }
 
     /// Applies a sort requested by `MrLoaded` during the last event drain.
@@ -1098,40 +1153,39 @@ impl App {
             .and_then(|i| self.visible_mrs().nth(i))
             .map(|mr| mr.id.clone());
 
-        self.mrs.sort_by(|a, b| {
-            let cmp = match col {
-                SortColumn::UpdatedAt => {
-                    // MRs without a timestamp are pushed to the bottom.
-                    match (&a.updated_at, &b.updated_at) {
-                        (Some(ta), Some(tb)) => ta.cmp(tb),
-                        (None, Some(_)) => std::cmp::Ordering::Less,
-                        (Some(_), None) => std::cmp::Ordering::Greater,
-                        (None, None) => std::cmp::Ordering::Equal,
-                    }
-                }
-                SortColumn::Id => {
-                    let id_a = a.id.parse::<u64>().unwrap_or(0);
-                    let id_b = b.id.parse::<u64>().unwrap_or(0);
-                    id_a.cmp(&id_b)
-                }
-                SortColumn::Milestone => {
-                    if a.milestone == "None" && b.milestone != "None" {
-                        std::cmp::Ordering::Greater
-                    } else if a.milestone != "None" && b.milestone == "None" {
-                        std::cmp::Ordering::Less
-                    } else {
-                        a.milestone.to_lowercase().cmp(&b.milestone.to_lowercase())
-                    }
-                }
-                SortColumn::Title => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-            };
-
-            if order == SortOrder::Ascending {
-                cmp
+        // Keys that allocate (lowercased strings) are computed once per MR via
+        // `sort_by_cached_key` instead of twice per comparison. `Reverse` keeps the
+        // sort stable in descending order, so ties never swap between two sorts.
+        fn sort_by_key_dir<K: Ord>(
+            mrs: &mut [TrackedMr],
+            descending: bool,
+            key: impl Fn(&TrackedMr) -> K,
+        ) {
+            if descending {
+                mrs.sort_by_cached_key(|mr| std::cmp::Reverse(key(mr)));
             } else {
-                cmp.reverse()
+                mrs.sort_by_cached_key(key);
             }
-        });
+        }
+        let descending = order == SortOrder::Descending;
+        match col {
+            // MRs without a timestamp sort first (`None < Some`). Borrowed compare:
+            // no allocation needed, so no cached key.
+            SortColumn::UpdatedAt if descending => {
+                self.mrs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at))
+            }
+            SortColumn::UpdatedAt => self.mrs.sort_by(|a, b| a.updated_at.cmp(&b.updated_at)),
+            SortColumn::Id => sort_by_key_dir(&mut self.mrs, descending, |mr| {
+                mr.id.parse::<u64>().unwrap_or(0)
+            }),
+            // "None" milestones go last in ascending order.
+            SortColumn::Milestone => sort_by_key_dir(&mut self.mrs, descending, |mr| {
+                (mr.milestone == "None", mr.milestone.to_lowercase())
+            }),
+            SortColumn::Title => {
+                sort_by_key_dir(&mut self.mrs, descending, |mr| mr.title.to_lowercase())
+            }
+        }
 
         // Restore the cursor on the same MR after the sort. If the previously
         // selected MR is no longer visible (e.g. filtered out), fall back to
@@ -1141,6 +1195,18 @@ impl App {
             self.table_state.select(Some(new_idx));
         }
     }
+}
+
+/// What [`App::complete_fetch`] knows about the fetch that just finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FetchCompletion {
+    /// Notifications are allowed: the startup load was already over before this event.
+    pub notify_allowed: bool,
+    /// This event completes the startup load.
+    pub initial_sync_just_completed: bool,
+    /// The fetch belonged to a refresh cycle (auto-refresh or `[R]`), which already
+    /// re-fetched the linked tracker ticket unconditionally.
+    pub from_refresh_cycle: bool,
 }
 
 pub trait TrackedMrExt {
@@ -1309,22 +1375,8 @@ impl App {
                 }
             }
 
-            let cached = CachedMrData {
-                title: Some(mr.title.clone()),
-                description: Some(mr.description.clone()),
-                author: Some(mr.author.clone()),
-                assignee: Some(mr.assignee.clone()),
-                web_url: Some(mr.web_url.clone()),
-                labels: Some(mr.labels.clone()),
-                updated_at: mr.updated_at.clone(),
-                pipelines: mr.pipelines.clone(),
-                diff_stats: mr.diff_stats.clone(),
-                user_notes_count: mr.user_notes_count,
-                cached_state: Some(mr.state.clone()),
-                cache_policy: CachePolicy::Normal,
-            };
             let has_merge_sha = mr.sha.is_some() || mr.state == GitlabMrState::Merged;
-            gitlab_total += cached.estimate(&mr.state, has_merge_sha).total();
+            gitlab_total += mr.estimate(&mr.state, has_merge_sha).total();
 
             // Tracker calls only for MRs that already have a linked ticket resolved.
             if mr.linked_ticket.is_some() {
@@ -1676,9 +1728,10 @@ impl App {
             AppEvent::MrLoaded(data) => {
                 // Release the fetch before any early return so the spinner and the
                 // startup notification fence stay consistent.
-                let (notify_allowed, initial_fetches_completed) = self.complete_fetch(&data.id);
-                #[cfg(not(feature = "stats"))]
-                let _ = initial_fetches_completed;
+                let completion = self.complete_fetch(&data.id);
+                let notify_allowed = completion.notify_allowed;
+                #[cfg(feature = "stats")]
+                let initial_fetches_completed = completion.initial_sync_just_completed;
 
                 let Some(mr) = self.mrs.find_mut(&data.id) else {
                     return false;
@@ -1857,8 +1910,11 @@ impl App {
                     let fetch_id: Option<String> = if detected_id != cached_id {
                         // ID changed (or newly detected): always re-fetch.
                         detected_id.clone()
-                    } else if detected_id.is_some() && was_updated {
+                    } else if detected_id.is_some() && was_updated && !completion.from_refresh_cycle
+                    {
                         // Same ID but the MR was updated: refresh to pick up new spent hours.
+                        // Skipped for refresh-cycle fetches: the cycle already re-fetched
+                        // this ticket unconditionally, a second request would be a duplicate.
                         detected_id.clone()
                     } else if detected_id.is_some() && cache_is_stale {
                         // Same ID but the cached struct is from an older schema version:
@@ -2110,7 +2166,13 @@ impl App {
                 }
             }
 
-            AppEvent::NewMrsDiscovered(mr_ids) => {
+            AppEvent::NewMrsDiscovered {
+                mr_ids,
+                next_anchor,
+            } => {
+                let anchor_moved =
+                    self.discovery_started_at.as_deref() != Some(next_anchor.as_str());
+                self.discovery_started_at = Some(next_anchor);
                 let ctx = self.fetch_context();
                 let mut added = 0u32;
                 for mr_id in mr_ids {
@@ -2161,7 +2223,8 @@ impl App {
                     self.recompute_api_call_estimate();
                     true
                 } else {
-                    false
+                    // Persist an advanced anchor even when nothing new was found.
+                    anchor_moved
                 }
             }
 
@@ -2196,25 +2259,7 @@ impl App {
                 // make stats incomplete. Only active when `discover_new_mrs = true` in
                 // `[project.stats]` of `projects.toml`.
                 if self.discovery_enabled {
-                    // On the very first poll, record the current UTC time as the discovery
-                    // anchor. All subsequent polls pass this value as `created_after` to the
-                    // GitLab API so MRs that existed before the tool was started are never
-                    // auto-added to the tracking list.
-                    if self.discovery_started_at.is_none() {
-                        self.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
-                    }
-                    let known_ids: Vec<String> = self
-                        .mrs
-                        .iter()
-                        .map(|m| m.id.clone())
-                        .chain(self.dismissed_mr_ids.iter().cloned())
-                        .collect();
-                    crate::gitlab::spawn_mrs_discovery(
-                        ctx.clone(),
-                        known_ids,
-                        self.discovery_started_at.clone(),
-                        tx.clone(),
-                    );
+                    self.spawn_discovery(ctx.clone(), tx);
                 }
 
                 // Recompute GitLab + tracker estimates *before* spawning fetches so the
@@ -2325,7 +2370,8 @@ mod tests {
     async fn failed_fetch_of_untracked_mr_releases_spinner() {
         let mut app = test_app();
         app.pending_initial_fetches.insert("1".into());
-        app.pending_refresh_fetches.extend(["1".to_string(), "2".to_string()]);
+        app.pending_refresh_fetches
+            .extend(["1".to_string(), "2".to_string()]);
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
 
         // MR "1" is not in `app.mrs` (removed while its fetch was in flight):
@@ -2345,16 +2391,90 @@ mod tests {
         assert_eq!(app.pending_refresh_fetches.len(), 1);
     }
 
+    /// Tracks MRs "1".."n" with the given `(title, milestone)` pairs.
+    async fn app_with_mrs(mrs: &[(&str, &str)]) -> App {
+        let mut app = test_app();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        for (i, _) in mrs.iter().enumerate() {
+            app.apply_event(
+                AppEvent::MrAdded((i + 1).to_string()),
+                Arc::new(Semaphore::new(1)),
+                &tx,
+                &mut HashMap::new(),
+            )
+            .await;
+        }
+        for (mr, (title, milestone)) in app.mrs.iter_mut().zip(mrs) {
+            mr.title = (*title).into();
+            mr.milestone = (*milestone).into();
+        }
+        app
+    }
+
+    fn ids(app: &App) -> Vec<&str> {
+        app.mrs.iter().map(|mr| mr.id.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn sort_keys_and_stable_descending() {
+        let mut app = app_with_mrs(&[("beta", "None"), ("Alpha", "v2"), ("beta", "V1")]).await;
+
+        app.sort_column = SortColumn::Title;
+        app.sort_order = SortOrder::Ascending;
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["2", "1", "3"]); // case-insensitive, ties keep order
+
+        app.sort_order = SortOrder::Descending;
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["1", "3", "2"]); // ties still keep order
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["1", "3", "2"]); // re-sorting never swaps ties
+
+        app.sort_column = SortColumn::Milestone;
+        app.sort_order = SortOrder::Ascending;
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["3", "2", "1"]); // "None" last
+
+        app.sort_column = SortColumn::Id;
+        app.sort_order = SortOrder::Descending;
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["3", "2", "1"]);
+    }
+
+    #[tokio::test]
+    async fn render_cache_matches_live_visible_list() {
+        let mut app = app_with_mrs(&[("fix login", "None"), ("add stats", "None")]).await;
+        app.input = "stats".into();
+        let live: Vec<String> = app.visible_mrs().map(|mr| mr.id.clone()).collect();
+
+        app.begin_render_cache();
+        let cached: Vec<String> = app.visible_mrs().map(|mr| mr.id.clone()).collect();
+        app.end_render_cache();
+
+        assert_eq!(live, ["2"]);
+        assert_eq!(cached, live);
+    }
+
     #[test]
     fn complete_fetch_flags() {
         let mut app = test_app();
-        app.pending_initial_fetches.extend(["1".to_string(), "2".to_string()]);
+        app.pending_initial_fetches
+            .extend(["1".to_string(), "2".to_string()]);
+
+        app.pending_refresh_fetches.insert("3".into());
+        let done =
+            |notify_allowed, initial_sync_just_completed, from_refresh_cycle| FetchCompletion {
+                notify_allowed,
+                initial_sync_just_completed,
+                from_refresh_cycle,
+            };
 
         // An untracked fetch (e.g. MrAdded) must not release the startup fence.
-        assert_eq!(app.complete_fetch("99"), (false, false));
-        assert_eq!(app.complete_fetch("1"), (false, false));
+        assert_eq!(app.complete_fetch("99"), done(false, false, false));
+        assert_eq!(app.complete_fetch("1"), done(false, false, false));
         // Last startup fetch: completes the initial sync, notifications still off for it.
-        assert_eq!(app.complete_fetch("2"), (false, true));
-        assert_eq!(app.complete_fetch("3"), (true, false));
+        assert_eq!(app.complete_fetch("2"), done(false, true, false));
+        // Refresh-cycle fetch: its ticket was already re-fetched by the cycle.
+        assert_eq!(app.complete_fetch("3"), done(true, false, true));
     }
 }

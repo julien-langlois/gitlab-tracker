@@ -706,21 +706,7 @@ pub async fn handle_key_event(
                     // Run the discovery poller on manual refresh as well, so [R]
                     // behaves like the automatic refresh cycle when auto-polling is enabled.
                     if app.discovery_enabled {
-                        if app.discovery_started_at.is_none() {
-                            app.discovery_started_at = Some(chrono::Utc::now().to_rfc3339());
-                        }
-                        let known_ids: Vec<String> = app
-                            .mrs
-                            .iter()
-                            .map(|mr| mr.id.clone())
-                            .chain(app.dismissed_mr_ids.iter().cloned())
-                            .collect();
-                        crate::gitlab::spawn_mrs_discovery(
-                            ctx.clone(),
-                            known_ids,
-                            app.discovery_started_at.clone(),
-                            tx.clone(),
-                        );
+                        app.spawn_discovery(ctx.clone(), tx);
                     }
 
                     for mr in &mut app.mrs {

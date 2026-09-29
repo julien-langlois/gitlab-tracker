@@ -16,8 +16,9 @@ mod utils;
 
 use app::{App, AppInit};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyEventKind};
+use crossterm::event::{Event, EventStream, KeyEventKind};
 use events::{handle_key_event, handle_mouse_event};
+use futures::StreamExt;
 use gitlab::MAX_CONCURRENT_REQUESTS;
 use models::AppEvent;
 use std::sync::Arc;
@@ -27,6 +28,9 @@ use storage::{
     migrate_legacy_keyring_entry, save_state_async, ProjectEntry,
 };
 use tokio::sync::Semaphore;
+
+/// Redraw interval while the loading spinner is animating.
+const SPINNER_FRAME_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Converts a provider's raw `LabelColorMaps` (String pairs) into the ratatui-typed
 /// `TrackerLabelColors` used by the Inspector renderer.
@@ -372,7 +376,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // in the XDG config directory.
     #[cfg(feature = "stats")]
     {
-        use gitlab_tracker_stats::StatsDb as _;
         use std::sync::Arc;
 
         // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
@@ -385,26 +388,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
                 Ok(db) => {
                     let db = Arc::new(db);
-
-                    // Purge snapshots older than the configured retention threshold.
-                    let retention_days = stats_retention_days;
-                    match db.purge_old_snapshots(&project_id, retention_days).await {
-                        Ok(n) if n > 0 => {
-                            tracing::info!(rows = n, retention_days, "Purged old stats snapshots")
-                        }
-                        Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
-                        _ => {}
-                    }
-
-                    // Remove cross-day duplicates produced by repeated backfills:
-                    // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
-                    match db.deduplicate_snapshots(&project_id).await {
-                        Ok(n) if n > 0 => {
-                            tracing::info!(rows = n, "Deduplicated stats snapshots")
-                        }
-                        Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
-                        _ => {}
-                    }
 
                     // ── Backfill from tracker_state.json ─────────────────────
                     // On first run (or after a gap), seed the DB with the MRs
@@ -484,13 +467,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Single transaction: one fsync for the whole backfill instead of
                         // one per snapshot / label / reviewer. It also patches `created_at`
                         // on rows inserted before that field was tracked.
-                        match db.backfill_snapshots(&backfill).await {
-                            Ok(()) => tracing::info!(
-                                count = backfill.len(),
-                                "Stats backfill from tracker_state.json complete"
-                            ),
-                            Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
-                        }
+                        //
+                        // Purge, deduplication and backfill run in the background so
+                        // the UI shows up immediately; the report is refreshed once
+                        // they are done (StatsSnapshotRecorded → next Tick).
+                        let db = Arc::clone(&db);
+                        let project_id = project_id.clone();
+                        let tx = tx.clone();
+                        tokio::spawn(async move {
+                            // Purge snapshots older than the configured retention threshold.
+                            let retention_days = stats_retention_days;
+                            match db.purge_old_snapshots(&project_id, retention_days).await {
+                                Ok(n) if n > 0 => {
+                                    tracing::info!(
+                                        rows = n,
+                                        retention_days,
+                                        "Purged old stats snapshots"
+                                    )
+                                }
+                                Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
+                                _ => {}
+                            }
+
+                            // Remove cross-day duplicates produced by repeated backfills:
+                            // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
+                            match db.deduplicate_snapshots(&project_id).await {
+                                Ok(n) if n > 0 => {
+                                    tracing::info!(rows = n, "Deduplicated stats snapshots")
+                                }
+                                Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
+                                _ => {}
+                            }
+
+                            match db.backfill_snapshots(&backfill).await {
+                                Ok(()) => tracing::info!(
+                                    count = backfill.len(),
+                                    "Stats backfill from tracker_state.json complete"
+                                ),
+                                Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
+                            }
+                            let _ = tx.send(AppEvent::StatsSnapshotRecorded);
+                        });
                     }
 
                     app.stats_view.sprint_weeks = stats_sprint_weeks;
@@ -529,16 +546,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // ── Main event loop ───────────────────────────────────────────────────────
-    // Redraw only when something changed (async event, terminal input/resize) or
-    // while the loading spinner is visible — an idle tracker costs ~0 CPU.
+    // The loop sleeps until terminal input, an async event, or (only while the
+    // loading spinner is visible) the next spinner frame — no fixed-rate polling.
+    // It redraws only when something changed, so an idle tracker costs ~0 CPU.
     let mut dirty = true;
     let mut last_title = String::new();
+    let mut terminal_events = EventStream::new();
+    let mut pending_event: Option<AppEvent> = None;
     loop {
         // Drain all pending async events before rendering. State is persisted and
         // the MR list re-sorted once per drain rather than once per event: at
         // startup N `MrLoaded` events would otherwise mean N full JSON rewrites.
         let mut needs_save = false;
-        while let Ok(event) = rx.try_recv() {
+        while let Some(event) = pending_event.take().or_else(|| rx.try_recv().ok()) {
             dirty = true;
             needs_save |= app
                 .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
@@ -592,28 +612,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             dirty = false;
         }
 
-        if event::poll(Duration::from_millis(50))? {
-            dirty = true;
-            match event::read()? {
-                Event::Mouse(mouse) => {
-                    let size = terminal.size()?;
-                    handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
+        tokio::select! {
+            input = terminal_events.next() => {
+                // `None`: the terminal input stream is closed — nothing left to drive the UI.
+                let Some(input) = input else { break };
+                dirty = true;
+                match input? {
+                    Event::Mouse(mouse) => {
+                        let size = terminal.size()?;
+                        handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
+                    }
+                    Event::Key(key)
+                        if key.kind == KeyEventKind::Press
+                            && handle_key_event(
+                                key,
+                                &mut app,
+                                &api_semaphore,
+                                &tx,
+                                &mut last_known_branches,
+                            )
+                            .await =>
+                    {
+                        break;
+                    }
+                    _ => {}
                 }
-                Event::Key(key)
-                    if key.kind == KeyEventKind::Press
-                        && handle_key_event(
-                            key,
-                            &mut app,
-                            &api_semaphore,
-                            &tx,
-                            &mut last_known_branches,
-                        )
-                        .await =>
-                {
-                    break;
-                }
-                _ => {}
             }
+            // `main` keeps a sender alive, so `recv` never yields `None` here.
+            Some(event) = rx.recv() => pending_event = Some(event),
+            () = tokio::time::sleep(SPINNER_FRAME_INTERVAL), if spinner_visible => {}
         }
     }
 
