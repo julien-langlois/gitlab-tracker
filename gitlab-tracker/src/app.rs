@@ -438,13 +438,17 @@ pub struct App {
     /// All registered column definitions, collected at startup via `inventory`.
     /// Sorted by priority — used by the column picker popup and `VisibleColumns`.
     pub column_defs: Vec<&'static ColumnDef>,
-    /// Number of MR fetches still pending from the initial startup load.
+    /// Ids of MRs whose fetch from the initial startup load is still in flight.
     /// Change notifications (updated_at, mergeability, milestone) are suppressed
-    /// until this reaches zero, preventing spurious toasts on first launch.
-    pub pending_initial_fetches: usize,
-    /// Number of MR fetches still pending from the current auto-refresh cycle.
-    /// Drives the spinner in the table title; reset to 0 when all fetches complete.
-    pub pending_refresh_fetches: usize,
+    /// until this is empty, preventing spurious toasts on first launch.
+    ///
+    /// Tracked by id (not a counter) so a failed fetch, an MR removed while its
+    /// fetch was in flight, or an untracked fetch (MrAdded, milestone) can never
+    /// leave the spinner stuck or release the fence early — see `complete_fetch`.
+    pub pending_initial_fetches: HashSet<String>,
+    /// Ids of MRs whose fetch from the current refresh cycle is still in flight.
+    /// Drives the loading spinner in the status bar.
+    pub pending_refresh_fetches: HashSet<String>,
     /// Estimated GitLab API HTTP calls for the *next* refresh cycle (GitLab only).
     /// Computed just before fetches are spawned so it reflects the real cache state.
     pub estimated_gitlab_calls: usize,
@@ -617,8 +621,8 @@ impl App {
             column_defs,
             // Initialised to 0 — main.rs sets this to the number of MRs loaded from state
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
-            pending_initial_fetches: 0,
-            pending_refresh_fetches: 0,
+            pending_initial_fetches: HashSet::new(),
+            pending_refresh_fetches: HashSet::new(),
             estimated_gitlab_calls: 0,
             estimated_tracker_calls: 0,
             startup_gitlab_estimate: None,
@@ -1062,6 +1066,19 @@ impl App {
         self.sort_mrs();
     }
 
+    /// Marks the fetch of MR `id` as finished (loaded or failed).
+    ///
+    /// Returns `(notify_allowed, initial_sync_just_completed)`: notifications are
+    /// allowed only once the startup load was already over before this event, and
+    /// the second flag is `true` for the event that completes the startup load.
+    pub fn complete_fetch(&mut self, id: &str) -> (bool, bool) {
+        let notify_allowed = self.pending_initial_fetches.is_empty();
+        let initial_sync_just_completed =
+            self.pending_initial_fetches.remove(id) && self.pending_initial_fetches.is_empty();
+        self.pending_refresh_fetches.remove(id);
+        (notify_allowed, initial_sync_just_completed)
+    }
+
     /// Applies a sort requested by `MrLoaded` during the last event drain.
     pub fn flush_pending_sort(&mut self) {
         if std::mem::take(&mut self.needs_sort) {
@@ -1434,7 +1451,7 @@ impl App {
 
                 // Count each pending fetch so we can suppress change notifications
                 // until the initial sync is complete (avoids spurious toasts on launch).
-                self.pending_initial_fetches += 1;
+                self.pending_initial_fetches.insert(saved.id.clone());
 
                 spawn_mr_fetch(ctx.clone(), saved.id, cached, semaphore.clone(), tx.clone());
             }
@@ -1657,6 +1674,12 @@ impl App {
             }
 
             AppEvent::MrLoaded(data) => {
+                // Release the fetch before any early return so the spinner and the
+                // startup notification fence stay consistent.
+                let (notify_allowed, initial_fetches_completed) = self.complete_fetch(&data.id);
+                #[cfg(not(feature = "stats"))]
+                let _ = initial_fetches_completed;
+
                 let Some(mr) = self.mrs.find_mut(&data.id) else {
                     return false;
                 };
@@ -1676,19 +1699,6 @@ impl App {
 
                 // Update the persisted reference so subsequent refreshes won't re-notify.
                 last_known_branches.insert(data.id.clone(), data.branches.clone());
-
-                // Decrement the startup fence: notifications are suppressed until
-                // all MRs from the saved state have received their first API response.
-                #[cfg(feature = "stats")]
-                let initial_fetches_completed = self.pending_initial_fetches == 1;
-                let notify_allowed = self.pending_initial_fetches == 0;
-                if self.pending_initial_fetches > 0 {
-                    self.pending_initial_fetches -= 1;
-                }
-                // Decrement the auto-refresh counter (drives the spinner in the table title).
-                if self.pending_refresh_fetches > 0 {
-                    self.pending_refresh_fetches -= 1;
-                }
 
                 // Detect whether this MR was actually updated since the last refresh.
                 // We compare the old `updated_at` before overwriting it.
@@ -1991,6 +2001,8 @@ impl App {
             }
 
             AppEvent::MrFailed { id, error } => {
+                // A failed fetch is finished too — otherwise the spinner never stops.
+                self.complete_fetch(&id);
                 let Some(mr) = self.mrs.find_mut(&id) else {
                     return false;
                 };
@@ -2244,7 +2256,7 @@ impl App {
                         tx.clone(),
                     );
                     // Track pending auto-refresh fetches to drive the spinner.
-                    self.pending_refresh_fetches += 1;
+                    self.pending_refresh_fetches.insert(mr.id.clone());
 
                     // Re-fetch the tracker ticket unconditionally on each auto-refresh cycle,
                     // mirroring the manual [R] refresh behaviour. The GitLab MR may not have
@@ -2269,5 +2281,80 @@ impl App {
                 false
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_app() -> App {
+        App::new(AppInit {
+            token: "t".into(),
+            project_id: "1".into(),
+            base_url: "https://gitlab.example".into(),
+            project_name: None,
+            refresh_interval_secs: 900,
+            config: AppConfig::default(),
+            theme: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
+            project_settings: ProjectEntry {
+                name: None,
+                gitlab_url: "https://gitlab.example".into(),
+                project_id: "1".into(),
+                active: true,
+                default_branches: None,
+                table_label_prefixes: None,
+                complexity_profile: None,
+                tracked_branches: None,
+                refresh_interval_secs: None,
+                activity_stale_days: None,
+                activity_recent_days: None,
+                show_cockpit: None,
+                cockpit_thresholds: None,
+                stats: None,
+                visible_columns: None,
+                label_colors: None,
+                tracker: None,
+                gitlab_username: None,
+                discover_new_mrs: None,
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn failed_fetch_of_untracked_mr_releases_spinner() {
+        let mut app = test_app();
+        app.pending_initial_fetches.insert("1".into());
+        app.pending_refresh_fetches.extend(["1".to_string(), "2".to_string()]);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // MR "1" is not in `app.mrs` (removed while its fetch was in flight):
+        // the failure must still release it, and only it.
+        app.apply_event(
+            AppEvent::MrFailed {
+                id: "1".into(),
+                error: "boom".into(),
+            },
+            Arc::new(Semaphore::new(1)),
+            &tx,
+            &mut HashMap::new(),
+        )
+        .await;
+
+        assert!(app.pending_initial_fetches.is_empty());
+        assert_eq!(app.pending_refresh_fetches.len(), 1);
+    }
+
+    #[test]
+    fn complete_fetch_flags() {
+        let mut app = test_app();
+        app.pending_initial_fetches.extend(["1".to_string(), "2".to_string()]);
+
+        // An untracked fetch (e.g. MrAdded) must not release the startup fence.
+        assert_eq!(app.complete_fetch("99"), (false, false));
+        assert_eq!(app.complete_fetch("1"), (false, false));
+        // Last startup fetch: completes the initial sync, notifications still off for it.
+        assert_eq!(app.complete_fetch("2"), (false, true));
+        assert_eq!(app.complete_fetch("3"), (true, false));
     }
 }

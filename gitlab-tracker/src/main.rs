@@ -557,7 +557,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await;
         }
 
-        let spinner_visible = app.pending_initial_fetches + app.pending_refresh_fetches > 0;
+        let spinner_visible =
+            !app.pending_initial_fetches.is_empty() || !app.pending_refresh_fetches.is_empty();
         if dirty || spinner_visible {
             // Update the terminal window title with live stats (OSC 0), only when
             // it actually changes.

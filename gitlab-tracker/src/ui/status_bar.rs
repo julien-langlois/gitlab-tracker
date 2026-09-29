@@ -186,7 +186,10 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     ));
 
     // ── 8. Loading spinner ────────────────────────────────────────────────────
-    let pending = app.pending_initial_fetches + app.pending_refresh_fetches;
+    let pending = app
+        .pending_initial_fetches
+        .union(&app.pending_refresh_fetches)
+        .count();
     if pending > 0 {
         const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
