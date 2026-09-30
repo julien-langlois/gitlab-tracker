@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::config::CockpitThresholds;
 use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState};
 use crate::utils::matches_gitlab_username;
-use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use std::collections::BTreeMap;
 
 const MERGED_LAST_7_DAYS_WINDOW: i64 = 7;
@@ -117,7 +117,9 @@ impl DashboardSummary {
 
     fn from_visible_mrs(app: &App) -> Self {
         let mut summary = Self::default();
-        let now = Utc::now();
+        // Local time: "today", "this week" and "overdue" follow the user's calendar,
+        // not UTC (a merge at 23:30 UTC is tomorrow in UTC+2).
+        let now = Local::now();
         let today = now.date_naive();
         let current_iso_week = now.iso_week();
         let current_year = now.year();
@@ -131,7 +133,8 @@ impl DashboardSummary {
                 GitlabMrState::Opened => summary.open += 1,
                 GitlabMrState::Merged => {
                     summary.merged += 1;
-                    if let Some(merged_at) = parse_gitlab_datetime(mr.merged_at.as_deref()) {
+                    if let Some(merged_at) = parse_gitlab_datetime(mr.merged_at.as_deref(), &Local)
+                    {
                         if merged_at.date_naive() == today {
                             summary.merged_today += 1;
                         }
@@ -182,7 +185,6 @@ impl DashboardSummary {
                 MergeabilityStatus::DiscussionsNotResolved => summary.discussions += 1,
                 MergeabilityStatus::RequestedChanges => summary.requested_changes += 1,
                 MergeabilityStatus::CiStillRunning => summary.ci_running += 1,
-                MergeabilityStatus::CiMustPass => {}
                 MergeabilityStatus::NotApproved => summary.needs_review += 1,
                 _ => {}
             }
@@ -214,13 +216,13 @@ impl DashboardSummary {
                 }
             }
 
-            if parse_gitlab_datetime(mr.updated_at.as_deref())
+            if parse_gitlab_datetime(mr.updated_at.as_deref(), &Local)
                 .is_some_and(|updated_at| updated_at < now - Duration::days(thresholds.stale_days))
             {
                 summary.stale_7_days += 1;
             }
 
-            if let Some(created_at) = parse_gitlab_datetime(mr.created_at.as_deref()) {
+            if let Some(created_at) = parse_gitlab_datetime(mr.created_at.as_deref(), &Local) {
                 let age_days = (now - created_at).num_days().max(0);
                 summary.oldest_open_days = Some(
                     summary
@@ -294,7 +296,7 @@ impl DashboardSummary {
 }
 
 pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
-    let today = Utc::now().date_naive();
+    let today = Local::now().date_naive();
     let mut releases = BTreeMap::<String, ReleaseSummary>::new();
 
     // Current dashboard data is the baseline source for release health. Stats, when
@@ -381,8 +383,10 @@ fn is_over_estimate(estimate: Option<u32>, spent: Option<u32>) -> bool {
     matches!((estimate, spent), (Some(estimate), Some(spent)) if estimate > 0 && spent > estimate)
 }
 
-fn parse_gitlab_datetime(value: Option<&str>) -> Option<DateTime<Utc>> {
-    value?.parse::<DateTime<Utc>>().ok()
+/// Parses a GitLab (UTC) timestamp and converts it to `tz`, so calendar comparisons
+/// (same day, same week) happen in the user's time zone.
+fn parse_gitlab_datetime<Tz: TimeZone>(value: Option<&str>, tz: &Tz) -> Option<DateTime<Tz>> {
+    Some(value?.parse::<DateTime<Utc>>().ok()?.with_timezone(tz))
 }
 
 fn parse_gitlab_date(value: Option<&str>) -> Option<NaiveDate> {
@@ -391,6 +395,19 @@ fn parse_gitlab_date(value: Option<&str>) -> Option<NaiveDate> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn gitlab_datetime_is_bucketed_in_local_day() {
+        let paris_summer = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let merged = parse_gitlab_datetime(Some("2024-06-01T23:30:00.000Z"), &paris_summer)
+            .expect("valid GitLab timestamp");
+        assert_eq!(
+            merged.date_naive(),
+            NaiveDate::from_ymd_opt(2024, 6, 2).unwrap()
+        );
+        assert!(parse_gitlab_datetime(Some("garbage"), &paris_summer).is_none());
+    }
+
     use super::*;
 
     #[test]

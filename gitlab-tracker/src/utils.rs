@@ -201,6 +201,24 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
     ))
 }
 
+/// Builds `git clone -b <branch> git@<host>:<path>.git` from an MR web URL
+/// (`https://gitlab.example.com/group/project/-/merge_requests/42`).
+///
+/// Handles `http://` as well as `https://`, and drops an explicit HTTP port: the
+/// SSH port is unrelated (use an `~/.ssh/config` entry for non-standard ones).
+pub fn git_clone_command(web_url: &str, source_branch: &str) -> String {
+    let project_url = web_url.split("/-/").next().unwrap_or_default();
+    let without_scheme = project_url
+        .strip_prefix("https://")
+        .or_else(|| project_url.strip_prefix("http://"))
+        .unwrap_or(project_url);
+    let (host, path) = without_scheme
+        .split_once('/')
+        .unwrap_or((without_scheme, ""));
+    let host = host.split(':').next().unwrap_or(host);
+    format!("git clone -b {source_branch} git@{host}:{path}.git")
+}
+
 /// Disables mouse capture and restores the terminal (raw mode, alternate screen).
 pub fn restore_terminal() {
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
@@ -220,6 +238,19 @@ impl Drop for TerminalGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_clone_command_from_web_url() {
+        let mr = "/-/merge_requests/42";
+        assert_eq!(
+            git_clone_command(&format!("https://gitlab.com/org/sub/project{mr}"), "feat/x"),
+            "git clone -b feat/x git@gitlab.com:org/sub/project.git"
+        );
+        assert_eq!(
+            git_clone_command(&format!("http://git.local:8080/team/app{mr}"), "main"),
+            "git clone -b main git@git.local:team/app.git"
+        );
+    }
 
     #[test]
     fn non_finite_durations_are_rejected() {

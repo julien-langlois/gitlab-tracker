@@ -253,7 +253,7 @@ pub(crate) fn compute_stats(
 
     // ── Cycle times ───────────────────────────────────────────────────────────
     let mut cycle_times: Vec<f64> = merged.iter().filter_map(|m| m.cycle_time_hours).collect();
-    cycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    cycle_times.sort_by(f64::total_cmp);
 
     let cycle_time_median_hours = percentile(&cycle_times, 50.0);
     let cycle_time_p75_hours = percentile(&cycle_times, 75.0);
@@ -278,7 +278,7 @@ pub(crate) fn compute_stats(
     let cycle_time_by_reviewer: HashMap<String, f64> = reviewer_times
         .into_iter()
         .map(|(reviewer, mut times)| {
-            times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            times.sort_by(f64::total_cmp);
             (reviewer, percentile(&times, 50.0).unwrap_or(0.0))
         })
         .collect();
@@ -350,7 +350,7 @@ pub(crate) fn compute_stats(
             }
         })
         .collect();
-    open_mr_ages_days.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    open_mr_ages_days.sort_by(f64::total_cmp);
     let stale_open_mrs_7d = open_mr_ages_days.iter().filter(|age| **age >= 7.0).count();
     let stale_open_mrs_14d = open_mr_ages_days.iter().filter(|age| **age >= 14.0).count();
     let stale_open_mrs_30d = open_mr_ages_days.iter().filter(|age| **age >= 30.0).count();
@@ -500,7 +500,7 @@ fn compute_size_buckets(
                 .filter(|metric| includes(metric.diff_size))
                 .filter_map(|metric| metric.cycle_time_hours)
                 .collect::<Vec<_>>();
-            cycle_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            cycle_times.sort_by(f64::total_cmp);
 
             MrSizeBucketStats {
                 label: (*label).to_string(),
@@ -579,7 +579,7 @@ where
     groups
         .into_iter()
         .map(|(k, mut vals)| {
-            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            vals.sort_by(f64::total_cmp);
             let median = percentile(&vals, 50.0).unwrap_or(0.0);
             (k, median)
         })

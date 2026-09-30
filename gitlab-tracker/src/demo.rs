@@ -471,63 +471,9 @@ async fn seed_demo_stats_db(
 /// Used to produce realistic, relative `updated_at` values in demo mode
 /// so that the Activity badge (🟢 / 🟡 / 🔴) reflects the configured thresholds.
 fn demo_updated_at(days_ago: i64) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-    let ts = now - days_ago * 86_400;
-    // Format as a minimal ISO 8601 UTC string understood by the activity_badge parser.
-    let secs = ts % 60;
-    let mins = (ts / 60) % 60;
-    let hours = (ts / 3600) % 24;
-    let days_since_epoch = ts / 86_400;
-    // Compute calendar date from days since Unix epoch (1970-01-01).
-    let (year, month, day) = days_since_epoch_to_ymd(days_since_epoch);
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
-        year, month, day, hours, mins, secs
-    )
-}
-
-/// Converts days since Unix epoch to a (year, month, day) tuple.
-fn days_since_epoch_to_ymd(mut days: i64) -> (i64, u8, u8) {
-    let mut year = 1970i64;
-    loop {
-        let days_in_year = if is_leap(year) { 366 } else { 365 };
-        if days < days_in_year {
-            break;
-        }
-        days -= days_in_year;
-        year += 1;
-    }
-    let months = [
-        31,
-        if is_leap(year) { 29 } else { 28 },
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
-    let mut month = 1u8;
-    for &m in &months {
-        if days < m {
-            break;
-        }
-        days -= m;
-        month += 1;
-    }
-    (year, month, (days + 1) as u8)
-}
-
-fn is_leap(year: i64) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+    (chrono::Utc::now() - chrono::Duration::days(days_ago))
+        .format("%Y-%m-%dT%H:%M:%S.000Z")
+        .to_string()
 }
 
 /// Runs the application in demo mode with pre-populated mock data.
@@ -561,7 +507,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     };
 
     let mut app = App::new(AppInit {
-        token: "demo-token".into(),
+        token: std::sync::Arc::new("demo-token".to_string().into()),
         project_id: "123456".into(),
         base_url: "https://gitlab.com".into(),
         project_name: None,

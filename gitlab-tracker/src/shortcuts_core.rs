@@ -74,7 +74,7 @@ fn core_shortcuts() -> ShortcutBlock {
             },
             ShortcutEntry {
                 key: "y / Y",
-                description: "Copy MR URL to clipboard",
+                description: "Copy `git clone` command for the MR branch",
                 status_hint: None,
             },
             ShortcutEntry {

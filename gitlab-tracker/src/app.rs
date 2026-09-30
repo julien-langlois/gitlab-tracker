@@ -376,7 +376,7 @@ pub struct App {
     /// Whether the input field has exclusive keyboard focus.
     /// In `Editing` mode all printable keys feed the field; shortcuts are suspended.
     pub input_mode: InputMode,
-    pub token: String,
+    pub token: crate::gitlab::ApiToken,
     pub project_id: String,
     pub base_url: String,
     /// Optional human-readable alias for this project, as set in `projects.toml` (`name` field).
@@ -480,6 +480,9 @@ pub struct App {
     /// shown (see `ensure_time_entries`). `None` = request in flight. Cleared at each
     /// refresh cycle so entries logged elsewhere show up within one cycle.
     pub time_entries: HashMap<String, Option<Vec<gitlab_tracker_core::TimeEntry>>>,
+    /// System clipboard, created on first yank and kept alive: on Linux without a
+    /// clipboard manager the copied text is lost as soon as its owner is dropped.
+    clipboard: Option<arboard::Clipboard>,
     /// State of the Log Time popup form. Reset each time the popup is opened.
     pub log_time_form: LogTimeForm,
     /// When `true`, the user has pressed Esc once and is being asked to confirm quitting.
@@ -559,7 +562,7 @@ pub struct App {
 pub const RECENT_UPDATE_FADE_TICKS: u64 = 10;
 
 pub struct AppInit {
-    pub token: String,
+    pub token: crate::gitlab::ApiToken,
     pub project_id: String,
     pub base_url: String,
     pub project_name: Option<String>,
@@ -639,6 +642,7 @@ impl App {
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
             activities: Vec::new(),
             time_entries: HashMap::new(),
+            clipboard: None,
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
             theme,
@@ -815,7 +819,7 @@ impl App {
 
         // Sort by descending relevance only when a query is active.
         if query.is_some() {
-            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.sort_by(|a, b| b.0.total_cmp(&a.0));
         }
 
         scored.into_iter().map(|(_, i)| i).collect()
@@ -1071,6 +1075,28 @@ impl App {
             let entries = provider.fetch_time_entries(&ticket_id).await;
             let _ = tx.send(AppEvent::TimeEntriesLoaded { ticket_id, entries });
         });
+    }
+
+    /// Copies the selected MR's `git clone -b <branch> <ssh url>` command to the clipboard.
+    pub fn yank_clone_command(&mut self) {
+        let Some(cmd) = self
+            .table_state
+            .selected()
+            .and_then(|i| self.visible_mrs().nth(i))
+            .map(|mr| crate::utils::git_clone_command(&mr.web_url, &mr.source_branch))
+        else {
+            return;
+        };
+        if self.clipboard.is_none() {
+            self.clipboard = arboard::Clipboard::new()
+                .map_err(|e| tracing::warn!(error = %e, "Clipboard unavailable"))
+                .ok();
+        }
+        if let Some(clipboard) = &mut self.clipboard {
+            if let Err(e) = clipboard.set_text(cmd) {
+                tracing::warn!(error = %e, "Failed to copy to clipboard");
+            }
+        }
     }
 
     /// Keeps the selection inside the visible list after it shrinks.
@@ -2265,7 +2291,7 @@ mod tests {
 
     fn test_app() -> App {
         App::new(AppInit {
-            token: "t".into(),
+            token: std::sync::Arc::new("t".to_string().into()),
             project_id: "1".into(),
             base_url: "https://gitlab.example".into(),
             project_name: None,

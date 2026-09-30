@@ -282,17 +282,11 @@ fn render_diff_stats_lines(
 
     // Build the "Behind" line — only for open MRs; not applicable for merged/closed.
     let behind_line = if mr.state == GitlabMrState::Opened {
+        // Behind by 0 commits, or unknown but GitLab reports the MR as mergeable.
+        let up_to_date = stats.commits_behind == Some(0)
+            || (stats.commits_behind.is_none() && mr.mergeability == MergeabilityStatus::Mergeable);
         match stats.commits_behind {
-            Some(0) | None if mr.mergeability == MergeabilityStatus::Mergeable => Line::from(vec![
-                Span::raw("Behind   : "),
-                Span::styled(
-                    "✔ Up to date",
-                    Style::default()
-                        .fg(palette.accent_green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Some(0) => Line::from(vec![
+            _ if up_to_date => Line::from(vec![
                 Span::raw("Behind   : "),
                 Span::styled(
                     "✔ Up to date",
@@ -398,18 +392,7 @@ pub fn render_safe_inspector_text(
     // Build the git clone command for the source branch — used in the [Y]ank hint.
     // Derives the SSH clone URL from the web URL: replaces the HTTPS scheme and host
     // with the git@ SSH equivalent (standard GitLab convention).
-    let git_clone_cmd = {
-        // e.g. "https://gitlab.com/org/project/-/merge_requests/42"
-        //   -> "git clone -b feat/my-branch git@gitlab.com:org/project.git"
-        let ssh_url = mr
-            .web_url
-            .split("/-/")
-            .next()
-            .unwrap_or("")
-            .replacen("https://", "git@", 1)
-            .replacen('/', ":", 1);
-        format!("git clone -b {} {}.git", mr.source_branch, ssh_url)
-    };
+    let git_clone_cmd = crate::utils::git_clone_command(&mr.web_url, &mr.source_branch);
 
     // ── SECTION 1: Identity ──────────────────────────────────────────────────
     let mut lines = vec![

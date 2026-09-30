@@ -26,10 +26,6 @@ use std::collections::HashMap;
 ///
 /// Any future tracker plugin (Jira, Linear, …) simply fills the same two maps —
 /// no change to the renderers is needed.
-///
-/// `#[allow(dead_code)]` suppresses Clippy false-positives in feature-less builds
-/// where no tracker is compiled in.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct TrackerLabelColors {
     /// Colour map for tracker-type labels (e.g. "Bug", "Evolution").
@@ -40,7 +36,6 @@ pub struct TrackerLabelColors {
     pub priority: HashMap<String, (Color, Color)>,
 }
 
-#[allow(dead_code)]
 impl TrackerLabelColors {
     /// Resolves a label against a colour map with case-insensitive exact match,
     /// then a wildcard `"*"` fallback, then a hard-coded default (dark_gray / white).
@@ -104,11 +99,6 @@ fn fmt_hours(hours: f32) -> String {
 ///
 /// Contains: ID, subject, type/priority badges, status, assignees, version,
 /// start date, progress bar, and time tracking (estimate/spent/remaining).
-///
-/// `tracker_colors` is only exercised when a tracker feature flag is compiled in
-/// and a ticket is linked. `#[allow(unused_variables)]` suppresses Clippy
-/// false-positives in feature-less builds.
-#[allow(unused_variables)]
 pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -> Text<'static> {
     let Some(ticket) = &mr.linked_ticket else {
         return Text::from(vec![Line::from(vec![Span::styled(
@@ -254,9 +244,9 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
     }
 
     // ── Time tracking ─────────────────────────────────────────────────────────
-    let has_estimate = ticket.time_estimate.map(|v| v > 0).unwrap_or(false);
-    let has_spent = ticket.time_spent.map(|v| v > 0).unwrap_or(false);
-    let has_remaining = ticket.time_remaining.map(|v| v > 0).unwrap_or(false);
+    let has_estimate = ticket.time_estimate.is_some_and(|v| v > 0);
+    let has_spent = ticket.time_spent.is_some_and(|v| v > 0);
+    let has_remaining = ticket.time_remaining.is_some_and(|v| v > 0);
 
     if has_estimate || has_spent || has_remaining {
         let spent_color = match (ticket.time_estimate, ticket.time_spent) {

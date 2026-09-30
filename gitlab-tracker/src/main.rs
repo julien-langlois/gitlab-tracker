@@ -215,9 +215,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     migrate_legacy_keyring_entry(&base_url);
 
     // `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
-    // from memory when dropped. We extract the inner `String` here so the rest
-    // of the program is unaffected; the Zeroizing wrapper is immediately dropped.
-    let token = get_or_prompt_token(&base_url).to_string();
+    // from memory when dropped. It is shared as-is (behind an `Arc`) by the app and
+    // every fetch, so no plain-`String` copy of the token is ever made.
+    let token = Arc::new(get_or_prompt_token(&base_url));
 
     // ── Optional tracker integration ──────────────────────────────────────────
     // The tracker config lives inside the active `ProjectEntry` under the generic

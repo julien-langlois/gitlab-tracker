@@ -580,24 +580,7 @@ pub async fn handle_key_event(
                 }
 
                 // [Y]ank — copy the git clone command for the MR source branch to clipboard.
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    if let Some(selected) = app.table_state.selected() {
-                        // Use visible_mrs() so the index is relative to the filtered list.
-                        if let Some(mr) = app.visible_mrs().nth(selected) {
-                            let ssh_url = mr
-                                .web_url
-                                .split("/-/")
-                                .next()
-                                .unwrap_or("")
-                                .replacen("https://", "git@", 1)
-                                .replacen('/', ":", 1);
-                            let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
-                            if let Ok(mut ctx) = arboard::Clipboard::new() {
-                                let _ = ctx.set_text(cmd);
-                            }
-                        }
-                    }
-                }
+                KeyCode::Char('y') | KeyCode::Char('Y') => app.yank_clone_command(),
 
                 // Force a full refresh of all MRs (GitLab + Redmine tickets).
                 KeyCode::Char('r') | KeyCode::Char('R') => {
@@ -964,24 +947,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         }
 
         // [Y]ank — copy the git clone command for the MR source branch to clipboard.
-        KeyCode::Char('y') | KeyCode::Char('Y') => {
-            if let Some(selected) = app.table_state.selected() {
-                // Use visible_mrs() so the index is relative to the filtered list.
-                if let Some(mr) = app.visible_mrs().nth(selected) {
-                    let ssh_url = mr
-                        .web_url
-                        .split("/-/")
-                        .next()
-                        .unwrap_or("")
-                        .replacen("https://", "git@", 1)
-                        .replacen('/', ":", 1);
-                    let cmd = format!("git clone -b {} {}.git", mr.source_branch, ssh_url);
-                    if let Ok(mut ctx) = arboard::Clipboard::new() {
-                        let _ = ctx.set_text(cmd);
-                    }
-                }
-            }
-        }
+        KeyCode::Char('y') | KeyCode::Char('Y') => app.yank_clone_command(),
 
         // Reset the refresh timer display only (no actual network fetch in demo mode).
         KeyCode::Char('r') | KeyCode::Char('R') => {

@@ -169,7 +169,7 @@ fn rank_vector(values: &[f64]) -> Vec<f64> {
         .enumerate()
         .map(|(i, v)| (v, i))
         .collect();
-    indexed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    indexed.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let mut ranks = vec![0.0f64; n];
     let mut i = 0;

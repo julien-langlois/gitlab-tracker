@@ -216,10 +216,14 @@ impl CountApiCalls for crate::models::TrackedMr {
     }
 }
 
+/// The GitLab API token: a single zeroized-on-drop copy shared by every fetch
+/// (cloning a `FetchContext` only bumps the reference count).
+pub type ApiToken = std::sync::Arc<zeroize::Zeroizing<String>>;
+
 #[derive(Clone)]
 pub struct FetchContext {
     pub base_url: String,
-    pub token: String,
+    pub token: ApiToken,
     pub project_id: String,
     pub branches: Vec<String>,
 }
@@ -293,7 +297,7 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     );
     let res = match client
         .get(&pipelines_url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
     {
@@ -319,7 +323,7 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
             async move {
                 let res = client
                     .get(&jobs_url)
-                    .header("PRIVATE-TOKEN", &token)
+                    .header("PRIVATE-TOKEN", token.as_str())
                     .send()
                     .await
                     .ok()?;
@@ -371,7 +375,7 @@ async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Cl
 
         let res = match client
             .get(&url)
-            .header("PRIVATE-TOKEN", &ctx.token)
+            .header("PRIVATE-TOKEN", ctx.token.as_str())
             .send()
             .await
         {
@@ -460,7 +464,7 @@ async fn fetch_commits_behind(
     );
     let res = client
         .get(&url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
         .ok()?;
@@ -499,7 +503,7 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     );
     let res = client
         .get(&url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
         .ok()?;
@@ -583,7 +587,7 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     );
     let header_total = client
         .get(&commits_total_url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
         .ok()
@@ -608,7 +612,7 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
             );
             let res = client
                 .get(&commits_url)
-                .header("PRIVATE-TOKEN", &ctx.token)
+                .header("PRIVATE-TOKEN", ctx.token.as_str())
                 .send()
                 .await;
             match res {
@@ -656,7 +660,7 @@ pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
     );
     let res = match client
         .get(&url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
     {
@@ -683,7 +687,7 @@ pub async fn fetch_gitlab_labels(ctx: &FetchContext) -> Vec<GitLabLabelDetail> {
     );
     let res = match client
         .get(&url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
     {
@@ -737,7 +741,7 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
     );
     let res = match client
         .get(&url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
     {
@@ -781,7 +785,7 @@ pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Opt
         );
         let res = match client
             .get(&url)
-            .header("PRIVATE-TOKEN", &ctx.token)
+            .header("PRIVATE-TOKEN", ctx.token.as_str())
             .send()
             .await
         {
@@ -894,7 +898,7 @@ async fn fetch_single_mr(
 ) -> Result<GitLabMr, String> {
     let mr_res = client
         .get(mr_url)
-        .header("PRIVATE-TOKEN", &ctx.token)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
         .map_err(|e| format!("MR network error: {}", e))?;
@@ -1228,7 +1232,7 @@ pub async fn fetch_gitlab_data(
         );
         match client
             .get(&refs_url)
-            .header("PRIVATE-TOKEN", &ctx.token)
+            .header("PRIVATE-TOKEN", ctx.token.as_str())
             .send()
             .await
         {
@@ -1247,7 +1251,7 @@ pub async fn fetch_gitlab_data(
                         {
                             let Some(next) = client
                                 .get(format!("{refs_url}&page={page}"))
-                                .header("PRIVATE-TOKEN", &ctx.token)
+                                .header("PRIVATE-TOKEN", ctx.token.as_str())
                                 .send()
                                 .await
                                 .ok()

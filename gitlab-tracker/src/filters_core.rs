@@ -191,7 +191,7 @@ inventory::submit!(FilterDef {
     active_label: "Effort: Easy 🟢",
     priority: 16,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.map(|d| d < 0.33).unwrap_or(false) },
+    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d < 0.33) },
 });
 
 inventory::submit!(FilterDef {
@@ -200,7 +200,7 @@ inventory::submit!(FilterDef {
     active_label: "Effort: Complex 🔴",
     priority: 17,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.map(|d| d >= 0.66).unwrap_or(false) },
+    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d >= 0.66) },
 });
 
 // Parametric filters — need_text_input = true, priority 50+

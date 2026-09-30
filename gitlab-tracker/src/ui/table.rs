@@ -359,8 +359,8 @@ pub fn render_table(app: &App) -> Table<'_> {
                             }
                         };
 
-                        let has_tracking = t.time_estimate.map(|v| v > 0).unwrap_or(false)
-                            || t.time_spent.map(|v| v > 0).unwrap_or(false);
+                        let has_tracking = t.time_estimate.is_some_and(|v| v > 0)
+                            || t.time_spent.is_some_and(|v| v > 0);
 
                         if has_tracking {
                             let spent = t
