@@ -302,28 +302,8 @@ fn beta_continued_fraction(x: f64, a: f64, b: f64) -> f64 {
 
 /// Natural log of the beta function: ln B(a, b) = ln Γ(a) + ln Γ(b) - ln Γ(a+b).
 fn ln_beta(a: f64, b: f64) -> f64 {
+    use crate::poisson::ln_gamma;
     ln_gamma(a) + ln_gamma(b) - ln_gamma(a + b)
-}
-
-/// Stirling-series approximation of ln Γ(x) (Lanczos, g=7).
-fn ln_gamma(x: f64) -> f64 {
-    const COEFFS: [f64; 8] = [
-        0.999_999_999_999_809_3,
-        676.520_368_121_885_1,
-        -1_259.139_216_722_403,
-        771.323_428_777_653_1,
-        -176.615_029_162_140_6,
-        12.507_343_278_686_9,
-        -0.138_571_095_265_720_12,
-        9.984_369_578_019_572e-6,
-    ];
-    let z = x - 1.0;
-    let mut sum = COEFFS[0];
-    for (i, &c) in COEFFS[1..].iter().enumerate() {
-        sum += c / (z + i as f64 + 1.0);
-    }
-    let t = z + 7.5;
-    std::f64::consts::FRAC_2_SQRT_PI.sqrt() * (t.powf(z + 0.5)) * (-t).exp() * sum
 }
 
 #[cfg(test)]
@@ -335,6 +315,19 @@ mod tests {
         let points: Vec<(f64, f64)> = (1..=10).map(|i| (i as f64, i as f64)).collect();
         let rho = spearman_rho(&points);
         assert!((rho - 1.0).abs() < 1e-9, "expected ρ ≈ 1.0, got {rho}");
+    }
+
+    #[test]
+    fn p_value_matches_reference() {
+        // Reference values from scipy.stats (t-distribution, two-tailed).
+        let cases = [(0.5, 20, 0.0248), (0.3, 30, 0.1072), (0.8, 10, 0.0055)];
+        for (rho, n, expected) in cases {
+            let p = spearman_p_value(rho, n);
+            assert!(
+                (p - expected).abs() < 5e-4,
+                "rho={rho} n={n}: expected p≈{expected}, got {p}"
+            );
+        }
     }
 
     #[test]

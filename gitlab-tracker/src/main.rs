@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        ratatui::restore();
+        utils::restore_terminal();
         default_panic(info);
     }));
 
@@ -301,6 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
     let mut terminal = ratatui::init();
+    let _terminal_guard = crate::utils::TerminalGuard;
 
     let (
         saved_mrs,
@@ -565,6 +566,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await;
         }
         app.flush_pending_sort();
+        app.ensure_time_entries(&tx);
         if needs_save {
             save_state_async(
                 &app.mrs,
@@ -620,7 +622,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match input? {
                     Event::Mouse(mouse) => {
                         let size = terminal.size()?;
-                        handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
+                        handle_mouse_event(mouse, size.width, size.height, &mut app);
                     }
                     Event::Key(key)
                         if key.kind == KeyEventKind::Press
@@ -644,8 +646,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Disable mouse capture before restoring the terminal.
-    crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
-    ratatui::restore();
+    // `_terminal_guard` disables mouse capture and restores the terminal on drop.
     Ok(())
 }

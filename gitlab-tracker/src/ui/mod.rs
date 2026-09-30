@@ -87,12 +87,7 @@ fn render_frame(f: &mut Frame, app: &mut App) {
     }
 
     // --- Right Column: split vertically when a tracker ticket is available ---
-    let has_ticket = app
-        .table_state
-        .selected()
-        .and_then(|i| app.mrs.get(i))
-        .and_then(|mr| mr.linked_ticket.as_ref())
-        .is_some();
+    let has_ticket = app.has_tracker_ticket();
 
     let right_chunks = if has_ticket {
         // 2/3 Inspector (top) + 1/3 Tracker (bottom)
@@ -186,9 +181,14 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                 let tracker_is_active = app.active_pane == ActivePane::Tracker;
                 let text = match app.tracker_view {
                     TrackerView::TicketInfo => tracker::render_ticket_info(mr, &app.tracker_colors),
-                    TrackerView::TimeLog => {
-                        tracker::render_time_log(mr, &app.time_entries, app.theme.muted_comment)
-                    }
+                    TrackerView::TimeLog => tracker::render_time_log(
+                        mr,
+                        mr.linked_ticket
+                            .as_ref()
+                            .and_then(|t| app.time_entries.get(&t.id))
+                            .and_then(|e| e.as_deref()),
+                        app.theme.muted_comment,
+                    ),
                 };
                 let line_count = text.lines.len() as u16;
                 Some((text, line_count, tracker_is_active))

@@ -958,6 +958,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
 
     let mut terminal = ratatui::init();
+    let _terminal_guard = crate::utils::TerminalGuard;
 
     loop {
         // Drain the event queue before rendering
@@ -992,7 +993,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             match event::read()? {
                 Event::Mouse(mouse) => {
                     let size = terminal.size()?;
-                    handle_mouse_event(mouse, size.width, size.height, &mut app, &tx);
+                    handle_mouse_event(mouse, size.width, size.height, &mut app);
                 }
                 // Quit on Esc/q (handle_key_event_demo returns true).
                 Event::Key(key)
@@ -1020,8 +1021,6 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         }
     }
 
-    // Disable mouse capture before restoring the terminal.
-    crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture)?;
-    ratatui::restore();
+    // `_terminal_guard` disables mouse capture and restores the terminal on drop.
     Ok(())
 }

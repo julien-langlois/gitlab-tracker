@@ -206,7 +206,6 @@ pub struct CachedMrData {
     pub title: Option<String>,
     pub description: Option<String>,
     pub author: Option<String>,
-    pub assignee: Option<String>,
 
     pub web_url: Option<String>,
     pub labels: Option<Vec<String>>,
@@ -1180,22 +1179,22 @@ pub async fn fetch_gitlab_data(
 
     // Author and web_url are immutable after MR creation — always served from cache
     // when available to avoid redundant formatting work.
-    let (author, assignee, web_url) = match (cached.author, cached.assignee, cached.web_url) {
-        (Some(a), Some(asg), Some(w)) if !w.is_empty() => (a, asg, w),
+    let (author, web_url) = match (cached.author, cached.web_url) {
+        (Some(a), Some(w)) if !w.is_empty() => (a, w),
         _ => {
             let auth = mr
                 .author
                 .map(|u| format!("{} (@{})", u.name, u.username))
                 .unwrap_or_else(|| "unknown".to_string());
-            let asg = mr
-                .assignee
-                .map(|u| format!("{} (@{})", u.name, u.username))
-                .unwrap_or_else(|| "none".to_string());
-            let web_url = mr.web_url.unwrap_or_default();
-
-            (auth, asg, web_url)
+            (auth, mr.web_url.unwrap_or_default())
         }
     };
+    // The assignee can change at any time: always take it from the fresh payload.
+    // "None" matches the sentinel used on restore and by the cockpit counter.
+    let assignee = mr
+        .assignee
+        .map(|u| format!("{} (@{})", u.name, u.username))
+        .unwrap_or_else(|| "None".to_string());
 
     let mut found_branches = HashSet::new();
 

@@ -476,11 +476,8 @@ pub enum AppEvent {
     /// `apply_event` is the single place that pushes to `app.mrs` and recomputes
     /// the API call estimate — `events.rs` must never mutate `app.mrs` directly.
     MrAdded(String),
-    /// Fired when the user removes the currently selected MR (Delete key).
-    /// Carries the raw list index so `apply_event` can remove the right entry
-    /// without duplicating the selection-clamping logic.
-    MrRemovedByIndex(usize),
-    /// Fired when the user removes a MR by typing `-<id>` in the input field.
+    /// Fired when the user removes a MR: Delete key on the selected row, or `-<id>`
+    /// typed in the input field.
     MrRemovedById(String),
     /// Fired when the project label list (with colours) has been fetched from GitLab.
     GitlabLabelsLoaded(Vec<GitLabLabelDetail>),
@@ -502,7 +499,9 @@ pub enum AppEvent {
     /// Stored in `App` for use in the Log Time popup selector.
     ActivitiesLoaded(Vec<gitlab_tracker_core::Activity>),
     /// Fired when time entries for a ticket have been fetched from the tracker.
+    /// Keyed by ticket id so a late response can never land on another ticket.
     TimeEntriesLoaded {
+        ticket_id: String,
         entries: Vec<gitlab_tracker_core::TimeEntry>,
     },
     /// Fired when a time entry has been successfully submitted to the tracker.
@@ -548,9 +547,7 @@ impl AppEvent {
         use gitlab_tracker_core::MrLifecycleEvent;
         match self {
             AppEvent::MrAdded(_) => Some(MrLifecycleEvent::Added),
-            AppEvent::MrRemovedByIndex(_) | AppEvent::MrRemovedById(_) => {
-                Some(MrLifecycleEvent::Deleted)
-            }
+            AppEvent::MrRemovedById(_) => Some(MrLifecycleEvent::Deleted),
             AppEvent::MrLoaded(_) => Some(MrLifecycleEvent::Refreshed),
             AppEvent::MrFailed { .. } => Some(MrLifecycleEvent::FetchFailed),
             _ => None,

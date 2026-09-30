@@ -329,7 +329,8 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
 /// fetched from the tracker backend for the linked ticket.
 pub fn render_time_log(
     mr: &TrackedMr,
-    entries: &[gitlab_tracker_core::TimeEntry],
+    // `None` while the entries are being fetched.
+    entries: Option<&[gitlab_tracker_core::TimeEntry]>,
     muted_comment: ratatui::style::Color,
 ) -> Text<'static> {
     let mut lines = vec![
@@ -384,7 +385,7 @@ pub fn render_time_log(
             ]));
         } else {
             // No estimate — just show total spent.
-            let total_hours: f32 = entries.iter().map(|e| e.hours).sum();
+            let total_hours: f32 = entries.unwrap_or_default().iter().map(|e| e.hours).sum();
             lines.push(Line::from(vec![
                 Span::raw("Total    : "),
                 Span::styled(
@@ -413,6 +414,13 @@ pub fn render_time_log(
         ),
     ]));
 
+    let Some(entries) = entries else {
+        lines.push(Line::from(vec![Span::styled(
+            "Loading time entries…",
+            Style::default().fg(theme::MUTED),
+        )]));
+        return Text::from(lines);
+    };
     if entries.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No time entries recorded yet.",

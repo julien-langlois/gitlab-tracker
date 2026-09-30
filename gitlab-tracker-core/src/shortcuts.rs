@@ -42,7 +42,7 @@ pub struct ShortcutBlock {
 /// # How to register a new provider (e.g. Jira)
 ///
 /// In `gitlab-tracker-jira/src/shortcuts.rs`, add:
-/// ```rust
+/// ```rust,ignore
 /// fn jira_shortcuts() -> ShortcutBlock { /* … */ }
 /// inventory::submit!(ShortcutFactory(jira_shortcuts));
 /// ```

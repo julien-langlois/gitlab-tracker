@@ -60,9 +60,9 @@ fn log_factorial(k: u32) -> f64 {
     ln_gamma(k as f64 + 1.0)
 }
 
-/// Lanczos approximation of ln(Γ(x)), accurate to ~1e-9 for x > 0.
-fn ln_gamma(x: f64) -> f64 {
-    const COEFFS: [f64; 8] = [
+/// Lanczos approximation of ln(Γ(x)) (g=7, n=9), accurate to ~1e-15 for x > 0.
+pub(crate) fn ln_gamma(x: f64) -> f64 {
+    const COEFFS: [f64; 9] = [
         0.999_999_999_999_809_3,
         676.520_368_121_885_1,
         -1_259.139_216_722_403,
@@ -71,6 +71,7 @@ fn ln_gamma(x: f64) -> f64 {
         12.507_343_278_686_9,
         -0.138_571_095_265_720_12,
         9.984_369_578_019_572e-6,
+        1.505_632_735_149_311_6e-7,
     ];
     let z = x - 1.0;
     let mut sum = COEFFS[0];

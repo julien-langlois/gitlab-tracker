@@ -6,12 +6,19 @@ fn stats_table(project: &toml::Table) -> Option<&toml::Table> {
     project.get("stats").and_then(toml::Value::as_table)
 }
 
+/// Returns the `[stats]` table, replacing any non-table value (e.g. `stats = 1`)
+/// instead of panicking on a malformed user config.
 fn stats_table_mut(project: &mut toml::Table) -> &mut toml::Table {
-    project
+    let entry = project
         .entry("stats".to_string())
-        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
-        .as_table_mut()
-        .expect("stats setting must be a TOML table")
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    if !entry.is_table() {
+        *entry = toml::Value::Table(toml::Table::new());
+    }
+    match entry {
+        toml::Value::Table(table) => table,
+        _ => unreachable!(),
+    }
 }
 
 fn read_u32(project: &toml::Table, key: &str, default: u32) -> ProjectSettingValue {
@@ -60,3 +67,18 @@ fn sprint_weeks_setting() -> ProjectSettingDef {
 
 inventory::submit!(ProjectSettingFactory(retention_days_setting));
 inventory::submit!(ProjectSettingFactory(sprint_weeks_setting));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_table_stats_value_is_replaced_not_panicking() {
+        let mut project: toml::Table = toml::from_str("stats = 1").unwrap();
+        write_u32(&mut project, "retention_days", ProjectSettingValue::U32(30));
+        assert_eq!(
+            read_u32(&project, "retention_days", 365),
+            ProjectSettingValue::U32(30)
+        );
+    }
+}

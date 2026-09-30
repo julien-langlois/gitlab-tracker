@@ -395,7 +395,7 @@ pub fn parse_color(s: &str) -> Color {
         "dark_gray" | "dark_grey" => Color::Rgb(88, 88, 100),
         "gray" | "grey" | "light_gray" | "light_grey" => Color::Rgb(160, 160, 175),
         _ => {
-            if s.starts_with('#') && s.len() == 7 {
+            if s.is_ascii() && s.starts_with('#') && s.len() == 7 {
                 let r = u8::from_str_radix(&s[1..3], 16).unwrap_or(128);
                 let g = u8::from_str_radix(&s[3..5], 16).unwrap_or(128);
                 let b = u8::from_str_radix(&s[5..7], 16).unwrap_or(128);

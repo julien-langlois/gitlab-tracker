@@ -169,7 +169,7 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
         };
 
         let total = hours + minutes / 60.0;
-        if total <= 0.0 {
+        if !(total.is_finite() && total > 0.0) {
             return Err("Duration must be greater than zero".into());
         }
         return Ok(total);
@@ -181,7 +181,7 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
             .parse()
             .map_err(|_| format!("Invalid minutes in \"{}\"", input))?;
         let total = minutes / 60.0;
-        if total <= 0.0 {
+        if !(total.is_finite() && total > 0.0) {
             return Err("Duration must be greater than zero".into());
         }
         return Ok(total);
@@ -189,7 +189,7 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
 
     // Pattern: bare number — treated as minutes
     if let Ok(minutes) = s.parse::<f32>() {
-        if minutes <= 0.0 {
+        if !(minutes.is_finite() && minutes > 0.0) {
             return Err("Duration must be greater than zero".into());
         }
         return Ok(minutes / 60.0);
@@ -199,4 +199,39 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
         "Unrecognised format \"{}\". Try: 1h30, 90m, 1.5h",
         input
     ))
+}
+
+/// Disables mouse capture and restores the terminal (raw mode, alternate screen).
+pub fn restore_terminal() {
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
+    ratatui::restore();
+}
+
+/// Restores the terminal when dropped, so an early `?` return in the event loop
+/// never leaves the shell in raw mode with mouse capture on.
+pub struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        restore_terminal();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_finite_durations_are_rejected() {
+        for input in ["nan", "inf", "infh", "1hnan", "NaNm"] {
+            assert!(parse_duration_to_hours(input).is_err(), "{input} accepted");
+        }
+        assert_eq!(parse_duration_to_hours("1h30"), Ok(1.5));
+    }
+
+    #[test]
+    fn multibyte_hex_colour_does_not_panic() {
+        // 7 bytes but not 7 ASCII chars: slicing `[1..3]` used to panic.
+        let _ = crate::config::parse_color("#aé€");
+    }
 }

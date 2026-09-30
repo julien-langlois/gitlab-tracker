@@ -3,7 +3,7 @@ use crate::models::{MrStatus, SavedMr, SavedState, TrackedMr};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 // ── projects.toml ─────────────────────────────────────────────────────────────
@@ -219,16 +219,43 @@ pub fn projects_toml_path() -> Option<PathBuf> {
     get_save_dir().map(|d| d.join("projects.toml"))
 }
 
+/// Writes `content` to a sibling `*.tmp` file then renames it over `path`, so a
+/// crash mid-write never leaves a truncated file behind.
+async fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    tokio::fs::write(&tmp, content).await?;
+    tokio::fs::rename(&tmp, path).await
+}
+
+/// Moves an unparseable file to `*.bak` so the next save cannot overwrite the
+/// user's data with an empty default.
+async fn backup_corrupt_file(path: &Path, error: &dyn std::fmt::Display) {
+    let mut bak = path.as_os_str().to_owned();
+    bak.push(".bak");
+    match tokio::fs::rename(path, &bak).await {
+        Ok(()) => tracing::error!(
+            error = %error, path = ?path, backup = ?bak,
+            "Unparseable file moved to backup — fix it and rename it back"
+        ),
+        Err(e) => tracing::error!(error = %e, path = ?path, "Failed to back up unparseable file"),
+    }
+}
+
 /// Loads `projects.toml`, returning an empty config when the file is absent or unparseable.
+/// An unparseable file is first moved to `projects.toml.bak`.
 pub async fn load_projects_toml() -> ProjectsConfig {
     let Some(path) = projects_toml_path() else {
         return ProjectsConfig::default();
     };
     match tokio::fs::read_to_string(&path).await {
-        Ok(content) => toml::from_str(&content).unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "Failed to parse projects.toml — using empty config");
-            ProjectsConfig::default()
-        }),
+        Ok(content) => match toml::from_str(&content) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                backup_corrupt_file(&path, &e).await;
+                ProjectsConfig::default()
+            }
+        },
         Err(_) => ProjectsConfig::default(),
     }
 }
@@ -243,7 +270,7 @@ async fn save_projects_toml(cfg: &ProjectsConfig) {
     }
     match toml::to_string_pretty(cfg) {
         Ok(content) => {
-            if let Err(e) = tokio::fs::write(&path, content).await {
+            if let Err(e) = write_atomic(&path, &content).await {
                 tracing::error!(error = %e, path = ?path, "Failed to write projects.toml");
             }
         }
@@ -1182,7 +1209,11 @@ pub async fn load_state_async(
     let path = config_dir.join(&file_name);
 
     if let Ok(content) = tokio::fs::read_to_string(&path).await {
-        if let Ok(state) = serde_json::from_str::<SavedState>(&content) {
+        let parsed = serde_json::from_str::<SavedState>(&content);
+        if let Err(e) = &parsed {
+            backup_corrupt_file(&path, e).await;
+        }
+        if let Ok(state) = parsed {
             // One-shot migration: if the state file has branches and
             // projects.toml does not yet, backfill projects.toml now.
             if !state.branches.is_empty() {
@@ -1272,7 +1303,33 @@ pub async fn save_state_async(
             let file_name = tracker_state_file_name(gitlab_url, project_id);
             let path = config_dir.join(file_name);
             let _ = tokio::fs::create_dir_all(&config_dir).await;
-            let _ = tokio::fs::write(path, json).await;
+            if let Err(e) = write_atomic(&path, &json).await {
+                tracing::error!(error = %e, path = ?path, "Failed to write tracker state");
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn atomic_write_and_corrupt_backup() {
+        let dir = std::env::temp_dir().join(format!("gt-storage-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.json");
+
+        write_atomic(&path, "{broken").await.unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{broken");
+        assert!(!dir.join("state.json.tmp").exists());
+
+        backup_corrupt_file(&path, &"parse error").await;
+        assert!(!path.exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("state.json.bak")).unwrap(),
+            "{broken"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

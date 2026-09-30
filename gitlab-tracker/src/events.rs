@@ -4,9 +4,7 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
-use crate::app::{
-    ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm, TrackerView,
-};
+use crate::app::{ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm};
 use crate::gitlab::{
     spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData, FetchContext,
 };
@@ -17,21 +15,13 @@ use crate::storage::{
 use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
-///
-/// Returns `true` when the selected dashboard row changed (scroll in the table pane),
-/// so the caller can trigger a time-entries re-fetch when the TimeLog view is active.
-pub fn handle_mouse_event(
-    mouse: MouseEvent,
-    term_width: u16,
-    term_height: u16,
-    app: &mut App,
-    tx: &UnboundedSender<AppEvent>,
-) {
+/// Time entries for a newly selected row are fetched by `App::ensure_time_entries`.
+pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, term_height: u16, app: &mut App) {
     // The right column starts at 65% of the terminal width.
-    let inspector_start_col = term_width * 65 / 100;
+    let inspector_start_col = (u32::from(term_width) * 65 / 100) as u16;
     // The Tracker pane occupies the bottom 33% of the right column.
     // Subtract 1 for the status bar at the bottom.
-    let tracker_start_row = term_height.saturating_sub(1) * 67 / 100;
+    let tracker_start_row = (u32::from(term_height.saturating_sub(1)) * 67 / 100) as u16;
     // Whether the cursor is in the right column and below the Inspector pane.
     let in_tracker_pane = mouse.column >= inspector_start_col
         && app.has_tracker_ticket()
@@ -58,27 +48,6 @@ pub fn handle_mouse_event(
                 app.inspector_scroll_down(3);
             } else {
                 app.next_row();
-                // When the TimeLog view is active, re-fetch time entries for the newly
-                // selected MR's linked ticket — mirrors the keyboard ↓ / j handler.
-                if app.tracker_view == TrackerView::TimeLog {
-                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                        let ticket_id = app
-                            .table_state
-                            .selected()
-                            .and_then(|i| app.visible_mrs().nth(i))
-                            .and_then(|mr| mr.linked_ticket.as_ref())
-                            .map(|t| t.id.clone());
-
-                        if let Some(tid) = ticket_id {
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                let entries = provider.fetch_time_entries(&tid).await;
-                                let _ = tx2
-                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
-                            });
-                        }
-                    }
-                }
             }
         }
         MouseEventKind::ScrollUp => {
@@ -88,26 +57,6 @@ pub fn handle_mouse_event(
                 app.inspector_scroll_up(3);
             } else {
                 app.prev_row();
-                // When the TimeLog tracker view is active, re-fetch time entries.
-                if app.tracker_view == TrackerView::TimeLog {
-                    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                        let ticket_id = app
-                            .table_state
-                            .selected()
-                            .and_then(|i| app.visible_mrs().nth(i))
-                            .and_then(|mr| mr.linked_ticket.as_ref())
-                            .map(|t| t.id.clone());
-
-                        if let Some(tid) = ticket_id {
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                let entries = provider.fetch_time_entries(&tid).await;
-                                let _ = tx2
-                                    .send(crate::models::AppEvent::TimeEntriesLoaded { entries });
-                            });
-                        }
-                    }
-                }
             }
         }
         _ => {}
@@ -604,29 +553,6 @@ pub async fn handle_key_event(
                     ActivePane::Tracker => app.tracker_scroll_down(1),
                     ActivePane::Dashboard => {
                         app.next_row();
-                        // When the TimeLog tracker view is active, re-fetch time entries
-                        // for the newly selected MR's linked ticket.
-                        if app.tracker_view == TrackerView::TimeLog {
-                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                                let ticket_id = app
-                                    .table_state
-                                    .selected()
-                                    .and_then(|i| app.visible_mrs().nth(i))
-                                    .and_then(|mr| mr.linked_ticket.as_ref())
-                                    .map(|t| t.id.clone());
-
-                                if let Some(tid) = ticket_id {
-                                    let tx2 = tx.clone();
-                                    tokio::spawn(async move {
-                                        let entries = provider.fetch_time_entries(&tid).await;
-                                        let _ =
-                                            tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
-                                                entries,
-                                            });
-                                    });
-                                }
-                            }
-                        }
                     }
                 },
                 KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
@@ -634,29 +560,6 @@ pub async fn handle_key_event(
                     ActivePane::Tracker => app.tracker_scroll_up(1),
                     ActivePane::Dashboard => {
                         app.prev_row();
-                        // When the TimeLog tracker view is active, re-fetch time entries
-                        // for the newly selected MR's linked ticket.
-                        if app.tracker_view == TrackerView::TimeLog {
-                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                                let ticket_id = app
-                                    .table_state
-                                    .selected()
-                                    .and_then(|i| app.visible_mrs().nth(i))
-                                    .and_then(|mr| mr.linked_ticket.as_ref())
-                                    .map(|t| t.id.clone());
-
-                                if let Some(tid) = ticket_id {
-                                    let tx2 = tx.clone();
-                                    tokio::spawn(async move {
-                                        let entries = provider.fetch_time_entries(&tid).await;
-                                        let _ =
-                                            tx2.send(crate::models::AppEvent::TimeEntriesLoaded {
-                                                entries,
-                                            });
-                                    });
-                                }
-                            }
-                        }
                     }
                 },
 
@@ -701,6 +604,7 @@ pub async fn handle_key_event(
                 // Force a full refresh of all MRs (GitLab + Redmine tickets).
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     app.time_left = app.refresh_interval_secs;
+                    app.time_entries.clear();
                     let ctx = build_fetch_context(app);
 
                     // Run the discovery poller on manual refresh as well, so [R]
@@ -758,30 +662,6 @@ pub async fn handle_key_event(
                         ActivePane::Tracker => {
                             app.tracker_view = app.tracker_view.next();
                             app.reset_tracker_scroll();
-
-                            // When entering TimeLog, fetch time entries for the selected ticket.
-                            if app.tracker_view == TrackerView::TimeLog {
-                                let ticket_id = app
-                                    .table_state
-                                    .selected()
-                                    .and_then(|i| app.visible_mrs().nth(i))
-                                    .and_then(|mr| mr.linked_ticket.as_ref())
-                                    .map(|t| t.id.clone());
-
-                                if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                                    if let Some(tid) = ticket_id {
-                                        let tx2 = tx.clone();
-                                        tokio::spawn(async move {
-                                            let entries = provider.fetch_time_entries(&tid).await;
-                                            let _ = tx2.send(
-                                                crate::models::AppEvent::TimeEntriesLoaded {
-                                                    entries,
-                                                },
-                                            );
-                                        });
-                                    }
-                                }
-                            }
                         }
                         _ => {
                             // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
@@ -886,10 +766,14 @@ pub async fn handle_key_event(
 
                 // Delete: remove the selected MR from the list.
                 KeyCode::Delete => {
-                    if let Some(selected) = app.table_state.selected() {
-                        if selected < app.mrs.len() {
-                            let _ = tx.send(AppEvent::MrRemovedByIndex(selected));
-                        }
+                    // The selection indexes the visible (filtered) list: resolve the id.
+                    if let Some(id) = app
+                        .table_state
+                        .selected()
+                        .and_then(|i| app.visible_mrs().nth(i))
+                        .map(|mr| mr.id.clone())
+                    {
+                        let _ = tx.send(AppEvent::MrRemovedById(id));
                     }
                 }
 
@@ -916,7 +800,7 @@ async fn handle_enter(
     if value.starts_with('-') {
         // Remove an MR (numeric) or a branch (text).
         let to_remove = value.trim_start_matches('-').to_string();
-        if to_remove.chars().all(|c| c.is_numeric()) {
+        if to_remove.chars().all(|c| c.is_ascii_digit()) {
             // Route through the event bus — apply_event handles the mutation,
             // recomputes the API call estimate, and persists state.
             let _ = tx.send(AppEvent::MrRemovedById(to_remove));
@@ -925,7 +809,7 @@ async fn handle_enter(
             // Branches live in projects.toml — persist there, not in tracker_state.json.
             save_branches_async(&app.branches, 0).await;
         }
-    } else if value.chars().all(|c| c.is_numeric()) {
+    } else if value.chars().all(|c| c.is_ascii_digit()) {
         // Add a new MR to track — route through the event bus so apply_event
         // handles the push, the fetch spawn, and the estimate recompute atomically.
         if !app.mrs.iter().any(|m| m.id == value) {
@@ -1180,7 +1064,6 @@ fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
         title: Some(mr.title.clone()),
         description: Some(mr.description.clone()),
         author: Some(mr.author.clone()),
-        assignee: Some(mr.assignee.clone()),
         web_url: Some(mr.web_url.clone()),
         labels: Some(mr.labels.clone()),
         updated_at: mr.updated_at.clone(),

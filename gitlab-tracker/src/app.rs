@@ -476,8 +476,10 @@ pub struct App {
     /// Activity categories fetched from the tracker at startup.
     /// Populated by `AppEvent::ActivitiesLoaded` and used to fill the Log Time popup.
     pub activities: Vec<gitlab_tracker_core::Activity>,
-    /// Time entries for the currently selected ticket, fetched when the TimeLog view opens.
-    pub time_entries: Vec<gitlab_tracker_core::TimeEntry>,
+    /// Time entries per tracker ticket id, fetched on demand while the TimeLog view is
+    /// shown (see `ensure_time_entries`). `None` = request in flight. Cleared at each
+    /// refresh cycle so entries logged elsewhere show up within one cycle.
+    pub time_entries: HashMap<String, Option<Vec<gitlab_tracker_core::TimeEntry>>>,
     /// State of the Log Time popup form. Reset each time the popup is opened.
     pub log_time_form: LogTimeForm,
     /// When `true`, the user has pressed Esc once and is being asked to confirm quitting.
@@ -636,7 +638,7 @@ impl App {
             ticket_transitioner: None,
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
             activities: Vec::new(),
-            time_entries: Vec::new(),
+            time_entries: HashMap::new(),
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
             theme,
@@ -1038,6 +1040,48 @@ impl App {
             .and_then(|i| self.visible_mrs().nth(i))
             .and_then(|mr| mr.linked_ticket.as_ref())
             .is_some()
+    }
+
+    /// Fetches the time entries of the selected MR's ticket when the TimeLog view is
+    /// shown and they are neither cached nor in flight. Called once per main-loop
+    /// iteration: navigation (keys, mouse, filters) never spawns a request itself,
+    /// and a ticket is fetched at most once per refresh cycle.
+    pub fn ensure_time_entries(&mut self, tx: &UnboundedSender<AppEvent>) {
+        if self.tracker_view != TrackerView::TimeLog {
+            return;
+        }
+        let Some(provider) = self.tracker.as_ref().map(Arc::clone) else {
+            return;
+        };
+        let Some(ticket_id) = self
+            .table_state
+            .selected()
+            .and_then(|i| self.visible_mrs().nth(i))
+            .and_then(|mr| mr.linked_ticket.as_ref())
+            .map(|t| t.id.clone())
+        else {
+            return;
+        };
+        if self.time_entries.contains_key(&ticket_id) {
+            return;
+        }
+        self.time_entries.insert(ticket_id.clone(), None);
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            let entries = provider.fetch_time_entries(&ticket_id).await;
+            let _ = tx.send(AppEvent::TimeEntriesLoaded { ticket_id, entries });
+        });
+    }
+
+    /// Keeps the selection inside the visible list after it shrinks.
+    fn clamp_selection(&mut self) {
+        let count = self.visible_mrs().count();
+        let selected = match self.table_state.selected() {
+            _ if count == 0 => None,
+            Some(i) => Some(i.min(count - 1)),
+            None => None,
+        };
+        self.table_state.select(selected);
     }
 
     pub fn next_row(&mut self) {
@@ -1488,7 +1532,6 @@ impl App {
                     title: Some(saved.title),
                     description: saved.description,
                     author: saved.author,
-                    assignee: saved.assignee,
                     web_url: saved.web_url,
                     labels: saved.labels,
                     updated_at: saved.updated_at,
@@ -1592,8 +1635,8 @@ impl App {
             }
 
             // ── Time entries loaded for a ticket ─────────────────────────────
-            AppEvent::TimeEntriesLoaded { entries } => {
-                self.time_entries = entries;
+            AppEvent::TimeEntriesLoaded { ticket_id, entries } => {
+                self.time_entries.insert(ticket_id, Some(entries));
                 false
             }
 
@@ -1606,13 +1649,17 @@ impl App {
                     let provider = Arc::clone(provider);
                     let tx2 = tx.clone();
                     let tid = ticket_id.clone();
+                    self.time_entries.insert(tid.clone(), None);
                     tokio::spawn(async move {
                         // Run both requests concurrently.
                         let (entries, ticket) = tokio::join!(
                             provider.fetch_time_entries(&tid),
                             provider.fetch_ticket(&tid),
                         );
-                        let _ = tx2.send(AppEvent::TimeEntriesLoaded { entries });
+                        let _ = tx2.send(AppEvent::TimeEntriesLoaded {
+                            ticket_id: tid,
+                            entries,
+                        });
                         if let Some(ticket) = ticket {
                             let _ = tx2.send(AppEvent::TrackerTicketLoaded {
                                 mr_id,
@@ -1674,7 +1721,11 @@ impl App {
                     linked_ticket: None,
                     diff_stats: None,
                 });
-                self.table_state.select(Some(self.mrs.len() - 1));
+                // The selection indexes the visible (filtered) list, not `mrs`.
+                let pos = self.visible_mrs().position(|m| m.id == id);
+                if pos.is_some() {
+                    self.table_state.select(pos);
+                }
                 // Spawn the fetch only if the policy confirms a refetch is needed for Added.
                 if self.event_policy.needs_refetch(&MrLifecycleEvent::Added) {
                     spawn_mr_fetch(
@@ -1689,21 +1740,6 @@ impl App {
                 needs_persist
             }
 
-            AppEvent::MrRemovedByIndex(index) => {
-                if index >= self.mrs.len() {
-                    return false;
-                }
-                let removed = self.mrs.remove(index);
-                self.dismissed_mr_ids.insert(removed.id);
-                if self.mrs.is_empty() {
-                    self.table_state.select(None);
-                } else if index >= self.mrs.len() {
-                    self.table_state.select(Some(self.mrs.len() - 1));
-                }
-                self.recompute_api_call_estimate();
-                needs_persist
-            }
-
             AppEvent::MrRemovedById(id) => {
                 let before = self.mrs.len();
                 self.mrs.retain(|m| m.id != id);
@@ -1711,9 +1747,7 @@ impl App {
                     return false; // Nothing removed — no state change.
                 }
                 self.dismissed_mr_ids.insert(id);
-                if self.mrs.is_empty() {
-                    self.table_state.select(None);
-                }
+                self.clamp_selection();
                 self.recompute_api_call_estimate();
                 needs_persist
             }
@@ -2251,6 +2285,7 @@ impl App {
 
                 // Timer elapsed — trigger a full refresh of all MRs.
                 self.time_left = self.refresh_interval_secs;
+                self.time_entries.clear();
                 let ctx = self.fetch_context();
 
                 // Discovery poller: find new MRs created by any team member since the
@@ -2283,7 +2318,6 @@ impl App {
                         title: Some(mr.title.clone()),
                         description: Some(mr.description.clone()),
                         author: Some(mr.author.clone()),
-                        assignee: Some(mr.assignee.clone()),
                         web_url: Some(mr.web_url.clone()),
                         labels: Some(mr.labels.clone()),
                         updated_at: mr.updated_at.clone(),
@@ -2453,6 +2487,44 @@ mod tests {
 
         assert_eq!(live, ["2"]);
         assert_eq!(cached, live);
+    }
+
+    #[tokio::test]
+    async fn delete_key_removes_selected_visible_mr() {
+        let mut app = app_with_mrs(&[
+            ("fix login", "None"),
+            ("add stats", "None"),
+            ("stats view", "None"),
+        ])
+        .await;
+        app.input = "stats".into();
+        // MR "1" (= `mrs[0]`) is hidden by the search, so visible row 0 is another MR:
+        // the old index-based removal deleted `mrs[0]` instead.
+        app.table_state.select(Some(0));
+        let victim = app.visible_mrs().next().unwrap().id.clone();
+        let survivor = app.visible_mrs().nth(1).unwrap().id.clone();
+        assert_ne!(victim, "1");
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let key = crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Delete);
+        crate::events::handle_key_event(
+            key,
+            &mut app,
+            &Arc::new(Semaphore::new(1)),
+            &tx,
+            &mut HashMap::new(),
+        )
+        .await;
+        while let Ok(event) = rx.try_recv() {
+            app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
+                .await;
+        }
+
+        assert_eq!(app.mrs.len(), 2);
+        assert!(app.mrs.iter().any(|m| m.id == "1") && app.mrs.iter().any(|m| m.id == survivor));
+        assert!(app.dismissed_mr_ids.contains(&victim));
+        // The selection is clamped to the (now single-row) visible list.
+        assert_eq!(app.table_state.selected(), Some(0));
     }
 
     #[test]

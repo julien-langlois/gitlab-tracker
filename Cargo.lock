@@ -1241,7 +1241,7 @@ dependencies = [
  "async-trait",
  "inventory",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.19",
  "toml",
 ]
 
@@ -1266,7 +1266,7 @@ dependencies = [
  "reqwest",
  "rpassword",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.19",
  "tokio",
  "tracing",
  "zeroize",
@@ -1283,7 +1283,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
- "thiserror 1.0.69",
+ "thiserror 2.0.19",
  "tokio",
  "toml",
 ]
