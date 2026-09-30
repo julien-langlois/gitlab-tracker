@@ -80,6 +80,29 @@ pub trait CountApiCalls {
 
 /// Implemented on the tracked MR itself: the estimate only reads its cache-relevant
 /// fields, so no `CachedMrData` (with cloned description, pipelines, …) is needed.
+/// Cache snapshot of a tracked MR handed to the fetcher, so it can skip pipeline,
+/// diff and notes re-fetches when the MR has not changed since the last cycle.
+impl From<&crate::models::TrackedMr> for CachedMrData {
+    fn from(mr: &crate::models::TrackedMr) -> Self {
+        Self {
+            title: Some(mr.title.clone()),
+            description: Some(mr.description.clone()),
+            author: Some(mr.author.clone()),
+            web_url: Some(mr.web_url.clone()),
+            labels: Some(mr.labels.clone()),
+            updated_at: mr.updated_at.clone(),
+            pipelines: mr.pipelines.clone(),
+            diff_stats: mr.diff_stats.clone(),
+            user_notes_count: mr.user_notes_count,
+            // Lets the fetcher detect Open → Merged transitions and invalidate the
+            // notes cache accordingly.
+            cached_state: Some(mr.state.clone()),
+            // Callers needing a forced re-sync override this (e.g. [R] sets ForceAll).
+            cache_policy: CachePolicy::Normal,
+        }
+    }
+}
+
 impl CountApiCalls for crate::models::TrackedMr {
     fn estimate(
         &self,

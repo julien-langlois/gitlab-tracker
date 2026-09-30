@@ -553,21 +553,11 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         gitlab_url: "https://gitlab.com".into(),
         project_id: "123456".into(),
         active: true,
-        default_branches: None,
-        table_label_prefixes: None,
-        complexity_profile: None,
-        tracked_branches: None,
         refresh_interval_secs: Some(900),
         activity_stale_days: Some(7),
         activity_recent_days: Some(2),
         show_cockpit: Some(true),
-        cockpit_thresholds: None,
-        stats: None,
-        visible_columns: None,
-        label_colors: None,
-        tracker: None,
-        gitlab_username: None,
-        discover_new_mrs: None,
+        ..Default::default()
     };
 
     let mut app = App::new(AppInit {

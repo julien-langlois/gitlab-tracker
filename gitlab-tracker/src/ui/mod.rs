@@ -33,6 +33,12 @@ fn pane_border_style(is_active: bool) -> Style {
     }
 }
 
+/// Centres a `width` × `height` popup in `area`, shrunk to fit when the terminal is
+/// smaller than the popup (so borders and cursor never land off-screen).
+pub(crate) fn centered_popup(area: Rect, width: u16, height: u16) -> Rect {
+    area.centered(Constraint::Length(width), Constraint::Length(height))
+}
+
 pub fn render_ui(f: &mut Frame, app: &mut App) {
     app.begin_render_cache();
     render_frame(f, app);
@@ -385,9 +391,7 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
     let activity_rows = (app.activities.len() as u16).clamp(2, 6);
     let popup_height: u16 = 3 + activity_rows + 3 + 2 + 2;
 
-    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    let popup_area = centered_popup(area, popup_width, popup_height);
 
     f.render_widget(Clear, popup_area);
 
@@ -558,7 +562,8 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
     // Anchor to the left of the input bar and grow upward.
     let popup_x = input_area.x;
     let popup_y = input_area.y.saturating_sub(popup_height);
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    // Clamp so a narrow or short terminal never pushes the dropdown off-screen.
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height).clamp(f.area());
 
     f.render_widget(Clear, popup_area);
 
@@ -625,9 +630,7 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     let popup_height = list_height + 2 + input_extra;
     let popup_width: u16 = 48;
 
-    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    let popup_area = centered_popup(area, popup_width, popup_height);
 
     f.render_widget(Clear, popup_area);
 
@@ -754,9 +757,7 @@ fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     let popup_width: u16 = 36;
     let popup_height: u16 = entries.len() as u16 + 2;
 
-    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    let popup_area = centered_popup(area, popup_width, popup_height);
 
     f.render_widget(Clear, popup_area);
 
@@ -804,9 +805,7 @@ fn render_settings_popup(f: &mut Frame, app: &App, area: Rect) {
     let max_height = (area.height as f32 * 0.95) as u16;
     let popup_height: u16 = desired_height.min(max_height).max(14);
 
-    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    let popup_area = centered_popup(area, popup_width, popup_height);
 
     f.render_widget(Clear, popup_area);
 
@@ -919,5 +918,26 @@ fn render_setting_value(value: &ProjectSettingValue, kind: &ProjectSettingKind) 
         (ProjectSettingValue::Text(value), _) if value.is_empty() => "<empty>".to_string(),
         (ProjectSettingValue::Text(value), _) => value.clone(),
         _ => "<invalid>".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn centered_popup_stays_inside_small_terminal() {
+        let area = Rect::new(0, 0, 40, 12);
+        let popup = centered_popup(area, 60, 17);
+        assert_eq!(
+            popup.intersection(area),
+            popup,
+            "popup overflows: {popup:?}"
+        );
+        // Fits: centred, full requested size.
+        assert_eq!(
+            centered_popup(Rect::new(0, 0, 100, 40), 60, 20),
+            Rect::new(20, 10, 60, 20)
+        );
     }
 }

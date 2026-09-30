@@ -303,6 +303,89 @@ pub struct TrackedMr {
     pub diff_stats: Option<DiffStats>,
 }
 
+impl TrackedMr {
+    /// A not-yet-fetched MR shown while its first GitLab fetch is in flight.
+    pub fn placeholder(id: String, title: String, milestone: String) -> Self {
+        Self {
+            id,
+            title,
+            status: MrStatus::Loading,
+            state: GitlabMrState::Opened,
+            mergeability: MergeabilityStatus::Unknown,
+            sha: None,
+            description: String::new(),
+            author: "Loading".to_string(),
+            assignee: "Loading".to_string(),
+            reviewers: vec![],
+            milestone,
+            milestone_due_date: None,
+            milestone_description: None,
+            web_url: String::new(),
+            labels: vec![],
+            updated_at: None,
+            created_at: None,
+            source_branch: "unknown".to_string(),
+            target_branch: "unknown".to_string(),
+            merged_by: None,
+            merged_at: None,
+            pipelines: vec![],
+            recently_updated: false,
+            user_notes_count: 0,
+            flagged: false,
+            linked_ticket: None,
+            diff_stats: None,
+        }
+    }
+}
+
+#[cfg(feature = "stats")]
+impl TrackedMr {
+    /// Builds the stats snapshot for this MR. Shared by the startup backfill and the
+    /// live `MrLoaded` recorder so both always store the same fields the same way.
+    pub fn stats_snapshot(
+        &self,
+        trigger: gitlab_tracker_stats::snapshot::SnapshotTrigger,
+        project_id: &str,
+        profile: &DifficultyProfile,
+    ) -> gitlab_tracker_stats::snapshot::MrStatsSnapshot {
+        // Display sentinels ("None" on restore, "Loading" on placeholders, legacy
+        // "none") are not real values: store them as NULL.
+        let known = |s: &str| {
+            (!matches!(s.trim(), "" | "None" | "none" | "Loading")).then(|| s.to_string())
+        };
+        let diff = self.diff_stats.as_ref();
+        gitlab_tracker_stats::snapshot::MrStatsSnapshot {
+            mr_id: self.id.clone(),
+            project_id: project_id.to_string(),
+            title: self.title.clone(),
+            trigger,
+            author: self.author.clone(),
+            assignee: known(&self.assignee),
+            reviewers: self.reviewers.clone(),
+            merged_by: self.merged_by.clone(),
+            milestone: known(&self.milestone),
+            labels: self.labels.clone(),
+            target_branch: self.target_branch.clone(),
+            state: format!("{:?}", self.state).to_lowercase(),
+            created_at: self.created_at.clone(),
+            merged_at: self.merged_at.clone(),
+            updated_at: self.updated_at.clone(),
+            files_changed: diff.map(|d| d.files_changed).unwrap_or(0),
+            additions: diff.map(|d| d.additions).unwrap_or(0),
+            deletions: diff.map(|d| d.deletions).unwrap_or(0),
+            commits_count: diff.map(|d| d.commits_count).unwrap_or(0),
+            diff_difficulty: diff.map(|d| d.difficulty(profile)),
+            user_notes_count: self.user_notes_count,
+            pipeline_count: self.pipelines.len() as u32,
+            pipeline_failure_count: self
+                .pipelines
+                .iter()
+                .filter(|p| p.status == PipelineState::Failed)
+                .count() as u32,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MrLoadedData {
     pub id: String,

@@ -198,6 +198,13 @@ pub async fn fetch_issue_statuses(
         .map_err(|e| format!("Failed to deserialize Redmine issue statuses: {}", e))
 }
 
+/// Redmine issue ids are numeric. The id comes from a user-configurable regex
+/// capture and is interpolated into request URLs sent with the API key, so anything
+/// else (`/`, `?`, `..`) could target another endpoint: reject it.
+fn is_valid_ticket_id(ticket_id: &str) -> bool {
+    !ticket_id.is_empty() && ticket_id.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// Fetches a single Redmine issue by its numeric ID.
 ///
 /// Uses the `X-Redmine-API-Key` header for authentication (standard Redmine REST API).
@@ -208,6 +215,10 @@ pub async fn fetch_issue(
     token: &str,
     ticket_id: &str,
 ) -> Option<RedmineIssue> {
+    if !is_valid_ticket_id(ticket_id) {
+        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
+        return None;
+    }
     let url = format!(
         "{}/issues/{}.json",
         base_url.trim_end_matches('/'),
@@ -304,6 +315,10 @@ pub async fn fetch_time_entries(
     token: &str,
     ticket_id: &str,
 ) -> Vec<TimeEntry> {
+    if !is_valid_ticket_id(ticket_id) {
+        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
+        return vec![];
+    }
     // Redmine exposes time entries via a global endpoint filtered by issue_id.
     // The route `/issues/{id}/time_entries.json` does not exist and returns 404.
     let url = format!(
@@ -379,6 +394,10 @@ pub async fn update_issue_status(
     ticket_id: &str,
     status_id: u64,
 ) -> Result<(), String> {
+    if !is_valid_ticket_id(ticket_id) {
+        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
+        return Err(format!("Invalid ticket id \"{ticket_id}\""));
+    }
     #[derive(Debug, Serialize)]
     struct PutIssueBody {
         issue: PutIssue,
@@ -428,6 +447,10 @@ pub async fn log_time(
     entry: TimeEntryRequest,
     issue: Option<&RedmineIssue>,
 ) -> Result<(), String> {
+    if !is_valid_ticket_id(ticket_id) {
+        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
+        return Err(format!("Invalid ticket id \"{ticket_id}\""));
+    }
     let url = format!("{}/time_entries.json", base_url.trim_end_matches('/'));
 
     // Compute budget and ETC from the issue when available.
@@ -467,5 +490,18 @@ pub async fn log_time(
         Ok(())
     } else {
         Err(format!("Redmine API error: HTTP {}", resp.status()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ticket_id_must_be_numeric() {
+        assert!(is_valid_ticket_id("1234"));
+        for bad in ["", "12/../users", "1?key=x", "١٢", "12 ", "-1"] {
+            assert!(!is_valid_ticket_id(bad), "{bad:?} accepted");
+        }
     }
 }

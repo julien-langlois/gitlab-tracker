@@ -5,10 +5,8 @@ use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use crate::app::{ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm};
-use crate::gitlab::{
-    spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData, FetchContext,
-};
-use crate::models::{AppEvent, MrStatus, TrackedMr};
+use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData};
+use crate::models::{AppEvent, MrStatus};
 use crate::storage::{
     save_branches_async, save_project_settings_async, save_state_async, save_visible_columns_async,
 };
@@ -94,7 +92,7 @@ pub async fn handle_key_event(
                 // immediately dispatch a bulk-add fetch for that milestone's MRs.
                 if !app.milestone_suggestions.is_empty() {
                     if let Some(title) = app.confirm_milestone_suggestion() {
-                        let ctx = build_fetch_context(app);
+                        let ctx = app.fetch_context();
                         // Filter by milestone title — the GitLab MRs API uses the title,
                         // not the numeric milestone ID, for the `milestone` query parameter.
                         spawn_milestone_mrs_fetch(ctx, title, tx.clone());
@@ -605,7 +603,7 @@ pub async fn handle_key_event(
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     app.time_left = app.refresh_interval_secs;
                     app.time_entries.clear();
-                    let ctx = build_fetch_context(app);
+                    let ctx = app.fetch_context();
 
                     // Run the discovery poller on manual refresh as well, so [R]
                     // behaves like the automatic refresh cycle when auto-polling is enabled.
@@ -615,7 +613,7 @@ pub async fn handle_key_event(
 
                     for mr in &mut app.mrs {
                         mr.status = MrStatus::Loading;
-                        let mut cached = cached_from_mr(mr);
+                        let mut cached = CachedMrData::from(&*mr);
                         // Force a full re-sync on manual refresh: bypass all cache guards
                         // so the user always gets an up-to-date snapshot, even for
                         // already-merged MRs whose caches would otherwise be permanent.
@@ -822,11 +820,11 @@ async fn handle_enter(
             // Branches live in projects.toml — persist there, not in tracker_state.json.
             save_branches_async(&app.branches, 0).await;
 
-            let ctx = build_fetch_context(app);
+            let ctx = app.fetch_context();
             for mr in &mut app.mrs {
                 if mr.status != MrStatus::Loading {
                     mr.status = MrStatus::Loading;
-                    let cached = cached_from_mr(mr);
+                    let cached = CachedMrData::from(&*mr);
                     spawn_mr_fetch(
                         ctx.clone(),
                         mr.id.clone(),
@@ -1043,38 +1041,4 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
     }
 
     false
-}
-
-/// Builds a `FetchContext` from the current application state.
-fn build_fetch_context(app: &App) -> FetchContext {
-    FetchContext {
-        base_url: app.base_url.clone(),
-        token: app.token.clone(),
-        project_id: app.project_id.clone(),
-        branches: app.branches.clone(),
-    }
-}
-
-/// Builds a `CachedMrData` snapshot from a `TrackedMr` for use in fetch requests.
-///
-/// Includes `updated_at` and the current `pipelines` so the fetcher can skip
-/// pipeline re-fetching when the MR has not changed since the last cycle.
-fn cached_from_mr(mr: &TrackedMr) -> CachedMrData {
-    CachedMrData {
-        title: Some(mr.title.clone()),
-        description: Some(mr.description.clone()),
-        author: Some(mr.author.clone()),
-        web_url: Some(mr.web_url.clone()),
-        labels: Some(mr.labels.clone()),
-        updated_at: mr.updated_at.clone(),
-        pipelines: mr.pipelines.clone(),
-        diff_stats: mr.diff_stats.clone(),
-        user_notes_count: mr.user_notes_count,
-        // Persist the state so the fetcher can detect Open → Merged transitions
-        // and invalidate the notes cache accordingly.
-        cached_state: Some(mr.state.clone()),
-        // Normal policy — callers that need a forced re-sync override this after
-        // calling cached_from_mr (e.g. the manual [R] handler sets ForceAll).
-        cache_policy: CachePolicy::Normal,
-    }
 }

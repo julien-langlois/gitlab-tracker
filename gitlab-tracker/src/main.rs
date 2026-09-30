@@ -164,6 +164,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Initialise logging right after .env (which may set RUST_LOG) so that config
+    // loading, project resolution and tracker wiring below are logged too.
+    // The guard must stay alive for the duration of the program.
+    let _log_guard = init_logging();
+
     let mut config = load_or_create_config_async().await;
 
     if args.demo {
@@ -247,7 +252,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Deserialise the provider-specific fields from the opaque `extra`
                 // table — only the Redmine plugin knows which keys it expects.
                 let mut redmine_cfg: gitlab_tracker_redmine::config::RedmineConfig =
-                    cfg.extra.clone().try_into().unwrap_or_default();
+                    cfg.extra.clone().try_into().unwrap_or_else(|e| {
+                        tracing::warn!(
+                            error = %e,
+                            "Invalid [project.tracker] settings — using defaults \
+                             (ticket_patterns and status_transitions are ignored)"
+                        );
+                        Default::default()
+                    });
                 redmine_cfg.url = cfg.url.clone();
 
                 // Apply REDMINE_URL env override if set.
@@ -265,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         |tok| {
                             let provider = Arc::new(gitlab_tracker_redmine::RedmineProvider::new(
                                 redmine_cfg,
-                                tok.to_string(),
+                                tok,
                             ));
                             (
                                 Arc::clone(&provider)
@@ -278,10 +290,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     };
-
-    // Initialise logging before ratatui takes over the terminal.
-    // The guard must stay alive for the duration of the program.
-    let _log_guard = init_logging();
 
     // Detect the terminal colour scheme BEFORE ratatui::init() takes ownership of
     // the terminal (raw mode). terminal-colorsaurus sends an OSC 11 query and reads
@@ -310,10 +318,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         saved_discovery_started_at,
         dismissed_mr_ids,
     ) = load_state_async(&base_url, &project_id).await;
-    // Clone complexity_profile before the move into App::new so the backfill
-    // closure below can still reference it after `config` is consumed.
-    #[cfg(feature = "stats")]
-    let complexity_profile = config.complexity_profile.clone();
 
     let mut app = App::new(AppInit {
         token,
@@ -390,127 +394,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(db) => {
                     let db = Arc::new(db);
 
-                    // ── Backfill from tracker_state.json ─────────────────────
-                    // On first run (or after a gap), seed the DB with the MRs
-                    // already persisted on disk so stats are immediately useful
-                    // without waiting for live merge/close events.
-                    //
-                    // Strategy:
-                    //   • Merged/closed MRs  → OnMerge / OnClose snapshot
-                    //     (recorded_at = merged_at / updated_at as best proxy)
-                    //   • Open MRs           → OnRefresh snapshot (today)
-                    //
-                    // All upserts are idempotent: the UNIQUE constraint silently
-                    // ignores duplicates if the DB already has data for today.
-                    {
-                        use crate::models::GitlabMrState;
-                        use gitlab_tracker_stats::db::StatsDb as _;
-                        use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
-
-                        let today = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-
-                        let mut backfill = Vec::with_capacity(saved_mrs.len());
-                        for mr in &saved_mrs {
-                            let (trigger, recorded_at) = match &mr.state {
-                                GitlabMrState::Merged => (
-                                    SnapshotTrigger::OnMerge,
-                                    mr.merged_at.clone().unwrap_or_else(|| today.clone()),
-                                ),
-                                GitlabMrState::Closed => (
-                                    SnapshotTrigger::OnClose,
-                                    mr.updated_at.clone().unwrap_or_else(|| today.clone()),
-                                ),
-                                GitlabMrState::Opened => {
-                                    (SnapshotTrigger::OnRefresh, today.clone())
-                                }
-                            };
-
-                            let diff = mr.diff_stats.as_ref();
-                            let pipeline_count = mr.pipelines.len() as u32;
-                            let pipeline_failure_count =
-                                mr.pipelines
-                                    .iter()
-                                    .filter(|p| p.status == crate::models::PipelineState::Failed)
-                                    .count() as u32;
-
-                            let snap = MrStatsSnapshot {
-                                mr_id: mr.id.clone(),
-                                project_id: project_id.clone(),
-                                title: mr.title.clone(),
-                                trigger,
-                                author: mr.author.clone().unwrap_or_default(),
-                                assignee: mr.assignee.clone().filter(|s| !s.is_empty()),
-                                reviewers: mr.reviewers.clone(),
-                                merged_by: mr.merged_by.clone(),
-                                milestone: mr.milestone.clone().filter(|s| !s.is_empty()),
-                                labels: mr.labels.clone().unwrap_or_default(),
-                                target_branch: mr.target_branch.clone().unwrap_or_default(),
-                                state: format!("{:?}", mr.state).to_lowercase(),
-                                created_at: mr.created_at.clone(),
-                                merged_at: mr.merged_at.clone(),
-                                updated_at: mr.updated_at.clone(),
-                                files_changed: diff.map(|d| d.files_changed).unwrap_or(0),
-                                additions: diff.map(|d| d.additions).unwrap_or(0),
-                                deletions: diff.map(|d| d.deletions).unwrap_or(0),
-                                commits_count: diff.map(|d| d.commits_count).unwrap_or(0),
-                                diff_difficulty: diff.map(|d| d.difficulty(&complexity_profile)),
-                                user_notes_count: mr.user_notes_count,
-                                pipeline_count,
-                                pipeline_failure_count,
-                            };
-
-                            // `recorded_at` is explicit so merged MRs appear at their real
-                            // merge date rather than today; open MRs land at today —
-                            // correct behaviour for OnRefresh.
-                            backfill.push((snap, recorded_at));
-                        }
-
-                        // Single transaction: one fsync for the whole backfill instead of
-                        // one per snapshot / label / reviewer. It also patches `created_at`
-                        // on rows inserted before that field was tracked.
-                        //
-                        // Purge, deduplication and backfill run in the background so
-                        // the UI shows up immediately; the report is refreshed once
-                        // they are done (StatsSnapshotRecorded → next Tick).
-                        let db = Arc::clone(&db);
-                        let project_id = project_id.clone();
-                        let tx = tx.clone();
-                        tokio::spawn(async move {
-                            // Purge snapshots older than the configured retention threshold.
-                            let retention_days = stats_retention_days;
-                            match db.purge_old_snapshots(&project_id, retention_days).await {
-                                Ok(n) if n > 0 => {
-                                    tracing::info!(
-                                        rows = n,
-                                        retention_days,
-                                        "Purged old stats snapshots"
-                                    )
-                                }
-                                Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
-                                _ => {}
-                            }
-
-                            // Remove cross-day duplicates produced by repeated backfills:
-                            // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
-                            match db.deduplicate_snapshots(&project_id).await {
-                                Ok(n) if n > 0 => {
-                                    tracing::info!(rows = n, "Deduplicated stats snapshots")
-                                }
-                                Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
-                                _ => {}
-                            }
-
-                            match db.backfill_snapshots(&backfill).await {
-                                Ok(()) => tracing::info!(
-                                    count = backfill.len(),
-                                    "Stats backfill from tracker_state.json complete"
-                                ),
-                                Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
-                            }
-                            let _ = tx.send(AppEvent::StatsSnapshotRecorded);
-                        });
-                    }
-
                     app.stats_view.sprint_weeks = stats_sprint_weeks;
                     app.stats_db = Some(db);
                 }
@@ -523,6 +406,95 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
     app.restore_from_saved(saved_mrs, api_semaphore.clone(), tx.clone());
+
+    // Runs after `restore_from_saved` so the backfill reads the same `TrackedMr`s as
+    // the live recorder (`TrackedMr::stats_snapshot`). No `MrLoaded` has been applied
+    // yet — the event loop has not started — so these are exactly the persisted MRs.
+    #[cfg(feature = "stats")]
+    if let Some(db) = app.stats_db.clone() {
+        // ── Stats backfill from the restored MRs ──────────────────────────────────
+        // On first run (or after a gap), seed the DB with the MRs
+        // already persisted on disk so stats are immediately useful
+        // without waiting for live merge/close events.
+        //
+        // Strategy:
+        //   • Merged/closed MRs  → OnMerge / OnClose snapshot
+        //     (recorded_at = merged_at / updated_at as best proxy)
+        //   • Open MRs           → OnRefresh snapshot (today)
+        //
+        // All upserts are idempotent: the UNIQUE constraint silently
+        // ignores duplicates if the DB already has data for today.
+        {
+            use crate::models::GitlabMrState;
+            use gitlab_tracker_stats::db::StatsDb as _;
+            use gitlab_tracker_stats::snapshot::SnapshotTrigger;
+
+            let today = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+            let mut backfill = Vec::with_capacity(app.mrs.len());
+            for mr in &app.mrs {
+                let (trigger, recorded_at) = match &mr.state {
+                    GitlabMrState::Merged => (
+                        SnapshotTrigger::OnMerge,
+                        mr.merged_at.clone().unwrap_or_else(|| today.clone()),
+                    ),
+                    GitlabMrState::Closed => (
+                        SnapshotTrigger::OnClose,
+                        mr.updated_at.clone().unwrap_or_else(|| today.clone()),
+                    ),
+                    GitlabMrState::Opened => (SnapshotTrigger::OnRefresh, today.clone()),
+                };
+
+                let snap = mr.stats_snapshot(trigger, &project_id, &app.config.complexity_profile);
+
+                // `recorded_at` is explicit so merged MRs appear at their real
+                // merge date rather than today; open MRs land at today —
+                // correct behaviour for OnRefresh.
+                backfill.push((snap, recorded_at));
+            }
+
+            // Single transaction: one fsync for the whole backfill instead of
+            // one per snapshot / label / reviewer. It also patches `created_at`
+            // on rows inserted before that field was tracked.
+            //
+            // Purge, deduplication and backfill run in the background so
+            // the UI shows up immediately; the report is refreshed once
+            // they are done (StatsSnapshotRecorded → next Tick).
+            let db = Arc::clone(&db);
+            let project_id = project_id.clone();
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                // Purge snapshots older than the configured retention threshold.
+                let retention_days = stats_retention_days;
+                match db.purge_old_snapshots(&project_id, retention_days).await {
+                    Ok(n) if n > 0 => {
+                        tracing::info!(rows = n, retention_days, "Purged old stats snapshots")
+                    }
+                    Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
+                    _ => {}
+                }
+
+                // Remove cross-day duplicates produced by repeated backfills:
+                // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
+                match db.deduplicate_snapshots(&project_id).await {
+                    Ok(n) if n > 0 => {
+                        tracing::info!(rows = n, "Deduplicated stats snapshots")
+                    }
+                    Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
+                    _ => {}
+                }
+
+                match db.backfill_snapshots(&backfill).await {
+                    Ok(()) => tracing::info!(
+                        count = backfill.len(),
+                        "Stats backfill from tracker_state.json complete"
+                    ),
+                    Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
+                }
+                let _ = tx.send(AppEvent::StatsSnapshotRecorded);
+            });
+        }
+    }
 
     // Warm the shared stats report on startup so cockpit release data is reconciled
     // before the user opens the fullscreen stats overlay.

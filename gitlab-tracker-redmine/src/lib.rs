@@ -13,6 +13,7 @@ use gitlab_tracker_core::{
     Activity, LabelColorMaps, LinkedTicket, TicketTransitionProvider, TicketTransitionTarget,
     TimeEntry, TimeEntryRequest, TrackerProvider,
 };
+use zeroize::Zeroizing;
 
 pub use config::RedmineConfig;
 pub use keyring::get_or_prompt_token;
@@ -23,10 +24,8 @@ pub use keyring::get_or_prompt_token;
 /// Requires a valid API token and a populated [`RedmineConfig`].
 pub struct RedmineProvider {
     config: RedmineConfig,
-    /// Redmine API token — stored as a plain `String` here because `Arc<dyn TrackerProvider>`
-    /// requires `Sync`, and `Zeroizing<String>` is `Sync`. We clone it from the
-    /// `Zeroizing` wrapper immediately after the keyring lookup in the caller.
-    token: String,
+    /// Redmine API token, wiped from memory when the provider is dropped.
+    token: Zeroizing<String>,
     /// `config.ticket_patterns` compiled once at construction.
     ticket_patterns: Vec<regex::Regex>,
     /// Pre-built HTTP client — reused across all requests (connection pooling).
@@ -35,7 +34,7 @@ pub struct RedmineProvider {
 
 impl RedmineProvider {
     /// Creates a new [`RedmineProvider`] from a loaded config and a token.
-    pub fn new(config: RedmineConfig, token: String) -> Self {
+    pub fn new(config: RedmineConfig, token: Zeroizing<String>) -> Self {
         Self {
             ticket_patterns: detector::compile_patterns(&config.ticket_patterns),
             config,

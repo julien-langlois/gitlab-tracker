@@ -78,9 +78,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
     let max_height = (area.height as f32 * 0.90) as u16;
     let popup_height = (total_content_lines + 2).min(max_height); // +2 for borders
 
-    let popup_x = area.x + area.width.saturating_sub(popup_width) / 2;
-    let popup_y = area.y + area.height.saturating_sub(popup_height) / 2;
-    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+    let popup_area = super::centered_popup(area, popup_width, popup_height);
 
     f.render_widget(Clear, popup_area);
 

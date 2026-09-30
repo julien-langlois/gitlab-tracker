@@ -99,7 +99,7 @@ async fn print_tracker_statuses(project: &ProjectEntry) -> Result<(), Box<dyn st
             return Err("Redmine token is required to fetch issue statuses".into());
         };
 
-        let provider = gitlab_tracker_redmine::RedmineProvider::new(redmine_cfg, token.to_string());
+        let provider = gitlab_tracker_redmine::RedmineProvider::new(redmine_cfg, token);
         let statuses = provider.fetch_transition_targets().await?;
 
         if statuses.is_empty() {

@@ -1257,6 +1257,27 @@ pub trait TrackedMrExt {
     fn find_mut(&mut self, id: &str) -> Option<&mut TrackedMr>;
 }
 
+/// Branches an MR newly appeared on, for `mr_on_new_branch` notifications.
+///
+/// An MR with no persisted branch set (`previously_known == None`) seen during the
+/// startup sync is a first sighting, not a change: its branches are recorded
+/// silently instead of sending one notification per branch (first-launch avalanche).
+/// Once known — even with an empty set, e.g. an open MR — every new branch notifies,
+/// including changes that happened while the app was closed.
+fn branches_to_notify<'a>(
+    previously_known: Option<&HashSet<String>>,
+    branches: &'a HashSet<String>,
+    notify_allowed: bool,
+) -> Vec<&'a String> {
+    if previously_known.is_none() && !notify_allowed {
+        return Vec::new();
+    }
+    branches
+        .iter()
+        .filter(|b| !previously_known.is_some_and(|known| known.contains(*b)))
+        .collect()
+}
+
 impl TrackedMrExt for Vec<TrackedMr> {
     fn find_mut(&mut self, id: &str) -> Option<&mut TrackedMr> {
         self.iter_mut().find(|m| m.id == id)
@@ -1692,35 +1713,11 @@ impl App {
                 }
                 // Manual re-add is an explicit opt-in: allow discovery to track it again.
                 self.dismissed_mr_ids.remove(&id);
-                self.mrs.push(TrackedMr {
-                    id: id.clone(),
-                    title: "Loading...".to_string(),
-                    status: MrStatus::Loading,
-                    state: GitlabMrState::Opened,
-                    mergeability: MergeabilityStatus::Unknown,
-                    sha: None,
-                    description: String::new(),
-                    author: "Loading".to_string(),
-                    assignee: "Loading".to_string(),
-                    reviewers: vec![],
-                    milestone: "Loading".to_string(),
-                    milestone_due_date: None,
-                    milestone_description: None,
-                    web_url: String::new(),
-                    labels: vec![],
-                    updated_at: None,
-                    created_at: None,
-                    source_branch: "unknown".to_string(),
-                    target_branch: "unknown".to_string(),
-                    merged_by: None,
-                    merged_at: None,
-                    pipelines: vec![],
-                    recently_updated: false,
-                    user_notes_count: 0,
-                    flagged: false,
-                    linked_ticket: None,
-                    diff_stats: None,
-                });
+                self.mrs.push(TrackedMr::placeholder(
+                    id.clone(),
+                    "Loading...".to_string(),
+                    "Loading".to_string(),
+                ));
                 // The selection indexes the visible (filtered) list, not `mrs`.
                 let pos = self.visible_mrs().position(|m| m.id == id);
                 if pos.is_some() {
@@ -1773,15 +1770,12 @@ impl App {
 
                 // Compare new branches against the last persisted state to avoid
                 // re-notifying on restart or in-memory state that hasn't changed on disk.
-                let previously_known = last_known_branches
-                    .get(&data.id)
-                    .cloned()
-                    .unwrap_or_default();
-
-                for b in &data.branches {
-                    if !previously_known.contains(b) {
-                        notify::mr_on_new_branch(&data.id, &data.title, b, &data.web_url);
-                    }
+                for b in branches_to_notify(
+                    last_known_branches.get(&data.id),
+                    &data.branches,
+                    notify_allowed,
+                ) {
+                    notify::mr_on_new_branch(&data.id, &data.title, b, &data.web_url);
                 }
 
                 // Update the persisted reference so subsequent refreshes won't re-notify.
@@ -1992,7 +1986,7 @@ impl App {
                     // Re-borrow after all mutations are applied so the snapshot
                     // captures the final state written to `mr` just above.
                     if let Some(mr) = self.mrs.find_mut(&data_id_for_stats) {
-                        use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
+                        use gitlab_tracker_stats::snapshot::SnapshotTrigger;
 
                         let trigger = match &mr.state {
                             GitlabMrState::Merged => Some(SnapshotTrigger::OnMerge),
@@ -2015,48 +2009,11 @@ impl App {
                         };
 
                         if let Some(trigger) = trigger {
-                            let diff_stats = mr.diff_stats.as_ref();
-                            let pipeline_count = mr.pipelines.len() as u32;
-                            let pipeline_failure_count =
-                                mr.pipelines
-                                    .iter()
-                                    .filter(|p| p.status == crate::models::PipelineState::Failed)
-                                    .count() as u32;
-
-                            let snap = MrStatsSnapshot {
-                                mr_id: mr.id.clone(),
-                                project_id: self.project_id.clone(),
-                                title: mr.title.clone(),
+                            let snap = mr.stats_snapshot(
                                 trigger,
-                                author: mr.author.clone(),
-                                assignee: if mr.assignee.is_empty() {
-                                    None
-                                } else {
-                                    Some(mr.assignee.clone())
-                                },
-                                reviewers: mr.reviewers.clone(),
-                                merged_by: mr.merged_by.clone(),
-                                milestone: if mr.milestone.is_empty() {
-                                    None
-                                } else {
-                                    Some(mr.milestone.clone())
-                                },
-                                labels: mr.labels.clone(),
-                                target_branch: mr.target_branch.clone(),
-                                state: format!("{:?}", mr.state).to_lowercase(),
-                                created_at: mr.created_at.clone(),
-                                merged_at: mr.merged_at.clone(),
-                                updated_at: mr.updated_at.clone(),
-                                files_changed: diff_stats.map(|d| d.files_changed).unwrap_or(0),
-                                additions: diff_stats.map(|d| d.additions).unwrap_or(0),
-                                deletions: diff_stats.map(|d| d.deletions).unwrap_or(0),
-                                commits_count: diff_stats.map(|d| d.commits_count).unwrap_or(0),
-                                diff_difficulty: diff_stats
-                                    .map(|d| d.difficulty(&self.config.complexity_profile)),
-                                user_notes_count: mr.user_notes_count,
-                                pipeline_count,
-                                pipeline_failure_count,
-                            };
+                                &self.project_id,
+                                &self.config.complexity_profile,
+                            );
 
                             let project_id = self.project_id.clone();
                             let tx2 = if initial_fetches_completed {
@@ -2150,36 +2107,11 @@ impl App {
                     if self.mrs.iter().any(|m| m.id == mr_id) {
                         continue;
                     }
-                    self.mrs.push(TrackedMr {
-                        id: mr_id.clone(),
-                        title: format!("Loading… ({})", milestone_title),
-                        status: MrStatus::Loading,
-                        state: GitlabMrState::Opened,
-                        mergeability: MergeabilityStatus::Unknown,
-                        sha: None,
-                        description: String::new(),
-                        author: "Loading".to_string(),
-                        assignee: "Loading".to_string(),
-                        reviewers: vec![],
-                        milestone: milestone_title.clone(),
-                        milestone_due_date: None,
-                        milestone_description: None,
-                        web_url: String::new(),
-                        labels: vec![],
-                        updated_at: None,
-                        created_at: None,
-                        source_branch: "unknown".to_string(),
-                        target_branch: "unknown".to_string(),
-                        merged_by: None,
-                        merged_at: None,
-                        pipelines: vec![],
-                        recently_updated: false,
-                        user_notes_count: 0,
-                        // New MRs start unflagged.
-                        flagged: false,
-                        diff_stats: None, // Ticket resolved live after each MR fetch — never pre-populated.
-                        linked_ticket: None,
-                    });
+                    self.mrs.push(TrackedMr::placeholder(
+                        mr_id.clone(),
+                        format!("Loading… ({})", milestone_title),
+                        milestone_title.clone(),
+                    ));
                     spawn_mr_fetch(
                         ctx.clone(),
                         mr_id,
@@ -2215,35 +2147,11 @@ impl App {
                     if self.mrs.iter().any(|m| m.id == mr_id) {
                         continue;
                     }
-                    self.mrs.push(TrackedMr {
-                        id: mr_id.clone(),
-                        title: format!("Loading… ({})", mr_id),
-                        status: MrStatus::Loading,
-                        state: GitlabMrState::Opened,
-                        mergeability: MergeabilityStatus::Unknown,
-                        sha: None,
-                        description: String::new(),
-                        author: "Loading".to_string(),
-                        assignee: "Loading".to_string(),
-                        reviewers: vec![],
-                        milestone: String::new(),
-                        milestone_due_date: None,
-                        milestone_description: None,
-                        web_url: String::new(),
-                        labels: vec![],
-                        updated_at: None,
-                        created_at: None,
-                        source_branch: "unknown".to_string(),
-                        target_branch: "unknown".to_string(),
-                        merged_by: None,
-                        merged_at: None,
-                        pipelines: vec![],
-                        recently_updated: false,
-                        user_notes_count: 0,
-                        flagged: false,
-                        diff_stats: None,
-                        linked_ticket: None,
-                    });
+                    self.mrs.push(TrackedMr::placeholder(
+                        mr_id.clone(),
+                        format!("Loading… ({})", mr_id),
+                        String::new(),
+                    ));
                     spawn_mr_fetch(
                         ctx.clone(),
                         mr_id,
@@ -2314,19 +2222,7 @@ impl App {
                     }
 
                     mr.status = MrStatus::Loading;
-                    let cached = CachedMrData {
-                        title: Some(mr.title.clone()),
-                        description: Some(mr.description.clone()),
-                        author: Some(mr.author.clone()),
-                        web_url: Some(mr.web_url.clone()),
-                        labels: Some(mr.labels.clone()),
-                        updated_at: mr.updated_at.clone(),
-                        pipelines: mr.pipelines.clone(),
-                        diff_stats: mr.diff_stats.clone(),
-                        user_notes_count: mr.user_notes_count,
-                        cached_state: Some(mr.state.clone()),
-                        cache_policy: CachePolicy::Normal,
-                    };
+                    let cached = CachedMrData::from(&*mr);
                     spawn_mr_fetch(
                         ctx.clone(),
                         mr.id.clone(),
@@ -2525,6 +2421,39 @@ mod tests {
         assert!(app.dismissed_mr_ids.contains(&victim));
         // The selection is clamped to the (now single-row) visible list.
         assert_eq!(app.table_state.selected(), Some(0));
+    }
+
+    #[cfg(feature = "stats")]
+    #[tokio::test]
+    async fn stats_snapshot_stores_sentinels_as_null() {
+        use gitlab_tracker_stats::snapshot::SnapshotTrigger;
+        let mut app = app_with_mrs(&[("t", "None")]).await;
+        let profile = app.config.complexity_profile.clone();
+        let mr = &mut app.mrs[0];
+        // Placeholder: assignee "Loading", milestone "None".
+        let snap = mr.stats_snapshot(SnapshotTrigger::OnRefresh, "42", &profile);
+        assert_eq!((snap.assignee, snap.milestone), (None, None));
+
+        mr.assignee = "Jane (@jane)".into();
+        mr.milestone = "v1.0".into();
+        let snap = mr.stats_snapshot(SnapshotTrigger::OnRefresh, "42", &profile);
+        assert_eq!(snap.assignee.as_deref(), Some("Jane (@jane)"));
+        assert_eq!(snap.milestone.as_deref(), Some("v1.0"));
+        assert_eq!(snap.project_id, "42");
+    }
+
+    #[test]
+    fn new_branch_notifications_skip_first_sighting_at_startup() {
+        let set = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<HashSet<String>>();
+        let main = set(&["main"]);
+        // First launch, startup sync: silent.
+        assert!(branches_to_notify(None, &main, false).is_empty());
+        // Known open MR (empty set) that merged while the app was closed: notifies.
+        assert_eq!(branches_to_notify(Some(&set(&[])), &main, false), ["main"]);
+        // Already known on main: nothing new.
+        assert!(branches_to_notify(Some(&main), &main, true).is_empty());
+        // MR added after startup: notifies as before.
+        assert_eq!(branches_to_notify(None, &main, true), ["main"]);
     }
 
     #[test]

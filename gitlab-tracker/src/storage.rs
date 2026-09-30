@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 /// All project-scoped settings are optional — omitting them falls back to the
 /// compiled-in defaults. `config.json` is no longer needed once all fields are
 /// present here.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectEntry {
     /// Human-readable alias shown in prompts (e.g. "My Company — Backend").
     pub name: Option<String>,
@@ -377,18 +377,13 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         default_branches,
         table_label_prefixes,
         complexity_profile,
-        tracked_branches: None, // migrated later from tracker_state.json
         refresh_interval_secs,
         activity_stale_days,
         activity_recent_days,
-        show_cockpit: None,
-        cockpit_thresholds: None,
         visible_columns,
         label_colors,
         tracker,
-        gitlab_username: None,
-        stats: None,
-        discover_new_mrs: None,
+        ..Default::default()
     };
 
     // Write projects.toml with the migrated values.
@@ -603,25 +598,10 @@ pub async fn resolve_active_project() -> ProjectEntry {
 
     if let (Some(url), Some(id)) = (env_url, env_id) {
         return ProjectEntry {
-            name: None,
             gitlab_url: url.trim_end_matches('/').to_string(),
             project_id: id,
             active: true,
-            default_branches: None,
-            table_label_prefixes: None,
-            complexity_profile: None,
-            tracked_branches: None,
-            refresh_interval_secs: None,
-            activity_stale_days: None,
-            activity_recent_days: None,
-            show_cockpit: None,
-            cockpit_thresholds: None,
-            visible_columns: None,
-            label_colors: None,
-            tracker: None,
-            gitlab_username: None,
-            stats: None,
-            discover_new_mrs: None,
+            ..Default::default()
         };
     }
 
@@ -718,21 +698,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
         gitlab_url: gitlab_url.trim_end_matches('/').to_string(),
         project_id: project_id.clone(),
         active: true,
-        default_branches: None,
-        table_label_prefixes: None,
-        complexity_profile: None,
-        tracked_branches: None,
-        refresh_interval_secs: None,
-        activity_stale_days: None,
-        activity_recent_days: None,
-        show_cockpit: None,
-        cockpit_thresholds: None,
-        visible_columns: None,
-        label_colors: None,
-        tracker: None,
-        gitlab_username: None,
-        stats: None,
-        discover_new_mrs: None,
+        ..Default::default()
     };
     projects_cfg.projects.push(entry.clone());
     save_projects_toml(&projects_cfg).await;
