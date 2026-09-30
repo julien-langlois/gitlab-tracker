@@ -172,7 +172,9 @@ fn rank_vector(values: &[f64]) -> Vec<f64> {
     while i < n {
         // Find the extent of the tie group.
         let mut j = i;
-        while j < n && (indexed[j].0 - indexed[i].0).abs() < f64::EPSILON {
+        // Exact equality: ties are identical source values (counts, hours), and an
+        // absolute epsilon would be meaningless across the metrics' scales.
+        while j < n && indexed[j].0 == indexed[i].0 {
             j += 1;
         }
         // Average rank for the tie group (1-based ranks).

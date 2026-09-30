@@ -6,7 +6,7 @@ use gitlab_tracker_core::{FilterDef, MrSnapshot};
 inventory::submit!(FilterDef {
     id: "has_linked_ticket",
     label: "Has linked ticket 🎫",
-    active_label: "Has linked ticket 🎫",
+    active_label: None,
     priority: 100,
     needs_text_input: false,
     requires: None,

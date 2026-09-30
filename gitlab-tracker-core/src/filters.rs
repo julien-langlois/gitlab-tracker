@@ -20,10 +20,11 @@ pub struct FilterDef {
     /// Label displayed in the filter picker popup (e.g. `"All (no filter)"`).
     pub label: &'static str,
 
-    /// Short label shown in the table header when this filter is active.
-    /// For parametric filters (Milestone, Assignee) this is a prefix — the runtime
-    /// appends the query value: `"Milestone: sprint-42"`.
-    pub active_label: &'static str,
+    /// Short label shown in the table header when this filter is active, when it
+    /// differs from `label` (`None`: the header shows `label`). For parametric
+    /// filters (Milestone, Assignee) this is a prefix — the runtime appends the
+    /// query value: `"Milestone: sprint-42"`. Read it through [`FilterDef::active_label`].
+    pub active_label: Option<&'static str>,
 
     /// Display order — lower values appear first in the picker list.
     pub priority: u16,
@@ -48,6 +49,13 @@ pub struct FilterDef {
     /// for non-parametric ones — the predicate should ignore it in that case).
     #[allow(clippy::type_complexity)]
     pub apply: fn(mr: MrSnapshot<'_>, query: &str) -> bool,
+}
+
+impl FilterDef {
+    /// Label shown in the table header while this filter is active.
+    pub fn active_label(&self) -> &'static str {
+        self.active_label.unwrap_or(self.label)
+    }
 }
 
 /// A lightweight, borrow-based snapshot of the fields a filter predicate may inspect.

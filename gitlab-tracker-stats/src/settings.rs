@@ -25,18 +25,19 @@ fn stats_table_mut(project: &mut toml::Table) -> &mut toml::Table {
 }
 
 fn read_u32(project: &toml::Table, key: &str, default: u32) -> ProjectSettingValue {
-    ProjectSettingValue::U32(
-        stats_table(project)
-            .and_then(|stats| stats.get(key))
-            .and_then(toml::Value::as_integer)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(default),
-    )
+    let value = stats_table(project)
+        .and_then(|stats| stats.get(key))
+        .and_then(toml::Value::as_integer)
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(default);
+    ProjectSettingValue::U64(value.into())
 }
 
 fn write_u32(project: &mut toml::Table, key: &str, value: ProjectSettingValue) {
-    if let ProjectSettingValue::U32(number) = value {
-        stats_table_mut(project).insert(key.to_string(), toml::Value::Integer(number as i64));
+    // Both settings are `u32` fields of `[project.stats]`: clamp what the editor produced.
+    if let ProjectSettingValue::U64(number) = value {
+        let number = number.min(u32::MAX.into()) as i64;
+        stats_table_mut(project).insert(key.to_string(), toml::Value::Integer(number));
     }
 }
 
@@ -47,8 +48,8 @@ fn retention_days_setting() -> ProjectSettingDef {
         label: "Retention days",
         help: "Local stats snapshots older than this many days are purged on startup.",
         priority: 110,
-        kind: ProjectSettingKind::U32 { min: 1, step: 30 },
-        default_value: ProjectSettingValue::U32(DEFAULT_RETENTION_DAYS),
+        kind: ProjectSettingKind::U64 { min: 1, step: 30 },
+        default_value: ProjectSettingValue::U64(DEFAULT_RETENTION_DAYS as u64),
         read: |project| read_u32(project, "retention_days", DEFAULT_RETENTION_DAYS),
         write: |project, value| write_u32(project, "retention_days", value),
     }
@@ -61,8 +62,8 @@ fn sprint_weeks_setting() -> ProjectSettingDef {
         label: "Sprint weeks",
         help: "Sprint duration used by throughput forecasts.",
         priority: 120,
-        kind: ProjectSettingKind::U32 { min: 1, step: 1 },
-        default_value: ProjectSettingValue::U32(DEFAULT_SPRINT_WEEKS),
+        kind: ProjectSettingKind::U64 { min: 1, step: 1 },
+        default_value: ProjectSettingValue::U64(DEFAULT_SPRINT_WEEKS as u64),
         read: |project| read_u32(project, "sprint_weeks", DEFAULT_SPRINT_WEEKS),
         write: |project, value| write_u32(project, "sprint_weeks", value),
     }
@@ -78,10 +79,10 @@ mod tests {
     #[test]
     fn non_table_stats_value_is_replaced_not_panicking() {
         let mut project: toml::Table = toml::from_str("stats = 1").unwrap();
-        write_u32(&mut project, "retention_days", ProjectSettingValue::U32(30));
+        write_u32(&mut project, "retention_days", ProjectSettingValue::U64(30));
         assert_eq!(
             read_u32(&project, "retention_days", 365),
-            ProjectSettingValue::U32(30)
+            ProjectSettingValue::U64(30)
         );
     }
 }

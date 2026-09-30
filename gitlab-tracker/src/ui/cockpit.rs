@@ -1,6 +1,5 @@
 use crate::app::App;
 use chrono::Utc;
-use cockpit_summary::{release_summaries, DashboardSummary, ReleaseSummary};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -8,9 +7,9 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
+use summary::{release_summaries, DashboardSummary, ReleaseSummary};
 
-#[path = "cockpit_summary.rs"]
-mod cockpit_summary;
+mod summary;
 
 fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
     let today = Utc::now().date_naive();

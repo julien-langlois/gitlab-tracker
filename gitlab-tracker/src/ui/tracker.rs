@@ -67,30 +67,27 @@ impl TrackerLabelColors {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+/// Formats a number of minutes as "Xh Ym" ("45m", "2h", "1h 30m").
+fn format_minutes(total_mins: u32) -> String {
+    match (total_mins / 60, total_mins % 60) {
+        (0, m) => format!("{m}m"),
+        (h, 0) => format!("{h}h"),
+        (h, m) => format!("{h}h {m}m"),
+    }
+}
+
 /// Formats a duration in seconds as "Xh Ym". Returns "—" for zero.
-fn format_duration(secs: u32) -> String {
+/// Also used by the table's Tracker column.
+pub(crate) fn format_duration(secs: u32) -> String {
     if secs == 0 {
         return "—".to_string();
     }
-    let h = secs / 3600;
-    let m = (secs % 3600) / 60;
-    match (h, m) {
-        (0, m) => format!("{}m", m),
-        (h, 0) => format!("{}h", h),
-        (h, m) => format!("{}h {}m", h, m),
-    }
+    format_minutes(secs / 60)
 }
 
 /// Formats hours (f32) as "Xh Ym" for display in time-log entries.
 fn fmt_hours(hours: f32) -> String {
-    let total_mins = (hours * 60.0).round() as u32;
-    let h = total_mins / 60;
-    let m = total_mins % 60;
-    match (h, m) {
-        (0, m) => format!("{}m", m),
-        (h, 0) => format!("{}h", h),
-        (h, m) => format!("{}h {}m", h, m),
-    }
+    format_minutes((hours * 60.0).round() as u32)
 }
 
 // ── Renderers ─────────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+use crate::models::Effort;
 use crate::utils::matches_gitlab_username;
 use gitlab_tracker_core::{
     FilterDef, GitlabMrState, MergeabilityStatus, MrSnapshot, PipelineState, Requirement,
@@ -8,7 +9,7 @@ use gitlab_tracker_core::{
 inventory::submit!(FilterDef {
     id: "all",
     label: "All (no filter)",
-    active_label: "All",
+    active_label: Some("All"),
     priority: 0,
     needs_text_input: false,
     requires: None,
@@ -18,7 +19,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "flagged",
     label: "Flagged ★",
-    active_label: "Flagged ★",
+    active_label: None,
     priority: 1,
     needs_text_input: false,
     requires: None,
@@ -28,7 +29,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "state_opened",
     label: "State: Opened",
-    active_label: "State: Opened",
+    active_label: None,
     priority: 2,
     needs_text_input: false,
     requires: None,
@@ -38,7 +39,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "state_merged",
     label: "State: Merged",
-    active_label: "State: Merged",
+    active_label: None,
     priority: 3,
     needs_text_input: false,
     requires: None,
@@ -48,7 +49,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "state_closed",
     label: "State: Closed",
-    active_label: "State: Closed",
+    active_label: None,
     priority: 4,
     needs_text_input: false,
     requires: None,
@@ -58,7 +59,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_mergeable",
     label: "Mergeability: Mergeable",
-    active_label: "Mergeability: Mergeable",
+    active_label: None,
     priority: 5,
     needs_text_input: false,
     requires: None,
@@ -68,7 +69,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_conflict",
     label: "Mergeability: Conflict",
-    active_label: "Mergeability: Conflict",
+    active_label: None,
     priority: 6,
     needs_text_input: false,
     requires: None,
@@ -78,7 +79,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_rebase",
     label: "Mergeability: Needs Rebase",
-    active_label: "Mergeability: Needs Rebase",
+    active_label: None,
     priority: 7,
     needs_text_input: false,
     requires: None,
@@ -88,7 +89,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_not_approved",
     label: "Mergeability: Not Approved",
-    active_label: "Mergeability: Not Approved",
+    active_label: None,
     priority: 8,
     needs_text_input: false,
     requires: None,
@@ -98,7 +99,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_requested_changes",
     label: "Mergeability: Requested Changes",
-    active_label: "Mergeability: Requested Changes",
+    active_label: None,
     priority: 9,
     needs_text_input: false,
     requires: None,
@@ -108,7 +109,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_draft",
     label: "Mergeability: Draft",
-    active_label: "Mergeability: Draft",
+    active_label: None,
     priority: 10,
     needs_text_input: false,
     requires: None,
@@ -118,7 +119,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "mergeability_discussions",
     label: "Mergeability: Discussions",
-    active_label: "Mergeability: Discussions",
+    active_label: None,
     priority: 11,
     needs_text_input: false,
     requires: None,
@@ -128,7 +129,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "has_notes",
     label: "Has comments 💬",
-    active_label: "Has comments 💬",
+    active_label: None,
     priority: 12,
     needs_text_input: false,
     requires: None,
@@ -138,7 +139,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "ci_failing",
     label: "CI failing ❌",
-    active_label: "CI failing ❌",
+    active_label: None,
     priority: 13,
     needs_text_input: false,
     requires: None,
@@ -161,7 +162,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "assigned_to_me",
     label: "Assigned to me 👤",
-    active_label: "Assigned to me 👤",
+    active_label: None,
     priority: 14,
     needs_text_input: false,
     requires: Some(Requirement::GitlabUsername),
@@ -179,7 +180,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "reviewer_me",
     label: "Reviewer: me 👁️",
-    active_label: "Reviewer: me 👁️",
+    active_label: None,
     priority: 15,
     needs_text_input: false,
     requires: Some(Requirement::GitlabUsername),
@@ -207,21 +208,27 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "effort_easy",
     label: "Effort: Easy 🟢",
-    active_label: "Effort: Easy 🟢",
+    active_label: None,
     priority: 16,
     needs_text_input: false,
     requires: None,
-    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d < 0.33) },
+    apply: |mr: MrSnapshot<'_>, _| {
+        mr.diff_difficulty
+            .is_some_and(|d| Effort::from_score(d) == Effort::Easy)
+    },
 });
 
 inventory::submit!(FilterDef {
     id: "effort_complex",
     label: "Effort: Complex 🔴",
-    active_label: "Effort: Complex 🔴",
+    active_label: None,
     priority: 17,
     needs_text_input: false,
     requires: None,
-    apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d >= 0.66) },
+    apply: |mr: MrSnapshot<'_>, _| {
+        mr.diff_difficulty
+            .is_some_and(|d| Effort::from_score(d) == Effort::Complex)
+    },
 });
 
 // Parametric filters — need_text_input = true, priority 50+
@@ -229,7 +236,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "milestone",
     label: "Milestone… (type below)",
-    active_label: "Milestone:",
+    active_label: Some("Milestone:"),
     priority: 50,
     needs_text_input: true,
     requires: None,
@@ -245,7 +252,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "target_branch",
     label: "Target branch… (type below)",
-    active_label: "Branch:",
+    active_label: Some("Branch:"),
     priority: 52,
     needs_text_input: true,
     requires: None,
@@ -262,7 +269,7 @@ inventory::submit!(FilterDef {
 inventory::submit!(FilterDef {
     id: "assignee",
     label: "Assignee… (type below)",
-    active_label: "Assignee:",
+    active_label: Some("Assignee:"),
     priority: 51,
     needs_text_input: true,
     requires: None,

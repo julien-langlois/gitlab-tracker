@@ -373,7 +373,7 @@ pub(super) fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     if needs_text_input {
         let field_label = visible_filters
             .get(cursor)
-            .map(|(_, def)| def.active_label)
+            .map(|(_, def)| def.active_label())
             .unwrap_or("Query");
         let input_block = Block::default()
             .borders(Borders::ALL)
@@ -558,9 +558,6 @@ fn render_setting_value(value: &ProjectSettingValue, kind: &ProjectSettingKind) 
         }
         .to_string(),
         (ProjectSettingValue::U64(value), ProjectSettingKind::U64 { step, .. }) => {
-            format!("{}  (+/- {})", value, step)
-        }
-        (ProjectSettingValue::U32(value), ProjectSettingKind::U32 { step, .. }) => {
             format!("{}  (+/- {})", value, step)
         }
         (ProjectSettingValue::Text(value), _) if value.is_empty() => "<empty>".to_string(),

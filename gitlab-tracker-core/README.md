@@ -157,7 +157,7 @@ Register a new filter without modifying any existing file:
 inventory::submit!(FilterDef {
     id:              "my_filter",
     label:           "My filter",
-    active_label:    "My filter",
+    active_label:    None,         // header text when active; None → same as label
     priority:        100,          // 0–99: built-in, 100–199: plugins, 200+: community
     needs_text_input: false,
     requires:        None,         // or Some(Requirement::Tracker / GitlabUsername)

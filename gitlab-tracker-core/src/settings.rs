@@ -5,8 +5,8 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectSettingValue {
     Bool(bool),
+    /// Any non-negative integer; crates narrowing it (e.g. to `u32`) validate on read/write.
     U64(u64),
-    U32(u32),
     Text(String),
 }
 
@@ -15,7 +15,6 @@ pub enum ProjectSettingValue {
 pub enum ProjectSettingKind {
     Bool,
     U64 { min: u64, step: u64 },
-    U32 { min: u32, step: u32 },
     Text,
 }
 

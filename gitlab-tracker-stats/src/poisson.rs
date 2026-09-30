@@ -40,15 +40,31 @@ pub fn cdf(lambda: f64, k: u32) -> f64 {
     (0..=k).map(|i| pmf(lambda, i)).sum::<f64>().min(1.0)
 }
 
-/// Computes the right-tail exceedance probability P(X ≥ k) = 1 - P(X ≤ k-1).
+/// Computes the right-tail exceedance probability P(X ≥ k).
 ///
 /// This is the p-value used for anomaly detection: a small value (< 0.05)
 /// means the observed count is statistically unlikely under the baseline λ.
+///
+/// Above the mean the tail is summed directly: `1 − cdf` cancels to 0 there,
+/// exactly where the small p-values that matter live. At or below the mean the
+/// tail is large and `1 − cdf` is accurate.
 pub fn exceedance_probability(lambda: f64, k: u32) -> f64 {
     if k == 0 {
         return 1.0;
     }
-    (1.0 - cdf(lambda, k - 1)).max(0.0)
+    if k as f64 <= lambda {
+        return (1.0 - cdf(lambda, k - 1)).max(0.0);
+    }
+    // k > λ: each term is the previous one × λ/i < 1, so the series converges fast.
+    let mut term = pmf(lambda, k);
+    let mut sum = 0.0;
+    let mut i = k;
+    while term > 0.0 && term > sum * f64::EPSILON {
+        sum += term;
+        i += 1;
+        term *= lambda / i as f64;
+    }
+    sum.min(1.0)
 }
 
 /// Computes ln(k!) via Stirling-series (Lanczos) for numerical stability.
@@ -660,6 +676,18 @@ mod tests {
         let p_exceed = exceedance_probability(lambda, k);
         let p_cdf = cdf(lambda, k - 1);
         assert!((p_exceed + p_cdf - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn exceedance_far_tail_does_not_cancel_to_zero() {
+        // P(X ≥ 30 | λ=1) ≈ e^{-1}/30! ≈ 1.4e-33: `1 − cdf` returned exactly 0.
+        let p = exceedance_probability(1.0, 30);
+        let first_term = pmf(1.0, 30);
+        assert!(p > 0.0);
+        assert!(p >= first_term && p < first_term * 1.1);
+        // Both branches agree around the mean.
+        let direct = exceedance_probability(4.0, 5);
+        assert!((direct + cdf(4.0, 4) - 1.0).abs() < 1e-12);
     }
 
     #[test]

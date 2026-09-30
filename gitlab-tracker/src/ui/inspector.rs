@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::models::{DifficultyProfile, GitlabMrState, Pipeline, PipelineState, TrackedMr};
+use crate::models::{DifficultyProfile, Effort, GitlabMrState, Pipeline, PipelineState, TrackedMr};
 use crate::ui::table::{badge_label, behind_colors, mergeability_badge, Behind};
 use crate::ui::theme::Palette;
 use crate::utils::{format_relative_date, matches_gitlab_username};
@@ -231,12 +231,12 @@ fn render_diff_stats_lines(
 
     let difficulty_score = stats.difficulty(profile);
     // Labels are uppercased to match the table column style (EASY / MEDIUM / COMPLEX).
-    let (diff_icon, diff_fg, diff_bg) = if difficulty_score < 0.33 {
-        ("🟢 EASY", Color::Black, Color::Green)
-    } else if difficulty_score < 0.66 {
-        ("🟡 MEDIUM", Color::Black, Color::Yellow)
-    } else {
-        ("🔴 COMPLEX", Color::White, Color::Red)
+    let effort = Effort::from_score(difficulty_score);
+    let diff_icon = effort.label();
+    let (diff_fg, diff_bg, bar_color) = match effort {
+        Effort::Easy => (Color::Black, Color::Green, palette.accent_green),
+        Effort::Medium => (Color::Black, Color::Yellow, palette.accent_yellow),
+        Effort::Complex => (Color::White, Color::Red, palette.accent_red),
     };
 
     // Build a visual bar proportional to difficulty (10 chars wide).
@@ -246,14 +246,6 @@ fn render_diff_stats_lines(
         "█".repeat(filled),
         "░".repeat(10usize.saturating_sub(filled))
     );
-
-    let bar_color = if difficulty_score < 0.33 {
-        palette.accent_green
-    } else if difficulty_score < 0.66 {
-        palette.accent_yellow
-    } else {
-        palette.accent_red
-    };
 
     // Singular/plural label — 0 means the field was not yet fetched (stale cache).
     let commits_line = if stats.commits_count == 0 {

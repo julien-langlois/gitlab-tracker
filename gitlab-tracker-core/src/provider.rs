@@ -146,123 +146,60 @@ pub struct TimeEntryRequest {
     pub spent_on: String,
 }
 
-/// Represents a single field change detected between two versions of a [`LinkedTicket`].
+/// A tracked field that changed between two versions of a [`LinkedTicket`].
 ///
-/// # Design
-/// This enum is the **only** place in the codebase where "which fields are trackable"
-/// is declared. Adding a new tracked field (e.g. `Sprint`, `DoneRatio`) only requires:
-///   1. Adding a variant here.
-///   2. Adding a match arm in `LinkedTicket::diff`.
-///   3. Handling the new variant in the orchestrator's notification dispatch.
-///
-/// The orchestrator (`gitlab-tracker`) and notification plugin (`gitlab-tracker-notify`)
-/// never need to know about field names directly — they only receive `TicketChange` values.
-/// This satisfies OCP: providers (Redmine, Jira, …) and consumers (app, notify) are
-/// decoupled from the field enumeration.
+/// [`LinkedTicket::diff`] is the **only** place that declares which fields are
+/// tracked: adding one (e.g. a sprint) is one more `track(…)` line there. The
+/// orchestrator and the notification plugin only forward `field`, `old` and `new`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum TicketChange {
-    /// The priority label changed (e.g. "Normal" → "High").
-    Priority { old: String, new: String },
-    /// The status label changed (e.g. "In Progress" → "Resolved").
-    Status { old: String, new: String },
-    /// The assignee changed (e.g. "Alice" → "Bob", or "Unassigned" when empty).
-    Assignee { old: String, new: String },
-    /// The target version/release changed (e.g. "v1.2" → "v1.3", or "None" when unset).
-    Version { old: String, new: String },
-    /// The completion percentage changed (0–100). Fires on both increase and decrease.
-    /// `old` and `new` are formatted as \"N%\" strings for display consistency.
-    DoneRatio { old: String, new: String },
-}
-
-impl TicketChange {
-    /// Returns a human-readable label for the changed field, suitable for notification summaries.
-    pub fn field_label(&self) -> &'static str {
-        match self {
-            TicketChange::Priority { .. } => "priority",
-            TicketChange::Status { .. } => "status",
-            TicketChange::Assignee { .. } => "assignee",
-            TicketChange::Version { .. } => "version",
-            TicketChange::DoneRatio { .. } => "progress",
-        }
-    }
-
-    /// Returns the before/after values as `(&str, &str)` for display purposes.
-    pub fn before_after(&self) -> (&str, &str) {
-        match self {
-            TicketChange::Priority { old, new }
-            | TicketChange::Status { old, new }
-            | TicketChange::Assignee { old, new }
-            | TicketChange::Version { old, new }
-            | TicketChange::DoneRatio { old, new } => (old.as_str(), new.as_str()),
-        }
-    }
+pub struct TicketChange {
+    /// Human-readable field name used in logs and notifications: `"priority"`,
+    /// `"status"`, `"assignee"`, `"version"` or `"progress"`.
+    pub field: &'static str,
+    /// Value before the change, formatted for display (`"Unassigned"`, `"None"`, `"50%"`…).
+    pub old: String,
+    /// Value after the change, same formatting as `old`.
+    pub new: String,
 }
 
 impl LinkedTicket {
     /// Computes the list of tracked field changes between `self` (old) and `new`.
     ///
-    /// Returns an empty `Vec` when nothing changed. The caller (orchestrator) should
-    /// iterate over the result and dispatch notifications for each entry.
-    ///
-    /// # Design
-    /// This is a **pure function** — no side effects, no I/O. Adding a new tracked field
-    /// only requires adding a comparison block here and a variant to [`TicketChange`].
-    /// The orchestrator and notification plugin remain unchanged for existing fields.
+    /// Returns an empty `Vec` when nothing changed. Pure function — no side effects.
+    /// Missing values are compared through their display fallback (`"None"`,
+    /// `"Unassigned"`, `0%`), which is also what the notification shows.
     pub fn diff(&self, new: &LinkedTicket) -> Vec<TicketChange> {
         let mut changes = Vec::new();
+        let mut track = |field: &'static str, old: String, new: String| {
+            if old != new {
+                changes.push(TicketChange { field, old, new });
+            }
+        };
+        let or = |v: &Option<String>, fallback: &str| v.as_deref().unwrap_or(fallback).to_string();
+        let percent = |v: Option<u32>| format!("{}%", v.unwrap_or(0));
 
-        // Helper: normalise an Option<&str> to a display string for comparison.
-        let opt_str =
-            |v: Option<&str>, fallback: &str| -> String { v.unwrap_or(fallback).to_string() };
-
-        // Priority
-        let old_priority = opt_str(self.priority.as_deref(), "None");
-        let new_priority = opt_str(new.priority.as_deref(), "None");
-        if old_priority != new_priority {
-            changes.push(TicketChange::Priority {
-                old: old_priority,
-                new: new_priority,
-            });
-        }
-
-        // Status
-        if self.status != new.status {
-            changes.push(TicketChange::Status {
-                old: self.status.clone(),
-                new: new.status.clone(),
-            });
-        }
-
-        // Assignee
-        let old_assignee = opt_str(self.assignee.as_deref(), "Unassigned");
-        let new_assignee = opt_str(new.assignee.as_deref(), "Unassigned");
-        if old_assignee != new_assignee {
-            changes.push(TicketChange::Assignee {
-                old: old_assignee,
-                new: new_assignee,
-            });
-        }
-
-        // Version / release
-        let old_version = opt_str(self.version.as_deref(), "None");
-        let new_version = opt_str(new.version.as_deref(), "None");
-        if old_version != new_version {
-            changes.push(TicketChange::Version {
-                old: old_version,
-                new: new_version,
-            });
-        }
-
-        // Completion percentage — fires on both increase and decrease.
-        // Formatted as "N%" so the notification body is immediately readable.
-        let old_ratio = self.done_ratio.unwrap_or(0);
-        let new_ratio = new.done_ratio.unwrap_or(0);
-        if old_ratio != new_ratio {
-            changes.push(TicketChange::DoneRatio {
-                old: format!("{}%", old_ratio),
-                new: format!("{}%", new_ratio),
-            });
-        }
+        track(
+            "priority",
+            or(&self.priority, "None"),
+            or(&new.priority, "None"),
+        );
+        track("status", self.status.clone(), new.status.clone());
+        track(
+            "assignee",
+            or(&self.assignee, "Unassigned"),
+            or(&new.assignee, "Unassigned"),
+        );
+        track(
+            "version",
+            or(&self.version, "None"),
+            or(&new.version, "None"),
+        );
+        // Fires on both increase and decrease.
+        track(
+            "progress",
+            percent(self.done_ratio),
+            percent(new.done_ratio),
+        );
 
         changes
     }
@@ -408,5 +345,55 @@ pub trait TrackerProvider: Send + Sync {
         Err(TrackerError::Unsupported(
             "Time logging not supported by this tracker".into(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ticket() -> LinkedTicket {
+        LinkedTicket {
+            schema_version: LINKED_TICKET_SCHEMA_VERSION,
+            id: "1".into(),
+            subject: "s".into(),
+            status: "New".into(),
+            url: String::new(),
+            author: None,
+            assignee: None,
+            time_estimate: None,
+            time_spent: None,
+            time_remaining: None,
+            tracker_type: None,
+            priority: None,
+            version: None,
+            start_date: None,
+            done_ratio: None,
+        }
+    }
+
+    #[test]
+    fn diff_reports_changed_fields_only() {
+        let old = ticket();
+        assert!(old.diff(&old.clone()).is_empty());
+        let new = LinkedTicket {
+            status: "Resolved".into(),
+            assignee: Some("Bob".into()),
+            done_ratio: Some(50),
+            ..old.clone()
+        };
+        let changes: Vec<_> = old
+            .diff(&new)
+            .into_iter()
+            .map(|c| (c.field, c.old, c.new))
+            .collect();
+        assert_eq!(
+            changes,
+            [
+                ("status", "New".into(), "Resolved".into()),
+                ("assignee", "Unassigned".into(), "Bob".into()),
+                ("progress", "0%".into(), "50%".into()),
+            ]
+        );
     }
 }

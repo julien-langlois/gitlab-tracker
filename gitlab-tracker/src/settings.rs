@@ -79,28 +79,20 @@ impl SettingsEditorState {
 
     pub fn increment_selected(&mut self) {
         if let Some(item) = self.items.get_mut(self.cursor) {
-            match (&item.def.kind, &mut item.value) {
-                (ProjectSettingKind::U64 { step, .. }, ProjectSettingValue::U64(value)) => {
-                    *value = value.saturating_add(*step);
-                }
-                (ProjectSettingKind::U32 { step, .. }, ProjectSettingValue::U32(value)) => {
-                    *value = value.saturating_add(*step);
-                }
-                _ => {}
+            if let (ProjectSettingKind::U64 { step, .. }, ProjectSettingValue::U64(value)) =
+                (&item.def.kind, &mut item.value)
+            {
+                *value = value.saturating_add(*step);
             }
         }
     }
 
     pub fn decrement_selected(&mut self) {
         if let Some(item) = self.items.get_mut(self.cursor) {
-            match (&item.def.kind, &mut item.value) {
-                (ProjectSettingKind::U64 { min, step }, ProjectSettingValue::U64(value)) => {
-                    *value = value.saturating_sub(*step).max(*min);
-                }
-                (ProjectSettingKind::U32 { min, step }, ProjectSettingValue::U32(value)) => {
-                    *value = value.saturating_sub(*step).max(*min);
-                }
-                _ => {}
+            if let (ProjectSettingKind::U64 { min, step }, ProjectSettingValue::U64(value)) =
+                (&item.def.kind, &mut item.value)
+            {
+                *value = value.saturating_sub(*step).max(*min);
             }
         }
     }
@@ -154,8 +146,8 @@ impl SettingsEditorState {
                     app.config.activity_stale_days = *value;
                 }
                 #[cfg(feature = "stats")]
-                ("stats.sprint_weeks", ProjectSettingValue::U32(value)) => {
-                    app.stats_view.sprint_weeks = *value;
+                ("stats.sprint_weeks", ProjectSettingValue::U64(value)) => {
+                    app.stats_view.sprint_weeks = u32::try_from(*value).unwrap_or(u32::MAX);
                 }
                 _ => {}
             }
@@ -170,9 +162,6 @@ fn normalize_value(value: ProjectSettingValue, def: &ProjectSettingDef) -> Proje
         }
         (ProjectSettingKind::U64 { min, .. }, ProjectSettingValue::U64(value)) => {
             ProjectSettingValue::U64(value.max(*min))
-        }
-        (ProjectSettingKind::U32 { min, .. }, ProjectSettingValue::U32(value)) => {
-            ProjectSettingValue::U32(value.max(*min))
         }
         (ProjectSettingKind::Text, ProjectSettingValue::Text(value)) => {
             ProjectSettingValue::Text(value)

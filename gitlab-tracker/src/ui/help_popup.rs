@@ -15,6 +15,23 @@ const COL_SEPARATOR_WIDTH: usize = 5;
 const CELL_GUTTER: &str = "  ";
 const CELL_GUTTER_WIDTH: usize = 2;
 
+/// Terminal columns `s` occupies (emoji and other wide glyphs count 2), via ratatui's
+/// own width computation.
+fn display_width(s: &str) -> usize {
+    Span::raw(s).width()
+}
+
+/// Pads `s` with spaces to `width` terminal columns, on the left when `right_align`.
+/// `format!("{:>w$}")` pads by `char` count, which misaligns wide glyphs.
+fn pad(s: &str, width: usize, right_align: bool) -> String {
+    let fill = " ".repeat(width.saturating_sub(display_width(s)));
+    if right_align {
+        fill + s
+    } else {
+        format!("{s}{fill}")
+    }
+}
+
 /// Renders the help popup centred over the terminal.
 ///
 /// Layout per section:
@@ -36,7 +53,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
         .shortcut_providers
         .iter()
         .flat_map(|b| b.entries.iter())
-        .map(|e| e.key.chars().count())
+        .map(|e| display_width(e.key))
         .max()
         .unwrap_or(4);
 
@@ -44,7 +61,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
         .shortcut_providers
         .iter()
         .flat_map(|b| b.entries.iter())
-        .map(|e| e.description.chars().count())
+        .map(|e| display_width(e.description))
         .max()
         .unwrap_or(10);
 
@@ -144,7 +161,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
 
                 // Key badge — right-aligned within key column, bold yellow.
                 spans.push(Span::styled(
-                    format!("{:>width$}", entry.key, width = max_key_w),
+                    pad(entry.key, max_key_w, true),
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
@@ -157,7 +174,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
                 // Pad only when this is the left cell in a 2-column layout,
                 // so the separator lands at a fixed position.
                 let desc = if n_cols == 2 && col_idx == 0 {
-                    format!("{:<width$}", entry.description, width = max_desc_w)
+                    pad(entry.description, max_desc_w, false)
                 } else {
                     entry.description.to_string()
                 };
@@ -191,4 +208,17 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
         .alignment(Alignment::Center),
         zones[1],
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pad_counts_wide_glyphs_as_two_columns() {
+        // "🟢" is 1 char but 2 columns: char-count padding added one space too many.
+        assert_eq!(pad("🟢 me", 6, false), "🟢 me ");
+        assert_eq!(pad("ab", 4, true), "  ab");
+        assert_eq!(display_width("🟢 EASY"), 7);
+    }
 }

@@ -242,7 +242,7 @@ For teams and CI pipelines, you can still pre-configure everything via a `.env` 
 **Which project is loaded** (TUI and CLI commands alike):
 
 1. `--project <name | project ID | 1-based index>` on the command line
-2. `GITLAB_URL` + `GITLAB_PROJECT_ID` (shell or `.env`, both required) — the project is then built from the environment only, so its per-project settings in `projects.toml` are **not** applied
+2. `GITLAB_URL` + `GITLAB_PROJECT_ID` (shell or `.env`, both required) — if `projects.toml` has an entry with that URL and project ID, its per-project settings are used; otherwise the project runs on defaults
 3. first `[[project]]` with `active = true` in `projects.toml`, else the first entry
 4. one-time migration from a legacy `config.json`, else the first-run prompt
 
@@ -251,12 +251,12 @@ Settings edited from the TUI (columns `C`, branches in Insert mode, settings das
 **Display settings** (refresh interval, branches, label prefixes, activity thresholds, …) are then resolved in this order (highest to lowest priority):
 
 1. **`GITLAB_REFRESH_INTERVAL_SECS`** — for the refresh interval only, wins over everything below
-2. **The loaded `[[project]]` entry in `projects.toml`** — every field it sets
-3. **`GITLAB_TRACKER_*` environment variables** — see the table below
+2. **`GITLAB_TRACKER_*` environment variables** — see the table below
+3. **The loaded `[[project]]` entry in `projects.toml`** — every field it sets
 4. **`config.json`** (`~/.config/gitlab-tracker/config.json`) — legacy global file, a default template is written on first run
 5. **Built-in defaults** (`https://gitlab.com`, `["main"]` for default branches, 900 s refresh)
 
-`.env` is read from the current directory, else from `~/.config/gitlab-tracker/.env`. Layers 3–5 are merged with [Figment](https://crates.io/crates/figment); each higher-priority source only overrides the keys it explicitly sets.
+`.env` is read from the current directory, else from `~/.config/gitlab-tracker/.env`. Layers 2, 4 and 5 are merged with [Figment](https://crates.io/crates/figment); each higher-priority source only overrides the keys it explicitly sets.
 
 #### `GITLAB_TRACKER_*` — available overrides
 
@@ -268,7 +268,7 @@ Settings edited from the TUI (columns `C`, branches in Insert mode, settings das
 | `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS`  | `activity_recent_days`       | `3`                 |
 | `GITLAB_TRACKER_ACTIVITY_STALE_DAYS`   | `activity_stale_days`        | `14`                |
 
-> List values must use brackets (`[a,b]`). A bare `a,b` is read as a single string: the whole configuration is then rejected, and the app falls back to its defaults with a warning in the log.
+> List values must use brackets (`[a,b]`). A bare `a,b` is read as a single string: all `GITLAB_TRACKER_*` overrides are then ignored, with a warning in the log (`config.json` and `projects.toml` still apply).
 
 > **Upgrading from an older version?** If `projects.toml` does not exist yet but `config.json` holds `gitlab_url` + `project_id`, the app creates `projects.toml` from it once (connection details and project-scoped settings) and prints `✅ Project settings migrated from config.json to projects.toml`. `config.json` itself is still read afterwards as the lowest-priority layer, so it can simply be left in place.
 >
@@ -703,7 +703,8 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
     ├── app/
     │   ├── mr_changes.rs     # Change detection on MR loads → log + desktop notifications
     │   ├── tracker_sync.rs   # Linked-ticket fetches, status transitions, TimeLog cache
-    │   └── stats_recorder.rs # Stats snapshots on MR loads (feature `stats`)
+    │   ├── stats_recorder.rs # Stats snapshots on MR loads (feature `stats`)
+    │   └── stats_view.rs     # Stats overlay state: tab, window, report, generation guard
     ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus
     ├── gitlab.rs        # Async GitLab client: pagination, caching guards, rate-limit semaphore
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
@@ -724,7 +725,7 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
         ├── status_bar.rs      # One-line status bar (project, timer, API counts, sort, filter, spinner)
         ├── table.rs           # Main MR table widget
         ├── cockpit.rs         # Lower-left cockpit pane rendering
-        ├── cockpit_summary.rs # Cockpit metrics computed from the visible rows (time-zone aware)
+        ├── cockpit/summary.rs # Cockpit metrics computed from the visible rows (time-zone aware)
         ├── inspector.rs       # Upper-right pane: MR metadata, fetch errors & pipeline history
         ├── tracker.rs         # Lower-right pane: linked ticket details & time log
         ├── stats.rs           # Stats overlay shell: tabs, status bar, refresh (feature `stats`)

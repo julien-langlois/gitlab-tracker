@@ -16,6 +16,7 @@ No code outside of `app::apply_event` is allowed to mutate `app.mrs` directly.
 | `app/mr_changes.rs` | Change detection on MR loads (branches, `updated_at`, mergeability, milestone, complexity) → log + notifications |
 | `app/tracker_sync.rs` | Linked-ticket fetches, automatic status transitions, TimeLog cache |
 | `app/stats_recorder.rs` | Stats snapshots on MR loads (`stats` feature) |
+| `app/stats_view.rs` | Stats overlay state: tab, window, last report, generation guard against late responses |
 
 Renderer-written state (pane areas, scroll offsets, spinner frame) is grouped in
 `App::layout` (`UiLayout` / `PaneScroll`): the renderer writes it, key handlers read it.

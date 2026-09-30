@@ -411,6 +411,36 @@ impl DiffStats {
     }
 }
 
+/// Review-effort band of a [`DiffStats::difficulty`] score — the single place that
+/// knows the 0.33 / 0.66 boundaries (table, inspector, filters, notifications).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effort {
+    Easy,
+    Medium,
+    Complex,
+}
+
+impl Effort {
+    pub fn from_score(score: f64) -> Self {
+        if score < 0.33 {
+            Effort::Easy
+        } else if score < 0.66 {
+            Effort::Medium
+        } else {
+            Effort::Complex
+        }
+    }
+
+    /// Badge label, e.g. `"🟢 EASY"`.
+    pub fn label(self) -> &'static str {
+        match self {
+            Effort::Easy => "🟢 EASY",
+            Effort::Medium => "🟡 MEDIUM",
+            Effort::Complex => "🔴 COMPLEX",
+        }
+    }
+}
+
 /// Tech-stack calibration for the review-difficulty score.
 ///
 /// Different ecosystems have very different "cost per line" — a 500-line Drupal

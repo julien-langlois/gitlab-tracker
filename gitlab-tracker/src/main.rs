@@ -106,7 +106,8 @@ fn resolve_refresh_interval(config: &config::AppConfig) -> u64 {
 
 /// Applies project-scoped overrides from `projects.toml` onto the global `AppConfig`.
 ///
-/// Priority: `projects.toml` entry > `config.json` value > compiled-in default.
+/// Priority: `projects.toml` entry > `config.json` value > compiled-in default
+/// (`GITLAB_TRACKER_*` variables are applied on top afterwards).
 /// Only fields explicitly set in the `ProjectEntry` override the config — `None`
 /// means "use whatever config.json / the default says".
 fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntry) {
@@ -179,6 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Project-scoped settings override the global config.json values when present.
     let project = cli::resolve_project(&args).await;
     apply_project_overrides(&mut config, &project);
+    // GITLAB_TRACKER_* variables win over projects.toml too.
+    let config = storage::apply_env_overrides(config);
 
     if cli::run_command(args.command.as_ref(), &project).await? {
         return Ok(());

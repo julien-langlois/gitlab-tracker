@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::models::{GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
+use crate::models::{Effort, GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
     layout::Constraint,
@@ -314,12 +314,10 @@ pub fn render_table(app: &App) -> Table<'_> {
                     Some(stats) => {
                         let score = stats.difficulty(&app.config.complexity_profile);
 
-                        let (label, fg, bg) = if score < 0.33 {
-                            ("🟢 EASY   ", Color::Black, Color::Green)
-                        } else if score < 0.66 {
-                            ("🟡 MEDIUM ", Color::Black, Color::Yellow)
-                        } else {
-                            ("🔴 COMPLEX", Color::White, Color::Red)
+                        let (label, fg, bg) = match Effort::from_score(score) {
+                            Effort::Easy => ("🟢 EASY   ", Color::Black, Color::Green),
+                            Effort::Medium => ("🟡 MEDIUM ", Color::Black, Color::Yellow),
+                            Effort::Complex => ("🔴 COMPLEX", Color::White, Color::Red),
                         };
 
                         Cell::from(Line::from(vec![Span::styled(
@@ -384,19 +382,7 @@ pub fn render_table(app: &App) -> Table<'_> {
             if col("tracker_ticket") {
                 let ticket_cell = match &mr.linked_ticket {
                     Some(t) => {
-                        // Format time tracking as "Xh Ym" — reused from inspector logic.
-                        let fmt_duration = |secs: u32| -> String {
-                            if secs == 0 {
-                                return "—".to_string();
-                            }
-                            let h = secs / 3600;
-                            let m = (secs % 3600) / 60;
-                            match (h, m) {
-                                (0, m) => format!("{}m", m),
-                                (h, 0) => format!("{}h", h),
-                                (h, m) => format!("{}h {}m", h, m),
-                            }
-                        };
+                        use super::tracker::format_duration as fmt_duration;
 
                         let has_tracking = t.time_estimate.is_some_and(|v| v > 0)
                             || t.time_spent.is_some_and(|v| v > 0);

@@ -157,7 +157,7 @@ pub fn mr_milestone_changed(mr_id: &str, title: &str, old: &str, new: &str, web_
 ///
 /// This is a **single generic entry point** for all ticket field changes.
 /// The `field` parameter is a human-readable label (e.g. `"priority"`, `"status"`),
-/// sourced from `gitlab_tracker_core::TicketChange::field_label`.
+/// sourced from `gitlab_tracker_core::TicketChange::field`.
 ///
 /// Using one function instead of per-field functions means that adding a new tracked
 /// field in `core` (e.g. `Sprint`) requires **zero changes** to this crate.

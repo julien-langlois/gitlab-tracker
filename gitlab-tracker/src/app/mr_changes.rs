@@ -91,15 +91,7 @@ pub(super) fn log_and_notify_changes(
     // overwriting the stored diff_stats. Only fires when both old and new
     // stats are available and the category boundary is actually crossed.
     {
-        let complexity_label = |score: f64| -> &'static str {
-            if score < 0.33 {
-                "🟢 EASY"
-            } else if score < 0.66 {
-                "🟡 MEDIUM"
-            } else {
-                "🔴 COMPLEX"
-            }
-        };
+        let complexity_label = |score: f64| crate::models::Effort::from_score(score).label();
         if let (Some(old_stats), Some(new_stats)) = (&old.diff_stats, &new.data.diff_stats) {
             let old_label = complexity_label(old_stats.difficulty(profile));
             let new_label = complexity_label(new_stats.difficulty(profile));

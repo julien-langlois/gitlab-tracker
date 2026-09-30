@@ -499,13 +499,14 @@ async fn try_enrich_from_config_json(entry: &mut ProjectEntry) -> bool {
 /// Resolves the active `ProjectEntry` using the following priority:
 ///
 /// 1. `GITLAB_URL` + `GITLAB_PROJECT_ID` environment variables (both required).
-///    Project-scoped settings are not available via env vars — defaults are used.
+///    When `projects.toml` has an entry for that pair, its settings are used;
+///    otherwise the project runs on defaults.
 /// 2. First entry with `active = true` in `projects.toml`
 /// 3. First entry in `projects.toml`
 /// 4. One-time silent migration from legacy `config.json`
 /// 5. Interactive prompt → saved to `projects.toml`
 pub async fn resolve_active_project() -> ProjectEntry {
-    // 1. Environment variables — highest priority, no file I/O needed.
+    // 1. Environment variables — highest priority.
     let env_url = std::env::var("GITLAB_URL")
         .ok()
         .filter(|v| !v.trim().is_empty());
@@ -514,11 +515,16 @@ pub async fn resolve_active_project() -> ProjectEntry {
         .filter(|v| !v.trim().is_empty());
 
     if let (Some(url), Some(id)) = (env_url, env_id) {
+        let gitlab_url = url.trim_end_matches('/').to_string();
+        let mut projects_cfg = load_projects_toml().await;
+        let entry = find_project_mut(&mut projects_cfg, &gitlab_url, &id)
+            .map(|entry| entry.clone())
+            .unwrap_or_default();
         return ProjectEntry {
-            gitlab_url: url.trim_end_matches('/').to_string(),
+            gitlab_url,
             project_id: id,
             active: true,
-            ..Default::default()
+            ..entry
         };
     }
 
@@ -858,9 +864,12 @@ pub fn get_save_dir() -> Option<PathBuf> {
 /// Loads `AppConfig` using Figment with the following priority chain (highest → lowest):
 ///
 /// 1. Environment variables prefixed with `GITLAB_TRACKER_`
-///    (e.g. `GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300`)
+///    (e.g. `GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300`), see [`apply_env_overrides`]
 /// 2. `config.json` in the XDG config directory
 /// 3. Compiled-in defaults from `AppConfig::default()`
+///
+/// `main` then applies the project's `projects.toml` fields and calls
+/// [`apply_env_overrides`] again, so the environment also wins over `projects.toml`.
 ///
 /// When `config.json` does not exist yet, it is created with the default values
 /// so the user has a ready-to-edit template on first run.
@@ -871,7 +880,7 @@ pub fn get_save_dir() -> Option<PathBuf> {
 /// `GITLAB_TRACKER_` prefix mapping — e.g. `GITLAB_TRACKER_DEFAULT_BRANCHES=main,dev`.
 pub async fn load_or_create_config_async() -> AppConfig {
     use figment::{
-        providers::{Env, Format, Json, Serialized},
+        providers::{Format, Json, Serialized},
         Figment,
     };
 
@@ -894,24 +903,43 @@ pub async fn load_or_create_config_async() -> AppConfig {
         }
     }
 
-    // Environment variables (highest priority).
-    // Prefix: GITLAB_TRACKER_  →  maps to AppConfig field names (snake_case).
-    // Example: GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300
-    figment = figment.merge(Env::prefixed("GITLAB_TRACKER_").map(|key| {
-        // Normalize the key to lowercase so it matches serde field names.
-        key.as_str().to_lowercase().into()
-    }));
-
-    figment.extract().unwrap_or_else(|e| {
-        // One bad value (e.g. `GITLAB_TRACKER_DEFAULT_BRANCHES=main,dev` instead of
-        // `[main,dev]`) invalidates the whole extraction: say so instead of silently
-        // ignoring config.json and every environment override.
-        tracing::warn!(
-            error = %e,
-            "Invalid config.json or GITLAB_TRACKER_* value — using default settings"
-        );
+    let config = figment.extract().unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "Invalid config.json — using default settings");
         default_config
-    })
+    });
+    apply_env_overrides(config)
+}
+
+/// Overlays the `GITLAB_TRACKER_*` environment variables on `config` (highest
+/// priority). Prefix stripped and lowercased → `AppConfig` field names, e.g.
+/// `GITLAB_TRACKER_REFRESH_INTERVAL_SECS=300`.
+pub fn apply_env_overrides(config: AppConfig) -> AppConfig {
+    apply_env_overrides_with_prefix(config, "GITLAB_TRACKER_")
+}
+
+fn apply_env_overrides_with_prefix(config: AppConfig, prefix: &str) -> AppConfig {
+    use figment::{
+        providers::{Env, Serialized},
+        Figment,
+    };
+    let overridden = Figment::from(Serialized::defaults(&config))
+        .merge(Env::prefixed(prefix).map(|key| key.as_str().to_lowercase().into()))
+        .extract::<AppConfig>();
+    match overridden {
+        // `#[serde(skip)]` fields do not survive the round trip: carry them over.
+        Ok(overridden) => AppConfig {
+            gitlab_label_colors: config.gitlab_label_colors,
+            gitlab_username: config.gitlab_username,
+            ..overridden
+        },
+        Err(e) => {
+            // One bad value (e.g. `GITLAB_TRACKER_DEFAULT_BRANCHES=main,dev` instead of
+            // `[main,dev]`) invalidates the whole extraction: say so, and keep the
+            // config without any environment override.
+            tracing::warn!(error = %e, "Invalid GITLAB_TRACKER_* value — environment overrides ignored");
+            config
+        }
+    }
 }
 
 /// Computes a short, stable FNV-1a 32-bit hash of the `(gitlab_url, project_id)` pair
@@ -1171,6 +1199,21 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn env_overrides_win_and_keep_runtime_fields() {
+        // Unique prefix: tests share the process environment.
+        std::env::set_var("GT_ENVTEST3_ACTIVITY_STALE_DAYS", "21");
+        let project_config = AppConfig {
+            activity_stale_days: 7, // as set from projects.toml
+            gitlab_username: Some("jdoe".into()),
+            ..AppConfig::default()
+        };
+        let config = apply_env_overrides_with_prefix(project_config, "GT_ENVTEST3_");
+        std::env::remove_var("GT_ENVTEST3_ACTIVITY_STALE_DAYS");
+        assert_eq!(config.activity_stale_days, 21);
+        assert_eq!(config.gitlab_username.as_deref(), Some("jdoe"));
+    }
 
     #[tokio::test]
     async fn atomic_write_and_corrupt_backup() {
