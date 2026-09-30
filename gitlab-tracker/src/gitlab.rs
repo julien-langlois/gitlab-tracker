@@ -8,6 +8,24 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::time::{sleep, Duration};
 
+/// Why fetching a MR from GitLab failed. Its message is what the Inspector shows
+/// (`MrStatus::Error`), so each variant embeds the underlying detail.
+#[derive(Debug, thiserror::Error)]
+pub enum GitlabError {
+    /// The request could not be sent or the connection failed.
+    #[error("network error: {0}")]
+    Network(reqwest::Error),
+    /// GitLab answered with a non-2xx status (e.g. `401 Unauthorized`, `404 Not Found`).
+    #[error("HTTP {0}")]
+    Http(reqwest::StatusCode),
+    /// The response body is not the expected JSON.
+    #[error("invalid MR JSON: {0}")]
+    Decode(reqwest::Error),
+    /// The concurrency limiter was closed (app shutting down).
+    #[error("fetch cancelled: concurrency limiter was closed")]
+    Cancelled,
+}
+
 pub const MAX_CONCURRENT_REQUESTS: usize = 3;
 pub const MERGEABILITY_RETRY_ATTEMPTS: usize = 3;
 const MERGEABILITY_RETRY_DELAY_SECS: u64 = 2;
@@ -897,11 +915,8 @@ pub fn spawn_mr_fetch(
             Ok(data) => {
                 let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
             }
-            Err(err_msg) => {
-                let _ = tx.send(AppEvent::MrFailed {
-                    id: mr_id,
-                    error: err_msg,
-                });
+            Err(error) => {
+                let _ = tx.send(AppEvent::MrFailed { id: mr_id, error });
             }
         }
     });
@@ -911,22 +926,19 @@ async fn fetch_single_mr(
     client: &reqwest::Client,
     ctx: &FetchContext,
     mr_url: &str,
-) -> Result<GitLabMr, String> {
+) -> Result<GitLabMr, GitlabError> {
     let mr_res = client
         .get(mr_url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
         .send()
         .await
-        .map_err(|e| format!("MR network error: {}", e))?;
+        .map_err(GitlabError::Network)?;
 
     if !mr_res.status().is_success() {
-        return Err(format!("HTTP {} on MR", mr_res.status()));
+        return Err(GitlabError::Http(mr_res.status()));
     }
 
-    mr_res
-        .json()
-        .await
-        .map_err(|e| format!("Error reading MR JSON: {}", e))
+    mr_res.json().await.map_err(GitlabError::Decode)
 }
 
 const REFS_PER_PAGE: usize = 100;
@@ -958,12 +970,12 @@ pub async fn fetch_gitlab_data(
     cached: CachedMrData,
     semaphore: &Semaphore,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
-) -> Result<MrLoadedData, String> {
+) -> Result<MrLoadedData, GitlabError> {
     let acquire = || async {
         semaphore
             .acquire()
             .await
-            .map_err(|_| "MR fetch cancelled: concurrency limiter was closed".to_string())
+            .map_err(|_| GitlabError::Cancelled)
     };
     let mut _permit = acquire().await?;
     let client = http_client();

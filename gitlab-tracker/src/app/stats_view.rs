@@ -40,7 +40,7 @@ impl StatsViewState {
     pub fn apply_result(
         &mut self,
         generation: u64,
-        result: Result<Box<gitlab_tracker_stats::StatReport>, String>,
+        result: Result<Box<gitlab_tracker_stats::StatReport>, gitlab_tracker_stats::StatsError>,
     ) {
         if generation != self.generation {
             return;
@@ -51,7 +51,7 @@ impl StatsViewState {
                 self.error = None;
                 self.report = Some(*report);
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.error = Some(error.to_string()),
         }
     }
 }

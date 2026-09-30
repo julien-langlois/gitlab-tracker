@@ -63,6 +63,18 @@ only, as `MrStatus::Error(String)`, and shown in the Inspector.
 
 ---
 
+## Error handling
+
+| Where | Type | Rule |
+| :--- | :--- | :--- |
+| Libraries (`core`, `redmine`, `stats`) | `thiserror` enums: `TrackerError`, `SetupError`, `StatsError` | Typed variants callers can match (`Auth`, `NotFound`, `Network`…); never `Result<_, String>`. |
+| Binary, fallible I/O | `thiserror` enums: `GitlabError` (MR fetch), `DurationError` (Log Time input) | Same rule; the `Display` message is what the UI shows. |
+| `AppEvent` | Carries the typed error (`MrFailed { error: GitlabError }`, `Result<_, TrackerError>`, `Result<_, StatsError>`) | Conversion to a display `String` happens once, in `apply_event`, when it lands in UI state (`MrStatus::Error`, `activities_error`, `TimeLogState::Failed`…). |
+| `main`, `cli`, `demo` | `anyhow::Result` + `.context(…)` | Only at the top, where errors are reported and the process exits. |
+| Best-effort enrichments (diff stats, pipelines, notes count, milestones) | `Option` / empty `Vec` + `tracing::warn!` | A missing enrichment must not fail the MR row. |
+
+---
+
 ## Crate boundaries
 
 ```text

@@ -139,6 +139,19 @@ pub fn format_relative_date(iso: &str) -> String {
     }
 }
 
+/// Why a Log Time duration was rejected; the message is shown in the popup.
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum DurationError {
+    #[error("Invalid hours in \"{0}\"")]
+    InvalidHours(String),
+    #[error("Invalid minutes in \"{0}\"")]
+    InvalidMinutes(String),
+    #[error("Duration must be greater than zero")]
+    NotPositive,
+    #[error("Unrecognised format \"{0}\". Try: 1h30, 90m, 1.5h")]
+    Unrecognised(String),
+}
+
 /// Parses a human-readable duration string into a number of hours (f32).
 ///
 /// Accepted formats (case-insensitive):
@@ -147,10 +160,17 @@ pub fn format_relative_date(iso: &str) -> String {
 /// - `"1.5h"`, `"1,5h"` → 1.5
 /// - `"2h"` → 2.0
 ///
-/// Returns `Err` with a human-readable message when the format is not recognised
-/// or when the result is zero / negative.
-pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
+/// Fails when the format is not recognised or when the result is zero / negative.
+pub fn parse_duration_to_hours(input: &str) -> Result<f32, DurationError> {
     let s = input.trim().to_lowercase().replace(',', ".");
+    let positive = |hours: f32| {
+        if hours.is_finite() && hours > 0.0 {
+            Ok(hours)
+        } else {
+            Err(DurationError::NotPositive)
+        }
+    };
+    let invalid_minutes = |_| DurationError::InvalidMinutes(input.to_string());
 
     // Pattern: "1h30m" or "1h30" — hours and optional minutes
     if let Some(h_pos) = s.find('h') {
@@ -159,47 +179,27 @@ pub fn parse_duration_to_hours(input: &str) -> Result<f32, String> {
 
         let hours: f32 = hours_part
             .parse()
-            .map_err(|_| format!("Invalid hours in \"{}\"", input))?;
-
+            .map_err(|_| DurationError::InvalidHours(input.to_string()))?;
         let minutes: f32 = if minutes_part.is_empty() {
             0.0
         } else {
-            minutes_part
-                .parse()
-                .map_err(|_| format!("Invalid minutes in \"{}\"", input))?
+            minutes_part.parse().map_err(invalid_minutes)?
         };
-
-        let total = hours + minutes / 60.0;
-        if !(total.is_finite() && total > 0.0) {
-            return Err("Duration must be greater than zero".into());
-        }
-        return Ok(total);
+        return positive(hours + minutes / 60.0);
     }
 
     // Pattern: "90m" — plain minutes
     if let Some(stripped) = s.strip_suffix('m') {
-        let minutes: f32 = stripped
-            .parse()
-            .map_err(|_| format!("Invalid minutes in \"{}\"", input))?;
-        let total = minutes / 60.0;
-        if !(total.is_finite() && total > 0.0) {
-            return Err("Duration must be greater than zero".into());
-        }
-        return Ok(total);
+        let minutes: f32 = stripped.parse().map_err(invalid_minutes)?;
+        return positive(minutes / 60.0);
     }
 
     // Pattern: bare number — treated as minutes
     if let Ok(minutes) = s.parse::<f32>() {
-        if !(minutes.is_finite() && minutes > 0.0) {
-            return Err("Duration must be greater than zero".into());
-        }
-        return Ok(minutes / 60.0);
+        return positive(minutes / 60.0);
     }
 
-    Err(format!(
-        "Unrecognised format \"{}\". Try: 1h30, 90m, 1.5h",
-        input
-    ))
+    Err(DurationError::Unrecognised(input.to_string()))
 }
 
 /// Builds `git clone -b <branch> git@<host>:<path>.git` from an MR web URL
@@ -259,6 +259,19 @@ mod tests {
             assert!(parse_duration_to_hours(input).is_err(), "{input} accepted");
         }
         assert_eq!(parse_duration_to_hours("1h30"), Ok(1.5));
+        assert_eq!(parse_duration_to_hours("90m"), Ok(1.5));
+        assert_eq!(
+            parse_duration_to_hours("0"),
+            Err(DurationError::NotPositive)
+        );
+        assert_eq!(
+            parse_duration_to_hours("xh"),
+            Err(DurationError::InvalidHours("xh".into()))
+        );
+        assert_eq!(
+            parse_duration_to_hours("soon").unwrap_err().to_string(),
+            "Unrecognised format \"soon\". Try: 1h30, 90m, 1.5h"
+        );
     }
 
     #[test]

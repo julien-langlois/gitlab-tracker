@@ -192,10 +192,7 @@ impl App {
             .insert(ticket_id.clone(), TimeLogState::Loading);
         let tx = tx.clone();
         tokio::spawn(async move {
-            let entries = provider
-                .fetch_time_entries(&ticket_id)
-                .await
-                .map_err(|e| e.to_string());
+            let entries = provider.fetch_time_entries(&ticket_id).await;
             let _ = tx.send(AppEvent::TimeEntriesLoaded { ticket_id, entries });
         });
     }

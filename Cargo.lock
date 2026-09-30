@@ -1157,6 +1157,7 @@ dependencies = [
 name = "gitlab-tracker"
 version = "0.4.8"
 dependencies = [
+ "anyhow",
  "arboard",
  "async-trait",
  "chrono",
@@ -1178,6 +1179,7 @@ dependencies = [
  "serde",
  "serde_json",
  "terminal-colorsaurus",
+ "thiserror 2.0.19",
  "tokio",
  "toml",
  "tracing",

@@ -110,7 +110,6 @@ impl TicketTransitionProvider for RedmineProvider {
             status_id,
         )
         .await
-        .map_err(gitlab_tracker_core::TrackerError::Other)
     }
 }
 
@@ -226,6 +225,5 @@ impl TrackerProvider for RedmineProvider {
             issue.as_ref(),
         )
         .await
-        .map_err(gitlab_tracker_core::TrackerError::Other)
     }
 }

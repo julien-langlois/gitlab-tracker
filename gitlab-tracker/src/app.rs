@@ -1433,7 +1433,7 @@ impl App {
                     }
                     Err(error) => {
                         tracing::warn!(error = %error, "Tracker activities fetch failed");
-                        self.activities_error = Some(error);
+                        self.activities_error = Some(error.to_string());
                     }
                 }
                 false
@@ -1445,7 +1445,7 @@ impl App {
                     Ok(entries) => TimeLogState::Loaded(entries),
                     Err(error) => {
                         tracing::warn!(ticket_id = %ticket_id, error = %error, "Time entries fetch failed");
-                        TimeLogState::Failed(error)
+                        TimeLogState::Failed(error.to_string())
                     }
                 };
                 self.time_entries.insert(ticket_id, state);
@@ -1470,7 +1470,7 @@ impl App {
                         );
                         let _ = tx2.send(AppEvent::TimeEntriesLoaded {
                             ticket_id: tid,
-                            entries: entries.map_err(|e| e.to_string()),
+                            entries,
                         });
                         if let Ok(ticket) = ticket {
                             let _ = tx2.send(AppEvent::TrackerTicketLoaded {
@@ -1489,7 +1489,7 @@ impl App {
             // ── Time log submission failed ────────────────────────────────────
             AppEvent::TimeLogFailed { error } => {
                 self.log_time_form.submitting = false;
-                self.log_time_form.error = Some(error);
+                self.log_time_form.error = Some(error.to_string());
                 false
             }
 
@@ -1626,7 +1626,7 @@ impl App {
                 let Some(mr) = self.mrs.find_mut(&id) else {
                     return false;
                 };
-                mr.status = MrStatus::Error(error);
+                mr.status = MrStatus::Error(error.to_string());
                 // Not persisted: errors are not saved to disk (see `persists_state`).
                 needs_persist
             }
@@ -1789,7 +1789,7 @@ mod tests {
         app.apply_event(
             AppEvent::MrFailed {
                 id: "1".into(),
-                error: "boom".into(),
+                error: crate::gitlab::GitlabError::Cancelled,
             },
             Arc::new(Semaphore::new(1)),
             &tx,
@@ -2117,14 +2117,15 @@ mod tests {
         let old = view.next_generation(); // e.g. 30-day window
         view.loading = true;
         let new = view.next_generation(); // [W] pressed: 90-day window
-        view.apply_result(old, Err("old window".into()));
+        let invalid = |msg: &str| gitlab_tracker_stats::StatsError::InvalidData(msg.into());
+        view.apply_result(old, Err(invalid("old window")));
         assert!(
             view.loading && view.error.is_none(),
             "late response ignored"
         );
-        view.apply_result(new, Err("new window".into()));
+        view.apply_result(new, Err(invalid("new window")));
         assert!(!view.loading);
-        assert_eq!(view.error.as_deref(), Some("new window"));
+        assert_eq!(view.error.as_deref(), Some("Invalid data: new window"));
     }
 
     async fn press(app: &mut App, tx: &UnboundedSender<AppEvent>, code: KeyCode) -> bool {
@@ -2218,14 +2219,17 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let error = AppEvent::MrFailed {
             id: "1".into(),
-            error: "HTTP 502".into(),
+            error: crate::gitlab::GitlabError::Http(reqwest::StatusCode::BAD_GATEWAY),
         };
         let persist = app.apply_event(error, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new());
         assert_eq!(
             app.mrs[0].title, "Fix login",
             "the error is not written in the title"
         );
-        assert_eq!(app.mrs[0].status, MrStatus::Error("HTTP 502".into()));
+        assert_eq!(
+            app.mrs[0].status,
+            MrStatus::Error("HTTP 502 Bad Gateway".into())
+        );
         assert!(!persist, "errors are not persisted");
     }
 

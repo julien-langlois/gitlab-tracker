@@ -348,10 +348,12 @@ pub async fn update_issue_status(
     token: &str,
     ticket_id: &str,
     status_id: u64,
-) -> Result<(), String> {
+) -> Result<(), TrackerError> {
     if !is_valid_ticket_id(ticket_id) {
         tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
-        return Err(format!("Invalid ticket id \"{ticket_id}\""));
+        return Err(TrackerError::Other(format!(
+            "Invalid ticket id \"{ticket_id}\""
+        )));
     }
     #[derive(Debug, Serialize)]
     struct PutIssueBody {
@@ -385,12 +387,12 @@ pub async fn update_issue_status(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|e| TrackerError::Network(e.to_string()))?;
 
     if resp.status().is_success() {
         Ok(())
     } else {
-        Err(format!("Redmine API error: HTTP {}", resp.status()))
+        Err(status_error(resp.status()))
     }
 }
 
@@ -406,7 +408,7 @@ pub async fn update_issue_status(
 /// Redmine instances.
 ///
 /// Calls `POST /time_entries.json`.
-/// Returns `Ok(())` on success or an error string suitable for inline TUI display.
+/// Returns a typed error (`Auth`, `NotFound`, `Network`…) shown inline in the TUI.
 pub async fn log_time(
     http: &reqwest::Client,
     base_url: &str,
@@ -414,10 +416,12 @@ pub async fn log_time(
     ticket_id: &str,
     entry: TimeEntryRequest,
     issue: Option<&RedmineIssue>,
-) -> Result<(), String> {
+) -> Result<(), TrackerError> {
     if !is_valid_ticket_id(ticket_id) {
         tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
-        return Err(format!("Invalid ticket id \"{ticket_id}\""));
+        return Err(TrackerError::Other(format!(
+            "Invalid ticket id \"{ticket_id}\""
+        )));
     }
     let url = format!("{}/time_entries.json", base_url.trim_end_matches('/'));
 
@@ -452,12 +456,12 @@ pub async fn log_time(
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|e| TrackerError::Network(e.to_string()))?;
 
     if resp.status().is_success() {
         Ok(())
     } else {
-        Err(format!("Redmine API error: HTTP {}", resp.status()))
+        Err(status_error(resp.status()))
     }
 }
 

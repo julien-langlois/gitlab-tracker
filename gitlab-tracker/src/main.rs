@@ -15,6 +15,7 @@ mod storage;
 mod ui;
 mod utils;
 
+use anyhow::Context;
 use app::{App, AppInit};
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyEventKind};
@@ -148,7 +149,7 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
     let default_panic = std::panic::take_hook();
@@ -225,8 +226,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         migrate_legacy_keyring_entry(&token_url);
         get_or_prompt_token(&token_url)
     })
-    .await?
-    .ok_or("A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)")?;
+    .await
+    .context("GitLab token lookup task failed")?
+    .context("A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)")?;
     let token = Arc::new(token);
 
     // ── Optional tracker integration ──────────────────────────────────────────
@@ -265,7 +267,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let setup = tokio::task::spawn_blocking(move || {
                     gitlab_tracker_redmine::RedmineProvider::from_tracker_section(&url, extra)
                 })
-                .await?;
+                .await
+                .context("Redmine setup task failed")?;
                 match setup {
                     Ok(provider) => {
                         let provider = Arc::new(provider);
@@ -299,7 +302,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(mode = ?theme_mode, "Terminal theme detected");
 
     // Enable mouse capture so we can detect hover and scroll events per pane.
-    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)
+        .context("Failed to enable mouse capture")?;
 
     let mut terminal = ratatui::init();
     let _terminal_guard = crate::utils::TerminalGuard;
@@ -534,11 +538,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 crossterm::execute!(
                     std::io::stdout(),
                     crossterm::terminal::SetTitle(&window_title)
-                )?;
+                )
+                .context("Failed to set the terminal title")?;
                 last_title = window_title;
             }
 
-            terminal.draw(|f| ui::render_ui(f, &mut app))?;
+            terminal
+                .draw(|f| ui::render_ui(f, &mut app))
+                .context("Failed to draw the terminal")?;
             dirty = false;
         }
 
@@ -547,7 +554,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // `None`: the terminal input stream is closed — nothing left to drive the UI.
                 let Some(input) = input else { break };
                 dirty = true;
-                match input? {
+                match input.context("Failed to read terminal input")? {
                     Event::Mouse(mouse) => {
                         handle_mouse_event(mouse, &mut app);
                     }

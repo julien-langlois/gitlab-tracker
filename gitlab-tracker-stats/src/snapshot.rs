@@ -28,7 +28,7 @@ impl SnapshotTrigger {
 }
 
 impl std::str::FromStr for SnapshotTrigger {
-    type Err = String;
+    type Err = crate::StatsError;
 
     /// Parses the `trigger` DB column. An unknown value is an error, never a silent
     /// `OnRefresh`: a row written by a newer version must not be miscounted.
@@ -37,7 +37,9 @@ impl std::str::FromStr for SnapshotTrigger {
             "on_merge" => Ok(SnapshotTrigger::OnMerge),
             "on_close" => Ok(SnapshotTrigger::OnClose),
             "on_refresh" => Ok(SnapshotTrigger::OnRefresh),
-            other => Err(format!("unknown snapshot trigger {other:?}")),
+            other => Err(crate::StatsError::InvalidData(format!(
+                "unknown snapshot trigger {other:?}"
+            ))),
         }
     }
 }
@@ -201,7 +203,10 @@ mod tests {
             SnapshotTrigger::OnClose,
             SnapshotTrigger::OnRefresh,
         ] {
-            assert_eq!(trigger.as_str().parse::<SnapshotTrigger>(), Ok(trigger));
+            assert_eq!(
+                trigger.as_str().parse::<SnapshotTrigger>().ok(),
+                Some(trigger)
+            );
         }
         assert!("on_reopen".parse::<SnapshotTrigger>().is_err());
     }

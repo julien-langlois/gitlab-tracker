@@ -352,7 +352,7 @@ pub async fn handle_key_event(
                             let hours = parse_duration_to_hours(&app.log_time_form.duration_input);
                             match hours {
                                 Err(e) => {
-                                    app.log_time_form.error = Some(e);
+                                    app.log_time_form.error = Some(e.to_string());
                                     app.log_time_form.focused_field = LogTimeField::Duration;
                                 }
                                 Ok(h) => {
@@ -411,7 +411,7 @@ pub async fn handle_key_event(
                                                         Err(e) => {
                                                             let _ = tx2.send(
                                                                 crate::models::AppEvent::TimeLogFailed {
-                                                                    error: e.to_string(),
+                                                                    error: e,
                                                                 },
                                                             );
                                                         }
@@ -669,10 +669,7 @@ pub async fn handle_key_event(
                                 app.activities_error = None;
                                 let tx2 = tx.clone();
                                 tokio::spawn(async move {
-                                    let activities = provider
-                                        .fetch_activities()
-                                        .await
-                                        .map_err(|e| e.to_string());
+                                    let activities = provider.fetch_activities().await;
                                     let _ = tx2.send(crate::models::AppEvent::ActivitiesLoaded(
                                         activities,
                                     ));

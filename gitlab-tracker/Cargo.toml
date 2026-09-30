@@ -39,6 +39,8 @@ urlencoding = "2.1"
 directories.workspace = true
 keyring.workspace = true
 open.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
 # Desktop notifications (feature `notifications`, on by default).
 notify-rust = { version = "4", optional = true }
 arboard = { version = "3", default-features = false }

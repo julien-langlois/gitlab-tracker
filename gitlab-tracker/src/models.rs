@@ -499,7 +499,7 @@ pub enum AppEvent {
     MrLoaded(Box<MrLoadedData>),
     MrFailed {
         id: String,
-        error: String,
+        error: crate::gitlab::GitlabError,
     },
     /// Fired while GitLab is still computing mergeability and the fetcher is retrying.
     MrMergeabilityRetrying {
@@ -530,14 +530,14 @@ pub enum AppEvent {
     },
     /// Fired when the list of time-tracking activity categories has been fetched.
     /// Stored in `App` for use in the Log Time popup selector.
-    /// `Err` carries the tracker error message, shown in the Log Time popup.
-    ActivitiesLoaded(Result<Vec<gitlab_tracker_core::Activity>, String>),
+    /// `Err` is shown in the Log Time popup.
+    ActivitiesLoaded(Result<Vec<gitlab_tracker_core::Activity>, gitlab_tracker_core::TrackerError>),
     /// Fired when time entries for a ticket have been fetched from the tracker.
     /// Keyed by ticket id so a late response can never land on another ticket.
     TimeEntriesLoaded {
         ticket_id: String,
-        /// `Err` carries the tracker error message, shown in the TimeLog view.
-        entries: Result<Vec<gitlab_tracker_core::TimeEntry>, String>,
+        /// `Err` is shown in the TimeLog view.
+        entries: Result<Vec<gitlab_tracker_core::TimeEntry>, gitlab_tracker_core::TrackerError>,
     },
     /// Fired when a time entry has been successfully submitted to the tracker.
     /// Carries both the MR id (to update the right `linked_ticket` in memory) and the
@@ -549,9 +549,9 @@ pub enum AppEvent {
         ticket_id: String,
     },
     /// Fired when a time entry submission failed.
-    /// The error string is shown inline in the popup.
+    /// The error is shown inline in the popup.
     TimeLogFailed {
-        error: String,
+        error: gitlab_tracker_core::TrackerError,
     },
     /// Fired when an async stats aggregation finishes. `generation` identifies the
     /// request (see `StatsViewState::apply_result`); the report is boxed to keep the
@@ -559,7 +559,7 @@ pub enum AppEvent {
     #[cfg(feature = "stats")]
     StatsReportLoaded {
         generation: u64,
-        result: Result<Box<gitlab_tracker_stats::StatReport>, String>,
+        result: Result<Box<gitlab_tracker_stats::StatReport>, gitlab_tracker_stats::StatsError>,
     },
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]

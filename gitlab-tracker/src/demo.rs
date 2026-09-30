@@ -478,7 +478,8 @@ fn demo_updated_at(days_ago: i64) -> String {
 
 /// Runs the application in demo mode with pre-populated mock data.
 /// This mode is intended for screenshots, testing, and demonstrations.
-pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
+    use anyhow::Context;
     // In demo mode optional columns start hidden — the demo.tape scenario uses [C]
     // to open the column picker and enable them live, showcasing the feature.
     let demo_config = AppConfig {
@@ -911,7 +912,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     });
 
     // Enable mouse capture so VHS scroll simulation works in demo mode.
-    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)?;
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)
+        .context("Failed to enable mouse capture")?;
 
     let mut terminal = ratatui::init();
     let _terminal_guard = crate::utils::TerminalGuard;
@@ -938,10 +940,12 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
             }
         }
 
-        terminal.draw(|f| ui::render_ui(f, &mut app))?;
+        terminal
+            .draw(|f| ui::render_ui(f, &mut app))
+            .context("Failed to draw the terminal")?;
 
-        if event::poll(Duration::from_millis(50))? {
-            match event::read()? {
+        if event::poll(Duration::from_millis(50)).context("Failed to poll terminal input")? {
+            match event::read().context("Failed to read terminal input")? {
                 Event::Mouse(mouse) => {
                     handle_mouse_event(mouse, &mut app);
                 }

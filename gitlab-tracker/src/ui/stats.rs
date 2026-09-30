@@ -238,8 +238,7 @@ fn trigger_stats_report_refresh(
 
             let result = gitlab_tracker_stats::StatReport::load(db.as_ref(), &filter)
                 .await
-                .map(Box::new)
-                .map_err(|e| e.to_string());
+                .map(Box::new);
             let _ = tx2.send(crate::models::AppEvent::StatsReportLoaded { generation, result });
         });
     }

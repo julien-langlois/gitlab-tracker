@@ -66,7 +66,7 @@ pub async fn resolve_project(args: &Args) -> ProjectEntry {
 pub async fn run_command(
     command: Option<&Command>,
     project: &ProjectEntry,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> anyhow::Result<bool> {
     match command {
         Some(Command::TrackerStatuses) => {
             print_tracker_statuses(project).await?;
@@ -76,7 +76,7 @@ pub async fn run_command(
     }
 }
 
-async fn print_tracker_statuses(project: &ProjectEntry) -> Result<(), Box<dyn std::error::Error>> {
+async fn print_tracker_statuses(project: &ProjectEntry) -> anyhow::Result<()> {
     let Some(tracker_cfg) = project.tracker.as_ref() else {
         println!("No [project.tracker] section configured for the active project.");
         return Ok(());
@@ -84,6 +84,7 @@ async fn print_tracker_statuses(project: &ProjectEntry) -> Result<(), Box<dyn st
 
     #[cfg(feature = "redmine")]
     if tracker_cfg.provider.eq_ignore_ascii_case("redmine") {
+        use anyhow::Context;
         use gitlab_tracker_core::TicketTransitionProvider;
 
         let (url, extra) = (tracker_cfg.url.clone(), tracker_cfg.extra.clone());
@@ -91,8 +92,12 @@ async fn print_tracker_statuses(project: &ProjectEntry) -> Result<(), Box<dyn st
         let provider = tokio::task::spawn_blocking(move || {
             gitlab_tracker_redmine::RedmineProvider::from_tracker_section(&url, extra)
         })
-        .await??;
-        let statuses = provider.fetch_transition_targets().await?;
+        .await
+        .context("Redmine setup task failed")??;
+        let statuses = provider
+            .fetch_transition_targets()
+            .await
+            .context("Failed to fetch Redmine issue statuses")?;
 
         if statuses.is_empty() {
             println!("No tracker statuses returned.");
