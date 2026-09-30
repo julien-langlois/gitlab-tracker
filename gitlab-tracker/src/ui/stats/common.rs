@@ -99,19 +99,6 @@ pub(crate) fn kv_line(key: &str, value: &str, value_color: Color) -> Line<'stati
     ])
 }
 
-/// Linear-interpolation percentile on a pre-sorted slice.
-pub(crate) fn percentile_f64(sorted: &[f64], p: f64) -> Option<f64> {
-    let n = sorted.len();
-    if n == 0 {
-        return None;
-    }
-    let idx = (p / 100.0) * (n - 1) as f64;
-    let lo = idx.floor() as usize;
-    let hi = idx.ceil() as usize;
-    let frac = idx - lo as f64;
-    Some(sorted[lo] + frac * (sorted[hi] - sorted[lo]))
-}
-
 /// Truncates a string to `max_chars` characters, appending `…` when truncated.
 pub(crate) fn truncate(s: &str, max_chars: usize) -> String {
     let chars: Vec<char> = s.chars().collect();

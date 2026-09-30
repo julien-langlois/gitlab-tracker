@@ -16,4 +16,4 @@ desktop = ["dep:notify-rust", "dep:open"]
 
 [dependencies]
 notify-rust = { version = "4", optional = true }
-open = { version = "5", optional = true }
+open = { workspace = true, optional = true }

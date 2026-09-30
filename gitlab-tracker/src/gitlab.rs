@@ -80,6 +80,27 @@ pub trait CountApiCalls {
 
 /// Implemented on the tracked MR itself: the estimate only reads its cache-relevant
 /// fields, so no `CachedMrData` (with cloned description, pipelines, …) is needed.
+/// Counts added and deleted lines in a unified patch.
+///
+/// `+++` / `---` are file headers only before the first `@@` hunk (GitLab's `diff`
+/// field usually has none); inside hunks they are real changes such as `++i` or a
+/// SQL `-- comment`, which a plain prefix filter would drop.
+fn count_diff_lines(diff: &str) -> (u32, u32) {
+    let (mut added, mut deleted, mut in_hunk) = (0, 0, false);
+    for line in diff.lines() {
+        if line.starts_with("@@") {
+            in_hunk = true;
+        } else if !in_hunk {
+            continue;
+        } else if line.starts_with('+') {
+            added += 1;
+        } else if line.starts_with('-') {
+            deleted += 1;
+        }
+    }
+    (added, deleted)
+}
+
 /// Cache snapshot of a tracked MR handed to the fetcher, so it can skip pipeline,
 /// diff and notes re-fetches when the MR has not changed since the last cycle.
 impl From<&crate::models::TrackedMr> for CachedMrData {
@@ -352,15 +373,12 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     pipelines
 }
 
-/// Fetches the real human-comment count for a MR from the GitLab Discussions API.
+/// Counts the **unresolved review threads** of a MR (GitLab Discussions API).
 ///
 /// `GET /projects/:id/merge_requests/:iid/discussions` returns all discussion threads.
-/// Each thread contains one or more notes. We count every note where `system == false`,
-/// which corresponds to actual human feedback (thread starters + replies), regardless
-/// of whether the thread is resolved or still open.
-///
-/// System notes (label changes, merge commits, assignee changes, etc.) are excluded
-/// because they are GitLab activity entries, not reviewer feedback.
+/// A thread counts once when at least one of its notes is resolvable and not yet
+/// resolved; plain comments, replies and resolved threads are not counted.
+/// (The result is stored in `user_notes_count`, whose name predates this logic.)
 ///
 /// Falls back to `0` on any network or parse error — this is a best-effort enrichment.
 async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Client) -> u32 {
@@ -549,15 +567,10 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
         for change in changes {
             files_changed += 1;
             // Each `change` entry carries a `diff` field with the raw unified patch.
-            // Count lines starting with `+`/`-`, excluding `+++`/`---` file headers.
             if let Some(diff) = change.get("diff").and_then(|v| v.as_str()) {
-                for line in diff.lines() {
-                    if line.starts_with('+') && !line.starts_with("+++") {
-                        additions += 1;
-                    } else if line.starts_with('-') && !line.starts_with("---") {
-                        deletions += 1;
-                    }
-                }
+                let (added, deleted) = count_diff_lines(diff);
+                additions += added;
+                deletions += deleted;
             }
         }
 
@@ -1471,6 +1484,17 @@ pub async fn fetch_gitlab_data(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn diff_lines_keep_double_sign_changes() {
+        // GitLab's usual shape: no file headers, hunks only.
+        let patch = "@@ -1,2 +1,3 @@\n ctx\n-old\n+++i;\n+-- sql comment\n--- removed dashes";
+        assert_eq!(count_diff_lines(patch), (2, 2));
+        // With file headers: they are skipped, but only before the first hunk.
+        let with_headers = "--- a/f.rs\n+++ b/f.rs\n@@ -1 +1 @@\n-a\n+b";
+        assert_eq!(count_diff_lines(with_headers), (1, 1));
+    }
+
     use super::*;
 
     #[test]

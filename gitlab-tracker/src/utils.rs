@@ -76,9 +76,10 @@ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<f64> {
 
 /// Formats an ISO 8601 timestamp string into a human-readable relative date label.
 ///
-/// Returns labels such as "à l'instant", "il y a 5 min", "Hier", "Il y a 3 jours", etc.
-/// Falls back to a compact absolute date ("2024-06-01 14:32") when the timestamp
-/// cannot be parsed or when the difference exceeds 30 days.
+/// Returns English labels such as "just now", "5 min ago", "yesterday", "3 days ago",
+/// "2 months ago", or their future counterparts ("in 3 days", "next week").
+/// Falls back to a compact absolute date ("2024-06-01 14:32:00") when the timestamp
+/// cannot be parsed.
 pub fn format_relative_date(iso: &str) -> String {
     let Ok(dt) = iso.parse::<DateTime<Utc>>() else {
         // Graceful fallback: show a compact absolute date (drop sub-seconds and TZ).

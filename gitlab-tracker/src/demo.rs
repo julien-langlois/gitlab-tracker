@@ -928,8 +928,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         if event::poll(Duration::from_millis(50))? {
             match event::read()? {
                 Event::Mouse(mouse) => {
-                    let size = terminal.size()?;
-                    handle_mouse_event(mouse, size.width, size.height, &mut app);
+                    handle_mouse_event(mouse, &mut app);
                 }
                 // Quit on Esc/q (handle_key_event_demo returns true).
                 Event::Key(key)

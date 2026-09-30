@@ -100,13 +100,13 @@ pub struct AggregatedStats {
     /// 90th-percentile cycle time (captures the "long tail" of stuck MRs).
     pub cycle_time_p90_hours: Option<f64>,
 
-    /// Average cycle time grouped by MR author.
+    /// Median cycle time grouped by MR author.
     pub cycle_time_by_author: HashMap<String, f64>,
 
-    /// Average cycle time grouped by reviewer (across all reviewers on each MR).
+    /// Median cycle time grouped by reviewer (across all reviewers on each MR).
     pub cycle_time_by_reviewer: HashMap<String, f64>,
 
-    /// Average cycle time grouped by milestone title.
+    /// Median cycle time grouped by milestone title.
     pub cycle_time_by_milestone: HashMap<String, f64>,
 
     // ── Diff and review quality ───────────────────────────────────────────────
@@ -260,7 +260,7 @@ pub(crate) fn compute_stats(
     let cycle_time_p90_hours = percentile(&cycle_times, 90.0);
 
     // ── Cycle time by author ──────────────────────────────────────────────────
-    let cycle_time_by_author = group_average(
+    let cycle_time_by_author = group_median(
         merged.iter().copied(),
         |m| m.author.clone(),
         |m| m.cycle_time_hours,
@@ -284,7 +284,7 @@ pub(crate) fn compute_stats(
         .collect();
 
     // ── Cycle time by milestone ───────────────────────────────────────────────
-    let cycle_time_by_milestone = group_average(
+    let cycle_time_by_milestone = group_median(
         merged.iter().copied(),
         |m| m.milestone.clone().unwrap_or_default(),
         |m| m.cycle_time_hours,
@@ -517,7 +517,7 @@ fn compute_size_buckets(
 // ── Statistical helpers ───────────────────────────────────────────────────────
 
 /// Returns the p-th percentile of an already-sorted slice, using linear interpolation.
-fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
+pub fn percentile(sorted: &[f64], p: f64) -> Option<f64> {
     let n = sorted.len();
     if n == 0 {
         return None;
@@ -564,7 +564,7 @@ where
 /// Median is preferred over mean for cycle-time breakdowns: a single long-running
 /// MR (e.g. a multi-week feature branch) would otherwise dominate the average for
 /// authors or milestones with few MRs, giving a misleading picture.
-fn group_average<'a, I, K, V>(iter: I, key_fn: K, val_fn: V) -> HashMap<String, f64>
+fn group_median<'a, I, K, V>(iter: I, key_fn: K, val_fn: V) -> HashMap<String, f64>
 where
     I: Iterator<Item = &'a PerMrMetrics>,
     K: Fn(&PerMrMetrics) -> String,

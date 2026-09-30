@@ -21,7 +21,7 @@ use zeroize::Zeroizing;
 pub struct ProjectEntry {
     /// Human-readable alias shown in prompts (e.g. "My Company — Backend").
     pub name: Option<String>,
-    /// Base URL of the GitLab instance (e.g. "https://gitlab.com").
+    /// Base URL of the GitLab instance (e.g. <https://gitlab.com>).
     pub gitlab_url: String,
     /// Numeric or string project ID as shown in GitLab project settings.
     pub project_id: String,
@@ -196,7 +196,7 @@ pub struct TrackerConfig {
     /// Accepted values (case-insensitive): `"redmine"`, `"jira"` (future), …
     pub provider: String,
 
-    /// Base URL of the tracker instance (e.g. "https://redmine.example.com").
+    /// Base URL of the tracker instance (e.g. <https://redmine.example.com>).
     /// Used both as the API root and as the OS keyring account key.
     pub url: String,
 
@@ -278,15 +278,6 @@ async fn save_projects_toml(cfg: &ProjectsConfig) {
     }
 }
 
-/// Attempts a one-time silent migration from the legacy `config.json` format.
-///
-/// If `projects.toml` does not exist yet but `config.json` contains
-/// `project_id` and `gitlab_url` fields (written by an older version of the
-/// app), this function creates `projects.toml` from those values and returns
-/// the resolved `(gitlab_url, project_id)` pair.
-///
-/// Returns `None` when the migration is not applicable (file absent, fields
-/// missing, or already migrated).
 /// Attempts a one-time silent migration from the legacy `config.json` format.
 ///
 /// If `projects.toml` does not exist yet but `config.json` contains

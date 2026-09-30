@@ -23,6 +23,63 @@ pub fn badge_label(text: &str) -> String {
     format!("{:^width$}", text, width = BADGE_WIDTH)
 }
 
+/// Label and colours (fg, bg) of the mergeability badge — shared by the table and
+/// the inspector so both always agree. `Unknown` (not fetched yet, e.g. right after
+/// startup) reads as a plain "OPEN" to avoid a wall of grey badges.
+pub fn mergeability_badge(mergeability: &MergeabilityStatus) -> (&'static str, Color, Color) {
+    match mergeability {
+        MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
+        MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
+        MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
+        MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
+        MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
+        MergeabilityStatus::DiscussionsNotResolved => {
+            ("DISCUSSIONS", Color::Black, Color::LightMagenta)
+        }
+        MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
+        MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
+        MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
+        MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
+        MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
+        MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
+        MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
+    }
+}
+
+/// How far an open MR is behind its target branch — shared by the table column and
+/// the inspector.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Behind {
+    UpToDate,
+    Commits(u32),
+    /// Not computed yet.
+    Pending,
+}
+
+impl Behind {
+    /// A known commit count always wins: a `Mergeable` MR can still be behind.
+    /// Without a count, `Mergeable` means GitLab sees nothing to rebase.
+    pub fn of(commits_behind: Option<u32>, mergeability: &MergeabilityStatus) -> Self {
+        match commits_behind {
+            Some(0) => Behind::UpToDate,
+            Some(n) => Behind::Commits(n),
+            None if *mergeability == MergeabilityStatus::Mergeable => Behind::UpToDate,
+            None => Behind::Pending,
+        }
+    }
+}
+
+/// Colours (fg, bg) of the "n behind" chip: the further behind, the louder.
+pub fn behind_colors(n: u32) -> (Color, Color) {
+    if n >= 10 {
+        (Color::White, Color::Red)
+    } else if n >= 3 {
+        (Color::Black, Color::Yellow)
+    } else {
+        (Color::Black, Color::LightYellow)
+    }
+}
+
 /// Returns a styled badge cell for the GitLab MR state.
 ///
 /// For open MRs, `tick` (the current `time_left` value) drives a three-phase animation:
@@ -85,23 +142,7 @@ fn state_badge(
     }
 
     // tick % 3 == 1, or tick % 3 == 2 with no active CI: show the mergeability badge.
-    let (text, fg, bg) = match mergeability {
-        MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
-        MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
-        MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
-        MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
-        MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
-        MergeabilityStatus::DiscussionsNotResolved => {
-            ("DISCUSSIONS", Color::Black, Color::LightMagenta)
-        }
-        MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
-        MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
-        MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
-        MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
-        MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
-        MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
-        MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
-    };
+    let (text, fg, bg) = mergeability_badge(mergeability);
     Cell::from(Line::from(Span::styled(
         badge_label(text),
         Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
@@ -290,14 +331,13 @@ pub fn render_table(app: &App) -> Table<'_> {
                 cells.push(maybe_highlight(complexity_cell, highlight));
             }
 
-            // Optional "commits behind target" column — only meaningful for open MRs
-            // that are not Mergeable. Shows "Up to date" for Mergeable, "N behind" otherwise,
+            // Optional "commits behind target" column for open MRs (see `Behind::of`);
             // "—" for merged/closed MRs (not applicable).
             if col("commits_behind") {
                 let behind_cell = match &mr.diff_stats {
                     Some(stats) if mr.state == crate::models::GitlabMrState::Opened => {
-                        match (stats.commits_behind, &mr.mergeability) {
-                            (Some(0), _) | (_, MergeabilityStatus::Mergeable) => {
+                        match Behind::of(stats.commits_behind, &mr.mergeability) {
+                            Behind::UpToDate => {
                                 // Centered plain text — no background colour needed.
                                 Cell::from(format!(
                                     "{:^width$}",
@@ -306,14 +346,8 @@ pub fn render_table(app: &App) -> Table<'_> {
                                 ))
                                 .fg(Color::Green)
                             }
-                            (Some(n), _) => {
-                                let (fg, bg) = if n >= 10 {
-                                    (Color::White, Color::Red)
-                                } else if n >= 3 {
-                                    (Color::Black, Color::Yellow)
-                                } else {
-                                    (Color::Black, Color::LightYellow)
-                                };
+                            Behind::Commits(n) => {
+                                let (fg, bg) = behind_colors(n);
                                 // The text is padded to BEHIND_WIDTH so the background colour
                                 // fills the entire column width, matching the Status chip style.
                                 Cell::from(Span::styled(
@@ -325,14 +359,16 @@ pub fn render_table(app: &App) -> Table<'_> {
                                     Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
                                 ))
                             }
-                            (None, MergeabilityStatus::Retrying) => {
-                                Cell::from("RETRYING").fg(Color::Cyan)
-                            }
-                            (None, MergeabilityStatus::SyncFailed) => {
-                                Cell::from("SYNC FAILED").fg(Color::Red)
-                            }
-                            // None + non-Mergeable: still loading from the API.
-                            (None, _) => Cell::from("…").fg(Color::DarkGray),
+                            Behind::Pending => match mr.mergeability {
+                                MergeabilityStatus::Retrying => {
+                                    Cell::from("RETRYING").fg(Color::Cyan)
+                                }
+                                MergeabilityStatus::SyncFailed => {
+                                    Cell::from("SYNC FAILED").fg(Color::Red)
+                                }
+                                // Still loading from the API.
+                                _ => Cell::from("…").fg(Color::DarkGray),
+                            },
                         }
                     }
                     // Merged / closed or no diff_stats yet.
@@ -477,4 +513,20 @@ pub fn render_table(app: &App) -> Table<'_> {
         )
         .highlight_symbol("> ")
         .block(Block::default().borders(Borders::ALL).title(" Dashboard "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn behind_status_prefers_the_commit_count() {
+        use MergeabilityStatus::{Conflict, Mergeable};
+        // A mergeable MR can still be behind: the table used to say "Up to date".
+        assert_eq!(Behind::of(Some(5), &Mergeable), Behind::Commits(5));
+        assert_eq!(Behind::of(Some(0), &Conflict), Behind::UpToDate);
+        assert_eq!(Behind::of(None, &Mergeable), Behind::UpToDate);
+        assert_eq!(Behind::of(None, &Conflict), Behind::Pending);
+        assert_eq!(mergeability_badge(&MergeabilityStatus::Unknown).0, "OPEN");
+    }
 }

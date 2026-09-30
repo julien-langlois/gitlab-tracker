@@ -139,6 +139,11 @@ pub enum AnomalySeverity {
 }
 
 impl AnomalySeverity {
+    /// Anything above `Normal`.
+    pub fn is_anomalous(&self) -> bool {
+        *self != AnomalySeverity::Normal
+    }
+
     fn from_p_value(p: f64) -> Self {
         if p > 0.10 {
             Self::Normal
@@ -186,7 +191,7 @@ impl AnomalySignal {
 
     /// Returns `true` when this signal is worth surfacing to the user.
     pub fn is_anomalous(&self) -> bool {
-        self.severity != AnomalySeverity::Normal
+        self.severity.is_anomalous()
     }
 }
 
@@ -532,16 +537,6 @@ fn push_rate_anomaly(
             p_value,
             severity,
         });
-    }
-}
-
-trait AnomalySeverityExt {
-    fn is_anomalous(&self) -> bool;
-}
-
-impl AnomalySeverityExt for AnomalySeverity {
-    fn is_anomalous(&self) -> bool {
-        *self != AnomalySeverity::Normal
     }
 }
 

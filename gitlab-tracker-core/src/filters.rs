@@ -36,11 +36,9 @@ pub struct FilterDef {
 
     /// Pure predicate — returns `true` when the MR should be visible.
     ///
-    /// `mr_*` fields mirror the flat fields of `TrackedMr` without importing the
-    /// type directly, keeping `core` free of any UI/app dependency.
-    ///
-    /// `linked_ticket` is `Option<&LinkedTicket>` so tracker-aware filters can
-    /// inspect the resolved ticket without adding a separate callback.
+    /// `mr` is a borrowed [`MrSnapshot`] of the MR's fields, so `core` never depends
+    /// on the app's `TrackedMr`. Its `linked_ticket` lets tracker-aware filters
+    /// inspect the resolved ticket without a separate callback.
     ///
     /// `query` is the trimmed text-input value for parametric filters (empty string
     /// for non-parametric ones — the predicate should ignore it in that case).

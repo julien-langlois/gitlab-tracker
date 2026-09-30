@@ -76,7 +76,7 @@ pub enum InputMode {
     Help,
     /// The Stats fullscreen overlay is open — displays MR analytics and correlations.
     /// Only compiled and reachable when the `stats` feature is enabled.
-    /// [Esc] or [G] closes it and returns to Normal mode.
+    /// `[Esc]` or `[G]` closes it and returns to Normal mode.
     #[cfg(feature = "stats")]
     Stats,
 }
@@ -149,7 +149,7 @@ impl ActivePane {
 
 /// Controls which view is rendered inside the Inspector side panel.
 ///
-/// Cycled with [P] — rotates between MrInfo and Pipelines only.
+/// Cycled with `[P]` — rotates between MrInfo and Pipelines only.
 /// The TimeLog has moved to the dedicated Tracker pane.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum InspectorView {
@@ -172,7 +172,7 @@ impl InspectorView {
 
 /// Controls which view is rendered inside the Tracker pane (lower-right).
 ///
-/// Cycled with [P] when the Tracker pane is focused.
+/// Cycled with `[P]` when the Tracker pane is focused.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum TrackerView {
     /// Ticket details: type, priority, status, version, progress, time tracking.
@@ -245,7 +245,7 @@ pub struct StatsViewState {
     pub loading: bool,
     /// Human-readable error shown when aggregation fails.
     pub error: Option<String>,
-    /// The time window currently selected by the user (cycles with [W]).
+    /// The time window currently selected by the user (cycles with `[W]`).
     pub window: StatsWindow,
     /// The currently selected stats dashboard tab.
     pub tab: StatsTab,
@@ -325,7 +325,7 @@ impl StatsTab {
     }
 }
 
-/// Time-window selector cycled by [W] inside the Stats overlay.
+/// Time-window selector cycled by `[W]` inside the Stats overlay.
 #[cfg(feature = "stats")]
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum StatsWindow {
@@ -390,7 +390,7 @@ pub struct App {
     pub sort_order: SortOrder,
     /// Which pane currently holds focus (drives keyboard & scroll routing).
     pub active_pane: ActivePane,
-    /// Which view is rendered inside the Inspector panel ([P] toggles).
+    /// Which view is rendered inside the Inspector panel (`[P]` toggles).
     pub inspector_view: InspectorView,
     /// Vertical scroll offset for the Inspector pane (in lines).
     pub inspector_scroll: u16,
@@ -399,7 +399,11 @@ pub struct App {
     pub inspector_content_lines: u16,
     /// Height (in rows) of the Inspector pane area, updated at each render frame.
     pub inspector_pane_height: u16,
-    /// Which view is rendered inside the Tracker pane ([P] toggles when focused).
+    /// Screen area of the Inspector pane at the last render (mouse hit-test).
+    pub inspector_area: ratatui::layout::Rect,
+    /// Screen area of the Tracker pane at the last render; `None` when hidden.
+    pub tracker_area: Option<ratatui::layout::Rect>,
+    /// Which view is rendered inside the Tracker pane (`[P]` toggles when focused).
     pub tracker_view: TrackerView,
     /// Vertical scroll offset for the Tracker pane (in lines).
     pub tracker_scroll: u16,
@@ -427,7 +431,7 @@ pub struct App {
     pub milestone_suggestions: Vec<String>,
     /// Index of the currently highlighted suggestion in the autocomplete popup.
     pub milestone_suggestion_cursor: usize,
-    /// Active filter applied to the MR table — selected via the [F] picker popup.
+    /// Active filter applied to the MR table — selected via the `[F]` picker popup.
     pub active_filter: ActiveFilter,
     /// State of the filter picker popup (cursor position + text input).
     /// Reset each time the popup is opened.
@@ -613,6 +617,8 @@ impl App {
             inspector_scroll: 0,
             inspector_content_lines: 0,
             inspector_pane_height: 0,
+            inspector_area: ratatui::layout::Rect::default(),
+            tracker_area: None,
             tracker_view: TrackerView::default(),
             tracker_scroll: 0,
             tracker_content_lines: 0,
@@ -2480,6 +2486,33 @@ mod tests {
         assert!(branches_to_notify(Some(&main), &main, true).is_empty());
         // MR added after startup: notifies as before.
         assert_eq!(branches_to_notify(None, &main, true), ["main"]);
+    }
+
+    #[test]
+    fn mouse_focus_follows_rendered_pane_areas() {
+        use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
+        use ratatui::layout::Rect;
+        let mut app = test_app();
+        app.inspector_area = Rect::new(65, 0, 35, 20);
+        app.tracker_area = Some(Rect::new(65, 20, 35, 10));
+        let mut hover = |column, row| {
+            let kind = MouseEventKind::Moved;
+            let modifiers = KeyModifiers::NONE;
+            crate::events::handle_mouse_event(
+                MouseEvent {
+                    kind,
+                    column,
+                    row,
+                    modifiers,
+                },
+                &mut app,
+            );
+            app.active_pane
+        };
+        assert_eq!(hover(10, 5), ActivePane::Dashboard);
+        assert_eq!(hover(70, 19), ActivePane::Inspector);
+        // First Tracker row: the old hand-made layout put this in the Inspector.
+        assert_eq!(hover(70, 20), ActivePane::Tracker);
     }
 
     #[test]

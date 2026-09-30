@@ -24,9 +24,8 @@ pub struct ColumnDef {
     /// Display order — lower values appear first in the column picker.
     pub priority: u16,
 
-    /// When `Some`, the column is only shown when the runtime condition is met
-    /// (e.g. a tracker provider is configured). The closure receives a single `bool`
-    /// context value whose meaning is defined per-column in the orchestrator.
+    /// When `Some(feature)`, the column is only offered while that runtime feature is
+    /// active. The only value in use is `"tracker"` (a tracker provider is configured).
     ///
     /// `None` means the column is always available regardless of runtime state.
     pub requires_feature: Option<&'static str>,

@@ -2,6 +2,9 @@ use gitlab_tracker_core::{
     ProjectSettingDef, ProjectSettingFactory, ProjectSettingKind, ProjectSettingValue,
 };
 
+pub const DEFAULT_RETENTION_DAYS: u32 = 365;
+pub const DEFAULT_SPRINT_WEEKS: u32 = 2;
+
 fn stats_table(project: &toml::Table) -> Option<&toml::Table> {
     project.get("stats").and_then(toml::Value::as_table)
 }
@@ -45,8 +48,8 @@ fn retention_days_setting() -> ProjectSettingDef {
         help: "Local stats snapshots older than this many days are purged on startup.",
         priority: 110,
         kind: ProjectSettingKind::U32 { min: 1, step: 30 },
-        default_value: ProjectSettingValue::U32(365),
-        read: |project| read_u32(project, "retention_days", 365),
+        default_value: ProjectSettingValue::U32(DEFAULT_RETENTION_DAYS),
+        read: |project| read_u32(project, "retention_days", DEFAULT_RETENTION_DAYS),
         write: |project, value| write_u32(project, "retention_days", value),
     }
 }
@@ -59,8 +62,8 @@ fn sprint_weeks_setting() -> ProjectSettingDef {
         help: "Sprint duration used by throughput forecasts.",
         priority: 120,
         kind: ProjectSettingKind::U32 { min: 1, step: 1 },
-        default_value: ProjectSettingValue::U32(2),
-        read: |project| read_u32(project, "sprint_weeks", 2),
+        default_value: ProjectSettingValue::U32(DEFAULT_SPRINT_WEEKS),
+        read: |project| read_u32(project, "sprint_weeks", DEFAULT_SPRINT_WEEKS),
         write: |project, value| write_u32(project, "sprint_weeks", value),
     }
 }

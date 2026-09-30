@@ -115,6 +115,9 @@ fn render_frame(f: &mut Frame, app: &mut App) {
     } else {
         None
     };
+    // Real pane positions, used by the mouse hit-test (`handle_mouse_event`).
+    app.inspector_area = inspector_area;
+    app.tracker_area = tracker_area;
 
     // --- Inspector Pane (upper-right) ---
     let inspector_is_active = app.active_pane == ActivePane::Inspector;
@@ -135,7 +138,7 @@ fn render_frame(f: &mut Frame, app: &mut App) {
     // the rendering of Text<'static> happen inside a tight inner scope `{}`. Because
     // Text<'static> owns its content, it outlives the borrow — so once the scope ends the
     // iterator is dropped and `app` is free to be mutated (content_lines / pane_height).
-    let inspector_render: Option<(ratatui::text::Text<'static>, u16)> =
+    let inspector_render: Option<ratatui::text::Text<'static>> =
         app.table_state.selected().and_then(|i| {
             let mr = app.visible_mrs().nth(i)?;
             let text = match app.inspector_view {
@@ -144,19 +147,20 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                 }
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr, app.theme),
             };
-            let line_count = text.lines.len() as u16;
-            Some((text, line_count))
+            Some(text)
         });
 
     match inspector_render {
-        Some((rendered_text, line_count)) => {
-            app.inspector_content_lines = line_count;
-            app.inspector_pane_height = inspector_area.height.saturating_sub(2);
-
+        Some(rendered_text) => {
             let inspector_paragraph = Paragraph::new(rendered_text)
                 .block(inspector_block)
                 .wrap(Wrap { trim: false })
                 .scroll((app.inspector_scroll, 0));
+            // Wrapped (on-screen) line count, borders included — matches the pane height.
+            app.inspector_content_lines =
+                u16::try_from(inspector_paragraph.line_count(inspector_area.width))
+                    .unwrap_or(u16::MAX);
+            app.inspector_pane_height = inspector_area.height;
             f.render_widget(inspector_paragraph, inspector_area);
         }
         None if app.table_state.selected().is_some() => {
@@ -181,7 +185,7 @@ fn render_frame(f: &mut Frame, app: &mut App) {
     if let Some(area) = tracker_area {
         // Same borrow-scope pattern: render Text<'static> inside the closure so the
         // immutable borrow on `app` ends before we write tracker_content_lines / pane_height.
-        let tracker_render: Option<(ratatui::text::Text<'static>, u16, bool)> =
+        let tracker_render: Option<(ratatui::text::Text<'static>, bool)> =
             app.table_state.selected().and_then(|i| {
                 let mr = app.visible_mrs().nth(i)?;
                 let tracker_is_active = app.active_pane == ActivePane::Tracker;
@@ -196,11 +200,10 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                         app.theme.muted_comment,
                     ),
                 };
-                let line_count = text.lines.len() as u16;
-                Some((text, line_count, tracker_is_active))
+                Some((text, tracker_is_active))
             });
 
-        if let Some((rendered_text, line_count, tracker_is_active)) = tracker_render {
+        if let Some((rendered_text, tracker_is_active)) = tracker_render {
             let tracker_title = match (tracker_is_active, app.tracker_view) {
                 (true, TrackerView::TicketInfo) => {
                     " Tracker [FOCUS] │ [P]: Time Log │ [L]: Log Time │ [T]: Open URL "
@@ -217,13 +220,14 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                 .border_style(pane_border_style(tracker_is_active))
                 .title(tracker_title);
 
-            app.tracker_content_lines = line_count;
-            app.tracker_pane_height = area.height.saturating_sub(2);
-
             let tracker_paragraph = Paragraph::new(rendered_text)
                 .block(tracker_block)
                 .wrap(Wrap { trim: false })
                 .scroll((app.tracker_scroll, 0));
+            // Wrapped (on-screen) line count, borders included — matches the pane height.
+            app.tracker_content_lines =
+                u16::try_from(tracker_paragraph.line_count(area.width)).unwrap_or(u16::MAX);
+            app.tracker_pane_height = area.height;
             f.render_widget(tracker_paragraph, area);
         }
     }

@@ -1,10 +1,6 @@
 use gitlab_tracker_core::{Activity, TicketTransitionTarget, TimeEntry, TimeEntryRequest};
 use serde::{Deserialize, Serialize};
 
-/// Minimal Redmine issue fields needed to populate a [`LinkedTicket`].
-///
-/// The Redmine REST API wraps the issue under an `"issue"` key:
-/// `GET /issues/{id}.json` → `{ "issue": { ... } }`
 /// A Redmine user reference as returned in nested fields (`author`, `assigned_to`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedmineUser {
@@ -18,6 +14,10 @@ pub struct RedmineNamedRef {
     pub name: String,
 }
 
+/// Minimal Redmine issue fields needed to populate a [`LinkedTicket`].
+///
+/// The Redmine REST API wraps the issue under an `"issue"` key:
+/// `GET /issues/{id}.json` → `{ "issue": { ... } }`
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedmineIssue {
     pub id: u64,
@@ -370,19 +370,6 @@ pub async fn fetch_time_entries(
     }
 }
 
-/// Submits a new time entry on the given Redmine issue.
-///
-/// Accepts a pre-fetched `issue` so the caller can reuse it without an extra
-/// network round-trip. When the issue exposes `remaining_hours` or `estimated_hours`,
-/// the ETC is computed and attached directly to the time entry payload — this is
-/// how Redmine Budget plugin tracks remaining time (fields on the entry, not the issue).
-///
-/// Both `budget_hours` and `remaining_hours` are omitted from the payload when the
-/// issue does not expose the necessary fields, ensuring compatibility with vanilla
-/// Redmine instances.
-///
-/// Calls `POST /time_entries.json`.
-/// Returns `Ok(())` on success or an error string suitable for inline TUI display.
 /// Updates the Redmine issue status.
 ///
 /// Calls `PUT /issues/{id}.json` with a `status_id`. Redmine may still reject the
@@ -439,6 +426,19 @@ pub async fn update_issue_status(
     }
 }
 
+/// Submits a new time entry on the given Redmine issue.
+///
+/// Accepts a pre-fetched `issue` so the caller can reuse it without an extra
+/// network round-trip. When the issue exposes `remaining_hours` or `estimated_hours`,
+/// the ETC is computed and attached directly to the time entry payload — this is
+/// how Redmine Budget plugin tracks remaining time (fields on the entry, not the issue).
+///
+/// Both `budget_hours` and `remaining_hours` are omitted from the payload when the
+/// issue does not expose the necessary fields, ensuring compatibility with vanilla
+/// Redmine instances.
+///
+/// Calls `POST /time_entries.json`.
+/// Returns `Ok(())` on success or an error string suitable for inline TUI display.
 pub async fn log_time(
     http: &reqwest::Client,
     base_url: &str,

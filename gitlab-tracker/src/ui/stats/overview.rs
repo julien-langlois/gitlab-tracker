@@ -10,7 +10,8 @@ use ratatui::{
 
 use crate::ui::theme;
 
-use super::common::{kv_line, percentile_f64, split_horizontal, styled_block};
+use super::common::{kv_line, split_horizontal, styled_block};
+use gitlab_tracker_stats::aggregator::percentile;
 
 pub(super) fn render_overview_tab(f: &mut Frame, report: &StatReport, area: Rect) {
     let chunks = Layout::default()
@@ -210,7 +211,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
     }
 
     let oldest = agg.open_mr_ages_days.last().copied().unwrap_or(0.0);
-    let median_age = percentile_f64(&agg.open_mr_ages_days, 50.0).unwrap_or(0.0);
+    let median_age = percentile(&agg.open_mr_ages_days, 50.0).unwrap_or(0.0);
 
     let lines = vec![
         kv_line(

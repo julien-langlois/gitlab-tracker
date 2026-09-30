@@ -26,12 +26,6 @@ pub enum TrackerError {
     Other(String),
 }
 
-/// A lightweight reference to an external tracker ticket linked to a MR.
-///
-/// This struct is the only data type exchanged between the orchestrator
-/// (`gitlab-tracker`) and any tracker plugin (Redmine, Jira, Trello, …).
-/// It is intentionally flat and display-oriented — the orchestrator does not
-/// need to know anything about the internal data model of the tracker.
 /// Current schema version for [`LinkedTicket`].
 ///
 /// Increment this constant whenever fields are added to or removed from `LinkedTicket`.
@@ -40,6 +34,12 @@ pub enum TrackerError {
 /// silently hide newly added fields.
 pub const LINKED_TICKET_SCHEMA_VERSION: u32 = 2;
 
+/// A lightweight reference to an external tracker ticket linked to a MR.
+///
+/// This struct is the only data type exchanged between the orchestrator
+/// (`gitlab-tracker`) and any tracker plugin (Redmine, Jira, Trello, …).
+/// It is intentionally flat and display-oriented — the orchestrator does not
+/// need to know anything about the internal data model of the tracker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkedTicket {
     /// Schema version — used to detect stale cached tickets after a struct upgrade.

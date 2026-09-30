@@ -14,35 +14,29 @@ use crate::utils::parse_duration_to_hours;
 
 /// Handles a mouse event and updates the application state accordingly.
 /// Time entries for a newly selected row are fetched by `App::ensure_time_entries`.
-pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, term_height: u16, app: &mut App) {
-    // The right column starts at 65% of the terminal width.
-    let inspector_start_col = (u32::from(term_width) * 65 / 100) as u16;
-    // The Tracker pane occupies the bottom 33% of the right column.
-    // Subtract 1 for the status bar at the bottom.
-    let tracker_start_row = (u32::from(term_height.saturating_sub(1)) * 67 / 100) as u16;
-    // Whether the cursor is in the right column and below the Inspector pane.
-    let in_tracker_pane = mouse.column >= inspector_start_col
-        && app.has_tracker_ticket()
-        && mouse.row >= tracker_start_row;
+pub fn handle_mouse_event(mouse: MouseEvent, app: &mut App) {
+    // Hit-test against the pane areas recorded by the last render, so the result
+    // always matches what is on screen (layout, input bar height, cockpit…).
+    let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
+    let in_tracker_pane = app.tracker_area.is_some_and(|area| area.contains(pos));
+    let in_inspector_pane = app.inspector_area.contains(pos);
 
     match mouse.kind {
         // Update focus based on where the cursor is.
         MouseEventKind::Moved | MouseEventKind::Drag(_) => {
-            if mouse.column >= inspector_start_col {
-                if in_tracker_pane {
-                    app.active_pane = ActivePane::Tracker;
-                } else {
-                    app.active_pane = ActivePane::Inspector;
-                }
+            app.active_pane = if in_tracker_pane {
+                ActivePane::Tracker
+            } else if in_inspector_pane {
+                ActivePane::Inspector
             } else {
-                app.active_pane = ActivePane::Dashboard;
-            }
+                ActivePane::Dashboard
+            };
         }
         // Route scroll to the pane under the cursor.
         MouseEventKind::ScrollDown => {
             if in_tracker_pane {
                 app.tracker_scroll_down(3);
-            } else if mouse.column >= inspector_start_col {
+            } else if in_inspector_pane {
                 app.inspector_scroll_down(3);
             } else {
                 app.next_row();
@@ -51,7 +45,7 @@ pub fn handle_mouse_event(mouse: MouseEvent, term_width: u16, term_height: u16, 
         MouseEventKind::ScrollUp => {
             if in_tracker_pane {
                 app.tracker_scroll_up(3);
-            } else if mouse.column >= inspector_start_col {
+            } else if in_inspector_pane {
                 app.inspector_scroll_up(3);
             } else {
                 app.prev_row();

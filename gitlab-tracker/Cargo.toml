@@ -22,41 +22,31 @@ redmine = ["dep:gitlab-tracker-redmine"]
 stats = ["dep:gitlab-tracker-stats"]
 
 [dependencies]
-gitlab-tracker-notify = { version = "0.4.8", path = "../gitlab-tracker-notify" }
-gitlab-tracker-core = { version = "0.4.8", path = "../gitlab-tracker-core" }
-gitlab-tracker-redmine = { version = "0.4.8", path = "../gitlab-tracker-redmine", optional = true }
-gitlab-tracker-stats = { version = "0.4.8", path = "../gitlab-tracker-stats", optional = true }
-
-inventory = "0.3"
-ratatui = "0.30"
+gitlab-tracker-notify.workspace = true
+gitlab-tracker-core.workspace = true
+gitlab-tracker-redmine = { workspace = true, optional = true }
+gitlab-tracker-stats = { workspace = true, optional = true }
+inventory.workspace = true
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 terminal-colorsaurus = "1.0.3"
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = [
-    "json",
-    "rustls-tls",
-], default-features = false }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 dotenvy = "0.15"
 urlencoding = "2.1"
-directories = "5.0"
-keyring = { version = "3", features = [
-    "sync-secret-service",
-    "crypto-openssl",
-] }
-open = "5"
+directories.workspace = true
+keyring.workspace = true
+open.workspace = true
 arboard = { version = "3", default-features = false }
 clap = { version = "4.6.3", features = ["derive"] }
-chrono = { version = "0.4", default-features = false, features = [
-    "std",
-    "clock",
-] }
+chrono.workspace = true
 futures = "0.3"
-toml = { version = "0.8", features = ["parse"] }
+toml.workspace = true
 figment = { version = "0.10", features = ["toml", "json", "env"] }
-tracing = "0.1"
+tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zeroize = { version = "1", features = ["derive"] }
-rpassword = "7"
+zeroize.workspace = true
+rpassword.workspace = true

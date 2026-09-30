@@ -296,7 +296,7 @@ pub struct TrackedMr {
     /// Manually flagged by the user (Space key) — persisted across restarts.
     /// Flagged MRs display a coloured chevron and can be isolated via the Flagged filter.
     pub flagged: bool,
-    /// Ticket linked to this MR, resolved by the active [`TrackerProvider`].
+    /// Ticket linked to this MR, resolved by the active `TrackerProvider`.
     /// `None` when no tracker provider is configured or no ticket reference was found.
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
     /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
@@ -622,7 +622,7 @@ pub enum AppEvent {
 }
 
 impl AppEvent {
-    /// Maps an [`AppEvent`] to the corresponding [`MrLifecycleEvent`], if applicable.
+    /// Maps an [`AppEvent`] to the corresponding `MrLifecycleEvent`, if applicable.
     ///
     /// Not every `AppEvent` has a lifecycle meaning (e.g. `Tick`, `ActivitiesLoaded`
     /// are purely infrastructural). Returns `None` for those cases.

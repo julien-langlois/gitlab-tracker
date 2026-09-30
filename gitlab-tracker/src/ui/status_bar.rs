@@ -2,7 +2,7 @@
 //!
 //! Each piece of information is a coloured [`Span`] separated by a dim `│` divider,
 //! which allows per-segment colours (e.g. red timer when < 30 s) without cramming
-//! everything into a plain `.title()` string on the [`Block`].
+//! everything into a plain `.title()` string on the `Block`.
 //!
 //! All colours are sourced from `app.theme` (a [`crate::ui::theme::Palette`]) so
 //! the bar remains readable on both dark and light terminal backgrounds.

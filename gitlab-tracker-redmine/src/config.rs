@@ -69,7 +69,7 @@ pub struct StatusTransitionsConfig {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedmineConfig {
-    /// Base URL of the Redmine instance, e.g. "https://redmine.example.com".
+    /// Base URL of the Redmine instance, e.g. <https://redmine.example.com>.
     /// Must not have a trailing slash.
     pub url: String,
 

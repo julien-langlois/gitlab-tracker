@@ -60,7 +60,7 @@ pub trait StatsDb: Send + Sync {
     /// the `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` constraint.
     async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError>;
 
-    /// Same as [`upsert_snapshot`] but with an explicit `recorded_at` timestamp.
+    /// Same as `upsert_snapshot` but with an explicit `recorded_at` timestamp.
     ///
     /// Used during the startup backfill to place historical snapshots at their
     /// real event date (e.g. `merged_at`) rather than today, so cycle-time
@@ -129,9 +129,9 @@ impl SqliteStatsDb {
 
     /// Applies the embedded schema migrations in order.
     ///
-    /// Using inline SQL rather than the `sqlx::migrate!` macro avoids the
-    /// compile-time `DATABASE_URL` requirement, which would break `cargo build`
-    /// in environments where the DB does not exist yet.
+    /// Inline `CREATE … IF NOT EXISTS` statements, without versioning. (`sqlx::migrate!`
+    /// would embed versioned SQL files at compile time; it does not need `DATABASE_URL`,
+    /// only the `query!` macros do.)
     async fn run_migrations(pool: &SqlitePool) -> Result<(), StatsError> {
         sqlx::query(
             r#"
@@ -299,9 +299,8 @@ impl StatsDb for SqliteStatsDb {
              FROM mr_snapshots s {where_clause} ORDER BY s.recorded_at ASC"
         );
 
-        // sqlx does not support fully dynamic binding without a query builder, so we
-        // fall back to raw queries with manual binding via `query()` + `.bind()` chaining.
-        // This is safe because all values come from trusted application code, not user input.
+        // Dynamic WHERE clause: the SQL text only contains fixed fragments and `?`
+        // placeholders; every value goes through `.bind()`.
         let mut q = sqlx::query(&sql);
         for val in &dynamic {
             q = q.bind(val);

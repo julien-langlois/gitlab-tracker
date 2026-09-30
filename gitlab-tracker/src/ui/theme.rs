@@ -16,7 +16,7 @@
 //!
 //! At startup, `main.rs` queries the terminal background colour via OSC 11
 //! (`terminal-colorsaurus`) and resolves a [`ThemeMode`]. The resolved mode is
-//! stored in [`App::theme`] and forwarded to every renderer as a [`Palette`].
+//! stored in `App::theme` and forwarded to every renderer as a [`Palette`].
 //!
 //! All colours in each palette achieve a WCAG AA contrast ratio of at least
 //! 4.5:1 against the expected background.

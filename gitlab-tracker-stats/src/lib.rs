@@ -11,7 +11,8 @@
 //!
 //! # Design constraints
 //! - **No dependency** on `ratatui`, `crossterm`, or any TUI crate.
-//! - **No dependency** on `gitlab-tracker-core` — this crate is fully standalone.
+//! - Depends on `gitlab-tracker-core` only for the plugin contracts (project settings
+//!   and shortcut registration), never on the binary.
 //! - All public types implement `serde::{Serialize, Deserialize}` for JSON/CSV output.
 
 pub mod aggregator;

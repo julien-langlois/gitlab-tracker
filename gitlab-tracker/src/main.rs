@@ -194,13 +194,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .stats
         .as_ref()
         .and_then(|s| s.retention_days)
-        .unwrap_or(365);
+        .unwrap_or(gitlab_tracker_stats::settings::DEFAULT_RETENTION_DAYS);
     #[cfg(feature = "stats")]
     let stats_sprint_weeks = project
         .stats
         .as_ref()
         .and_then(|s| s.sprint_weeks)
-        .unwrap_or(2);
+        .unwrap_or(gitlab_tracker_stats::settings::DEFAULT_SPRINT_WEEKS);
     // Discovery lives at the project level — independent of the stats feature.
     // Any reviewer can opt in to automatic MR population without enabling analytics.
     let discover_new_mrs = project.discover_new_mrs.unwrap_or(false);
@@ -593,8 +593,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 dirty = true;
                 match input? {
                     Event::Mouse(mouse) => {
-                        let size = terminal.size()?;
-                        handle_mouse_event(mouse, size.width, size.height, &mut app);
+                        handle_mouse_event(mouse, &mut app);
                     }
                     Event::Key(key)
                         if key.kind == KeyEventKind::Press

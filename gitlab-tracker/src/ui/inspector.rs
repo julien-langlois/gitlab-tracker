@@ -1,8 +1,6 @@
 use crate::config::AppConfig;
-use crate::models::{
-    DifficultyProfile, GitlabMrState, MergeabilityStatus, Pipeline, PipelineState, TrackedMr,
-};
-use crate::ui::table::badge_label;
+use crate::models::{DifficultyProfile, GitlabMrState, Pipeline, PipelineState, TrackedMr};
+use crate::ui::table::{badge_label, behind_colors, mergeability_badge, Behind};
 use crate::ui::theme::Palette;
 use crate::utils::{format_relative_date, matches_gitlab_username};
 use ratatui::style::{Color, Modifier, Style};
@@ -11,7 +9,7 @@ use ratatui::text::{Line, Span, Text};
 /// Renders the pipeline list view for the Inspector panel.
 ///
 /// Shows the last fetched pipelines for the selected MR with their jobs,
-/// grouped by pipeline run. Displayed when the user presses [P].
+/// grouped by pipeline run. Displayed when the user presses `[P]`.
 pub fn render_pipelines_text(mr: &TrackedMr, palette: Palette) -> Text<'static> {
     let mut lines = vec![
         Line::from(vec![
@@ -282,11 +280,8 @@ fn render_diff_stats_lines(
 
     // Build the "Behind" line — only for open MRs; not applicable for merged/closed.
     let behind_line = if mr.state == GitlabMrState::Opened {
-        // Behind by 0 commits, or unknown but GitLab reports the MR as mergeable.
-        let up_to_date = stats.commits_behind == Some(0)
-            || (stats.commits_behind.is_none() && mr.mergeability == MergeabilityStatus::Mergeable);
-        match stats.commits_behind {
-            _ if up_to_date => Line::from(vec![
+        match Behind::of(stats.commits_behind, &mr.mergeability) {
+            Behind::UpToDate => Line::from(vec![
                 Span::raw("Behind   : "),
                 Span::styled(
                     "✔ Up to date",
@@ -295,14 +290,8 @@ fn render_diff_stats_lines(
                         .add_modifier(Modifier::BOLD),
                 ),
             ]),
-            Some(n) => {
-                let (fg, bg) = if n >= 10 {
-                    (Color::White, Color::Red)
-                } else if n >= 3 {
-                    (Color::Black, Color::Yellow)
-                } else {
-                    (Color::Black, Color::LightYellow)
-                };
+            Behind::Commits(n) => {
+                let (fg, bg) = behind_colors(n);
                 Line::from(vec![
                     Span::raw("Behind   : "),
                     Span::styled(
@@ -311,7 +300,7 @@ fn render_diff_stats_lines(
                     ),
                 ])
             }
-            None => Line::from(vec![
+            Behind::Pending => Line::from(vec![
                 Span::raw("Behind   : "),
                 Span::styled("Loading…", Style::default().fg(palette.muted)),
             ]),
@@ -591,23 +580,7 @@ pub fn render_safe_inspector_text(
     // Mergeability — only meaningful for open MRs.
     // badge_label() centers the text to BADGE_WIDTH, matching the State badge width.
     if mr.state == GitlabMrState::Opened {
-        let (merge_text, merge_fg, merge_bg) = match mr.mergeability {
-            MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
-            MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
-            MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
-            MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
-            MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
-            MergeabilityStatus::DiscussionsNotResolved => {
-                ("DISCUSSIONS", Color::Black, Color::LightMagenta)
-            }
-            MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
-            MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
-            MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
-            MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
-            MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
-            MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
-            MergeabilityStatus::Unknown => ("UNKNOWN", Color::DarkGray, Color::Black),
-        };
+        let (merge_text, merge_fg, merge_bg) = mergeability_badge(&mr.mergeability);
         lines.push(Line::from(vec![
             Span::raw("Merge    : "),
             Span::styled(
