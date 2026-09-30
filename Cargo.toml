@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.8"
+version = "0.5.0"
 authors = ["Julien Langlois <julien@julienlanglois.fr>"]
 edition = "2021"
 rust-version = "1.89"
@@ -17,9 +17,9 @@ repository = "https://github.com/julien-langlois/gitlab-tracker"
 
 [workspace.dependencies]
 # Internal crates
-gitlab-tracker-core = { version = "0.4.8", path = "gitlab-tracker-core" }
-gitlab-tracker-redmine = { version = "0.4.8", path = "gitlab-tracker-redmine" }
-gitlab-tracker-stats = { version = "0.4.8", path = "gitlab-tracker-stats" }
+gitlab-tracker-core = { version = "0.5.0", path = "gitlab-tracker-core" }
+gitlab-tracker-redmine = { version = "0.5.0", path = "gitlab-tracker-redmine" }
+gitlab-tracker-stats = { version = "0.5.0", path = "gitlab-tracker-stats" }
 # Third-party crates used by several members. Features listed here apply to every
 # member; each member adds the extra features it needs (e.g. tokio, chrono).
 async-trait = "0.1"

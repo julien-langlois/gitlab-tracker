@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-09-30
+
+### 🐛 Bug Fixes
+
+- **stats**: Date terminal snapshots at the real event, repair legacy rows, ratio-based anomalies
+- Save settings to the current project, typed tracker errors, Option fields, full pagination
+- Light-theme palette, surface config errors, drop dead redmine.yaml migration
+- Shared mergeability badge, accurate diff counts, render-based mouse hit-test and scroll
+- Zeroized GitLab token, local-time cockpit, persistent clipboard for yank
+- Validate Redmine ticket ids, non-blocking notifications, bounded popups
+- Quick wins batch (stats p-values, delete by id, atomic saves, per-ticket TimeLog cache)
+- Track in-flight MR fetches by id so the spinner always stops
+
+### ⚡ Performance
+
+- Event-driven main loop, per-render visible cache, fewer API calls
+- Cut idle redraws, batch stats DB I/O and share HTTP client
+
+### 🔨 Refactor
+
+- **errors**: GitlabError/DurationError with thiserror, typed errors through AppEvent, anyhow with context in main/cli/demo; fix(redmine): keep Auth/NotFound on time logging and status transitions
+- Fold notify crate into the binary, Redmine setup in its crate, sync apply_event, blocking prompts off the runtime, typed GitLab discussions/compare/changes responses
+- Effort enum, TicketChange struct, optional FilterDef::active_label, single U64 setting value, direct Poisson tail, display-width help alignment; fix: env overrides beat projects.toml, env-selected project uses its projects.toml entry
+- MrStatus::Error, shared core::secrets, UiLayout, popups module, stats startup maintenance; docs: realign all READMEs with current architecture, declare MSRV 1.89
+- Single MrData model, split apply_event, domain enums in core, versioned stats schema
+- Run the demo through the real key handler (read-only), key stats dedup by project
+
+### 👷 CI
+
+- **release**: GitHub release notes from git-cliff, changelog via cargo-release hook, act-safe preview
+
+
+**Full Changelog**: https://github.com/julien-langlois/gitlab-tracker/compare/v0.4.8...v0.5.0
+
 ## [0.4.8] - 2026-09-13
 
 ### 🚀 Features
