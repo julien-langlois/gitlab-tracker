@@ -97,3 +97,31 @@ numbered file and append it to `MIGRATIONS` in `db.rs` (the version is its index
 
 **Rule:** `gitlab-tracker-core` must never depend on `ratatui`, `crossterm`, or any
 TUI crate. It is the boundary that keeps domain logic testable in isolation.
+
+---
+
+## Releasing
+
+Release notes come from the commits (Conventional Commits), through one
+`cliff.toml` used in two places, so `CHANGELOG.md` and the GitHub release always
+show the same text:
+
+```text
+cargo release minor                 # dry run: prints the section that will be added, writes nothing
+cargo release minor --execute
+  ├─ pre-release hook (gitlab-tracker/Cargo.toml):
+  │    git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md
+  ├─ commit "chore(release): vX.Y.Z" (version bumps + CHANGELOG.md), signed tag vX.Y.Z
+  └─ push
+release.yml (on the tag)
+  ├─ github-release: git cliff --current --strip header → release body
+  │                  (+ "Full Changelog" compare link to the previous tag)
+  ├─ publish-crates
+  └─ build-release: binaries attached to that release
+```
+
+* The commit subject **is** the release note line: write it for readers. Use
+  `feat!:` / a `BREAKING CHANGE:` footer for incompatible changes (shown as
+  `[**breaking**]`).
+* `chore(release)` and `chore(changelog)` commits are skipped.
+* Sections older than 0.5.0 were edited by hand; `--prepend` never rewrites them.

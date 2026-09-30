@@ -57,3 +57,13 @@ zeroize.workspace = true
 [dev-dependencies]
 # Test doubles implementing the `TrackerProvider` trait.
 async-trait.workspace = true
+
+# cargo-release (declared on this package only, so it runs once per release):
+# prepends this release's section to CHANGELOG.md, with the same cliff.toml as the
+# GitHub release notes (release.yml), so both are identical. The hook also runs
+# during the dry run (DRY_RUN=true): it then only prints the section.
+[package.metadata.release]
+pre-release-hook = [
+  "sh", "-c",
+  'cd "$WORKSPACE_ROOT" && if [ "$DRY_RUN" = true ]; then git cliff --unreleased --tag "v$NEW_VERSION" --strip header; else git cliff --unreleased --tag "v$NEW_VERSION" --prepend CHANGELOG.md; fi',
+]

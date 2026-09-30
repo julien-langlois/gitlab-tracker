@@ -1,5 +1,8 @@
 [changelog]
-# Template for the changelog body (uses Tera templating)
+# Template for the changelog body (uses Tera templating).
+# The same template feeds CHANGELOG.md (cargo-release pre-release hook) and the
+# GitHub release notes (release.yml, `git cliff --current --strip header`), so both
+# always show the same section.
 header = """
 # CHANGELOG\n
 All notable changes to this project will be documented in this file.\n
@@ -10,12 +13,17 @@ body = """
 {% else %}\
     ## [Unreleased]
 {% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
+{# Groups are numbered <!-- NN --> with two digits: sorting the commits by group
+   first makes `group_by` emit them in that order. #}\
+{% for group, commits in commits | sort(attribute="group") | group_by(attribute="group") %}
     ### {{ group | striptags | trim | upper_first }}
     {% for commit in commits %}
-        - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
+        - {% if commit.breaking %}[**breaking**] {% endif %}{% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
     {% endfor %}
-{% endfor %}\n
+{% endfor %}
+{% if previous.version %}
+**Full Changelog**: https://github.com/julien-langlois/gitlab-tracker/compare/{{ previous.version }}...{% if version %}{{ version }}{% else %}HEAD{% endif %}
+{% endif %}\n
 """
 footer = ""
 trim = true
@@ -26,29 +34,23 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 
-# Group commits by their type
+# One group per commit type; the scope is shown in bold on each line.
 commit_parsers = [
-  # Skip release commits first
+  # Release bookkeeping never belongs in the notes.
   { message = "^chore\\(release\\)", skip = true },
   { message = "^chore: [Rr]elease", skip = true },
+  { message = "^chore\\(changelog\\)", skip = true },
 
-  # Scope-based rules: any type with a ui/demo scope is grouped by scope
-  { message = "^[a-z]+\\(ui\\)", group = "<!-- 9 -->🖥️ UI" },
-  { message = "^[a-z]+\\(demo\\)", group = "<!-- 10 -->🎬 Demo" },
-  { message = "^[a-z]+\\(ci\\)", group = "<!-- 8 -->👷 CI" },
-  { message = "^[a-z]+\\(build\\)", group = "<!-- 7 -->🏗️ Build" },
-
-  # Type-based rules (fallback when no scope override applies)
-  { message = "^feat", group = "<!-- 0 -->🚀 Features" },
-  { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
-  { message = "^doc", group = "<!-- 2 -->📚 Documentation" },
-  { message = "^perf", group = "<!-- 3 -->⚡ Performance" },
-  { message = "^refactor", group = "<!-- 4 -->🔨 Refactor" },
-  { message = "^style", group = "<!-- 5 -->🎨 Styling" },
-  { message = "^test", group = "<!-- 6 -->🧪 Testing" },
-  { message = "^build", group = "<!-- 7 -->🏗️ Build" },
-  { message = "^ci", group = "<!-- 8 -->👷 CI" },
-  { message = "^ui", group = "<!-- 9 -->🖥️ UI" },
+  { message = "^feat", group = "<!-- 00 -->🚀 Features" },
+  { message = "^fix", group = "<!-- 01 -->🐛 Bug Fixes" },
+  { message = "^perf", group = "<!-- 02 -->⚡ Performance" },
+  { message = "^refactor", group = "<!-- 03 -->🔨 Refactor" },
+  { message = "^doc", group = "<!-- 04 -->📚 Documentation" },
+  { message = "^test", group = "<!-- 05 -->🧪 Tests" },
+  { message = "^style", group = "<!-- 06 -->🎨 Styling" },
+  { message = "^build", group = "<!-- 07 -->🏗️ Build" },
+  { message = "^ci", group = "<!-- 08 -->👷 CI" },
+  { message = "^ui", group = "<!-- 09 -->🖥️ UI" },
   { message = "^demo", group = "<!-- 10 -->🎬 Demo" },
   { message = "^chore", group = "<!-- 11 -->⚙️ Miscellaneous" },
 ]

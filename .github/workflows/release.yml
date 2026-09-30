@@ -6,6 +6,41 @@ on:
       - 'v*'
 
 jobs:
+  # Creates the GitHub release with this tag's section of the changelog, generated
+  # by git-cliff from the same cliff.toml as CHANGELOG.md (cargo-release hook), so
+  # the release notes are exactly the commits since the previous tag.
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history and tags: git-cliff needs the previous tag
+
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --current --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      # Local runs with nektos/act (which sets ACT=true) only print the notes:
+      # they must never create a real release.
+      - name: Preview release notes (act only)
+        if: ${{ env.ACT }}
+        run: cat RELEASE_NOTES.md
+
+      - name: Create release
+        if: ${{ !env.ACT }}
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-crates:
     name: Publish to Crates.io
     runs-on: ubuntu-latest
@@ -18,39 +53,19 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Publish order follows the dependency graph:
-      #   gitlab-tracker-core  (no internal deps)
-      #     └── gitlab-tracker-redmine
-      #     └── gitlab-tracker-stats
-      #           └── gitlab-tracker  (depends on all of the above)
-
-      - name: Publish gitlab-tracker-core
-        run: cargo publish --package gitlab-tracker-core
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index propagation
-        run: sleep 30
-
-      - name: Publish gitlab-tracker-redmine
-        run: cargo publish --package gitlab-tracker-redmine
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish gitlab-tracker-stats
-        run: cargo publish --package gitlab-tracker-stats
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io index propagation
-        run: sleep 30
-
-      - name: Publish gitlab-tracker
-        run: cargo publish --package gitlab-tracker
+      # `cargo publish --workspace` publishes in dependency order (core first, the
+      # binary last) and waits for each crate to reach the crates.io index.
+      # Under act (ACT=true) it is a dry run: packages and verifies, uploads nothing.
+      - name: Publish crates
+        run: cargo publish --workspace ${{ env.ACT && '--dry-run' || '' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   build-release:
+    # The release (and its notes) must exist before the binaries are attached.
+    needs: github-release
+    permissions:
+      contents: write
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -105,7 +120,12 @@ jobs:
           cd target/${{ matrix.target }}/release
           Compress-Archive -Path gitlab-tracker.exe -DestinationPath ../../../${{ matrix.archive_name }}
 
+      - name: Show archive (act only)
+        if: ${{ env.ACT }}
+        run: ls -l ${{ matrix.archive_name }}
+
       - name: Upload Release Asset
+        if: ${{ !env.ACT }}
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.archive_name }}
