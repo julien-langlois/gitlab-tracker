@@ -480,7 +480,10 @@ pub fn render_safe_inspector_text(
     ]));
     lines.push(Line::from(vec![
         Span::raw("Assignee : "),
-        person_span(mr.assignee.clone()),
+        match &mr.assignee {
+            Some(assignee) => person_span(assignee.clone()),
+            None => Span::styled(crate::app::NO_VALUE, Style::default().fg(palette.muted)),
+        },
     ]));
 
     // Reviewers: listed inline, or dimmed "None" if empty.
@@ -525,10 +528,12 @@ pub fn render_safe_inspector_text(
     lines.push(section_header("Planning", palette));
     lines.push(Line::from(vec![
         Span::raw("Milestone: "),
-        Span::styled(
-            mr.milestone.clone(),
-            Style::default().fg(palette.accent_cyan),
-        ),
+        match &mr.milestone {
+            Some(milestone) => {
+                Span::styled(milestone.clone(), Style::default().fg(palette.accent_cyan))
+            }
+            None => Span::styled(crate::app::NO_VALUE, Style::default().fg(palette.muted)),
+        },
     ]));
     if let Some(desc) = mr
         .milestone_description

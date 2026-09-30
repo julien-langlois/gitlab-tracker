@@ -369,6 +369,19 @@ impl StatsWindow {
     }
 }
 
+/// Time entries of one ticket in the TimeLog view.
+#[derive(Debug, Clone)]
+pub enum TimeLogState {
+    /// Request in flight.
+    Loading,
+    Loaded(Vec<gitlab_tracker_core::TimeEntry>),
+    /// Fetch failed: the message is shown instead of an (empty) entry list.
+    Failed(String),
+}
+
+/// Shown in place of a missing assignee or milestone.
+pub const NO_VALUE: &str = "None";
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -481,9 +494,11 @@ pub struct App {
     /// Populated by `AppEvent::ActivitiesLoaded` and used to fill the Log Time popup.
     pub activities: Vec<gitlab_tracker_core::Activity>,
     /// Time entries per tracker ticket id, fetched on demand while the TimeLog view is
-    /// shown (see `ensure_time_entries`). `None` = request in flight. Cleared at each
-    /// refresh cycle so entries logged elsewhere show up within one cycle.
-    pub time_entries: HashMap<String, Option<Vec<gitlab_tracker_core::TimeEntry>>>,
+    /// shown (see `ensure_time_entries`). Cleared at each refresh cycle (and `[R]`) so
+    /// entries logged elsewhere show up — and a failed fetch is retried — within one cycle.
+    pub time_entries: HashMap<String, TimeLogState>,
+    /// Error of the last activity-list fetch, shown in the Log Time popup.
+    pub activities_error: Option<String>,
     /// System clipboard, created on first yank and kept alive: on Linux without a
     /// clipboard manager the copied text is lost as soon as its owner is dropped.
     clipboard: Option<arboard::Clipboard>,
@@ -648,6 +663,7 @@ impl App {
             tracker_colors: crate::ui::tracker::TrackerLabelColors::default(),
             activities: Vec::new(),
             time_entries: HashMap::new(),
+            activities_error: None,
             clipboard: None,
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
@@ -804,7 +820,7 @@ impl App {
                     let best = [
                         fuzzy_score(q, &mr.title),
                         fuzzy_score(q, &mr.author),
-                        fuzzy_score(q, &mr.assignee),
+                        mr.assignee.as_deref().and_then(|a| fuzzy_score(q, a)),
                         fuzzy_score(q, &mr.id),
                     ]
                     .into_iter()
@@ -935,8 +951,8 @@ impl App {
                 crate::models::MergeabilityStatus::Unknown => "Unknown",
             },
             user_notes_count: mr.user_notes_count,
-            milestone: &mr.milestone,
-            assignee: &mr.assignee,
+            milestone: mr.milestone.as_deref(),
+            assignee: mr.assignee.as_deref(),
             linked_ticket: mr.linked_ticket.as_ref(),
             pipeline_status: mr.pipelines.first().map(|p| match &p.status {
                 crate::models::PipelineState::Failed => "Failed",
@@ -1075,10 +1091,14 @@ impl App {
         if self.time_entries.contains_key(&ticket_id) {
             return;
         }
-        self.time_entries.insert(ticket_id.clone(), None);
+        self.time_entries
+            .insert(ticket_id.clone(), TimeLogState::Loading);
         let tx = tx.clone();
         tokio::spawn(async move {
-            let entries = provider.fetch_time_entries(&ticket_id).await;
+            let entries = provider
+                .fetch_time_entries(&ticket_id)
+                .await
+                .map_err(|e| e.to_string());
             let _ = tx.send(AppEvent::TimeEntriesLoaded { ticket_id, entries });
         });
     }
@@ -1254,9 +1274,12 @@ impl App {
             SortColumn::Id => sort_by_key_dir(&mut self.mrs, descending, |mr| {
                 mr.id.parse::<u64>().unwrap_or(0)
             }),
-            // "None" milestones go last in ascending order.
+            // MRs without a milestone go last in ascending order.
             SortColumn::Milestone => sort_by_key_dir(&mut self.mrs, descending, |mr| {
-                (mr.milestone == "None", mr.milestone.to_lowercase())
+                (
+                    mr.milestone.is_none(),
+                    mr.milestone.as_deref().map(str::to_lowercase),
+                )
             }),
             SortColumn::Title => {
                 sort_by_key_dir(&mut self.mrs, descending, |mr| mr.title.to_lowercase())
@@ -1308,6 +1331,32 @@ fn branches_to_notify<'a>(
         .iter()
         .filter(|b| !previously_known.is_some_and(|known| known.contains(*b)))
         .collect()
+}
+
+/// Fetches a tracker ticket in the background and emits `TrackerTicketLoaded`.
+///
+/// On failure nothing is sent: the MR keeps its cached ticket (a network blip or
+/// an expired token must not blank the Tracker pane) and the error is logged.
+pub fn spawn_ticket_fetch(
+    provider: Arc<dyn gitlab_tracker_core::TrackerProvider>,
+    ticket_id: String,
+    mr_id: String,
+    tx: &UnboundedSender<AppEvent>,
+) {
+    let tx = tx.clone();
+    tokio::spawn(async move {
+        match provider.fetch_ticket(&ticket_id).await {
+            Ok(ticket) => {
+                let _ = tx.send(AppEvent::TrackerTicketLoaded {
+                    mr_id,
+                    ticket: Box::new(ticket),
+                });
+            }
+            Err(error) => {
+                tracing::warn!(ticket_id = %ticket_id, error = %error, "Tracker ticket fetch failed; keeping cached copy");
+            }
+        }
+    });
 }
 
 impl TrackedMrExt for Vec<TrackedMr> {
@@ -1377,9 +1426,12 @@ fn spawn_ticket_transition_if_needed(request: TicketTransitionRequest<'_>) {
     let expected_status = previous_ticket.status;
 
     tokio::spawn(async move {
-        let Some(upstream_ticket) = provider.fetch_ticket(&ticket_id).await else {
-            tracing::warn!(ticket_id = %ticket_id, "Skipping tracker transition: ticket refetch failed");
-            return;
+        let upstream_ticket = match provider.fetch_ticket(&ticket_id).await {
+            Ok(ticket) => ticket,
+            Err(error) => {
+                tracing::warn!(ticket_id = %ticket_id, error = %error, "Skipping tracker transition: ticket refetch failed");
+                return;
+            }
         };
 
         if upstream_ticket.status != expected_status {
@@ -1419,7 +1471,7 @@ fn spawn_ticket_transition_if_needed(request: TicketTransitionRequest<'_>) {
             "Tracker transition succeeded",
         );
 
-        if let Some(refreshed_ticket) = provider.fetch_ticket(&ticket_id).await {
+        if let Ok(refreshed_ticket) = provider.fetch_ticket(&ticket_id).await {
             notify::ticket_status_transitioned(
                 &ticket_id,
                 &mr_title,
@@ -1539,12 +1591,9 @@ impl App {
                     .author
                     .clone()
                     .unwrap_or_else(|| "Unknown".to_string()),
-                assignee: saved.assignee.clone().unwrap_or_else(|| "None".to_string()),
+                assignee: crate::models::without_sentinel(saved.assignee.clone()),
                 reviewers: saved.reviewers.clone(),
-                milestone: saved
-                    .milestone
-                    .clone()
-                    .unwrap_or_else(|| "None".to_string()),
+                milestone: crate::models::without_sentinel(saved.milestone.clone()),
                 milestone_due_date: saved.milestone_due_date.clone(),
                 milestone_description: saved.milestone_description.clone(),
                 web_url: saved.web_url.clone().unwrap_or_default(),
@@ -1683,13 +1732,29 @@ impl App {
 
             // ── Activity categories loaded ────────────────────────────────────
             AppEvent::ActivitiesLoaded(activities) => {
-                self.activities = activities;
+                match activities {
+                    Ok(activities) => {
+                        self.activities = activities;
+                        self.activities_error = None;
+                    }
+                    Err(error) => {
+                        tracing::warn!(error = %error, "Tracker activities fetch failed");
+                        self.activities_error = Some(error);
+                    }
+                }
                 false
             }
 
             // ── Time entries loaded for a ticket ─────────────────────────────
             AppEvent::TimeEntriesLoaded { ticket_id, entries } => {
-                self.time_entries.insert(ticket_id, Some(entries));
+                let state = match entries {
+                    Ok(entries) => TimeLogState::Loaded(entries),
+                    Err(error) => {
+                        tracing::warn!(ticket_id = %ticket_id, error = %error, "Time entries fetch failed");
+                        TimeLogState::Failed(error)
+                    }
+                };
+                self.time_entries.insert(ticket_id, state);
                 false
             }
 
@@ -1702,7 +1767,7 @@ impl App {
                     let provider = Arc::clone(provider);
                     let tx2 = tx.clone();
                     let tid = ticket_id.clone();
-                    self.time_entries.insert(tid.clone(), None);
+                    self.time_entries.insert(tid.clone(), TimeLogState::Loading);
                     tokio::spawn(async move {
                         // Run both requests concurrently.
                         let (entries, ticket) = tokio::join!(
@@ -1711,9 +1776,9 @@ impl App {
                         );
                         let _ = tx2.send(AppEvent::TimeEntriesLoaded {
                             ticket_id: tid,
-                            entries,
+                            entries: entries.map_err(|e| e.to_string()),
                         });
-                        if let Some(ticket) = ticket {
+                        if let Ok(ticket) = ticket {
                             let _ = tx2.send(AppEvent::TrackerTicketLoaded {
                                 mr_id,
                                 ticket: Box::new(ticket),
@@ -1748,7 +1813,7 @@ impl App {
                 self.mrs.push(TrackedMr::placeholder(
                     id.clone(),
                     "Loading...".to_string(),
-                    "Loading".to_string(),
+                    None,
                 ));
                 // The selection indexes the visible (filtered) list, not `mrs`.
                 let pos = self.visible_mrs().position(|m| m.id == id);
@@ -1855,18 +1920,15 @@ impl App {
                     }
                 }
                 if mr.milestone != data.milestone {
-                    tracing::info!(
-                        mr_id = %data.id,
-                        old = %mr.milestone,
-                        new = %data.milestone,
-                        "MR milestone changed",
-                    );
+                    let old = mr.milestone.as_deref().unwrap_or(NO_VALUE);
+                    let new = data.milestone.as_deref().unwrap_or(NO_VALUE);
+                    tracing::info!(mr_id = %data.id, old, new, "MR milestone changed");
                     if notify_allowed {
                         notify::mr_milestone_changed(
                             &data.id,
                             &data.title,
-                            &mr.milestone,
-                            &data.milestone,
+                            old,
+                            new,
                             &data.web_url,
                         );
                     }
@@ -1986,17 +2048,7 @@ impl App {
                     };
 
                     if let Some(raw_id) = fetch_id {
-                        let provider = Arc::clone(provider);
-                        let mr_id = mr.id.clone();
-                        let tx2 = tx.clone();
-                        tokio::spawn(async move {
-                            if let Some(ticket) = provider.fetch_ticket(&raw_id).await {
-                                let _ = tx2.send(AppEvent::TrackerTicketLoaded {
-                                    mr_id,
-                                    ticket: Box::new(ticket),
-                                });
-                            }
-                        });
+                        spawn_ticket_fetch(Arc::clone(provider), raw_id, mr.id.clone(), tx);
                     } else if detected_id.is_none() && cached_id.is_some() {
                         // Ticket reference was removed from the MR — clear the cache.
                         mr.linked_ticket = None;
@@ -2142,7 +2194,7 @@ impl App {
                     self.mrs.push(TrackedMr::placeholder(
                         mr_id.clone(),
                         format!("Loading… ({})", milestone_title),
-                        milestone_title.clone(),
+                        Some(milestone_title.clone()),
                     ));
                     spawn_mr_fetch(
                         ctx.clone(),
@@ -2182,7 +2234,7 @@ impl App {
                     self.mrs.push(TrackedMr::placeholder(
                         mr_id.clone(),
                         format!("Loading… ({})", mr_id),
-                        String::new(),
+                        None,
                     ));
                     spawn_mr_fetch(
                         ctx.clone(),
@@ -2271,16 +2323,7 @@ impl App {
                     // or priority did — the conditional re-fetch inside MrLoaded would miss this.
                     if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
                         if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
-                            let mr_id = mr.id.clone();
-                            let tx2 = tx.clone();
-                            tokio::spawn(async move {
-                                if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
-                                    let _ = tx2.send(AppEvent::TrackerTicketLoaded {
-                                        mr_id,
-                                        ticket: Box::new(ticket),
-                                    });
-                                }
-                            });
+                            spawn_ticket_fetch(provider, ticket_id, mr.id.clone(), tx);
                         }
                     }
                 }
@@ -2368,7 +2411,8 @@ mod tests {
         }
         for (mr, (title, milestone)) in app.mrs.iter_mut().zip(mrs) {
             mr.title = (*title).into();
-            mr.milestone = (*milestone).into();
+            // Test shorthand: "None" means no milestone.
+            mr.milestone = Some(*milestone).filter(|m| *m != "None").map(Into::into);
         }
         app
     }
@@ -2462,12 +2506,12 @@ mod tests {
         let mut app = app_with_mrs(&[("t", "None")]).await;
         let profile = app.config.complexity_profile.clone();
         let mr = &mut app.mrs[0];
-        // Placeholder: assignee "Loading", milestone "None".
+        // Placeholder: no assignee, no milestone.
         let snap = mr.stats_snapshot(SnapshotTrigger::OnRefresh, "42", &profile);
         assert_eq!((snap.assignee, snap.milestone), (None, None));
 
-        mr.assignee = "Jane (@jane)".into();
-        mr.milestone = "v1.0".into();
+        mr.assignee = Some("Jane (@jane)".into());
+        mr.milestone = Some("v1.0".into());
         let snap = mr.stats_snapshot(SnapshotTrigger::OnRefresh, "42", &profile);
         assert_eq!(snap.assignee.as_deref(), Some("Jane (@jane)"));
         assert_eq!(snap.milestone.as_deref(), Some("v1.0"));
@@ -2554,6 +2598,116 @@ mod tests {
             }
         }
         theme::set_light(false);
+    }
+
+    /// Tracker double: time-entry responses are queued per test; calls are counted.
+    #[derive(Default)]
+    struct FakeTracker {
+        time_entries: std::sync::Mutex<
+            std::collections::VecDeque<
+                Result<Vec<gitlab_tracker_core::TimeEntry>, gitlab_tracker_core::TrackerError>,
+            >,
+        >,
+        time_entry_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl gitlab_tracker_core::TrackerProvider for FakeTracker {
+        fn name(&self) -> &'static str {
+            "Fake"
+        }
+        fn detect_ticket_id(&self, _title: &str, _description: &str) -> Option<String> {
+            None
+        }
+        async fn fetch_ticket(
+            &self,
+            ticket_id: &str,
+        ) -> Result<gitlab_tracker_core::LinkedTicket, gitlab_tracker_core::TrackerError> {
+            Err(gitlab_tracker_core::TrackerError::NotFound(
+                ticket_id.into(),
+            ))
+        }
+        fn ticket_url(&self, ticket_id: &str) -> String {
+            format!("https://tracker.example/{ticket_id}")
+        }
+        async fn fetch_time_entries(
+            &self,
+            _ticket_id: &str,
+        ) -> Result<Vec<gitlab_tracker_core::TimeEntry>, gitlab_tracker_core::TrackerError>
+        {
+            self.time_entry_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.time_entries
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or(Ok(vec![]))
+        }
+    }
+
+    #[tokio::test]
+    async fn time_log_caches_failures_until_the_next_cycle() {
+        use gitlab_tracker_core::TrackerError;
+        let fake = Arc::new(FakeTracker::default());
+        fake.time_entries
+            .lock()
+            .unwrap()
+            .extend([Err(TrackerError::Auth("HTTP 401".into())), Ok(vec![])]);
+        let mut app = app_with_mrs(&[("t", "None")]).await;
+        app.mrs[0].linked_ticket = Some(
+            serde_json::from_value(serde_json::json!({
+                "schema_version": gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION,
+                "id": "42", "subject": "s", "status": "New", "url": "u"
+            }))
+            .unwrap(),
+        );
+        app.tracker = Some(fake.clone());
+        app.tracker_view = TrackerView::TimeLog;
+        app.table_state.select(Some(0));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let calls = || {
+            fake.time_entry_calls
+                .load(std::sync::atomic::Ordering::SeqCst)
+        };
+
+        // Several main-loop iterations while the first request is in flight: one call.
+        app.ensure_time_entries(&tx);
+        app.ensure_time_entries(&tx);
+        let event = rx.recv().await.unwrap();
+        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
+            .await;
+        assert_eq!(calls(), 1);
+        assert!(
+            matches!(app.time_entries.get("42"), Some(TimeLogState::Failed(e)) if e.contains("401"))
+        );
+
+        // The failure is shown, not retried on every loop iteration…
+        app.ensure_time_entries(&tx);
+        assert_eq!(calls(), 1);
+
+        // …until the next refresh cycle / [R] clears the cache.
+        app.time_entries.clear();
+        app.ensure_time_entries(&tx);
+        let event = rx.recv().await.unwrap();
+        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
+            .await;
+        assert_eq!(calls(), 2);
+        assert!(
+            matches!(app.time_entries.get("42"), Some(TimeLogState::Loaded(e)) if e.is_empty())
+        );
+    }
+
+    #[test]
+    fn legacy_state_sentinels_restore_as_none() {
+        use crate::models::without_sentinel;
+        for legacy in ["None", "none", "Loading", "", "  "] {
+            assert_eq!(without_sentinel(Some(legacy.into())), None, "{legacy:?}");
+        }
+        assert_eq!(
+            without_sentinel(Some("v1.0".into())).as_deref(),
+            Some("v1.0")
+        );
+        assert_eq!(without_sentinel(None), None);
     }
 
     #[test]

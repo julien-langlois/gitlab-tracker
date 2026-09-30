@@ -1,4 +1,6 @@
-use gitlab_tracker_core::{Activity, TicketTransitionTarget, TimeEntry, TimeEntryRequest};
+use gitlab_tracker_core::{
+    Activity, TicketTransitionTarget, TimeEntry, TimeEntryRequest, TrackerError,
+};
 use serde::{Deserialize, Serialize};
 
 /// A Redmine user reference as returned in nested fields (`author`, `assigned_to`).
@@ -102,6 +104,9 @@ struct RedmineTimeEntry {
 #[derive(Debug, Deserialize)]
 struct TimeEntriesEnvelope {
     time_entries: Vec<RedmineTimeEntry>,
+    /// Total number of entries across all pages (absent on very old Redmine versions:
+    /// only the first page is then read).
+    total_count: Option<usize>,
 }
 
 // ── POST payload ─────────────────────────────────────────────────────────────
@@ -160,28 +165,35 @@ pub fn compute_etc(issue: &RedmineIssue, new_hours: f32) -> Option<f32> {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+/// Maps an HTTP status to the typed error the orchestrator can act on.
+fn status_error(status: reqwest::StatusCode) -> TrackerError {
+    let msg = format!("Redmine API returned HTTP {status}");
+    match status.as_u16() {
+        401 | 403 => TrackerError::Auth(msg),
+        404 => TrackerError::NotFound(msg),
+        _ => TrackerError::Other(msg),
+    }
+}
+
 /// `GET url` with the API key, then deserializes the JSON body.
-///
-/// Errors are short, human-readable strings (network, HTTP status, bad JSON):
-/// callers either show them in the TUI or log them.
 async fn get_json<T: serde::de::DeserializeOwned>(
     http: &reqwest::Client,
     url: &str,
     token: &str,
-) -> Result<T, String> {
+) -> Result<T, TrackerError> {
     tracing::debug!(url = %url, "Redmine GET");
     let resp = http
         .get(url)
         .header("X-Redmine-API-Key", token)
         .send()
         .await
-        .map_err(|e| format!("Network error: {e}"))?;
+        .map_err(|e| TrackerError::Network(e.to_string()))?;
     if !resp.status().is_success() {
-        return Err(format!("Redmine API error: HTTP {}", resp.status()));
+        return Err(status_error(resp.status()));
     }
     resp.json::<T>()
         .await
-        .map_err(|e| format!("Invalid Redmine response: {e}"))
+        .map_err(|e| TrackerError::Other(format!("Invalid Redmine response: {e}")))
 }
 
 /// Fetches all issue statuses configured on the Redmine instance.
@@ -192,7 +204,7 @@ pub async fn fetch_issue_statuses(
     http: &reqwest::Client,
     base_url: &str,
     token: &str,
-) -> Result<Vec<TicketTransitionTarget>, String> {
+) -> Result<Vec<TicketTransitionTarget>, TrackerError> {
     let url = format!("{}/issue_statuses.json", base_url.trim_end_matches('/'));
 
     get_json::<IssueStatusesEnvelope>(http, &url, token)
@@ -215,106 +227,115 @@ fn is_valid_ticket_id(ticket_id: &str) -> bool {
     !ticket_id.is_empty() && ticket_id.bytes().all(|b| b.is_ascii_digit())
 }
 
+/// Rejects a non-numeric ticket id before it reaches a request URL.
+fn check_ticket_id(ticket_id: &str) -> Result<(), TrackerError> {
+    if is_valid_ticket_id(ticket_id) {
+        Ok(())
+    } else {
+        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
+        Err(TrackerError::Other(format!(
+            "Invalid ticket id \"{ticket_id}\""
+        )))
+    }
+}
+
 /// Fetches a single Redmine issue by its numeric ID.
 ///
 /// Uses the `X-Redmine-API-Key` header for authentication (standard Redmine REST API).
-/// Returns `None` on any network error, non-2xx response, or JSON parse failure.
 pub async fn fetch_issue(
     http: &reqwest::Client,
     base_url: &str,
     token: &str,
     ticket_id: &str,
-) -> Option<RedmineIssue> {
-    if !is_valid_ticket_id(ticket_id) {
-        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
-        return None;
-    }
+) -> Result<RedmineIssue, TrackerError> {
+    check_ticket_id(ticket_id)?;
     let url = format!(
         "{}/issues/{}.json",
         base_url.trim_end_matches('/'),
         ticket_id
     );
-
     get_json::<IssueEnvelope>(http, &url, token)
         .await
         .map(|env| env.issue)
-        .map_err(|e| tracing::warn!(error = %e, url = %url, "Redmine issue request failed"))
-        .ok()
 }
 
 /// Fetches the list of time-tracking activity categories from Redmine.
 ///
 /// Calls `GET /enumerations/time_entry_activities.json`.
-/// Returns an empty `Vec` on any failure so the caller can degrade gracefully.
 pub async fn fetch_activities(
     http: &reqwest::Client,
     base_url: &str,
     token: &str,
-) -> Vec<Activity> {
+) -> Result<Vec<Activity>, TrackerError> {
     let url = format!(
         "{}/enumerations/time_entry_activities.json",
         base_url.trim_end_matches('/')
     );
-
-    match get_json::<ActivitiesEnvelope>(http, &url, token).await {
-        Ok(env) => env
-            .time_entry_activities
-            .into_iter()
-            .map(|a| Activity {
-                id: a.id,
-                name: a.name,
-            })
-            .collect(),
-        Err(e) => {
-            tracing::warn!(error = %e, "Redmine activities request failed");
-            vec![]
-        }
-    }
+    let env = get_json::<ActivitiesEnvelope>(http, &url, token).await?;
+    Ok(env
+        .time_entry_activities
+        .into_iter()
+        .map(|a| Activity {
+            id: a.id,
+            name: a.name,
+        })
+        .collect())
 }
 
-/// Fetches all time entries recorded on a Redmine issue.
+/// Page size of `GET /time_entries.json` (Redmine's maximum `limit`).
+const TIME_ENTRIES_PAGE: usize = 100;
+/// Safety cap on the number of pages read for one ticket (10 000 entries).
+const TIME_ENTRIES_MAX_PAGES: usize = 100;
+
+/// Offset of the next page to read, or `None` when every entry has been read.
+/// `total_count` is Redmine's own total; an empty page also ends the loop.
+fn next_offset(read: usize, page_len: usize, total_count: usize) -> Option<usize> {
+    (page_len > 0 && read < total_count).then_some(read)
+}
+
+/// Fetches all time entries recorded on a Redmine issue, following pagination.
 ///
-/// Calls `GET /time_entries.json?issue_id={id}`.
-/// Returns an empty `Vec` on any failure.
+/// Calls `GET /time_entries.json?issue_id={id}&limit=100&offset=…`.
 pub async fn fetch_time_entries(
     http: &reqwest::Client,
     base_url: &str,
     token: &str,
     ticket_id: &str,
-) -> Vec<TimeEntry> {
-    if !is_valid_ticket_id(ticket_id) {
-        tracing::warn!(ticket_id = %ticket_id, "Rejected non-numeric Redmine ticket id");
-        return vec![];
+) -> Result<Vec<TimeEntry>, TrackerError> {
+    check_ticket_id(ticket_id)?;
+    let mut entries = Vec::new();
+    let mut offset = Some(0);
+    for _ in 0..TIME_ENTRIES_MAX_PAGES {
+        let Some(current) = offset else {
+            return Ok(entries);
+        };
+        // Redmine exposes time entries via a global endpoint filtered by issue_id.
+        // The route `/issues/{id}/time_entries.json` does not exist and returns 404.
+        let url = format!(
+            "{}/time_entries.json?issue_id={}&limit={TIME_ENTRIES_PAGE}&offset={current}",
+            base_url.trim_end_matches('/'),
+            ticket_id
+        );
+        let env = get_json::<TimeEntriesEnvelope>(http, &url, token).await?;
+        let page_len = env.time_entries.len();
+        entries.extend(env.time_entries.into_iter().map(|e| TimeEntry {
+            id: e.id,
+            hours: e.hours,
+            activity: Activity {
+                id: e.activity.id,
+                name: e.activity.name,
+            },
+            comment: e.comments,
+            user: e.user.name,
+            spent_on: e.spent_on,
+        }));
+        offset = next_offset(entries.len(), page_len, env.total_count.unwrap_or(0));
     }
-    // Redmine exposes time entries via a global endpoint filtered by issue_id.
-    // The route `/issues/{id}/time_entries.json` does not exist and returns 404.
-    let url = format!(
-        "{}/time_entries.json?issue_id={}&limit=100",
-        base_url.trim_end_matches('/'),
-        ticket_id
+    tracing::warn!(
+        ticket_id,
+        "Time entries truncated at the pagination safety cap"
     );
-
-    match get_json::<TimeEntriesEnvelope>(http, &url, token).await {
-        Ok(env) => env
-            .time_entries
-            .into_iter()
-            .map(|e| TimeEntry {
-                id: e.id,
-                hours: e.hours,
-                activity: Activity {
-                    id: e.activity.id,
-                    name: e.activity.name,
-                },
-                comment: e.comments,
-                user: e.user.name,
-                spent_on: e.spent_on,
-            })
-            .collect(),
-        Err(e) => {
-            tracing::warn!(error = %e, "Redmine time entries request failed");
-            vec![]
-        }
-    }
+    Ok(entries)
 }
 
 /// Updates the Redmine issue status.
@@ -443,6 +464,35 @@ pub async fn log_time(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn http_status_maps_to_typed_errors() {
+        use reqwest::StatusCode;
+        assert!(matches!(
+            status_error(StatusCode::UNAUTHORIZED),
+            TrackerError::Auth(_)
+        ));
+        assert!(matches!(
+            status_error(StatusCode::FORBIDDEN),
+            TrackerError::Auth(_)
+        ));
+        assert!(matches!(
+            status_error(StatusCode::NOT_FOUND),
+            TrackerError::NotFound(_)
+        ));
+        assert!(matches!(
+            status_error(StatusCode::INTERNAL_SERVER_ERROR),
+            TrackerError::Other(_)
+        ));
+    }
+
+    #[test]
+    fn time_entries_pagination_stops() {
+        assert_eq!(next_offset(100, 100, 250), Some(100));
+        assert_eq!(next_offset(250, 50, 250), None); // all read
+        assert_eq!(next_offset(100, 100, 0), None); // no total_count: first page only
+        assert_eq!(next_offset(100, 0, 250), None); // empty page: stop anyway
+    }
 
     #[test]
     fn ticket_id_must_be_numeric() {

@@ -154,7 +154,8 @@ inventory::submit!(FilterDef {
         let Some(username) = mr.gitlab_username else {
             return false;
         };
-        matches_gitlab_username(mr.assignee, username)
+        mr.assignee
+            .is_some_and(|assignee| matches_gitlab_username(assignee, username))
     },
 });
 
@@ -215,7 +216,8 @@ inventory::submit!(FilterDef {
         if query.is_empty() {
             return true;
         }
-        mr.milestone.to_lowercase().contains(&query.to_lowercase())
+        mr.milestone
+            .is_some_and(|m| m.to_lowercase().contains(&query.to_lowercase()))
     },
 });
 
@@ -246,7 +248,9 @@ inventory::submit!(FilterDef {
             return true;
         }
         let q_lower = query.to_lowercase();
-        let gitlab_match = mr.assignee.to_lowercase().contains(&q_lower);
+        let gitlab_match = mr
+            .assignee
+            .is_some_and(|a| a.to_lowercase().contains(&q_lower));
         let tracker_match = mr
             .linked_ticket
             .and_then(|t| t.assignee.as_deref())

@@ -199,12 +199,16 @@ impl DashboardSummary {
             if mr.reviewers.is_empty() {
                 summary.no_reviewer += 1;
             }
-            if mr.assignee == "None" || mr.assignee.trim().is_empty() {
+            if mr.assignee.is_none() {
                 summary.no_assignee += 1;
             }
 
             if let Some(username) = username {
-                if matches_gitlab_username(&mr.assignee, username) {
+                if mr
+                    .assignee
+                    .as_deref()
+                    .is_some_and(|assignee| matches_gitlab_username(assignee, username))
+                {
                     summary.assigned_to_me += 1;
                 }
                 if mr
@@ -255,7 +259,7 @@ impl DashboardSummary {
                 summary.no_diff_stats += 1;
             }
 
-            if mr.milestone.trim().is_empty() || mr.milestone == "None" {
+            if mr.milestone.is_none() {
                 summary.no_milestone += 1;
             }
             if let Some(due_date) = parse_gitlab_date(mr.milestone_due_date.as_deref()) {
@@ -302,10 +306,9 @@ pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
     // Current dashboard data is the baseline source for release health. Stats, when
     // compiled and loaded, only enrich historical completion counters below.
     for mr in app.visible_mrs() {
-        let milestone = mr.milestone.trim();
-        if milestone.is_empty() || milestone == "None" {
+        let Some(milestone) = mr.milestone.as_deref() else {
             continue;
-        }
+        };
 
         let entry = releases
             .entry(milestone.to_string())
@@ -358,6 +361,7 @@ fn enrich_release_summaries_with_stats(app: &App, releases: &mut BTreeMap<String
     // inferred from the currently visible MR list.
     for (milestone, merged) in &report.aggregated.throughput_by_milestone {
         let milestone = milestone.trim();
+        // Stats rows recorded before sentinels were stored as NULL may still say "None".
         if milestone.is_empty() || milestone == "None" {
             continue;
         }

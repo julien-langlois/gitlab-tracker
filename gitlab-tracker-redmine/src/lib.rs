@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION;
 use gitlab_tracker_core::{
     Activity, LabelColorMaps, LinkedTicket, TicketTransitionProvider, TicketTransitionTarget,
-    TimeEntry, TimeEntryRequest, TrackerProvider,
+    TimeEntry, TimeEntryRequest, TrackerError, TrackerProvider,
 };
 use zeroize::Zeroizing;
 
@@ -53,9 +53,7 @@ impl TicketTransitionProvider for RedmineProvider {
     async fn fetch_transition_targets(
         &self,
     ) -> Result<Vec<TicketTransitionTarget>, gitlab_tracker_core::TrackerError> {
-        client::fetch_issue_statuses(&self.http, &self.config.url, &self.token)
-            .await
-            .map_err(gitlab_tracker_core::TrackerError::Other)
+        client::fetch_issue_statuses(&self.http, &self.config.url, &self.token).await
     }
 
     async fn transition_ticket_status(
@@ -119,11 +117,11 @@ impl TrackerProvider for RedmineProvider {
         }
     }
 
-    async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket> {
+    async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError> {
         let issue =
             client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await?;
 
-        Some(LinkedTicket {
+        Ok(LinkedTicket {
             schema_version: LINKED_TICKET_SCHEMA_VERSION,
             id: issue.id.to_string(),
             subject: issue.subject,
@@ -154,14 +152,14 @@ impl TrackerProvider for RedmineProvider {
     /// Fetches all available time-tracking activity categories from Redmine.
     ///
     /// Delegates to `GET /enumerations/time_entry_activities.json`.
-    async fn fetch_activities(&self) -> Vec<Activity> {
+    async fn fetch_activities(&self) -> Result<Vec<Activity>, TrackerError> {
         client::fetch_activities(&self.http, &self.config.url, &self.token).await
     }
 
     /// Fetches all time entries recorded on a Redmine issue.
     ///
     /// Delegates to `GET /time_entries.json?issue_id={id}`.
-    async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> {
+    async fn fetch_time_entries(&self, ticket_id: &str) -> Result<Vec<TimeEntry>, TrackerError> {
         client::fetch_time_entries(&self.http, &self.config.url, &self.token, ticket_id).await
     }
 
@@ -179,8 +177,11 @@ impl TrackerProvider for RedmineProvider {
         entry: TimeEntryRequest,
     ) -> Result<(), gitlab_tracker_core::TrackerError> {
         // Fetch the issue to get remaining_hours / estimated_hours for ETC computation.
-        // A None here simply means the ETC update step will be skipped — not an error.
-        let issue = client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await;
+        // A failure here simply means the ETC update step is skipped — not an error.
+        let issue = client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id)
+            .await
+            .map_err(|e| tracing::warn!(error = %e, "Issue fetch before time logging failed"))
+            .ok();
 
         client::log_time(
             &self.http,

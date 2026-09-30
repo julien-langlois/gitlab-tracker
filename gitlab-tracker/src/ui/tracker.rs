@@ -319,8 +319,8 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
 /// fetched from the tracker backend for the linked ticket.
 pub fn render_time_log(
     mr: &TrackedMr,
-    // `None` while the entries are being fetched.
-    entries: Option<&[gitlab_tracker_core::TimeEntry]>,
+    // `None` before the first fetch was even started.
+    state: Option<&crate::app::TimeLogState>,
     muted_comment: ratatui::style::Color,
 ) -> Text<'static> {
     let mut lines = vec![
@@ -375,7 +375,12 @@ pub fn render_time_log(
             ]));
         } else {
             // No estimate — just show total spent.
-            let total_hours: f32 = entries.unwrap_or_default().iter().map(|e| e.hours).sum();
+            let total_hours: f32 = match state {
+                Some(crate::app::TimeLogState::Loaded(entries)) => {
+                    entries.iter().map(|e| e.hours).sum()
+                }
+                _ => 0.0,
+            };
             lines.push(Line::from(vec![
                 Span::raw("Total    : "),
                 Span::styled(
@@ -404,12 +409,26 @@ pub fn render_time_log(
         ),
     ]));
 
-    let Some(entries) = entries else {
-        lines.push(Line::from(vec![Span::styled(
-            "Loading time entries…",
-            Style::default().fg(theme::muted()),
-        )]));
-        return Text::from(lines);
+    let entries = match state {
+        Some(crate::app::TimeLogState::Loaded(entries)) => entries.as_slice(),
+        Some(crate::app::TimeLogState::Failed(error)) => {
+            lines.push(Line::from(vec![Span::styled(
+                format!("Failed to load time entries: {error}"),
+                Style::default().fg(Color::Red),
+            )]));
+            lines.push(Line::from(vec![Span::styled(
+                "Retried at the next refresh — or press [R] now.",
+                Style::default().fg(theme::muted()),
+            )]));
+            return Text::from(lines);
+        }
+        Some(crate::app::TimeLogState::Loading) | None => {
+            lines.push(Line::from(vec![Span::styled(
+                "Loading time entries…",
+                Style::default().fg(theme::muted()),
+            )]));
+            return Text::from(lines);
+        }
     };
     if entries.is_empty() {
         lines.push(Line::from(vec![Span::styled(

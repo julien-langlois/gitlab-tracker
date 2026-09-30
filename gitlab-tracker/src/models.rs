@@ -262,10 +262,10 @@ pub struct TrackedMr {
     pub sha: Option<String>,
     pub description: String,
     pub author: String,
-    pub assignee: String,
+    pub assignee: Option<String>,
     /// Reviewer display strings — may be empty when no reviewer is assigned.
     pub reviewers: Vec<String>,
-    pub milestone: String,
+    pub milestone: Option<String>,
     /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
     pub milestone_due_date: Option<String>,
     /// Milestone description — `None` when not set or when no milestone is attached.
@@ -305,7 +305,7 @@ pub struct TrackedMr {
 
 impl TrackedMr {
     /// A not-yet-fetched MR shown while its first GitLab fetch is in flight.
-    pub fn placeholder(id: String, title: String, milestone: String) -> Self {
+    pub fn placeholder(id: String, title: String, milestone: Option<String>) -> Self {
         Self {
             id,
             title,
@@ -315,7 +315,7 @@ impl TrackedMr {
             sha: None,
             description: String::new(),
             author: "Loading".to_string(),
-            assignee: "Loading".to_string(),
+            assignee: None,
             reviewers: vec![],
             milestone,
             milestone_due_date: None,
@@ -338,6 +338,13 @@ impl TrackedMr {
     }
 }
 
+/// Drops the display sentinels (`"None"`, `"none"`, `"Loading"`, blank) that older
+/// versions stored in place of a missing assignee or milestone, so state files
+/// written before `Option` was used restore as `None`.
+pub fn without_sentinel(value: Option<String>) -> Option<String> {
+    value.filter(|s| !matches!(s.trim(), "" | "None" | "none" | "Loading"))
+}
+
 #[cfg(feature = "stats")]
 impl TrackedMr {
     /// Builds the stats snapshot for this MR. Shared by the startup backfill and the
@@ -348,11 +355,6 @@ impl TrackedMr {
         project_id: &str,
         profile: &DifficultyProfile,
     ) -> gitlab_tracker_stats::snapshot::MrStatsSnapshot {
-        // Display sentinels ("None" on restore, "Loading" on placeholders, legacy
-        // "none") are not real values: store them as NULL.
-        let known = |s: &str| {
-            (!matches!(s.trim(), "" | "None" | "none" | "Loading")).then(|| s.to_string())
-        };
         let diff = self.diff_stats.as_ref();
         gitlab_tracker_stats::snapshot::MrStatsSnapshot {
             mr_id: self.id.clone(),
@@ -360,10 +362,10 @@ impl TrackedMr {
             title: self.title.clone(),
             trigger,
             author: self.author.clone(),
-            assignee: known(&self.assignee),
+            assignee: self.assignee.clone(),
             reviewers: self.reviewers.clone(),
             merged_by: self.merged_by.clone(),
-            milestone: known(&self.milestone),
+            milestone: self.milestone.clone(),
             labels: self.labels.clone(),
             target_branch: self.target_branch.clone(),
             state: format!("{:?}", self.state).to_lowercase(),
@@ -394,10 +396,10 @@ pub struct MrLoadedData {
     pub branches: HashSet<String>,
     pub description: String,
     pub author: String,
-    pub assignee: String,
+    pub assignee: Option<String>,
     /// Reviewer display strings resolved from the GitLab API response.
     pub reviewers: Vec<String>,
-    pub milestone: String,
+    pub milestone: Option<String>,
     /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
     pub milestone_due_date: Option<String>,
     /// Milestone description — `None` when not set or when no milestone is attached.
@@ -580,12 +582,14 @@ pub enum AppEvent {
     },
     /// Fired when the list of time-tracking activity categories has been fetched.
     /// Stored in `App` for use in the Log Time popup selector.
-    ActivitiesLoaded(Vec<gitlab_tracker_core::Activity>),
+    /// `Err` carries the tracker error message, shown in the Log Time popup.
+    ActivitiesLoaded(Result<Vec<gitlab_tracker_core::Activity>, String>),
     /// Fired when time entries for a ticket have been fetched from the tracker.
     /// Keyed by ticket id so a late response can never land on another ticket.
     TimeEntriesLoaded {
         ticket_id: String,
-        entries: Vec<gitlab_tracker_core::TimeEntry>,
+        /// `Err` carries the tracker error message, shown in the TimeLog view.
+        entries: Result<Vec<gitlab_tracker_core::TimeEntry>, String>,
     },
     /// Fired when a time entry has been successfully submitted to the tracker.
     /// Carries both the MR id (to update the right `linked_ticket` in memory) and the

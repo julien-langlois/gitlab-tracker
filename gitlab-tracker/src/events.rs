@@ -239,7 +239,12 @@ pub async fn handle_key_event(
                 KeyCode::Esc | KeyCode::Enter => {
                     // Close the popup and persist the new column visibility to projects.toml.
                     app.input_mode = InputMode::Normal;
-                    save_visible_columns_async(&app.config.visible_columns, 0).await;
+                    save_visible_columns_async(
+                        &app.config.visible_columns,
+                        &app.base_url,
+                        &app.project_id,
+                    )
+                    .await;
                 }
                 _ => {}
             }
@@ -257,7 +262,10 @@ pub async fn handle_key_event(
             }
             KeyCode::Enter => {
                 let project_table = app.settings_editor.to_project_table();
-                if let Some(project) = save_project_settings_async(&project_table, 0).await {
+                if let Some(project) =
+                    save_project_settings_async(&project_table, &app.base_url, &app.project_id)
+                        .await
+                {
                     app.project_settings = project;
                     let editor = std::mem::take(&mut app.settings_editor);
                     editor.apply_to_app(app);
@@ -611,18 +619,12 @@ pub async fn handle_key_event(
                         if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
                             if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone())
                             {
-                                let mr_id = mr.id.clone();
-                                let tx2 = tx.clone();
-                                tokio::spawn(async move {
-                                    if let Some(ticket) = provider.fetch_ticket(&ticket_id).await {
-                                        let _ = tx2.send(
-                                            crate::models::AppEvent::TrackerTicketLoaded {
-                                                mr_id,
-                                                ticket: Box::new(ticket),
-                                            },
-                                        );
-                                    }
-                                });
+                                crate::app::spawn_ticket_fetch(
+                                    provider,
+                                    ticket_id,
+                                    mr.id.clone(),
+                                    tx,
+                                );
                             }
                         }
                     }
@@ -663,9 +665,13 @@ pub async fn handle_key_event(
                         // Fetch activities lazily if not yet loaded.
                         if app.activities.is_empty() {
                             if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+                                app.activities_error = None;
                                 let tx2 = tx.clone();
                                 tokio::spawn(async move {
-                                    let activities = provider.fetch_activities().await;
+                                    let activities = provider
+                                        .fetch_activities()
+                                        .await
+                                        .map_err(|e| e.to_string());
                                     let _ = tx2.send(crate::models::AppEvent::ActivitiesLoaded(
                                         activities,
                                     ));
@@ -782,7 +788,7 @@ async fn handle_enter(
         } else {
             app.branches.retain(|b| b != &to_remove);
             // Branches live in projects.toml — persist there, not in tracker_state.json.
-            save_branches_async(&app.branches, 0).await;
+            save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
         }
     } else if value.chars().all(|c| c.is_ascii_digit()) {
         // Add a new MR to track — route through the event bus so apply_event
@@ -795,7 +801,7 @@ async fn handle_enter(
         if !app.branches.contains(&value) {
             app.branches.push(value.clone());
             // Branches live in projects.toml — persist there, not in tracker_state.json.
-            save_branches_async(&app.branches, 0).await;
+            save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
 
             let ctx = app.fetch_context();
             for mr in &mut app.mrs {

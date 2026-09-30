@@ -675,30 +675,69 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
     })
 }
 
+/// Items per page requested from list endpoints (GitLab's maximum).
+const PAGE_SIZE: usize = 100;
+/// Safety cap on the pages read by [`get_all_pages`] (5 000 items).
+const MAX_PAGES: u32 = 50;
+
+/// Page to request after reading `page` with `len` items, or `None` when done:
+/// a short page is the last one, and [`MAX_PAGES`] bounds a runaway listing.
+fn next_page(page: u32, len: usize) -> Option<u32> {
+    (len >= PAGE_SIZE && page < MAX_PAGES).then_some(page + 1)
+}
+
+/// GETs every page of a GitLab list endpoint. `url` already carries its query
+/// string (`…?state=active`); `per_page` and `page` are appended.
+///
+/// Returns `None` when any page fails: a partial list must not be mistaken for a
+/// complete one (the discovery poll relies on it).
+async fn get_all_pages<T: serde::de::DeserializeOwned>(
+    ctx: &FetchContext,
+    url: &str,
+) -> Option<Vec<T>> {
+    let client = http_client();
+    let mut items = Vec::new();
+    let mut page = 1;
+    loop {
+        let res = client
+            .get(format!("{url}&per_page={PAGE_SIZE}&page={page}"))
+            .header("PRIVATE-TOKEN", ctx.token.as_str())
+            .send()
+            .await
+            .ok()
+            .filter(|r| r.status().is_success())?;
+        let batch: Vec<T> = res.json().await.ok()?;
+        let len = batch.len();
+        items.extend(batch);
+        match next_page(page, len) {
+            Some(next) => page = next,
+            None => {
+                if len >= PAGE_SIZE {
+                    tracing::warn!(url, "List truncated at the pagination safety cap");
+                }
+                return Some(items);
+            }
+        }
+    }
+}
+
+/// Only the project-scoped id of a MR list entry.
+#[derive(serde::Deserialize)]
+struct MrIid {
+    iid: u64,
+}
+
 /// Fetches all open or upcoming milestones for the project from the GitLab API.
 ///
 /// Uses `state=active` which returns both currently active and upcoming milestones.
 /// Results are sorted by title for display in the autocomplete widget.
 /// Returns an empty vec on any error — milestones are best-effort.
 pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
-    let client = http_client();
     let url = format!(
-        "{}/api/v4/projects/{}/milestones?state=active&per_page=100",
+        "{}/api/v4/projects/{}/milestones?state=active",
         ctx.base_url, ctx.project_id
     );
-    let res = match client
-        .get(&url)
-        .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
-        .await
-    {
-        Ok(r) if r.status().is_success() => r,
-        _ => return vec![],
-    };
-    let mut milestones: Vec<GitLabMilestone> = match res.json().await {
-        Ok(m) => m,
-        Err(_) => return vec![],
-    };
+    let mut milestones: Vec<GitLabMilestone> = get_all_pages(ctx, &url).await.unwrap_or_default();
     milestones.sort_by(|a, b| a.title.cmp(&b.title));
     milestones
 }
@@ -708,23 +747,11 @@ pub async fn fetch_milestones(ctx: &FetchContext) -> Vec<GitLabMilestone> {
 /// Used to provide a fallback colour for labels not overridden in `config.json`.
 /// Returns an empty vec on any error — labels are best-effort.
 pub async fn fetch_gitlab_labels(ctx: &FetchContext) -> Vec<GitLabLabelDetail> {
-    let client = http_client();
     let url = format!(
-        "{}/api/v4/projects/{}/labels?per_page=100",
+        "{}/api/v4/projects/{}/labels?with_counts=false",
         ctx.base_url, ctx.project_id
     );
-    let res = match client
-        .get(&url)
-        .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
-        .await
-    {
-        Ok(r) if r.status().is_success() => r,
-        _ => return vec![],
-    };
-    res.json::<Vec<GitLabLabelDetail>>()
-        .await
-        .unwrap_or_default()
+    get_all_pages(ctx, &url).await.unwrap_or_default()
 }
 
 /// Spawns an async task that fetches all project labels (with colours) and sends them via `tx`.
@@ -758,33 +785,19 @@ pub fn spawn_milestones_fetch(ctx: FetchContext, tx: tokio::sync::mpsc::Unbounde
 /// The GitLab MRs API filters by milestone **title** (not numeric ID) via the
 /// `milestone` query parameter — hence we URL-encode the title.
 pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -> Vec<String> {
-    let client = http_client();
     // No `state` filter — a release manager needs to track all MRs regardless of
     // their state (opened, merged, closed) to verify full branch coverage for a release.
     let url = format!(
-        "{}/api/v4/projects/{}/merge_requests?milestone={}&per_page=100",
+        "{}/api/v4/projects/{}/merge_requests?milestone={}",
         ctx.base_url,
         ctx.project_id,
         urlencoding::encode(milestone_title)
     );
-    let res = match client
-        .get(&url)
-        .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+    get_all_pages::<MrIid>(ctx, &url)
         .await
-    {
-        Ok(r) if r.status().is_success() => r,
-        _ => return vec![],
-    };
-
-    let mrs: Vec<serde_json::Value> = match res.json().await {
-        Ok(v) => v,
-        Err(_) => return vec![],
-    };
-
-    mrs.iter()
-        .filter_map(|v| v.get("iid").and_then(|id| id.as_u64()))
-        .map(|id| id.to_string())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|mr| mr.iid.to_string())
         .collect()
 }
 
@@ -794,47 +807,20 @@ pub async fn fetch_milestone_mr_ids(ctx: &FetchContext, milestone_title: &str) -
 /// This intentionally includes MRs that were opened and merged between two
 /// refresh cycles, so the discovery poller can still add them and let the stats
 /// recorder persist an `OnMerge` snapshot. Paginates through all pages
-/// (100/page). Returns an empty vec on any network or parse error — discovery is
-/// best-effort.
-/// Returns every MR IID created after `created_after`, or `None` when any page
-/// fails — a partial result must not be mistaken for a complete poll.
+/// ([`get_all_pages`]).
+///
+/// Returns `None` when any page fails — a partial result must not be mistaken for
+/// a complete poll (the discovery anchor only advances after a complete one).
 pub async fn fetch_recent_mr_ids(ctx: &FetchContext, created_after: &str) -> Option<Vec<String>> {
-    let client = http_client();
-    let mut all_ids: Vec<String> = Vec::new();
-    let mut page: u32 = 1;
-
     // URL-encode the timestamp so the `+` offset separator is not lost.
-    let encoded_after = urlencoding::encode(created_after);
-
-    loop {
-        let url = format!(
-            "{}/api/v4/projects/{}/merge_requests?state=all&created_after={}&per_page=100&page={}",
-            ctx.base_url, ctx.project_id, encoded_after, page
-        );
-        let res = match client
-            .get(&url)
-            .header("PRIVATE-TOKEN", ctx.token.as_str())
-            .send()
-            .await
-        {
-            Ok(r) if r.status().is_success() => r,
-            _ => return None,
-        };
-        let mrs: Vec<serde_json::Value> = res.json().await.ok()?;
-        let page_len = mrs.len();
-        for mr in mrs {
-            if let Some(id) = mr.get("iid").and_then(|v| v.as_u64()) {
-                all_ids.push(id.to_string());
-            }
-        }
-        // GitLab returns fewer than 100 items on the last page.
-        if page_len < 100 {
-            break;
-        }
-        page += 1;
-    }
-
-    Some(all_ids)
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests?state=all&created_after={}",
+        ctx.base_url,
+        ctx.project_id,
+        urlencoding::encode(created_after)
+    );
+    let mrs = get_all_pages::<MrIid>(ctx, &url).await?;
+    Some(mrs.into_iter().map(|mr| mr.iid.to_string()).collect())
 }
 
 /// Safety margin applied when advancing the discovery anchor, absorbing clock
@@ -1146,10 +1132,7 @@ pub async fn fetch_gitlab_data(
     // at any time, and the cache would silently hold a stale value.
     let milestone_due_date = mr.milestone.as_ref().and_then(|m| m.due_date.clone());
     let milestone_description = mr.milestone.as_ref().and_then(|m| m.description.clone());
-    let milestone = mr
-        .milestone
-        .map(|m| m.title)
-        .unwrap_or_else(|| "None".to_string());
+    let milestone = mr.milestone.map(|m| m.title);
 
     // Reviewers are always read fresh — they can be added or removed at any time.
     // Format: "Full Name (username)" — mirrors the author/assignee display convention.
@@ -1245,11 +1228,7 @@ pub async fn fetch_gitlab_data(
         }
     };
     // The assignee can change at any time: always take it from the fresh payload.
-    // "None" matches the sentinel used on restore and by the cockpit counter.
-    let assignee = mr
-        .assignee
-        .map(|u| format!("{} (@{})", u.name, u.username))
-        .unwrap_or_else(|| "None".to_string());
+    let assignee = mr.assignee.map(|u| format!("{} (@{})", u.name, u.username));
 
     let mut found_branches = HashSet::new();
 
@@ -1473,6 +1452,14 @@ pub async fn fetch_gitlab_data(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn pagination_stops_on_short_page_or_cap() {
+        assert_eq!(next_page(1, PAGE_SIZE), Some(2));
+        assert_eq!(next_page(3, 42), None); // short page = last page
+        assert_eq!(next_page(1, 0), None);
+        assert_eq!(next_page(MAX_PAGES, PAGE_SIZE), None); // safety cap
+    }
 
     #[test]
     fn diff_stats_cache_rejects_legacy_entries() {

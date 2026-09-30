@@ -602,59 +602,69 @@ pub async fn resolve_active_project() -> ProjectEntry {
     entry
 }
 
-/// Resolves the target project index for legacy save calls.
+/// Finds the `projects.toml` entry of the project the app is running on.
 ///
-/// The TUI currently passes `0` from older call sites. To avoid writing into the
-/// first tenant when another entry is marked active, index `0` is treated as
-/// "active project" when an active entry exists. Explicit non-zero indexes keep
-/// their exact meaning for future multi-tenant flows.
-fn resolve_save_project_idx(cfg: &ProjectsConfig, project_idx: usize) -> Option<usize> {
-    if cfg.projects.is_empty() {
-        return None;
-    }
-
-    if project_idx == 0 {
-        return Some(
-            cfg.projects
-                .iter()
-                .position(|project| project.active)
-                .unwrap_or(0),
-        );
-    }
-
-    (project_idx < cfg.projects.len()).then_some(project_idx)
+/// Matched by `(gitlab_url, project_id)` — never by position or by the `active`
+/// flag: `--project`, `GITLAB_URL` / `GITLAB_PROJECT_ID` can select a project that is
+/// not the active one, and saving into the active entry would corrupt it.
+fn find_project_mut<'c>(
+    cfg: &'c mut ProjectsConfig,
+    gitlab_url: &str,
+    project_id: &str,
+) -> Option<&'c mut ProjectEntry> {
+    let url = gitlab_url.trim_end_matches('/');
+    cfg.projects
+        .iter_mut()
+        .find(|p| p.gitlab_url.trim_end_matches('/') == url && p.project_id == project_id)
 }
 
-/// Persists the column visibility settings into `projects.toml` for the given entry index.
+/// Loads `projects.toml`, applies `update` to the current project's entry and saves.
+///
+/// Returns `false` (and writes nothing) when the project is not in `projects.toml`,
+/// e.g. when it was only given through environment variables.
+async fn update_project_entry(
+    gitlab_url: &str,
+    project_id: &str,
+    update: impl FnOnce(&mut ProjectEntry),
+) -> bool {
+    let mut cfg = load_projects_toml().await;
+    let Some(entry) = find_project_mut(&mut cfg, gitlab_url, project_id) else {
+        tracing::warn!(
+            gitlab_url,
+            project_id,
+            "Current project is not in projects.toml — setting not saved"
+        );
+        return false;
+    };
+    update(entry);
+    save_projects_toml(&cfg).await;
+    true
+}
+
+/// Persists the column visibility settings of the current project into `projects.toml`.
 ///
 /// Called whenever the user closes the column picker popup so that the column
 /// selection survives restarts without writing to the legacy `config.json`.
-pub async fn save_visible_columns_async(cols: &crate::config::VisibleColumns, project_idx: usize) {
-    let mut cfg = load_projects_toml().await;
-    if let Some(idx) = resolve_save_project_idx(&cfg, project_idx) {
-        if let Some(entry) = cfg.projects.get_mut(idx) {
-            entry.visible_columns = Some(cols.clone());
-            save_projects_toml(&cfg).await;
-        }
-    }
+pub async fn save_visible_columns_async(
+    cols: &crate::config::VisibleColumns,
+    gitlab_url: &str,
+    project_id: &str,
+) {
+    update_project_entry(gitlab_url, project_id, |entry| {
+        entry.visible_columns = Some(cols.clone());
+    })
+    .await;
 }
 
-/// Persists the active branch list into `projects.toml` for the given entry index.
+/// Persists the tracked branch list of the current project into `projects.toml`.
 ///
 /// Called whenever the user adds or removes a branch in the TUI so that the
 /// branch list survives restarts without touching `tracker_state.json`.
-pub async fn save_branches_async(branches: &[String], project_idx: usize) {
-    let mut cfg = load_projects_toml().await;
-    if let Some(idx) = resolve_save_project_idx(&cfg, project_idx) {
-        if let Some(entry) = cfg.projects.get_mut(idx) {
-            entry.tracked_branches = if branches.is_empty() {
-                None
-            } else {
-                Some(branches.to_vec())
-            };
-            save_projects_toml(&cfg).await;
-        }
-    }
+pub async fn save_branches_async(branches: &[String], gitlab_url: &str, project_id: &str) {
+    update_project_entry(gitlab_url, project_id, |entry| {
+        entry.tracked_branches = (!branches.is_empty()).then(|| branches.to_vec());
+    })
+    .await;
 }
 
 /// Persists a TOML-edited project settings table into `projects.toml`.
@@ -662,22 +672,18 @@ pub async fn save_branches_async(branches: &[String], project_idx: usize) {
 /// The settings dashboard edits a generic TOML table so plugin-provided settings
 /// can be saved without hardcoding their fields in the main crate. The table is
 /// deserialised back into `ProjectEntry` before saving to preserve validation and
-/// the canonical typed storage model.
+/// the canonical typed storage model. It replaces the entry of the **current**
+/// project (`gitlab_url`, `project_id`), whatever entry is marked active.
 pub async fn save_project_settings_async(
     project_table: &toml::Table,
-    project_idx: usize,
+    gitlab_url: &str,
+    project_id: &str,
 ) -> Option<ProjectEntry> {
-    let mut cfg = load_projects_toml().await;
-    let idx = resolve_save_project_idx(&cfg, project_idx)?;
     let project: ProjectEntry = toml::Value::Table(project_table.clone()).try_into().ok()?;
-
-    if let Some(entry) = cfg.projects.get_mut(idx) {
-        *entry = project.clone();
-        save_projects_toml(&cfg).await;
-        return Some(project);
-    }
-
-    None
+    let saved = project.clone();
+    update_project_entry(gitlab_url, project_id, |entry| *entry = project)
+        .await
+        .then_some(saved)
 }
 
 /// Prompts the user interactively for a required config value (read from stdin).
@@ -1089,10 +1095,7 @@ pub async fn load_state_async(
             if !state.branches.is_empty() {
                 let mut cfg = load_projects_toml().await;
                 // Target the project this state file belongs to, not the first one.
-                let url = gitlab_url.trim_end_matches('/');
-                let entry = cfg.projects.iter_mut().find(|p| {
-                    p.gitlab_url.trim_end_matches('/') == url && p.project_id == project_id
-                });
+                let entry = find_project_mut(&mut cfg, gitlab_url, project_id);
                 if let Some(entry) = entry.filter(|p| p.tracked_branches.is_none()) {
                     entry.tracked_branches = Some(state.branches.clone());
                     save_projects_toml(&cfg).await;
@@ -1138,9 +1141,9 @@ pub async fn save_state_async(
                 },
                 description: Some(m.description.clone()),
                 author: Some(m.author.clone()),
-                assignee: Some(m.assignee.clone()),
+                assignee: m.assignee.clone(),
                 reviewers: m.reviewers.clone(),
-                milestone: Some(m.milestone.clone()),
+                milestone: m.milestone.clone(),
                 milestone_due_date: m.milestone_due_date.clone(),
                 milestone_description: m.milestone_description.clone(),
                 web_url: Some(m.web_url.clone()),
@@ -1180,6 +1183,33 @@ pub async fn save_state_async(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn saves_target_the_current_project_not_the_active_one() {
+        let project = |url: &str, id: &str, active| ProjectEntry {
+            gitlab_url: url.into(),
+            project_id: id.into(),
+            active,
+            ..Default::default()
+        };
+        let mut cfg = ProjectsConfig {
+            projects: vec![
+                project("https://gitlab.a.com", "1", true),
+                project("https://gitlab.b.com", "2", false),
+            ],
+        };
+        // Started with `--project 2`: the second entry is edited, the active one untouched.
+        let entry = find_project_mut(&mut cfg, "https://gitlab.b.com/", "2").unwrap();
+        entry.tracked_branches = Some(vec!["main".into()]);
+        assert_eq!(cfg.projects[0].tracked_branches, None);
+        assert_eq!(
+            cfg.projects[1].tracked_branches.as_deref(),
+            Some(&["main".to_string()][..])
+        );
+        // Same id on another instance, or a project only known from env vars: no match.
+        assert!(find_project_mut(&mut cfg, "https://gitlab.a.com", "2").is_none());
+        assert!(find_project_mut(&mut cfg, "https://env-only.example", "9").is_none());
+    }
 
     #[test]
     fn env_list_syntax_for_figment() {

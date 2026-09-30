@@ -195,8 +195,7 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                         mr,
                         mr.linked_ticket
                             .as_ref()
-                            .and_then(|t| app.time_entries.get(&t.id))
-                            .and_then(|e| e.as_deref()),
+                            .and_then(|t| app.time_entries.get(&t.id)),
                         app.theme.muted_comment,
                     ),
                 };
@@ -465,9 +464,16 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         ));
 
     if app.activities.is_empty() {
-        let loading = Paragraph::new("Loading activities…")
+        // Failed fetch: show why (reopening the popup retries) instead of an endless
+        // "Loading…".
+        let (text, color) = match &app.activities_error {
+            Some(error) => (format!("Failed to load activities: {error}"), Color::Red),
+            None => ("Loading activities…".to_string(), Color::DarkGray),
+        };
+        let loading = Paragraph::new(text)
             .block(activity_block)
-            .style(Style::default().fg(Color::DarkGray));
+            .style(Style::default().fg(color))
+            .wrap(Wrap { trim: true });
         f.render_widget(loading, zones[1]);
     } else {
         let cursor = app.log_time_form.selected_activity_idx;

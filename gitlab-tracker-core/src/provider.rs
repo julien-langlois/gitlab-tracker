@@ -348,9 +348,10 @@ pub trait TrackerProvider: Send + Sync {
 
     /// Fetches the full ticket details for the given raw ticket id.
     ///
-    /// Returns `None` on network error, authentication failure, or when the
-    /// ticket does not exist. The caller is responsible for caching results.
-    async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket>;
+    /// Errors are typed so the caller can tell a missing ticket (`NotFound`) from a
+    /// rejected token (`Auth`) or a network failure, and keep its cached copy on a
+    /// transient error. The caller is responsible for caching results.
+    async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError>;
 
     /// Builds the direct URL to the ticket from its id.
     ///
@@ -384,15 +385,15 @@ pub trait TrackerProvider: Send + Sync {
     ///
     /// Called once at startup (or on first popup open) and cached in `App`.
     /// Default implementation returns an empty list (opt-in capability).
-    async fn fetch_activities(&self) -> Vec<Activity> {
-        vec![]
+    async fn fetch_activities(&self) -> Result<Vec<Activity>, TrackerError> {
+        Ok(vec![])
     }
 
     /// Fetches all time entries recorded on the given ticket.
     ///
-    /// Displayed in the Inspector's TimeLog view. Default returns empty (opt-in).
-    async fn fetch_time_entries(&self, _ticket_id: &str) -> Vec<TimeEntry> {
-        vec![]
+    /// Displayed in the Tracker pane's TimeLog view. Default returns empty (opt-in).
+    async fn fetch_time_entries(&self, _ticket_id: &str) -> Result<Vec<TimeEntry>, TrackerError> {
+        Ok(vec![])
     }
 
     /// Submits a new time entry on the given ticket.

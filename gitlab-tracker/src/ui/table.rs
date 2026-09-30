@@ -283,7 +283,10 @@ pub fn render_table(app: &App) -> Table<'_> {
             }
             if col("milestone") {
                 cells.push(maybe_highlight(
-                    Cell::from(mr.milestone.as_str()).fg(Color::Cyan),
+                    match mr.milestone.as_deref() {
+                        Some(milestone) => Cell::from(milestone).fg(Color::Cyan),
+                        None => Cell::from(crate::app::NO_VALUE).fg(Color::DarkGray),
+                    },
                     highlight,
                 ));
             }

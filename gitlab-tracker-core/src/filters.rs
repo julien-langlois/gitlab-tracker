@@ -55,8 +55,8 @@ pub struct MrSnapshot<'a> {
     pub state: &'a str,
     pub mergeability: &'a str,
     pub user_notes_count: u32,
-    pub milestone: &'a str,
-    pub assignee: &'a str,
+    pub milestone: Option<&'a str>,
+    pub assignee: Option<&'a str>,
     pub linked_ticket: Option<&'a LinkedTicket>,
     pub pipeline_status: Option<&'a str>,
     /// Reviewer display strings for this MR (e.g. "Alice (@alice)").
