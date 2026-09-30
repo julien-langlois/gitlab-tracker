@@ -388,6 +388,34 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     pipelines
 }
 
+/// A discussion thread of the GitLab Discussions API (only what is counted).
+#[derive(serde::Deserialize)]
+struct Discussion {
+    #[serde(default)]
+    notes: Vec<DiscussionNote>,
+}
+
+/// `Option`s: GitLab omits (or nulls) both fields on notes that cannot be resolved.
+#[derive(serde::Deserialize)]
+struct DiscussionNote {
+    resolvable: Option<bool>,
+    resolved: Option<bool>,
+}
+
+/// A thread is "unresolved" when at least one of its notes is resolvable (a proper
+/// review thread, not a plain comment) and not yet resolved. Threads are counted,
+/// not individual notes or replies.
+fn count_unresolved_threads(discussions: &[Discussion]) -> u32 {
+    discussions
+        .iter()
+        .filter(|d| {
+            d.notes
+                .iter()
+                .any(|n| n.resolvable.unwrap_or(false) && !n.resolved.unwrap_or(false))
+        })
+        .count() as u32
+}
+
 /// Counts the **unresolved review threads** of a MR (GitLab Discussions API).
 ///
 /// `GET /projects/:id/merge_requests/:iid/discussions` returns all discussion threads.
@@ -427,7 +455,7 @@ async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Cl
             }
         };
 
-        let discussions: Vec<serde_json::Value> = match res.json().await {
+        let discussions: Vec<Discussion> = match res.json().await {
             Ok(v) => v,
             Err(e) => {
                 tracing::warn!("Failed to deserialize discussions for MR {}: {}", mr_id, e);
@@ -441,28 +469,7 @@ async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Cl
 
         let page_count = discussions.len();
 
-        for discussion in discussions {
-            if let Some(notes) = discussion.get("notes").and_then(|n| n.as_array()) {
-                // A discussion thread is "unresolved" when at least one of its notes
-                // is resolvable (i.e. it is a proper review thread, not a plain comment)
-                // and has not yet been resolved.
-                // We count threads (discussions), not individual notes/replies.
-                let is_unresolved_thread = notes.iter().any(|note| {
-                    let resolvable = note
-                        .get("resolvable")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let resolved = note
-                        .get("resolved")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    resolvable && !resolved
-                });
-                if is_unresolved_thread {
-                    total += 1;
-                }
-            }
-        }
+        total += count_unresolved_threads(&discussions);
         // If fewer than 100 results were returned, this was the last page.
         if page_count < 100 {
             break;
@@ -510,15 +517,62 @@ async fn fetch_commits_behind(
         return None;
     }
 
-    let body: serde_json::Value = res.json().await.ok()?;
+    // `commits` is the list of commits on `target` but not on `source`; only their
+    // number matters, so the entries themselves are not parsed.
+    #[derive(serde::Deserialize)]
+    struct Compare {
+        commits: Vec<serde::de::IgnoredAny>,
+    }
+    let body: Compare = res.json().await.ok()?;
+    Some(body.commits.len() as u32)
+}
 
-    // `commits` is the list of commits on `target` but not on `source`.
-    let count = body
-        .get("commits")
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.len() as u32)?;
+/// Body of `GET /merge_requests/:iid/changes` (only what the diff stats use).
+#[derive(serde::Deserialize)]
+struct MrChanges {
+    /// `true` when GitLab truncated `changes` (> 1 000 files).
+    overflow: Option<bool>,
+    /// A string, sometimes with a trailing `+` when capped (e.g. `"1000+"`).
+    changes_count: Option<String>,
+    /// `null` when the diff is too large for GitLab to compute inline.
+    changes: Option<Vec<MrChange>>,
+}
 
-    Some(count)
+#[derive(serde::Deserialize)]
+struct MrChange {
+    /// Raw unified patch of one file.
+    diff: Option<String>,
+}
+
+/// `(files_changed, additions, deletions)` of a Changes API body.
+///
+/// Lines are counted from each file's patch. When the list is truncated
+/// (`overflow`) or absent (`changes: null`), the server-side `changes_count` gives
+/// the file total; additions/deletions then stay partial (best-effort) rather than
+/// returning nothing and leaving the MR on "Loading".
+fn diff_totals(body: &MrChanges) -> (u32, u32, u32) {
+    let changes_count = body
+        .changes_count
+        .as_deref()
+        .map(|s| s.trim_end_matches('+'))
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let Some(changes) = &body.changes else {
+        return (changes_count, 0, 0);
+    };
+    let (mut additions, mut deletions) = (0, 0);
+    for diff in changes.iter().filter_map(|c| c.diff.as_deref()) {
+        let (added, deleted) = count_diff_lines(diff);
+        additions += added;
+        deletions += deleted;
+    }
+    let listed = changes.len() as u32;
+    let files = if body.overflow.unwrap_or(false) && changes_count > 0 {
+        changes_count
+    } else {
+        listed
+    };
+    (files, additions, deletions)
 }
 
 /// Fetches diff statistics for a merge request from the GitLab Changes API.
@@ -550,60 +604,8 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
         return None;
     }
 
-    let body: serde_json::Value = res.json().await.ok()?;
-
-    let mut files_changed: u32 = 0;
-    let mut additions: u32 = 0;
-    let mut deletions: u32 = 0;
-
-    // GitLab sets `overflow: true` when the diff is truncated (> 1 000 files).
-    // In that case `changes` is still present but only contains a partial list,
-    // so counting its entries would give an incorrect total.
-    let overflow = body
-        .get("overflow")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    // Helper: parse `changes_count` from the top-level response.
-    // GitLab returns it as a string, sometimes with a trailing "+" (e.g. "1000+")
-    // when the count itself is capped — strip that suffix before parsing.
-    let parse_changes_count = |b: &serde_json::Value| -> u32 {
-        b.get("changes_count")
-            .and_then(|v| v.as_str())
-            .map(|s| s.trim_end_matches('+'))
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0)
-    };
-
-    // `changes` can be null when the diff is too large for GitLab to compute inline.
-    // In that case we still return the stats we have rather than returning None
-    // and staying stuck on Loading.
-    if let Some(changes) = body.get("changes").and_then(|v| v.as_array()) {
-        for change in changes {
-            files_changed += 1;
-            // Each `change` entry carries a `diff` field with the raw unified patch.
-            if let Some(diff) = change.get("diff").and_then(|v| v.as_str()) {
-                let (added, deleted) = count_diff_lines(diff);
-                additions += added;
-                deletions += deleted;
-            }
-        }
-
-        // When the diff is overflowing, the `changes` array is truncated.
-        // Prefer the server-side `changes_count` which reflects the real total.
-        if overflow {
-            let server_count = parse_changes_count(&body);
-            if server_count > 0 {
-                files_changed = server_count;
-            }
-            // additions/deletions are already partial and cannot be recovered from
-            // this endpoint when overflowing — they remain best-effort.
-        }
-    } else {
-        // Fallback: GitLab exposes `changes_count` as a string (e.g. "42") at the
-        // top level when the inline diff is omitted due to size limits.
-        files_changed = parse_changes_count(&body);
-    }
+    let body: MrChanges = res.json().await.ok()?;
+    let (files_changed, additions, deletions) = diff_totals(&body);
 
     // Fetch the commit count via the dedicated commits endpoint —
     // GET /projects/:id/merge_requests/:iid/commits returns a paginated list.
@@ -1448,6 +1450,35 @@ pub async fn fetch_gitlab_data(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn unresolved_threads_ignore_plain_and_resolved_notes() {
+        let json = r#"[
+            {"notes": [{"resolvable": true, "resolved": false}, {"resolvable": true, "resolved": true}]},
+            {"notes": [{"resolvable": true, "resolved": true}]},
+            {"notes": [{"body": "plain comment", "resolvable": false}]},
+            {"notes": [{"resolvable": null, "resolved": null}]},
+            {"notes": [{"resolvable": true}]}
+        ]"#;
+        let discussions: Vec<super::Discussion> = serde_json::from_str(json).unwrap();
+        assert_eq!(super::count_unresolved_threads(&discussions), 2);
+    }
+
+    #[test]
+    fn diff_totals_handle_overflow_and_null_changes() {
+        let parse = |json: &str| super::diff_totals(&serde_json::from_str(json).unwrap());
+        let patch = r"@@ -1 +1,2 @@\n-a\n+b\n+c"; // JSON-escaped newlines
+        let normal = format!(r#"{{"changes": [{{"diff": "{patch}"}}, {{"diff": null}}]}}"#);
+        assert_eq!(parse(&normal), (2, 2, 1));
+        let overflow = format!(
+            r#"{{"overflow": true, "changes_count": "1000+", "changes": [{{"diff": "{patch}"}}]}}"#
+        );
+        assert_eq!(parse(&overflow), (1000, 2, 1));
+        assert_eq!(
+            parse(r#"{"changes_count": "42", "changes": null}"#),
+            (42, 0, 0)
+        );
+    }
 
     #[test]
     fn pagination_stops_on_short_page_or_cap() {

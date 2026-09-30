@@ -18,12 +18,11 @@ path = "src/main.rs"
 
 [features]
 default = ["notifications"]
-notifications = ["gitlab-tracker-notify/desktop"]
+notifications = ["dep:notify-rust"]
 redmine = ["dep:gitlab-tracker-redmine"]
 stats = ["dep:gitlab-tracker-stats"]
 
 [dependencies]
-gitlab-tracker-notify.workspace = true
 gitlab-tracker-core = { workspace = true, features = ["secrets"] }
 gitlab-tracker-redmine = { workspace = true, optional = true }
 gitlab-tracker-stats = { workspace = true, optional = true }
@@ -40,6 +39,8 @@ urlencoding = "2.1"
 directories.workspace = true
 keyring.workspace = true
 open.workspace = true
+# Desktop notifications (feature `notifications`, on by default).
+notify-rust = { version = "4", optional = true }
 arboard = { version = "3", default-features = false }
 clap = { version = "4.6.3", features = ["derive"] }
 chrono.workspace = true

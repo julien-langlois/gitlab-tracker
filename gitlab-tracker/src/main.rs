@@ -7,6 +7,7 @@ mod events;
 mod filters_core;
 mod gitlab;
 mod models;
+mod notify;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
@@ -212,26 +213,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let project_id = project.project_id;
     let refresh_interval_secs = resolve_refresh_interval(&config);
 
-    // One-time silent migration: move any token stored under legacy keyring keys
-    // (service rename + flat account → per-instance URL account) to the current
-    // multi-tenant key, then delete orphaned legacy entries.
-    migrate_legacy_keyring_entry(&base_url);
-
-    // `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
-    // from memory when dropped. It is shared as-is (behind an `Arc`) by the app and
-    // every fetch, so no plain-`String` copy of the token is ever made.
-    let token = Arc::new(get_or_prompt_token(&base_url).ok_or(
-        "A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)",
-    )?);
+    // Keyring (D-Bus) and prompt (stdin) calls block: run them off the async runtime.
+    // 1. One-time silent migration: move any token stored under legacy keyring keys
+    //    (service rename + flat account → per-instance URL account) to the current
+    //    multi-tenant key, then delete orphaned legacy entries.
+    // 2. `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
+    //    from memory when dropped. It is shared as-is (behind an `Arc`) by the app
+    //    and every fetch, so no plain-`String` copy of the token is ever made.
+    let token_url = base_url.clone();
+    let token = tokio::task::spawn_blocking(move || {
+        migrate_legacy_keyring_entry(&token_url);
+        get_or_prompt_token(&token_url)
+    })
+    .await?
+    .ok_or("A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)")?;
+    let token = Arc::new(token);
 
     // ── Optional tracker integration ──────────────────────────────────────────
     // The tracker config lives inside the active `ProjectEntry` under the generic
     // `[project.tracker]` key. The `provider` field selects the plugin at runtime;
     // all provider-specific fields are forwarded via `extra: toml::Table`.
     //
-    // This block is the only place that maps a provider name to a concrete plugin
-    // crate — adding a new provider (Jira, Linear, …) means adding one `else if`
-    // branch here and a new feature-gated crate, without touching any other file.
+    // This block maps a provider name to a concrete plugin crate (with its twin in
+    // `cli.rs`); the plugin owns its setup (`RedmineProvider::from_tracker_section`).
+    // Adding a provider (Jira, Linear, …) means one branch here and a new
+    // feature-gated crate.
     #[cfg(feature = "redmine")]
     let redmine_provider: Option<(app::TrackerHandle, app::TicketTransitionHandle)> = {
         use std::sync::Arc;
@@ -254,43 +260,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None
             }
             Some(cfg) => {
-                // Deserialise the provider-specific fields from the opaque `extra`
-                // table — only the Redmine plugin knows which keys it expects.
-                let mut redmine_cfg: gitlab_tracker_redmine::config::RedmineConfig =
-                    cfg.extra.clone().try_into().unwrap_or_else(|e| {
-                        tracing::warn!(
-                            error = %e,
-                            "Invalid [project.tracker] settings — using defaults \
-                             (ticket_patterns and status_transitions are ignored)"
-                        );
-                        Default::default()
-                    });
-                redmine_cfg.url = cfg.url.clone();
-
-                // Apply REDMINE_URL env override if set.
-                redmine_cfg.apply_env_override();
-
-                if !redmine_cfg.is_active() {
-                    tracing::warn!(
-                        "[project.tracker] found but url is empty — integration disabled"
-                    );
-                    None
-                } else {
-                    tracing::info!(url = %redmine_cfg.url, "Redmine integration active (from projects.toml)");
-                    // Token is keyed by URL — each tenant instance is independent.
-                    gitlab_tracker_redmine::keyring::get_or_prompt_token(&redmine_cfg.url).map(
-                        |tok| {
-                            let provider = Arc::new(gitlab_tracker_redmine::RedmineProvider::new(
-                                redmine_cfg,
-                                tok,
-                            ));
-                            (
-                                Arc::clone(&provider)
-                                    as Arc<dyn gitlab_tracker_core::TrackerProvider>,
-                                provider as Arc<dyn gitlab_tracker_core::TicketTransitionProvider>,
-                            )
-                        },
-                    )
+                // Token resolution may hit the keyring and a prompt: off the runtime.
+                let (url, extra) = (cfg.url.clone(), cfg.extra.clone());
+                let setup = tokio::task::spawn_blocking(move || {
+                    gitlab_tracker_redmine::RedmineProvider::from_tracker_section(&url, extra)
+                })
+                .await?;
+                match setup {
+                    Ok(provider) => {
+                        let provider = Arc::new(provider);
+                        Some((
+                            Arc::clone(&provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>,
+                            provider as Arc<dyn gitlab_tracker_core::TicketTransitionProvider>,
+                        ))
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Redmine integration disabled");
+                        None
+                    }
                 }
             }
         }
@@ -503,9 +490,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut needs_save = false;
         while let Some(event) = pending_event.take().or_else(|| rx.try_recv().ok()) {
             dirty = true;
-            needs_save |= app
-                .apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches)
-                .await;
+            needs_save |=
+                app.apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches);
         }
         app.flush_pending_sort();
         app.ensure_time_entries(&tx);

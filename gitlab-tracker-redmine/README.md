@@ -43,7 +43,7 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
   | Target version | ℹ️ `dialog-information` |
   | Progress (`done_ratio`) | ℹ️ `dialog-information` — fires on both increase **and** decrease |
 
-  Notifications are suppressed during the initial sync (see [`gitlab-tracker-notify`](../gitlab-tracker-notify/README.md)).
+  Notifications are suppressed during the initial sync (see [How Desktop Notifications Work](../README.md#-how-desktop-notifications-work)).
 
 * **Time Log view (`p` on the Tracker pane):** focus the Tracker pane (`Tab` or `t`), then press `p` to toggle Ticket Info ↔ **Time Log**:
   * A progress bar comparing time spent vs. the ticket's estimate.
@@ -312,11 +312,11 @@ Because the keyring entry is keyed by URL, switching between two Redmine instanc
 
 ## Adding a New Tracker Plugin
 
-The tracker system is designed to be extended without modifying any existing file except `main.rs`. To add a different tracker (Jira, Linear, …):
+The tracker system is designed to be extended without modifying any existing file except `main.rs` and `cli.rs` (one branch each). To add a different tracker (Jira, Linear, …):
 
 1. Create a new crate (e.g. `gitlab-tracker-jira`) and implement the `TrackerProvider` trait from `gitlab-tracker-core`.
 2. In `projects.toml`, users set `provider = "jira"` in their `[project.tracker]` section — `storage.rs` and `ProjectEntry` require **no changes**.
-3. Add a `#[cfg(feature = "jira")]` branch in `gitlab-tracker/src/main.rs` that reads `project.tracker`, deserialises the `extra` fields, and wires up the provider.
+3. Expose a constructor from the `[project.tracker]` section in your crate (see below), and add a `#[cfg(feature = "jira")]` branch in `gitlab-tracker/src/main.rs` (and `cli.rs` for status discovery) that calls it.
 
 ### Required methods
 
@@ -363,25 +363,30 @@ impl TicketTransitionProvider for MyProvider {
 
 ### Wiring in `main.rs`
 
-Add a `#[cfg(feature = "my-tracker")]` block that reads `project.tracker`, checks `provider`, deserialises `extra` into your config struct, then instantiates your provider:
+Keep the setup (config parsing, token lookup, construction) **in your crate**, like
+`RedmineProvider::from_tracker_section(url, extra) -> Result<Self, SetupError>`: the TUI and
+the CLI commands then share it, and `main.rs` only maps the provider name to the crate.
+Token lookup may hit the OS keyring and a stdin prompt, which block: call it through
+`spawn_blocking`.
 
 ```rust
 #[cfg(feature = "my-tracker")]
-let my_tracker_provider: Option<app::TrackerHandle> = {
-    let tracker_cfg = project.tracker.as_ref()
-        .filter(|t| t.provider.eq_ignore_ascii_case("my-tracker"));
-
-    if let Some(cfg) = tracker_cfg {
-        let mut my_cfg: MyTrackerConfig = cfg.extra.clone().try_into().unwrap_or_default();
-        my_cfg.url = cfg.url.clone();
-        // Zeroizing<String> from gitlab_tracker_core::secrets::resolve_secret.
-        my_tracker_keyring::get_or_prompt_token(&cfg.url).map(|tok| {
-            let provider = MyTrackerProvider::new(my_cfg, tok);
-            Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
-        })
-    } else {
-        None
+let my_tracker_provider: Option<app::TrackerHandle> = match project
+    .tracker
+    .as_ref()
+    .filter(|t| t.provider.eq_ignore_ascii_case("my-tracker"))
+{
+    Some(cfg) => {
+        let (url, extra) = (cfg.url.clone(), cfg.extra.clone());
+        match tokio::task::spawn_blocking(move || MyTrackerProvider::from_tracker_section(&url, extra)).await? {
+            Ok(provider) => Some(Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>),
+            Err(e) => {
+                tracing::warn!(error = %e, "My tracker integration disabled");
+                None
+            }
+        }
     }
+    None => None,
 };
 ```
 

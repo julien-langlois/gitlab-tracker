@@ -32,7 +32,41 @@ pub struct RedmineProvider {
     http: reqwest::Client,
 }
 
+/// Why [`RedmineProvider::from_tracker_section`] could not build a provider.
+#[derive(Debug, thiserror::Error)]
+pub enum SetupError {
+    #[error("[project.tracker] provider is redmine but url is empty")]
+    EmptyUrl,
+    #[error("no Redmine token given (REDMINE_TOKEN, OS keyring or prompt)")]
+    NoToken,
+}
+
 impl RedmineProvider {
+    /// Builds the provider from a `[project.tracker]` section: its `url` and the
+    /// provider-specific `extra` fields. Applies `REDMINE_URL`, then resolves the
+    /// token (env → keyring → prompt). Shared by the TUI and the CLI commands.
+    ///
+    /// Invalid `extra` fields are logged and replaced by their defaults rather than
+    /// failing: a typo in `status_transitions` must not disable ticket display.
+    pub fn from_tracker_section(url: &str, extra: toml::Table) -> Result<Self, SetupError> {
+        let mut config: RedmineConfig = extra.try_into().unwrap_or_else(|e| {
+            tracing::warn!(
+                error = %e,
+                "Invalid [project.tracker] settings — using defaults \
+                 (ticket_patterns and status_transitions are ignored)"
+            );
+            RedmineConfig::default()
+        });
+        config.url = url.to_string();
+        config.apply_env_override();
+        if !config.is_active() {
+            return Err(SetupError::EmptyUrl);
+        }
+        let token = get_or_prompt_token(&config.url).ok_or(SetupError::NoToken)?;
+        tracing::info!(url = %config.url, "Redmine integration active (from projects.toml)");
+        Ok(Self::new(config, token))
+    }
+
     /// Creates a new [`RedmineProvider`] from a loaded config and a token.
     pub fn new(config: RedmineConfig, token: Zeroizing<String>) -> Self {
         Self {

@@ -86,20 +86,12 @@ async fn print_tracker_statuses(project: &ProjectEntry) -> Result<(), Box<dyn st
     if tracker_cfg.provider.eq_ignore_ascii_case("redmine") {
         use gitlab_tracker_core::TicketTransitionProvider;
 
-        let mut redmine_cfg: gitlab_tracker_redmine::config::RedmineConfig =
-            tracker_cfg.extra.clone().try_into().unwrap_or_default();
-        redmine_cfg.url = tracker_cfg.url.clone();
-        redmine_cfg.apply_env_override();
-
-        if !redmine_cfg.is_active() {
-            return Err("[project.tracker] provider is redmine but url is empty".into());
-        }
-
-        let Some(token) = gitlab_tracker_redmine::get_or_prompt_token(&redmine_cfg.url) else {
-            return Err("Redmine token is required to fetch issue statuses".into());
-        };
-
-        let provider = gitlab_tracker_redmine::RedmineProvider::new(redmine_cfg, token);
+        let (url, extra) = (tracker_cfg.url.clone(), tracker_cfg.extra.clone());
+        // Keyring and prompt block: off the async runtime.
+        let provider = tokio::task::spawn_blocking(move || {
+            gitlab_tracker_redmine::RedmineProvider::from_tracker_section(&url, extra)
+        })
+        .await??;
         let statuses = provider.fetch_transition_targets().await?;
 
         if statuses.is_empty() {

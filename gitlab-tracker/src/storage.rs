@@ -293,7 +293,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
 
     // Skip migration when projects.toml already exists.
     let toml_path = config_dir.join("projects.toml");
-    if toml_path.exists() {
+    if tokio::fs::try_exists(&toml_path).await.unwrap_or(false) {
         return None;
     }
 
@@ -561,7 +561,20 @@ pub async fn resolve_active_project() -> ProjectEntry {
         return migrated;
     }
 
-    // 5. Interactive prompt — first run with no projects configured yet.
+    // 5. Interactive prompt — first run with no projects configured yet. Reading
+    //    stdin blocks, so it runs off the async runtime.
+    let entry = tokio::task::spawn_blocking(prompt_new_project)
+        .await
+        .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));
+    projects_cfg.projects.push(entry.clone());
+    save_projects_toml(&projects_cfg).await;
+    println!("✅ Project saved to projects.toml!\n");
+
+    entry
+}
+
+/// First-run onboarding: asks for the GitLab URL, project ID and an optional name.
+fn prompt_new_project() -> ProjectEntry {
     println!("⚙️  No project configured yet. Let's set one up.\n");
 
     print!("GitLab URL [https://gitlab.com]: ");
@@ -594,18 +607,13 @@ pub async fn resolve_active_project() -> ProjectEntry {
         None
     };
 
-    let entry = ProjectEntry {
+    ProjectEntry {
         name,
         gitlab_url: gitlab_url.trim_end_matches('/').to_string(),
-        project_id: project_id.clone(),
+        project_id,
         active: true,
         ..Default::default()
-    };
-    projects_cfg.projects.push(entry.clone());
-    save_projects_toml(&projects_cfg).await;
-    println!("✅ Project saved to projects.toml!\n");
-
-    entry
+    }
 }
 
 /// Finds the `projects.toml` entry of the project the app is running on.
@@ -892,7 +900,7 @@ pub async fn load_or_create_config_async() -> AppConfig {
     if let Some(config_dir) = get_save_dir() {
         let config_path = config_dir.join("config.json");
 
-        if config_path.exists() {
+        if tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
             figment = figment.merge(Json::file(&config_path));
         } else {
             // First run — write a default config.json template for the user.
@@ -987,7 +995,9 @@ async fn migrate_tracker_state_file(
     let target = config_dir.join(&target_name);
 
     // Only migrate when the legacy file exists and the new file does not.
-    if !legacy.exists() || target.exists() {
+    let legacy_exists = tokio::fs::try_exists(&legacy).await.unwrap_or(false);
+    let target_exists = tokio::fs::try_exists(&target).await.unwrap_or(false);
+    if !legacy_exists || target_exists {
         return;
     }
 

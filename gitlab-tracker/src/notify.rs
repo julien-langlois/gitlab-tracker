@@ -1,8 +1,8 @@
-//! Desktop notification plugin for gitlab-tracker.
+//! Desktop notifications (formerly the `gitlab-tracker-notify` crate).
 //!
-//! Compiled with the `desktop` feature (on by default) to send OS notifications
-//! via `notify-rust`. Build with `--no-default-features` for a zero-dependency
-//! stub suitable for headless / CI environments.
+//! With the `notifications` feature (on by default), OS notifications are sent via
+//! `notify-rust`. Build with `--no-default-features` for no-op functions and no
+//! `notify-rust` (headless / CI environments).
 //!
 //! When the user clicks a notification, the MR URL is opened in the default browser.
 //!
@@ -13,7 +13,7 @@
 // ── Internal helper ───────────────────────────────────────────────────────────
 
 /// A notification queued for the worker thread.
-#[cfg_attr(not(feature = "desktop"), allow(dead_code))]
+#[cfg_attr(not(feature = "notifications"), allow(dead_code))]
 struct Toast {
     summary: String,
     body: String,
@@ -24,11 +24,11 @@ struct Toast {
 
 /// Maximum number of notifications waiting for a click at the same time. Each one
 /// needs its own thread blocked in `wait_for_action` until the notification closes.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "notifications")]
 const MAX_CLICK_WAITERS: usize = 8;
 
 /// Queues `toast` for the notification worker, started on first use.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "notifications")]
 fn send(toast: Toast) {
     use std::sync::{mpsc, OnceLock};
 
@@ -50,12 +50,12 @@ fn send(toast: Toast) {
     }
 }
 
-#[cfg(not(feature = "desktop"))]
+#[cfg(not(feature = "notifications"))]
 #[inline(always)]
 fn send(_toast: Toast) {}
 
 /// Shows `toast` (runs on the worker thread) and, if the user clicks it, opens its URL.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "notifications")]
 fn show(toast: Toast) {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -129,7 +129,6 @@ pub fn mr_updated(mr_id: &str, title: &str, updated_at: Option<&str>, web_url: &
 }
 
 /// Notify that an MR's mergeability status has changed.
-/// Accepts string labels so this crate stays independent of gitlab-tracker model types.
 pub fn mr_mergeability_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
     let summary = format!("MR !{mr_id} — mergeability changed");
     changed(summary, title, old, new, "dialog-warning", web_url);

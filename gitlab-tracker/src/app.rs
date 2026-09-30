@@ -3,12 +3,12 @@ use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
+use crate::notify;
 use crate::settings::SettingsEditorState;
 use crate::storage::ProjectEntry;
 use gitlab_tracker_core::{
     collect_all_columns, collect_all_filters, ColumnDef, FilterDef, LinkedTicket, MrSnapshot,
 };
-use gitlab_tracker_notify as notify;
 use ratatui::widgets::TableState;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -1376,7 +1376,7 @@ impl App {
     /// event loop thin. Returns `true` if the state was mutated in a way that
     /// requires persisting (caller must then call `save_state_async`); see
     /// [`AppEvent::persists_state`].
-    pub async fn apply_event(
+    pub fn apply_event(
         &mut self,
         event: AppEvent,
         semaphore: Arc<Semaphore>,
@@ -1794,8 +1794,7 @@ mod tests {
             Arc::new(Semaphore::new(1)),
             &tx,
             &mut HashMap::new(),
-        )
-        .await;
+        );
 
         assert!(app.pending_initial_fetches.is_empty());
         assert_eq!(app.pending_refresh_fetches.len(), 1);
@@ -1811,8 +1810,7 @@ mod tests {
                 Arc::new(Semaphore::new(1)),
                 &tx,
                 &mut HashMap::new(),
-            )
-            .await;
+            );
         }
         for (mr, (title, milestone)) in app.mrs.iter_mut().zip(mrs) {
             mr.title = (*title).into();
@@ -1893,8 +1891,7 @@ mod tests {
         )
         .await;
         while let Ok(event) = rx.try_recv() {
-            app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
-                .await;
+            app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new());
         }
 
         assert_eq!(app.mrs.len(), 2);
@@ -2079,8 +2076,7 @@ mod tests {
         app.ensure_time_entries(&tx);
         app.ensure_time_entries(&tx);
         let event = rx.recv().await.unwrap();
-        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
-            .await;
+        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new());
         assert_eq!(calls(), 1);
         assert!(
             matches!(app.time_entries.get("42"), Some(TimeLogState::Failed(e)) if e.contains("401"))
@@ -2094,8 +2090,7 @@ mod tests {
         app.time_entries.clear();
         app.ensure_time_entries(&tx);
         let event = rx.recv().await.unwrap();
-        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
-            .await;
+        app.apply_event(event, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new());
         assert_eq!(calls(), 2);
         assert!(
             matches!(app.time_entries.get("42"), Some(TimeLogState::Loaded(e)) if e.is_empty())
@@ -2225,9 +2220,7 @@ mod tests {
             id: "1".into(),
             error: "HTTP 502".into(),
         };
-        let persist = app
-            .apply_event(error, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
-            .await;
+        let persist = app.apply_event(error, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new());
         assert_eq!(
             app.mrs[0].title, "Fix login",
             "the error is not written in the title"

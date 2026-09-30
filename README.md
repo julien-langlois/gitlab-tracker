@@ -476,7 +476,19 @@ Notifications fire for GitLab MR events (new branch, MR updated, mergeability ch
 
 MR notifications include a clickable **"Open MR"** button; tracker notifications include **"Open ticket"** and open the linked ticket URL instead. Change notifications are suppressed during the initial sync to avoid spurious alerts on restart.
 
-See [`gitlab-tracker-notify/README.md`](gitlab-tracker-notify/README.md) for the full event reference, platform support details, and feature flags.
+| Event | Trigger |
+| :--- | :--- |
+| 🌿 New branch | The MR's merge/squash SHA is found on a tracked branch it was not known on |
+| 🕐 MR updated | `updated_at` changed since the previous refresh |
+| 🔀 Mergeability changed | e.g. `MERGEABLE → CONFLICT` |
+| 🏁 Milestone changed | e.g. `v2.4.0 → v2.5.0` |
+| ⚠️ Complexity changed | The effort band changed (e.g. `🟢 EASY → 🔴 COMPLEX`) |
+| 🎫 Ticket field changed *(tracker)* | Priority, status, assignee, version or progress of the linked ticket |
+| ✅ Status transitioned *(tracker)* | An automatic tracker status transition succeeded |
+
+* **Never blocks the UI:** notifications are queued to one background worker thread that performs the (synchronous) D-Bus calls, so a slow or hung notification daemon cannot freeze the dashboard. At most 8 notifications wait for a click at once; beyond that they still show, but clicking does nothing.
+* **Anti-spam:** change notifications are suppressed during the initial sync. An MR seen for the first time (no branch set persisted yet in `tracker_<hash>.json`) records its branches silently instead of sending one toast per branch; once known, every new branch notifies, including changes made while the app was closed.
+* **Platforms:** click-to-open uses D-Bus actions on Linux (GNOME, KDE…); without a notification daemon, clicks are ignored. Build with `--no-default-features` to drop the feature and `notify-rust` (`libdbus` is still needed on Linux, by the OS keyring).
 
 ---
 
@@ -692,7 +704,7 @@ When the input starts with `@`, a dropdown appears above the input bar listing a
 
 ## 🏗️ Project Architecture
 
-This project is structured as a **Cargo workspace** with five crates. Contributor-level internals (event bus, data model, persistence) are described in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+This project is structured as a **Cargo workspace** with four crates. Contributor-level internals (event bus, data model, persistence) are described in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ```text
 gitlab-tracker/                  # Binary crate — TUI orchestrator
@@ -705,7 +717,8 @@ gitlab-tracker/                  # Binary crate — TUI orchestrator
     │   ├── tracker_sync.rs   # Linked-ticket fetches, status transitions, TimeLog cache
     │   ├── stats_recorder.rs # Stats snapshots on MR loads (feature `stats`)
     │   └── stats_view.rs     # Stats overlay state: tab, window, report, generation guard
-    ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus
+    ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus, Effort
+    ├── notify.rs        # Desktop notifications: non-blocking notify-rust worker (no-ops without `notifications`)
     ├── gitlab.rs        # Async GitLab client: pagination, caching guards, rate-limit semaphore
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
     ├── storage.rs       # projects.toml, config.json layer, state files, token lookup
@@ -742,13 +755,9 @@ gitlab-tracker-core/             # Library crate — shared contracts, zero UI d
     ├── settings.rs      # ProjectSettingDef / ProjectSettingFactory + inventory registry
     └── secrets.rs       # (feature `secrets`) resolve_secret: env var → OS keyring → prompt
 
-gitlab-tracker-notify/           # Library crate — desktop notification plugin
-└── src/
-    └── lib.rs           # Non-blocking notify-rust worker thread (empty stubs without feature `desktop`)
-
 gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
 └── src/
-    ├── lib.rs           # RedmineProvider: TrackerProvider + TicketTransitionProvider + label_colors()
+    ├── lib.rs           # RedmineProvider (from_tracker_section: config + token): TrackerProvider + TicketTransitionProvider
     ├── client.rs        # Async Redmine REST client (issues, paginated time entries, activities, statuses)
     ├── config.rs        # RedmineConfig ([project.tracker] fields), LabelColorConfig, status transitions
     ├── detector.rs      # Regex-based ticket ID detector (title & description)
@@ -776,7 +785,7 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
 
 | Feature flag    | Default     | Effect                                                                                                                   |
 | :-------------- | :---------- | :----------------------------------------------------------------------------------------------------------------------- |
-| `notifications` | ✅ enabled  | Desktop notifications via `notify-rust` (enables `gitlab-tracker-notify/desktop`; without it, notifications are no-ops)  |
+| `notifications` | ✅ enabled  | Desktop notifications via `notify-rust` (module `notify.rs`; without it, notifications are no-ops and `notify-rust` is not built)|
 | `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md))            |
 | `stats`         | ❌ disabled | MR analytics, velocity metrics, and Spearman correlations (see [`gitlab-tracker-stats`](gitlab-tracker-stats/README.md)) |
 

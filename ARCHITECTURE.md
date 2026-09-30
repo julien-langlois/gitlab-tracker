@@ -66,7 +66,7 @@ only, as `MrStatus::Error(String)`, and shown in the Inspector.
 ## Crate boundaries
 
 ```text
-gitlab-tracker          (binary — TUI, UI, event loop)
+gitlab-tracker          (binary — TUI, UI, event loop, desktop notifications)
     │  uses
     ▼
 gitlab-tracker-core     (library — domain contracts, zero UI dependency)
@@ -75,7 +75,6 @@ gitlab-tracker-core     (library — domain contracts, zero UI dependency)
     ├── registries: FilterDef / ColumnDef / ShortcutBlock / ProjectSettingDef
     └── secrets (feature): env → keyring → prompt token resolution
 
-gitlab-tracker-notify   (library — desktop notifications, feature `notifications`)
 gitlab-tracker-redmine  (library — Redmine tracker plugin, feature `redmine`)
 gitlab-tracker-stats    (library — SQLite snapshots & analytics, feature `stats`)
 ```

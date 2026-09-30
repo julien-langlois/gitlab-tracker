@@ -2,7 +2,6 @@
 resolver = "3"
 members = [
     "gitlab-tracker",
-    "gitlab-tracker-notify",
     "gitlab-tracker-core",
     "gitlab-tracker-redmine",
     "gitlab-tracker-stats",
@@ -19,7 +18,6 @@ repository = "https://github.com/julien-langlois/gitlab-tracker"
 [workspace.dependencies]
 # Internal crates
 gitlab-tracker-core = { version = "0.4.8", path = "gitlab-tracker-core" }
-gitlab-tracker-notify = { version = "0.4.8", path = "gitlab-tracker-notify" }
 gitlab-tracker-redmine = { version = "0.4.8", path = "gitlab-tracker-redmine" }
 gitlab-tracker-stats = { version = "0.4.8", path = "gitlab-tracker-stats" }
 # Third-party crates used by several members. Features listed here apply to every

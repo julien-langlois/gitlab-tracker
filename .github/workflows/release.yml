@@ -20,7 +20,6 @@ jobs:
 
       # Publish order follows the dependency graph:
       #   gitlab-tracker-core  (no internal deps)
-      #     └── gitlab-tracker-notify
       #     └── gitlab-tracker-redmine
       #     └── gitlab-tracker-stats
       #           └── gitlab-tracker  (depends on all of the above)
@@ -32,11 +31,6 @@ jobs:
 
       - name: Wait for crates.io index propagation
         run: sleep 30
-
-      - name: Publish gitlab-tracker-notify
-        run: cargo publish --package gitlab-tracker-notify
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish gitlab-tracker-redmine
         run: cargo publish --package gitlab-tracker-redmine

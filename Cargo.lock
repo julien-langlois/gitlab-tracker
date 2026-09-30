@@ -1167,11 +1167,11 @@ dependencies = [
  "figment",
  "futures",
  "gitlab-tracker-core",
- "gitlab-tracker-notify",
  "gitlab-tracker-redmine",
  "gitlab-tracker-stats",
  "inventory",
  "keyring",
+ "notify-rust",
  "open",
  "ratatui",
  "reqwest",
@@ -1203,19 +1203,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "gitlab-tracker-notify"
-version = "0.4.8"
-dependencies = [
- "notify-rust",
- "open",
-]
-
-[[package]]
 name = "gitlab-tracker-redmine"
 version = "0.4.8"
 dependencies = [
  "async-trait",
- "directories",
  "gitlab-tracker-core",
  "inventory",
  "keyring",
@@ -1223,6 +1214,7 @@ dependencies = [
  "reqwest",
  "serde",
  "thiserror 2.0.19",
+ "toml",
  "tracing",
  "zeroize",
 ]
