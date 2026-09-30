@@ -67,7 +67,7 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
                  Open this view again after a few MR events have been processed.",
             )
             .block(outer_block)
-            .style(Style::default().fg(theme::MUTED))
+            .style(Style::default().fg(theme::muted()))
             .wrap(Wrap { trim: false }),
             area,
         );
@@ -123,13 +123,13 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(theme::MUTED_DIM))
+            .border_style(Style::default().fg(theme::muted_dim()))
             .title(Span::styled(
                 " STATS │ [Tab]/[Shift+Tab]: Tabs │ [1-5]: Jump │ [W]: Window │ [R]: Refresh │ [↑/↓]: Scroll │ [G/Esc]: Close ",
                 Style::default().fg(Color::Cyan),
             )),
     )
-    .style(Style::default().fg(theme::MUTED_DIM));
+    .style(Style::default().fg(theme::muted_dim()));
     f.render_widget(status_bar, status_area);
 }
 
@@ -153,7 +153,7 @@ fn render_stats_tab_bar(f: &mut Frame, area: Rect, active: StatsTab) {
                     .bg(Color::Cyan)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(theme::MUTED)
+                Style::default().fg(theme::muted())
             };
             [Span::raw(" "), Span::styled(format!(" {label} "), style)]
         })
@@ -163,7 +163,7 @@ fn render_stats_tab_bar(f: &mut Frame, area: Rect, active: StatsTab) {
         Paragraph::new(Line::from(spans)).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::MUTED_DIM))
+                .border_style(Style::default().fg(theme::muted_dim()))
                 .title(Span::styled(
                     " Tabs ",
                     Style::default()

@@ -160,6 +160,30 @@ pub fn compute_etc(issue: &RedmineIssue, new_hours: f32) -> Option<f32> {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+/// `GET url` with the API key, then deserializes the JSON body.
+///
+/// Errors are short, human-readable strings (network, HTTP status, bad JSON):
+/// callers either show them in the TUI or log them.
+async fn get_json<T: serde::de::DeserializeOwned>(
+    http: &reqwest::Client,
+    url: &str,
+    token: &str,
+) -> Result<T, String> {
+    tracing::debug!(url = %url, "Redmine GET");
+    let resp = http
+        .get(url)
+        .header("X-Redmine-API-Key", token)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("Redmine API error: HTTP {}", resp.status()));
+    }
+    resp.json::<T>()
+        .await
+        .map_err(|e| format!("Invalid Redmine response: {e}"))
+}
+
 /// Fetches all issue statuses configured on the Redmine instance.
 ///
 /// Calls `GET /issue_statuses.json`. The returned `(id, label)` pairs are meant to be
@@ -171,20 +195,7 @@ pub async fn fetch_issue_statuses(
 ) -> Result<Vec<TicketTransitionTarget>, String> {
     let url = format!("{}/issue_statuses.json", base_url.trim_end_matches('/'));
 
-    tracing::debug!(url = %url, "Fetching Redmine issue statuses");
-
-    let resp = http
-        .get(&url)
-        .header("X-Redmine-API-Key", token)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("Redmine API error: HTTP {}", resp.status()));
-    }
-
-    resp.json::<IssueStatusesEnvelope>()
+    get_json::<IssueStatusesEnvelope>(http, &url, token)
         .await
         .map(|env| {
             env.issue_statuses
@@ -195,7 +206,6 @@ pub async fn fetch_issue_statuses(
                 })
                 .collect()
         })
-        .map_err(|e| format!("Failed to deserialize Redmine issue statuses: {}", e))
 }
 
 /// Redmine issue ids are numeric. The id comes from a user-configurable regex
@@ -225,33 +235,10 @@ pub async fn fetch_issue(
         ticket_id
     );
 
-    tracing::debug!(url = %url, "Fetching Redmine issue");
-
-    let resp = http
-        .get(&url)
-        .header("X-Redmine-API-Key", token)
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, url = %url, "Redmine HTTP request failed");
-        })
-        .ok()?;
-
-    if !resp.status().is_success() {
-        tracing::warn!(
-            status = %resp.status(),
-            url = %url,
-            "Redmine API returned a non-2xx status"
-        );
-        return None;
-    }
-
-    resp.json::<IssueEnvelope>()
+    get_json::<IssueEnvelope>(http, &url, token)
         .await
         .map(|env| env.issue)
-        .map_err(|e| {
-            tracing::warn!(error = %e, "Failed to deserialize Redmine issue response");
-        })
+        .map_err(|e| tracing::warn!(error = %e, url = %url, "Redmine issue request failed"))
         .ok()
 }
 
@@ -269,27 +256,7 @@ pub async fn fetch_activities(
         base_url.trim_end_matches('/')
     );
 
-    tracing::debug!(url = %url, "Fetching Redmine time entry activities");
-
-    let resp = match http
-        .get(&url)
-        .header("X-Redmine-API-Key", token)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!(error = %e, "Redmine activities request failed");
-            return vec![];
-        }
-    };
-
-    if !resp.status().is_success() {
-        tracing::warn!(status = %resp.status(), "Redmine activities returned non-2xx");
-        return vec![];
-    }
-
-    match resp.json::<ActivitiesEnvelope>().await {
+    match get_json::<ActivitiesEnvelope>(http, &url, token).await {
         Ok(env) => env
             .time_entry_activities
             .into_iter()
@@ -299,7 +266,7 @@ pub async fn fetch_activities(
             })
             .collect(),
         Err(e) => {
-            tracing::warn!(error = %e, "Failed to deserialize Redmine activities");
+            tracing::warn!(error = %e, "Redmine activities request failed");
             vec![]
         }
     }
@@ -327,27 +294,7 @@ pub async fn fetch_time_entries(
         ticket_id
     );
 
-    tracing::debug!(url = %url, "Fetching Redmine time entries");
-
-    let resp = match http
-        .get(&url)
-        .header("X-Redmine-API-Key", token)
-        .send()
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!(error = %e, "Redmine time entries request failed");
-            return vec![];
-        }
-    };
-
-    if !resp.status().is_success() {
-        tracing::warn!(status = %resp.status(), "Redmine time entries returned non-2xx");
-        return vec![];
-    }
-
-    match resp.json::<TimeEntriesEnvelope>().await {
+    match get_json::<TimeEntriesEnvelope>(http, &url, token).await {
         Ok(env) => env
             .time_entries
             .into_iter()
@@ -364,7 +311,7 @@ pub async fn fetch_time_entries(
             })
             .collect(),
         Err(e) => {
-            tracing::warn!(error = %e, "Failed to deserialize Redmine time entries");
+            tracing::warn!(error = %e, "Redmine time entries request failed");
             vec![]
         }
     }

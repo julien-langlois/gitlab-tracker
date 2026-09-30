@@ -447,11 +447,11 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         .border_style(field_style(duration_focused))
         .title(Span::styled(
             " Duration (e.g. 1h30, 90m, 1.5h) ",
-            Style::default().fg(Color::White),
+            Style::default().fg(crate::ui::theme::fg()),
         ));
     let duration_widget = Paragraph::new(app.log_time_form.duration_input.as_str())
         .block(duration_block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(crate::ui::theme::fg()));
     f.render_widget(duration_widget, zones[0]);
 
     // ── Activity selector ─────────────────────────────────────────────────────
@@ -461,7 +461,7 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         .border_style(field_style(activity_focused))
         .title(Span::styled(
             " Activity [↑/↓] ",
-            Style::default().fg(Color::White),
+            Style::default().fg(crate::ui::theme::fg()),
         ));
 
     if app.activities.is_empty() {
@@ -492,7 +492,7 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
                         .bg(Color::Magenta)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(crate::ui::theme::fg())
                 };
                 ListItem::new(Line::from(Span::styled(format!("  {} ", act.name), style)))
             })
@@ -511,11 +511,11 @@ fn render_log_time_popup(f: &mut Frame, app: &App, area: Rect) {
         .border_style(field_style(comment_focused))
         .title(Span::styled(
             " Comment (optional) ",
-            Style::default().fg(Color::White),
+            Style::default().fg(crate::ui::theme::fg()),
         ));
     let comment_widget = Paragraph::new(app.log_time_form.comment_input.as_str())
         .block(comment_block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(crate::ui::theme::fg()));
     f.render_widget(comment_widget, zones[2]);
 
     // ── Error / hint line ─────────────────────────────────────────────────────
@@ -592,7 +592,7 @@ fn render_milestone_autocomplete(f: &mut Frame, app: &App, input_area: Rect) {
                     .bg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(crate::ui::theme::fg())
             };
             ListItem::new(Line::from(Span::styled(format!("  {} ", title), style)))
         })
@@ -706,7 +706,7 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(crate::ui::theme::fg())
             };
             ListItem::new(Line::from(Span::styled(display_label, style)))
         })
@@ -728,11 +728,11 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
             .border_style(Style::default().fg(Color::Yellow))
             .title(Span::styled(
                 format!(" {} ", field_label),
-                Style::default().fg(Color::White),
+                Style::default().fg(crate::ui::theme::fg()),
             ));
         let input_widget = Paragraph::new(app.filter_picker.input.as_str())
             .block(input_block)
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(crate::ui::theme::fg()));
         f.render_widget(input_widget, zones[1]);
     }
 }
@@ -777,7 +777,7 @@ fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
                     .bg(Color::Cyan)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(crate::ui::theme::fg())
             };
             ListItem::new(Line::from(vec![
                 Span::styled(format!("  {} ", checkbox), style),
@@ -851,7 +851,7 @@ fn render_settings_popup(f: &mut Frame, app: &App, area: Rect) {
                 .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::White)
+            Style::default().fg(crate::ui::theme::fg())
         };
         let value = render_setting_value(&item.value, &item.def.kind);
         list_items.push(ListItem::new(Line::from(vec![

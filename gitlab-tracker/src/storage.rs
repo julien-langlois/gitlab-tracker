@@ -350,16 +350,6 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .filter(|m: &std::collections::HashMap<_, _>| !m.is_empty());
 
-    // Attempt a one-shot silent migration from the legacy `redmine.yaml` file.
-    // When the file exists and contains a non-empty URL, we populate the generic
-    // `[project.tracker]` section so the user is not re-prompted on upgrade.
-    // Compiled only when `--features redmine` is active; always `None` otherwise
-    // so vanilla builds never see a `TrackerConfig` populated here.
-    #[cfg(feature = "redmine")]
-    let tracker = try_migrate_redmine_yaml(&config_dir).await;
-    #[cfg(not(feature = "redmine"))]
-    let tracker: Option<TrackerConfig> = None;
-
     let entry = ProjectEntry {
         name: Some("Migrated from config.json".to_string()),
         gitlab_url: gitlab_url.clone(),
@@ -373,7 +363,6 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
         activity_recent_days,
         visible_columns,
         label_colors,
-        tracker,
         ..Default::default()
     };
 
@@ -390,69 +379,6 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
     println!("✅ Project settings migrated from config.json to projects.toml\n");
 
     Some(entry)
-}
-
-/// Attempts a one-shot silent migration from the legacy `redmine.yaml` file into
-/// the generic `TrackerConfig` embedded in `ProjectEntry`.
-///
-/// Compiled only when `--features redmine` is active.
-///
-/// Reads `redmine.yaml` as a raw JSON value (via `serde_json`) so `storage.rs`
-/// never depends on `serde_yml` or `RedmineConfig` directly; the struct stays
-/// provider-agnostic at all times.
-///
-/// The YAML-to-JSON step relies on `serde_json`'s ability to deserialise simple
-/// YAML supersets (scalar strings, arrays, maps) — sufficient for the flat
-/// `redmine.yaml` format used by this app.
-///
-/// Returns `None` when the file is absent, unparseable, or the URL is empty.
-#[cfg(feature = "redmine")]
-async fn try_migrate_redmine_yaml(config_dir: &std::path::Path) -> Option<TrackerConfig> {
-    let yaml_path = config_dir.join("redmine.yaml");
-    let content = tokio::fs::read_to_string(&yaml_path).await.ok()?;
-
-    // Parse as a generic JSON value — serde_json handles the simple YAML subset
-    // used in redmine.yaml (flat scalars, arrays, nested maps) without serde_yml.
-    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&content).ok()?;
-
-    // The legacy field was called `redmine_url`; we normalise it to `url`.
-    let url = map
-        .get("redmine_url")
-        .and_then(|v| v.as_str())
-        .filter(|v| !v.trim().is_empty())
-        .map(|v| v.trim_end_matches('/').to_string())?;
-
-    // Forward every remaining field (ticket_patterns, *_colors, …) as raw TOML
-    // so the Redmine plugin can still deserialise them without any glue code here.
-    let mut extra = toml::Table::new();
-    for (key, value) in &map {
-        if key == "redmine_url" {
-            continue;
-        }
-        // Best-effort JSON → TOML value conversion.
-        if let Ok(toml_val) = toml::Value::try_from(value.clone()) {
-            extra.insert(key.clone(), toml_val);
-        }
-    }
-
-    tracing::info!(url = %url, "Migrated Redmine config from redmine.yaml to projects.toml");
-    println!("✅ Redmine config migrated from redmine.yaml to projects.toml");
-
-    // Remove the legacy file so it is never read again and the user does not
-    // have to clean it up manually. Failure is non-fatal — the migration result
-    // is still returned and written to projects.toml.
-    match tokio::fs::remove_file(&yaml_path).await {
-        Ok(_) => println!("🗑️  redmine.yaml removed (settings are now in projects.toml)\n"),
-        Err(e) => {
-            tracing::warn!(error = %e, path = ?yaml_path, "Could not remove legacy redmine.yaml")
-        }
-    }
-
-    Some(TrackerConfig {
-        provider: "redmine".to_string(),
-        url,
-        extra,
-    })
 }
 
 /// Enriches a `ProjectEntry` that is missing fields by reading them from the
@@ -617,29 +543,7 @@ pub async fn resolve_active_project() -> ProjectEntry {
             );
         }
 
-        // One-shot silent migration from legacy `redmine.yaml` — runs only when
-        // [project.tracker] is absent from the active entry and a redmine.yaml
-        // file still exists on disk. After this the section is written to
-        // projects.toml and the migration never runs again.
-        #[cfg(feature = "redmine")]
-        let needs_save_redmine = if entry.tracker.is_none() {
-            if let Some(config_dir) = get_save_dir() {
-                if let Some(tracker) = try_migrate_redmine_yaml(&config_dir).await {
-                    entry.tracker = Some(tracker);
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-        #[cfg(not(feature = "redmine"))]
-        let needs_save_redmine = false;
-
-        if needs_save_json || needs_save_redmine {
+        if needs_save_json {
             save_projects_toml(&projects_cfg).await;
         }
 
@@ -1066,7 +970,16 @@ pub async fn load_or_create_config_async() -> AppConfig {
         key.as_str().to_lowercase().into()
     }));
 
-    figment.extract().unwrap_or(default_config)
+    figment.extract().unwrap_or_else(|e| {
+        // One bad value (e.g. `GITLAB_TRACKER_DEFAULT_BRANCHES=main,dev` instead of
+        // `[main,dev]`) invalidates the whole extraction: say so instead of silently
+        // ignoring config.json and every environment override.
+        tracing::warn!(
+            error = %e,
+            "Invalid config.json or GITLAB_TRACKER_* value — using default settings"
+        );
+        default_config
+    })
 }
 
 /// Computes a short, stable FNV-1a 32-bit hash of the `(gitlab_url, project_id)` pair
@@ -1175,20 +1088,18 @@ pub async fn load_state_async(
             // projects.toml does not yet, backfill projects.toml now.
             if !state.branches.is_empty() {
                 let mut cfg = load_projects_toml().await;
-                let needs_migration = cfg
-                    .projects
-                    .first()
-                    .map(|p| p.tracked_branches.is_none())
-                    .unwrap_or(false);
-                if needs_migration {
-                    if let Some(entry) = cfg.projects.first_mut() {
-                        entry.tracked_branches = Some(state.branches.clone());
-                        save_projects_toml(&cfg).await;
-                        tracing::info!(
-                            "Migrated tracked branches from {} to projects.toml",
-                            file_name
-                        );
-                    }
+                // Target the project this state file belongs to, not the first one.
+                let url = gitlab_url.trim_end_matches('/');
+                let entry = cfg.projects.iter_mut().find(|p| {
+                    p.gitlab_url.trim_end_matches('/') == url && p.project_id == project_id
+                });
+                if let Some(entry) = entry.filter(|p| p.tracked_branches.is_none()) {
+                    entry.tracked_branches = Some(state.branches.clone());
+                    save_projects_toml(&cfg).await;
+                    tracing::info!(
+                        "Migrated tracked branches from {} to projects.toml",
+                        file_name
+                    );
                 }
             }
             let discovery_started_at = state.discovery_started_at.clone();
@@ -1269,6 +1180,38 @@ pub async fn save_state_async(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn env_list_syntax_for_figment() {
+        use figment::providers::{Env, Serialized};
+        use figment::Figment;
+        let parse = |value: &str| {
+            // Unique prefix: tests share the process environment.
+            std::env::set_var("GT_ENVTEST_DEFAULT_BRANCHES", value);
+            let result = Figment::from(Serialized::defaults(AppConfig::default()))
+                .merge(Env::prefixed("GT_ENVTEST_").map(|k| k.as_str().to_lowercase().into()))
+                .extract::<AppConfig>()
+                .map(|c| c.default_branches)
+                .ok();
+            std::env::remove_var("GT_ENVTEST_DEFAULT_BRANCHES");
+            result
+        };
+        // A bare comma list is a string, not a sequence: extraction fails (and the
+        // whole config used to fall back to defaults silently). The README documents
+        // the bracket syntax.
+        assert!(parse("main,staging").is_none());
+        assert_eq!(parse("[main,staging]").unwrap(), ["main", "staging"]);
+
+        std::env::set_var("GT_ENVTEST2_TABLE_LABEL_PREFIXES", "[deploy::,review::]");
+        let prefixes = Figment::from(Serialized::defaults(AppConfig::default()))
+            .merge(Env::prefixed("GT_ENVTEST2_").map(|k| k.as_str().to_lowercase().into()))
+            .extract::<AppConfig>()
+            .map(|c| c.table_label_prefixes)
+            .ok();
+        std::env::remove_var("GT_ENVTEST2_TABLE_LABEL_PREFIXES");
+        assert_eq!(prefixes.unwrap(), ["deploy::", "review::"]);
+    }
+
     use super::*;
 
     #[tokio::test]

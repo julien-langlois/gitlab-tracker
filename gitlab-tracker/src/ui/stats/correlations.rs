@@ -30,7 +30,7 @@ fn correlation_lines(report: &StatReport) -> Vec<Line<'static>> {
     if report.correlations.is_empty() {
         return vec![Line::from(Span::styled(
             "  Not enough data (need ≥ 3 MRs per pair).",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ))];
     }
 
@@ -52,12 +52,12 @@ fn correlation_line(cr: &CorrelationResult) -> Line<'static> {
         match cr.interpretation {
             CorrelationStrength::VeryStrong | CorrelationStrength::Strong => ("●", Color::Cyan),
             CorrelationStrength::Moderate => ("●", Color::Yellow),
-            _ => ("○", theme::MUTED),
+            _ => ("○", theme::muted()),
         }
     } else if matches!(cr.interpretation, CorrelationStrength::Negligible) {
-        ("·", theme::MUTED_DIM)
+        ("·", theme::muted_dim())
     } else {
-        ("○", theme::MUTED)
+        ("○", theme::muted())
     };
 
     let pair_lbl = pair_label(&cr.pair);
@@ -66,9 +66,9 @@ fn correlation_line(cr: &CorrelationResult) -> Line<'static> {
     let direction = if cr.rho > 0.0 { "↑↑" } else { "↑↓" };
 
     let text_style = if significant {
-        Style::default().fg(Color::White)
+        Style::default().fg(crate::ui::theme::fg())
     } else {
-        Style::default().fg(theme::MUTED)
+        Style::default().fg(theme::muted())
     };
 
     Line::from(vec![
@@ -81,15 +81,15 @@ fn correlation_line(cr: &CorrelationResult) -> Line<'static> {
         Span::styled(
             format!("p = {:.3}    ", cr.p_value),
             Style::default().fg(if cr.p_value < 0.05 {
-                theme::MUTED
+                theme::muted()
             } else {
-                theme::MUTED_DIM
+                theme::muted_dim()
             }),
         ),
         Span::styled(format!("{direction}  {:<13}", strength_lbl), text_style),
         Span::styled(
             format!("(n={})", cr.sample_size),
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(theme::muted_dim()),
         ),
     ])
 }
@@ -109,7 +109,7 @@ fn pair_label(pair: &MetricPair) -> &'static str {
 /// Chooses a colour for the ρ value based on magnitude and significance.
 fn rho_color(rho: f64, significant: bool) -> Color {
     if !significant {
-        return theme::MUTED_DIM;
+        return theme::muted_dim();
     }
     let abs = rho.abs();
     if abs >= 0.70 {
@@ -119,7 +119,7 @@ fn rho_color(rho: f64, significant: bool) -> Color {
     } else if abs >= 0.30 {
         Color::Yellow
     } else {
-        theme::MUTED
+        theme::muted()
     }
 }
 

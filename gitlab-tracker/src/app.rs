@@ -2515,6 +2515,47 @@ mod tests {
         assert_eq!(hover(70, 20), ActivePane::Tracker);
     }
 
+    #[tokio::test]
+    async fn light_theme_never_uses_dark_only_foregrounds() {
+        use crate::ui::theme::{self, Palette, ThemeMode};
+        use ratatui::{backend::TestBackend, style::Color, Terminal};
+
+        let mut app = app_with_mrs(&[("fix login", "v1.0"), ("add stats", "None")]).await;
+        app.theme = Palette::for_mode(ThemeMode::Light);
+        app.table_state.select(Some(0));
+        app.shortcut_providers = gitlab_tracker_core::collect_all_blocks();
+        theme::set_light(true);
+
+        let dark = Palette::for_mode(ThemeMode::Dark);
+        let dark_only = [
+            Color::White,
+            dark.fg,
+            dark.muted,
+            dark.muted_dim,
+            dark.muted_hint,
+        ];
+        let mut terminal = Terminal::new(TestBackend::new(140, 40)).unwrap();
+        for mode in [InputMode::Normal, InputMode::Help, InputMode::ColumnPicker] {
+            app.input_mode = mode;
+            terminal
+                .draw(|f| crate::ui::render_ui(f, &mut app))
+                .unwrap();
+            for cell in terminal.backend().buffer().content() {
+                // Text on the terminal's own (light) background must use light colours.
+                if cell.bg == Color::Reset && cell.symbol().trim() != "" {
+                    assert!(
+                        !dark_only.contains(&cell.fg),
+                        "{:?}: {:?} drawn in dark-theme colour {:?}",
+                        app.input_mode,
+                        cell.symbol(),
+                        cell.fg
+                    );
+                }
+            }
+        }
+        theme::set_light(false);
+    }
+
     #[test]
     fn complete_fetch_flags() {
         let mut app = test_app();

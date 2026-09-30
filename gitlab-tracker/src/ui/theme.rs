@@ -102,7 +102,7 @@ impl Palette {
     // Backgrounds darker than #333333. ANSI named colours work fine here but
     // we still use Rgb for consistency and to avoid palette-specific drift.
 
-    fn dark() -> Self {
+    const fn dark() -> Self {
         Self {
             fg: Color::Rgb(220, 220, 230),
             muted: Color::Rgb(160, 160, 175),
@@ -128,7 +128,7 @@ impl Palette {
     //   accent_yellow #B58900 contrast ~4.5:1  (Solarized yellow)
     //   accent_red   #DC322F  contrast ~5.1:1  (Solarized red)
 
-    fn light() -> Self {
+    const fn light() -> Self {
         Self {
             fg: Color::Rgb(61, 68, 81),
             muted: Color::Rgb(88, 110, 117),
@@ -144,20 +144,50 @@ impl Palette {
     }
 }
 
-// ── Backwards-compatible constants (dark palette) ─────────────────────────────
+// ── Active palette ────────────────────────────────────────────────────────────
 //
-// These constants mirror the dark palette values so that existing call sites
-// that have not yet been migrated to `Palette` continue to compile unchanged.
-// New renderers should receive a `&Palette` directly instead.
+// Renderers that do not receive a `Palette` (stats overlay, popups, tracker pane)
+// read the session palette through these accessors. The theme is detected once at
+// startup (`set_light`) and never changes during a session.
+// ponytail: process-wide flag; pass `&Palette` explicitly if themes ever switch live.
 
-/// Primary muted colour — dark palette shorthand.
-pub const MUTED: Color = Color::Rgb(160, 160, 175);
+static LIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+const DARK_PALETTE: Palette = Palette::dark();
+const LIGHT_PALETTE: Palette = Palette::light();
 
-/// Dimmer muted colour — dark palette shorthand.
-pub const MUTED_DIM: Color = Color::Rgb(100, 100, 115);
+/// Selects the session palette read by [`active`] (dark until called).
+pub fn set_light(light: bool) {
+    LIGHT.store(light, std::sync::atomic::Ordering::Relaxed);
+}
 
-/// Keyboard-hint muted colour — dark palette shorthand.
-pub const MUTED_HINT: Color = Color::Rgb(120, 120, 135);
+/// The palette of the current session.
+pub fn active() -> Palette {
+    if LIGHT.load(std::sync::atomic::Ordering::Relaxed) {
+        LIGHT_PALETTE
+    } else {
+        DARK_PALETTE
+    }
+}
+
+/// Primary foreground of the active palette (instead of `Color::White`).
+pub fn fg() -> Color {
+    active().fg
+}
+
+/// Primary muted colour of the active palette.
+pub fn muted() -> Color {
+    active().muted
+}
+
+/// Dimmer muted colour of the active palette.
+pub fn muted_dim() -> Color {
+    active().muted_dim
+}
+
+/// Keyboard-hint muted colour of the active palette.
+pub fn muted_hint() -> Color {
+    active().muted_hint
+}
 
 // ── Semantic accent colours (kept as named ANSI — these are intentional) ──────
 //

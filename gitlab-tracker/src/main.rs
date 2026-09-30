@@ -303,6 +303,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let palette = crate::ui::theme::Palette::for_mode(theme_mode);
+    crate::ui::theme::set_light(matches!(theme_mode, crate::ui::theme::ThemeMode::Light));
     tracing::info!(mode = ?theme_mode, "Terminal theme detected");
 
     // Enable mouse capture so we can detect hover and scroll events per pane.
@@ -595,18 +596,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Event::Mouse(mouse) => {
                         handle_mouse_event(mouse, &mut app);
                     }
-                    Event::Key(key)
-                        if key.kind == KeyEventKind::Press
-                            && handle_key_event(
-                                key,
-                                &mut app,
-                                &api_semaphore,
-                                &tx,
-                                &mut last_known_branches,
-                            )
-                            .await =>
-                    {
-                        break;
+                    Event::Key(key) if key.kind == KeyEventKind::Press => {
+                        let quit = handle_key_event(
+                            key,
+                            &mut app,
+                            &api_semaphore,
+                            &tx,
+                            &mut last_known_branches,
+                        )
+                        .await;
+                        if quit {
+                            break;
+                        }
                     }
                     _ => {}
                 }

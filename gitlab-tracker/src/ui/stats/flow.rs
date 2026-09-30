@@ -27,7 +27,7 @@ fn render_by_author_block(f: &mut Frame, report: &StatReport, area: Rect) {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No author data.",
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             ))
             .block(block),
             area,
@@ -55,7 +55,7 @@ fn render_by_reviewer_block(f: &mut Frame, report: &StatReport, area: Rect) {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No reviewer data.",
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             ))
             .block(block),
             area,
@@ -83,7 +83,7 @@ fn render_by_milestone_block(f: &mut Frame, report: &StatReport, area: Rect) {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "  No milestone data.",
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             ))
             .block(block),
             area,
@@ -143,7 +143,7 @@ fn render_bar_chart_block(
                 Span::raw("  "),
                 Span::styled(
                     truncate(label, label_width),
-                    Style::default().fg(theme::MUTED),
+                    Style::default().fg(theme::muted()),
                 ),
             ])),
             label_rect,
@@ -171,7 +171,7 @@ fn render_bar_chart_block(
         let days = hours / 24.0;
         let value_str = format!(" {:.1} h ({:.1}d) ", hours, days);
         f.render_widget(
-            Paragraph::new(Span::styled(value_str, Style::default().fg(theme::MUTED))),
+            Paragraph::new(Span::styled(value_str, Style::default().fg(theme::muted()))),
             value_rect,
         );
     }

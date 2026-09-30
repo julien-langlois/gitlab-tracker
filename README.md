@@ -254,10 +254,12 @@ Config loading is powered by [Figment](https://crates.io/crates/figment): layers
 | Environment variable                   | `AppConfig` field overridden | Example             |
 | :------------------------------------- | :--------------------------- | :------------------ |
 | `GITLAB_TRACKER_REFRESH_INTERVAL_SECS` | `refresh_interval_secs`      | `300`               |
-| `GITLAB_TRACKER_DEFAULT_BRANCHES`      | `default_branches`           | `main,staging`      |
-| `GITLAB_TRACKER_TABLE_LABEL_PREFIXES`  | `table_label_prefixes`       | `deploy::,review::` |
+| `GITLAB_TRACKER_DEFAULT_BRANCHES`      | `default_branches`           | `[main,staging]`    |
+| `GITLAB_TRACKER_TABLE_LABEL_PREFIXES`  | `table_label_prefixes`       | `[deploy::,review::]` |
 | `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS`  | `activity_recent_days`       | `3`                 |
 | `GITLAB_TRACKER_ACTIVITY_STALE_DAYS`   | `activity_stale_days`        | `14`                |
+
+> List values must use brackets (`[a,b]`). A bare `a,b` is read as a single string: the whole configuration is then rejected, and the app falls back to its defaults with a warning in the log.
 
 > **Upgrading from an older version?** If you have a `config.json` from a previous release, the app performs a **silent one-time migration** on first startup: all settings are read from `config.json`, written into `projects.toml`, and the old file is no longer used. Nothing breaks — you will simply see a `✅ Project settings migrated` message once.
 >

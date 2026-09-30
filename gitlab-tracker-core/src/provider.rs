@@ -77,7 +77,7 @@ pub struct LinkedTicket {
     pub time_remaining: Option<u32>,
     /// Type / category of the ticket as defined by the tracker (e.g. "Bug", "Evolution").
     /// The label is tracker-specific and may be in any language — do not hardcode colour logic
-    /// on its value; use `label_colors` in `redmine.yaml` instead.
+    /// on its value; use the tracker's colour settings in `projects.toml` instead.
     /// `None` when not provided by the tracker.
     #[serde(default)]
     pub tracker_type: Option<String>,

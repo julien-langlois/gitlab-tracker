@@ -88,13 +88,16 @@ fn confidence_line(label: &str, score: f64, detail: String) -> Line<'static> {
     Line::from(vec![
         Span::styled(
             format!("  {:<14}", label),
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ),
         Span::styled(
             format!("{:<6}", level),
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!("  {detail}"), Style::default().fg(theme::MUTED_DIM)),
+        Span::styled(
+            format!("  {detail}"),
+            Style::default().fg(theme::muted_dim()),
+        ),
     ])
 }
 
@@ -123,7 +126,7 @@ fn size_bucket_line(bucket: &MrSizeBucketStats) -> Line<'static> {
         "Medium" => Color::Cyan,
         "Large" => Color::Yellow,
         "Huge" => Color::Red,
-        _ => theme::MUTED,
+        _ => theme::muted(),
     };
 
     Line::from(vec![
@@ -131,14 +134,20 @@ fn size_bucket_line(bucket: &MrSizeBucketStats) -> Line<'static> {
             format!("  {:<7}", bucket.label),
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(format!("{:<15}", range), Style::default().fg(theme::MUTED)),
+        Span::styled(
+            format!("{:<15}", range),
+            Style::default().fg(theme::muted()),
+        ),
         Span::styled(
             format!(
                 "total={:<4} merged={:<4}",
                 bucket.total_mrs, bucket.merged_mrs
             ),
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ),
-        Span::styled(format!("  {median}"), Style::default().fg(theme::MUTED_DIM)),
+        Span::styled(
+            format!("  {median}"),
+            Style::default().fg(theme::muted_dim()),
+        ),
     ])
 }

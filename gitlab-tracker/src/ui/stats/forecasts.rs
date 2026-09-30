@@ -34,7 +34,7 @@ fn forecast_signal_lines(report: &StatReport) -> Vec<Line<'static>> {
     if p.throughput_forecasts.is_empty() {
         lines.push(Line::from(Span::styled(
             "  Not enough throughput data for forecasts.",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         )));
     } else {
         lines.push(section_header("Forecasts", 40));
@@ -83,7 +83,7 @@ fn throughput_forecast_line(f: &ThroughputForecast, index: usize) -> Line<'stati
     Line::from(vec![
         Span::styled(
             format!("  {:<36}", label),
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ),
         Span::styled(
             format!("{:.1}%", pct),
@@ -91,7 +91,7 @@ fn throughput_forecast_line(f: &ThroughputForecast, index: usize) -> Line<'stati
         ),
         Span::styled(
             format!("  (λ={:.1}/w)", f.lambda_per_week),
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(theme::muted_dim()),
         ),
     ])
 }
@@ -120,8 +120,8 @@ fn anomaly_signal_line(signal: &AnomalySignal) -> Line<'static> {
         ),
         Span::styled(
             format!("{:<30}", signal.metric),
-            Style::default().fg(Color::White),
+            Style::default().fg(crate::ui::theme::fg()),
         ),
-        Span::styled(detail, Style::default().fg(theme::MUTED)),
+        Span::styled(detail, Style::default().fg(theme::muted())),
     ])
 }

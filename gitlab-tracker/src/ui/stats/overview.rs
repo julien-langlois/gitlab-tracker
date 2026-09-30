@@ -44,7 +44,7 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
 
     let mut lines = vec![
         kv_line("Merged", &agg.merged_count.to_string(), Color::Green),
-        kv_line("Closed", &agg.closed_count.to_string(), theme::MUTED),
+        kv_line("Closed", &agg.closed_count.to_string(), theme::muted()),
         kv_line("Throughput", &throughput, Color::Cyan),
     ];
 
@@ -57,7 +57,7 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
             } else if rate >= 0.10 {
                 Color::Yellow
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ));
     }
@@ -65,12 +65,12 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
     lines.push(kv_line(
         "Avg diff size",
         &format!("{:.0} lines", agg.avg_diff_size),
-        theme::MUTED,
+        theme::muted(),
     ));
     lines.push(kv_line(
         "Avg comments",
         &format!("{:.1}", agg.avg_comments),
-        theme::MUTED,
+        theme::muted(),
     ));
 
     if let Some(density) = agg.avg_comment_density {
@@ -80,7 +80,7 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if density >= 5.0 {
                 Color::Yellow
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ));
     }
@@ -89,7 +89,11 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
         lines.push(kv_line(
             "Pipeline fail rate",
             &format!("{:.1}%", pfr * 100.0),
-            if pfr > 0.3 { Color::Red } else { theme::MUTED },
+            if pfr > 0.3 {
+                Color::Red
+            } else {
+                theme::muted()
+            },
         ));
     }
 
@@ -99,7 +103,7 @@ fn render_throughput_block(f: &mut Frame, report: &StatReport, area: Rect) {
         if agg.pipeline_data_coverage < 0.5 {
             Color::Yellow
         } else {
-            theme::MUTED
+            theme::muted()
         },
     ));
 
@@ -140,7 +144,7 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
         .split(inner);
 
     let label_style = Style::default()
-        .fg(Color::White)
+        .fg(crate::ui::theme::fg())
         .add_modifier(Modifier::BOLD);
 
     let fmt_value = |hours: f64| -> String {
@@ -184,10 +188,10 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
     let spread = p90 - median;
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("  Spread  ", Style::default().fg(theme::MUTED)),
+            Span::styled("  Spread  ", Style::default().fg(theme::muted())),
             Span::styled(
                 format!("{:>5.1} h ({:.1}d)  (P90 − Median)", spread, spread / 24.0),
-                Style::default().fg(theme::MUTED_DIM),
+                Style::default().fg(theme::muted_dim()),
             ),
         ])),
         rows[4],
@@ -202,7 +206,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 "  No open MRs.",
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             )))
             .block(styled_block(" Backlog Health ")),
             area,
@@ -217,7 +221,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
         kv_line(
             "Open MRs",
             &agg.open_mr_ages_days.len().to_string(),
-            theme::MUTED,
+            theme::muted(),
         ),
         kv_line(
             "Median age",
@@ -225,7 +229,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if median_age > 14.0 {
                 Color::Yellow
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ),
         kv_line(
@@ -234,7 +238,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if oldest > 30.0 {
                 Color::Red
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ),
         kv_line(
@@ -243,7 +247,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if agg.stale_open_mrs_7d > 0 {
                 Color::Yellow
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ),
         kv_line(
@@ -252,7 +256,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if agg.stale_open_mrs_14d > 0 {
                 Color::Yellow
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ),
         kv_line(
@@ -261,7 +265,7 @@ fn render_backlog_block(f: &mut Frame, report: &StatReport, area: Rect) {
             if agg.stale_open_mrs_30d > 0 {
                 Color::Red
             } else {
-                theme::MUTED
+                theme::muted()
             },
         ),
     ];
@@ -290,7 +294,11 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
             };
             lines.push(kv_line("Flow pressure ρ", &format!("{rho:.2}"), rho_color));
             if let Some(mrs) = q.expected_mrs_in_system {
-                lines.push(kv_line("MRs in system", &format!("{mrs:.1}"), theme::MUTED));
+                lines.push(kv_line(
+                    "MRs in system",
+                    &format!("{mrs:.1}"),
+                    theme::muted(),
+                ));
             }
             if let Some(wait_hours) = q.expected_wait_hours {
                 let wait_color = if wait_hours > 48.0 {
@@ -319,7 +327,7 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
         QueueStatus::InsufficientData => {
             lines.push(Line::from(Span::styled(
                 "  Flow pressure: not enough data.",
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             )));
         }
     }
@@ -336,7 +344,10 @@ fn render_poisson_summary_block(f: &mut Frame, report: &StatReport, area: Rect) 
                 format!("  {} ", icon),
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(signal.metric.clone(), Style::default().fg(Color::White)),
+            Span::styled(
+                signal.metric.clone(),
+                Style::default().fg(crate::ui::theme::fg()),
+            ),
         ]));
     } else {
         lines.push(Line::from(Span::styled(
@@ -357,7 +368,7 @@ fn render_summary_insights_block(f: &mut Frame, report: &StatReport, area: Rect)
         Span::styled(
             "  Snapshot  ",
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -368,7 +379,7 @@ fn render_summary_insights_block(f: &mut Frame, report: &StatReport, area: Rect)
                 agg.open_mr_ages_days.len(),
                 agg.stale_open_mrs_14d
             ),
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ),
     ])];
 
@@ -380,7 +391,7 @@ fn render_summary_insights_block(f: &mut Frame, report: &StatReport, area: Rect)
         Span::styled(
             "  Delivery  ",
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -388,7 +399,7 @@ fn render_summary_insights_block(f: &mut Frame, report: &StatReport, area: Rect)
                 "{abandon} · pipeline coverage {:.0}%",
                 agg.pipeline_data_coverage * 100.0
             ),
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         ),
     ]));
 
@@ -402,10 +413,10 @@ fn render_summary_insights_block(f: &mut Frame, report: &StatReport, area: Rect)
         Span::styled(
             "  Signal    ",
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(top_signal.to_string(), Style::default().fg(theme::MUTED)),
+        Span::styled(top_signal.to_string(), Style::default().fg(theme::muted())),
     ]));
 
     f.render_widget(

@@ -51,7 +51,7 @@ impl TrackerLabelColors {
         if let Some(&colors) = map.get("*") {
             return colors;
         }
-        (theme::MUTED_DIM, Color::White)
+        (theme::muted_dim(), Color::White)
     }
 
     /// Resolves the colour pair for a tracker-type label.
@@ -121,7 +121,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
         Span::styled(
             ticket.subject.clone(),
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
@@ -212,7 +212,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
             Span::raw("Start    : "),
             Span::styled(
                 format!("{}  ({})", start, relative),
-                Style::default().fg(theme::MUTED),
+                Style::default().fg(theme::muted()),
             ),
         ]));
     }
@@ -303,7 +303,7 @@ pub fn render_ticket_info(mr: &TrackedMr, tracker_colors: &TrackerLabelColors) -
                         .map(format_duration)
                         .unwrap_or_else(|| "—".to_string()),
                     Style::default()
-                        .fg(theme::MUTED)
+                        .fg(theme::muted())
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -391,7 +391,7 @@ pub fn render_time_log(
 
     // ── Entries list ──────────────────────────────────────────────────────────
     lines.push(Line::from(vec![
-        Span::styled("── ", Style::default().fg(theme::MUTED_DIM)),
+        Span::styled("── ", Style::default().fg(theme::muted_dim())),
         Span::styled(
             "Entries",
             Style::default()
@@ -400,27 +400,27 @@ pub fn render_time_log(
         ),
         Span::styled(
             " ──────────────────────────────",
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(theme::muted_dim()),
         ),
     ]));
 
     let Some(entries) = entries else {
         lines.push(Line::from(vec![Span::styled(
             "Loading time entries…",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         )]));
         return Text::from(lines);
     };
     if entries.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "No time entries recorded yet.",
-            Style::default().fg(theme::MUTED),
+            Style::default().fg(theme::muted()),
         )]));
     } else {
         for entry in entries {
             // Line 1: date | duration | activity | user
             lines.push(Line::from(vec![
-                Span::styled(entry.spent_on.clone(), Style::default().fg(theme::MUTED)),
+                Span::styled(entry.spent_on.clone(), Style::default().fg(theme::muted())),
                 Span::raw("  "),
                 Span::styled(
                     fmt_hours(entry.hours),
@@ -436,7 +436,10 @@ pub fn render_time_log(
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw("  "),
-                Span::styled(entry.user.clone(), Style::default().fg(Color::White)),
+                Span::styled(
+                    entry.user.clone(),
+                    Style::default().fg(crate::ui::theme::fg()),
+                ),
             ]));
             // Line 2: comment (indented), shown only when non-empty.
             if !entry.comment.is_empty() {
@@ -464,7 +467,7 @@ pub fn render_time_log(
                 fmt_hours(total_hours)
             ),
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         )]));
     }

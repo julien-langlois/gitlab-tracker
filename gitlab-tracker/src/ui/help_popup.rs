@@ -138,7 +138,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
                 if col_idx > 0 {
                     spans.push(Span::styled(
                         COL_SEPARATOR,
-                        Style::default().fg(crate::ui::theme::MUTED_DIM),
+                        Style::default().fg(crate::ui::theme::muted_dim()),
                     ));
                 }
 
@@ -161,7 +161,10 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
                 } else {
                     entry.description.to_string()
                 };
-                spans.push(Span::styled(desc, Style::default().fg(Color::White)));
+                spans.push(Span::styled(
+                    desc,
+                    Style::default().fg(crate::ui::theme::fg()),
+                ));
             }
 
             lines.push(Line::from(spans));
@@ -183,7 +186,7 @@ pub fn render_help_popup(f: &mut Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             "Press any key to close",
-            Style::default().fg(crate::ui::theme::MUTED_HINT),
+            Style::default().fg(crate::ui::theme::muted_hint()),
         )]))
         .alignment(Alignment::Center),
         zones[1],

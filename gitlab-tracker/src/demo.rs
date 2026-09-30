@@ -930,26 +930,20 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 Event::Mouse(mouse) => {
                     handle_mouse_event(mouse, &mut app);
                 }
-                // Quit on Esc/q (handle_key_event_demo returns true).
                 Event::Key(key)
-                    if (key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat)
-                        && handle_key_event_demo(key, &mut app) =>
+                    if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
                 {
-                    break;
-                }
-                // After a non-quitting key, check if Stats mode was just activated.
-                // handle_key_event_demo is sync so trigger_stats_refresh (which spawns
-                // a Tokio task) must be called here, in the async context.
-                #[cfg(feature = "stats")]
-                Event::Key(key)
-                    if (key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat)
-                        && app.input_mode == crate::app::InputMode::Stats
-                        && app.stats_view.loading =>
-                {
-                    // Key was already handled by the previous arm's side-effect;
-                    // we only need to trigger the async aggregation here.
-                    let _ = key;
-                    crate::ui::stats::trigger_stats_refresh(&mut app, &tx);
+                    // Quit on Esc/q (handle_key_event_demo returns true).
+                    let quit = handle_key_event_demo(key, &mut app);
+                    if quit {
+                        break;
+                    }
+                    // handle_key_event_demo is sync: when the key just opened the Stats
+                    // overlay, start the async aggregation here.
+                    #[cfg(feature = "stats")]
+                    if app.input_mode == crate::app::InputMode::Stats && app.stats_view.loading {
+                        crate::ui::stats::trigger_stats_refresh(&mut app, &tx);
+                    }
                 }
                 _ => {}
             }

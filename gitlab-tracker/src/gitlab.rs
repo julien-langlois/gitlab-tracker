@@ -101,6 +101,38 @@ fn count_diff_lines(diff: &str) -> (u32, u32) {
     (added, deleted)
 }
 
+/// Whether cached diff stats can be reused (while `updated_at` is unchanged).
+/// Shared by the fetcher and the API-call estimate so they never disagree.
+///
+/// Rejects entries written by older cache formats:
+/// - `files_changed > 0` with no added/removed line: fetched through the old
+///   `added_lines` / `removed_lines` fields, which do not exist in the GitLab API;
+/// - `files_changed > 0` with 0 commits: written before `commits_count` existed
+///   (serde default), since a real MR with changes always has at least one commit.
+fn diff_stats_cache_valid(stats: Option<&crate::models::DiffStats>) -> bool {
+    stats.is_some_and(|s| {
+        let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
+        let commits_ok = s.commits_count > 0 || s.files_changed == 0;
+        lines_ok && commits_ok
+    })
+}
+
+/// Whether cached pipelines can be reused (while `updated_at` is unchanged).
+/// Shared by the fetcher and the API-call estimate.
+///
+/// Re-fetch when the cache is empty, when no pipeline has jobs or one lacks
+/// `created_at` (older state files), and always while a pipeline is transient:
+/// it can finish without the MR's `updated_at` changing.
+fn pipelines_cache_reusable(pipelines: &[Pipeline]) -> bool {
+    use crate::models::PipelineState::{Created, Pending, Running};
+    !pipelines.is_empty()
+        && pipelines.iter().any(|p| !p.jobs.is_empty())
+        && pipelines.iter().all(|p| p.created_at.is_some())
+        && !pipelines
+            .iter()
+            .any(|p| matches!(p.status, Running | Pending | Created))
+}
+
 /// Cache snapshot of a tracked MR handed to the fetcher, so it can skip pipeline,
 /// diff and notes re-fetches when the MR has not changed since the last cycle.
 impl From<&crate::models::TrackedMr> for CachedMrData {
@@ -151,11 +183,7 @@ impl CountApiCalls for crate::models::TrackedMr {
         // Mirrors the cache-validity check in fetch_gitlab_data:
         //   • Skip when updated_at is unchanged AND the cached stats are valid.
         //   • \"Valid\" means lines_ok && commits_ok (matches `cached_diff_stats_valid`).
-        let diff_stats_cached_valid = self.diff_stats.as_ref().is_some_and(|s| {
-            let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
-            let commits_ok = s.commits_count > 0 || s.files_changed == 0;
-            lines_ok && commits_ok
-        });
+        let diff_stats_cached_valid = diff_stats_cache_valid(self.diff_stats.as_ref());
         let diff_stats = if self.updated_at.is_some() && diff_stats_cached_valid {
             // Cache hit — no calls needed.
             // (The real guard also checks updated_at == fresh updated_at, which we
@@ -194,21 +222,8 @@ impl CountApiCalls for crate::models::TrackedMr {
         // Mirrors the cache-validity logic in fetch_gitlab_data:
         //   • Skip when updated_at unchanged, pipelines cached, all have jobs and
         //     dates, and none is in a transient state.
-        let cached_has_jobs = self.pipelines.iter().any(|p| !p.jobs.is_empty());
-        let cached_has_dates = self.pipelines.iter().all(|p| p.created_at.is_some());
-        let cached_has_transient = self.pipelines.iter().any(|p| {
-            matches!(
-                p.status,
-                crate::models::PipelineState::Running
-                    | crate::models::PipelineState::Pending
-                    | crate::models::PipelineState::Created
-            )
-        });
-        let pipelines_cache_hit = self.updated_at.is_some()
-            && !self.pipelines.is_empty()
-            && cached_has_jobs
-            && cached_has_dates
-            && !cached_has_transient;
+        let pipelines_cache_hit =
+            self.updated_at.is_some() && pipelines_cache_reusable(&self.pipelines);
 
         let pipelines = if pipelines_cache_hit {
             0
@@ -1342,20 +1357,7 @@ pub async fn fetch_gitlab_data(
     // We cache this behind the same `updated_at` guard as pipelines to avoid hammering
     // the API: if the MR hasn't changed, the diff hasn't changed either.
     let cached_diff_stats = cached.diff_stats.clone();
-    // Invalidate the cache if the stored stats look corrupted: files_changed > 0
-    // but both additions and deletions are 0 means they were fetched with the old
-    // `added_lines`/`removed_lines` fields that do not exist in the GitLab API.
-    let cached_diff_stats_valid = cached_diff_stats.as_ref().is_some_and(|s| {
-        // Reject entries where additions/deletions are inconsistent (old cache format).
-        let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
-        // Reject entries where commits_count was never fetched (field added later —
-        // stale state files have 0 from serde default, but a real MR always has ≥ 1 commit).
-        // Once the fresh fetch writes a real value (even 0 from the API), we accept it.
-        // We distinguish stale-zero from api-zero by checking files_changed: if files > 0
-        // and commits == 0, the entry was written before this field existed.
-        let commits_ok = s.commits_count > 0 || s.files_changed == 0;
-        lines_ok && commits_ok
-    });
+    let cached_diff_stats_valid = diff_stats_cache_valid(cached_diff_stats.as_ref());
     let diff_stats =
         if updated_at.is_some() && updated_at == cached.updated_at && cached_diff_stats_valid {
             cached_diff_stats
@@ -1430,22 +1432,9 @@ pub async fn fetch_gitlab_data(
     // (running, pending, created, waiting). A pipeline can transition to success/failed
     // without the MR's `updated_at` changing, so the equality check alone is not
     // sufficient to detect stale pipeline data.
-    let cached_has_jobs = cached.pipelines.iter().any(|p| !p.jobs.is_empty());
-    let cached_has_dates = cached.pipelines.iter().all(|p| p.created_at.is_some());
-    let cached_has_transient_pipeline = cached.pipelines.iter().any(|p| {
-        matches!(
-            p.status,
-            crate::models::PipelineState::Running
-                | crate::models::PipelineState::Pending
-                | crate::models::PipelineState::Created
-        )
-    });
     let pipelines = if updated_at.is_some()
         && updated_at == cached.updated_at
-        && !cached.pipelines.is_empty()
-        && cached_has_jobs
-        && cached_has_dates
-        && !cached_has_transient_pipeline
+        && pipelines_cache_reusable(&cached.pipelines)
     {
         cached.pipelines
     } else {
@@ -1484,6 +1473,22 @@ pub async fn fetch_gitlab_data(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn diff_stats_cache_rejects_legacy_entries() {
+        use crate::models::DiffStats;
+        let stats = |files_changed, additions, commits_count| DiffStats {
+            files_changed,
+            additions,
+            commits_count,
+            ..DiffStats::default()
+        };
+        assert!(!diff_stats_cache_valid(None));
+        assert!(diff_stats_cache_valid(Some(&stats(3, 10, 2))));
+        assert!(diff_stats_cache_valid(Some(&stats(0, 0, 0)))); // empty MR
+        assert!(!diff_stats_cache_valid(Some(&stats(3, 0, 2)))); // old line fields
+        assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 0)))); // before commits_count
+    }
 
     #[test]
     fn diff_lines_keep_double_sign_changes() {

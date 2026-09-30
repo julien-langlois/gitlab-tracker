@@ -47,7 +47,7 @@ pub(crate) fn split_horizontal_thirds(area: Rect) -> [Rect; 3] {
 pub(crate) fn styled_block(title: &str) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme::MUTED_DIM))
+        .border_style(Style::default().fg(theme::muted_dim()))
         .title(Span::styled(
             title.to_string(),
             Style::default()
@@ -81,12 +81,12 @@ pub(crate) fn section_header(label: &'static str, dash_count: usize) -> Line<'st
         Span::styled(
             format!("  {label}  "),
             Style::default()
-                .fg(Color::White)
+                .fg(crate::ui::theme::fg())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             "─".repeat(dash_count),
-            Style::default().fg(theme::MUTED_DIM),
+            Style::default().fg(theme::muted_dim()),
         ),
     ])
 }
@@ -94,7 +94,10 @@ pub(crate) fn section_header(label: &'static str, dash_count: usize) -> Line<'st
 /// `key  value` row with fixed label column.
 pub(crate) fn kv_line(key: &str, value: &str, value_color: Color) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("  {:<22}", key), Style::default().fg(theme::MUTED)),
+        Span::styled(
+            format!("  {:<22}", key),
+            Style::default().fg(theme::muted()),
+        ),
         Span::styled(value.to_string(), Style::default().fg(value_color)),
     ])
 }
