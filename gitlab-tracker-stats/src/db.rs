@@ -1,22 +1,21 @@
-use async_trait::async_trait;
 use sqlx::SqlitePool;
 
 use crate::snapshot::MrStatsSnapshot;
 
-/// Typed error returned by all [`StatsDb`] operations.
+/// Typed error returned by all [`SqliteStatsDb`] operations.
 #[derive(Debug, thiserror::Error)]
 pub enum StatsError {
     #[error("Database error: {0}")]
     Sqlx(#[from] sqlx::Error),
 
-    #[error("Migration error: {0}")]
-    Migration(#[from] sqlx::migrate::MigrateError),
-
     #[error("Invalid data: {0}")]
     InvalidData(String),
 }
 
-/// A stored snapshot as returned by [`StatsDb::query`].
+/// Schema migrations, in order (see `SqliteStatsDb::run_migrations`).
+const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
+
+/// A stored snapshot as returned by [`SqliteStatsDb::query`].
 ///
 /// Mirrors [`MrStatsSnapshot`] but with the DB-assigned surrogate key included.
 /// The `id` is used internally for the N:N join tables (labels, reviewers).
@@ -36,81 +35,15 @@ pub struct SnapshotQuery {
     pub author: Option<String>,
     /// Restrict to MRs that include this reviewer username.
     pub reviewer: Option<String>,
-    /// Restrict to MRs attached to this milestone title.
-    pub milestone: Option<String>,
     /// Restrict to MRs targeting this branch.
     pub target_branch: Option<String>,
     /// Only return snapshots recorded on or after this ISO 8601 date.
     pub from_date: Option<String>,
     /// Only return snapshots recorded before this ISO 8601 date.
     pub to_date: Option<String>,
-    /// Only return snapshots with this trigger type ("on_merge", "on_close", "on_refresh").
-    pub trigger: Option<String>,
 }
 
-/// Persistence contract for the stats engine.
-///
-/// The trait boundary keeps [`SqliteStatsDb`] swappable with an in-memory
-/// implementation for unit tests, without any changes to the aggregation logic.
-#[async_trait]
-pub trait StatsDb: Send + Sync {
-    /// Records a MR snapshot, ignoring duplicates (same mr_id + project_id + calendar day).
-    ///
-    /// Idempotency is enforced at the DB level via `INSERT OR IGNORE` combined with
-    /// the `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` constraint.
-    async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError>;
-
-    /// Same as `upsert_snapshot` but with an explicit `recorded_at` timestamp.
-    ///
-    /// Used during the startup backfill to place historical snapshots at their
-    /// real event date (e.g. `merged_at`) rather than today, so cycle-time
-    /// aggregations reflect actual history rather than the backfill date.
-    async fn upsert_snapshot_at(
-        &self,
-        snap: &MrStatsSnapshot,
-        recorded_at: &str,
-    ) -> Result<(), StatsError>;
-
-    /// Startup backfill: for each `(snapshot, recorded_at)` runs
-    /// [`upsert_snapshot_at`](Self::upsert_snapshot_at), then fills `created_at`
-    /// on that MR's rows where it is still NULL (rows inserted before the field
-    /// was tracked — INSERT OR IGNORE never updates them). Everything runs in a
-    /// single transaction: one fsync instead of one per row. Idempotent.
-    async fn backfill_snapshots(
-        &self,
-        items: &[(MrStatsSnapshot, String)],
-    ) -> Result<(), StatsError>;
-
-    /// Returns all stored snapshots matching the given filter, ordered by `recorded_at` ASC.
-    async fn query(&self, filter: &SnapshotQuery) -> Result<Vec<StoredSnapshot>, StatsError>;
-
-    /// Deletes all snapshots older than `retention_days` for the given project.
-    ///
-    /// Called once on startup when `stats_retention_days` is set in `projects.toml`.
-    async fn purge_old_snapshots(
-        &self,
-        project_id: &str,
-        retention_days: u32,
-    ) -> Result<u64, StatsError>;
-
-    /// Repairs rows written by older versions, on every startup (idempotent: a
-    /// clean database is only read):
-    /// 1. keeps one `on_merge` / `on_close` row per MR (the most recent `id`) — older
-    ///    versions recorded a new one, dated today, on every refresh;
-    /// 2. re-dates those rows at the real event time (`merged_at` / `updated_at`),
-    ///    which the dedup of step 1 used to throw away with the backfilled row;
-    /// 3. normalises every `recorded_at` to the canonical UTC format.
-    ///
-    /// When anything needs fixing and `backup_path` is given, a consistent copy of
-    /// the database is written there first (`VACUUM INTO`).
-    async fn repair_snapshots(
-        &self,
-        project_id: &str,
-        backup_path: Option<&str>,
-    ) -> Result<RepairSummary, StatsError>;
-}
-
-/// SQLite-backed implementation of [`StatsDb`].
+/// SQLite-backed store of MR snapshots — the persistence layer of the stats engine.
 pub struct SqliteStatsDb {
     pool: SqlitePool,
 }
@@ -124,100 +57,57 @@ impl SqliteStatsDb {
         use sqlx::sqlite::SqliteConnectOptions;
         use std::str::FromStr as _;
 
+        // Connection settings, applied to every pooled connection (they used to be
+        // PRAGMAs inside the schema script): WAL, and enforced foreign keys for the
+        // `ON DELETE CASCADE` of labels / reviewers (sqlx's default, made explicit).
         let options = SqliteConnectOptions::from_str(db_path)
             .map_err(StatsError::Sqlx)?
-            .create_if_missing(true);
+            .create_if_missing(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+            .foreign_keys(true);
 
         let pool = SqlitePool::connect_with(options).await?;
         Self::run_migrations(&pool).await?;
         Ok(Self { pool })
     }
 
-    /// Applies the embedded schema migrations in order.
+    /// Applies the pending schema migrations in order, each in its own transaction.
     ///
-    /// Inline `CREATE … IF NOT EXISTS` statements, without versioning. (`sqlx::migrate!`
-    /// would embed versioned SQL files at compile time; it does not need `DATABASE_URL`,
-    /// only the `query!` macros do.)
+    /// `PRAGMA user_version` records how many of [`MIGRATIONS`] ran, so a new schema
+    /// change is a new file appended to the list — never an edit of a published one.
     async fn run_migrations(pool: &SqlitePool) -> Result<(), StatsError> {
-        sqlx::query(
-            r#"
-            PRAGMA journal_mode = WAL;
-            PRAGMA foreign_keys = ON;
-
-            CREATE TABLE IF NOT EXISTS mr_snapshots (
-                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-                recorded_at            TEXT    NOT NULL,
-                -- Stores the calendar date (YYYY-MM-DD) of recorded_at for use in the UNIQUE
-                -- constraint. Expressions (e.g. DATE()) are not allowed in UNIQUE constraints
-                -- on older SQLite versions (< 3.37), so we materialise the value explicitly.
-                recorded_date          TEXT    NOT NULL,
-                trigger                TEXT    NOT NULL,
-                mr_id                  TEXT    NOT NULL,
-                project_id             TEXT    NOT NULL,
-                title                  TEXT    NOT NULL,
-                author                 TEXT    NOT NULL,
-                assignee               TEXT,
-                merged_by              TEXT,
-                milestone              TEXT,
-                target_branch          TEXT    NOT NULL,
-                state                  TEXT    NOT NULL,
-                created_at             TEXT,
-                merged_at              TEXT,
-                updated_at             TEXT,
-                files_changed          INTEGER NOT NULL DEFAULT 0,
-                additions              INTEGER NOT NULL DEFAULT 0,
-                deletions              INTEGER NOT NULL DEFAULT 0,
-                commits_count          INTEGER NOT NULL DEFAULT 0,
-                diff_difficulty        REAL,
-                user_notes_count       INTEGER NOT NULL DEFAULT 0,
-                pipeline_count         INTEGER NOT NULL DEFAULT 0,
-                pipeline_failure_count INTEGER NOT NULL DEFAULT 0,
-                -- Idempotency: one snapshot per MR, per project, per calendar day, per trigger.
-                UNIQUE(mr_id, project_id, recorded_date, trigger)
-            );
-
-            CREATE TABLE IF NOT EXISTS mr_labels (
-                snapshot_id INTEGER NOT NULL REFERENCES mr_snapshots(id) ON DELETE CASCADE,
-                label       TEXT    NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS mr_reviewers (
-                snapshot_id INTEGER NOT NULL REFERENCES mr_snapshots(id) ON DELETE CASCADE,
-                reviewer    TEXT    NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_snapshots_project_date
-                ON mr_snapshots(project_id, recorded_date);
-
-            CREATE INDEX IF NOT EXISTS idx_snapshots_author
-                ON mr_snapshots(author);
-
-            CREATE INDEX IF NOT EXISTS idx_snapshots_milestone
-                ON mr_snapshots(milestone);
-
-            -- Label / reviewer lookups are keyed by snapshot_id; without these
-            -- every lookup is a full table scan.
-            CREATE INDEX IF NOT EXISTS idx_labels_snapshot
-                ON mr_labels(snapshot_id);
-
-            CREATE INDEX IF NOT EXISTS idx_reviewers_snapshot
-                ON mr_reviewers(snapshot_id);
-            "#,
-        )
-        .execute(pool)
-        .await?;
+        let applied: i64 = sqlx::query_scalar("PRAGMA user_version")
+            .fetch_one(pool)
+            .await?;
+        for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
+            let mut tx = pool.begin().await?;
+            sqlx::query(sql).execute(&mut *tx).await?;
+            // PRAGMA arguments cannot be bound: the value is our own integer.
+            sqlx::query(&format!("PRAGMA user_version = {}", version + 1))
+                .execute(&mut *tx)
+                .await?;
+            tx.commit().await?;
+        }
         Ok(())
     }
 }
 
-#[async_trait]
-impl StatsDb for SqliteStatsDb {
-    async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError> {
+impl SqliteStatsDb {
+    /// Records a MR snapshot, ignoring duplicates (same mr_id + project_id + calendar day).
+    ///
+    /// Idempotency is enforced at the DB level via `INSERT OR IGNORE` combined with
+    /// the `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` constraint.
+    pub async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError> {
         self.upsert_snapshot_at(snap, &snap.event_recorded_at())
             .await
     }
 
-    async fn upsert_snapshot_at(
+    /// Same as `upsert_snapshot` but with an explicit `recorded_at` timestamp.
+    ///
+    /// Used during the startup backfill to place historical snapshots at their
+    /// real event date (e.g. `merged_at`) rather than today, so cycle-time
+    /// aggregations reflect actual history rather than the backfill date.
+    pub async fn upsert_snapshot_at(
         &self,
         snap: &MrStatsSnapshot,
         recorded_at: &str,
@@ -229,7 +119,12 @@ impl StatsDb for SqliteStatsDb {
         Ok(())
     }
 
-    async fn backfill_snapshots(
+    /// Startup backfill: for each `(snapshot, recorded_at)` runs
+    /// [`upsert_snapshot_at`](Self::upsert_snapshot_at), then fills `created_at`
+    /// on that MR's rows where it is still NULL (rows inserted before the field
+    /// was tracked — INSERT OR IGNORE never updates them). Everything runs in a
+    /// single transaction: one fsync instead of one per row. Idempotent.
+    pub async fn backfill_snapshots(
         &self,
         items: &[(MrStatsSnapshot, String)],
     ) -> Result<(), StatsError> {
@@ -249,7 +144,8 @@ impl StatsDb for SqliteStatsDb {
         Ok(())
     }
 
-    async fn query(&self, filter: &SnapshotQuery) -> Result<Vec<StoredSnapshot>, StatsError> {
+    /// Returns all stored snapshots matching the given filter, ordered by `recorded_at` ASC.
+    pub async fn query(&self, filter: &SnapshotQuery) -> Result<Vec<StoredSnapshot>, StatsError> {
         // Build a dynamic WHERE clause from the optional filter fields.
         // Using a Vec of conditions keeps the query readable and avoids a query-builder dependency.
         let mut conditions: Vec<&str> = Vec::new();
@@ -263,10 +159,6 @@ impl StatsDb for SqliteStatsDb {
             conditions.push("s.author = ?");
             dynamic.push(author.clone());
         }
-        if let Some(milestone) = &filter.milestone {
-            conditions.push("s.milestone = ?");
-            dynamic.push(milestone.clone());
-        }
         if let Some(branch) = &filter.target_branch {
             conditions.push("s.target_branch = ?");
             dynamic.push(branch.clone());
@@ -278,10 +170,6 @@ impl StatsDb for SqliteStatsDb {
         if let Some(to) = &filter.to_date {
             conditions.push("s.recorded_at < ?");
             dynamic.push(to.clone());
-        }
-        if let Some(trigger) = &filter.trigger {
-            conditions.push("s.trigger = ?");
-            dynamic.push(trigger.clone());
         }
 
         // Reviewer sub-filter requires an EXISTS sub-query. It is pushed last so its
@@ -372,7 +260,10 @@ impl StatsDb for SqliteStatsDb {
         Ok(results)
     }
 
-    async fn purge_old_snapshots(
+    /// Deletes all snapshots older than `retention_days` for the given project.
+    ///
+    /// Called once on startup when `stats_retention_days` is set in `projects.toml`.
+    pub async fn purge_old_snapshots(
         &self,
         project_id: &str,
         retention_days: u32,
@@ -392,7 +283,17 @@ impl StatsDb for SqliteStatsDb {
         Ok(result.rows_affected())
     }
 
-    async fn repair_snapshots(
+    /// Repairs rows written by older versions, on every startup (idempotent: a
+    /// clean database is only read):
+    /// 1. keeps one `on_merge` / `on_close` row per MR (the most recent `id`) — older
+    ///    versions recorded a new one, dated today, on every refresh;
+    /// 2. re-dates those rows at the real event time (`merged_at` / `updated_at`),
+    ///    which the dedup of step 1 used to throw away with the backfilled row;
+    /// 3. normalises every `recorded_at` to the canonical UTC format.
+    ///
+    /// When anything needs fixing and `backup_path` is given, a consistent copy of
+    /// the database is written there first (`VACUUM INTO`).
+    pub async fn repair_snapshots(
         &self,
         project_id: &str,
         backup_path: Option<&str>,
@@ -438,7 +339,7 @@ impl StatsDb for SqliteStatsDb {
     }
 }
 
-/// What [`StatsDb::repair_snapshots`] changed (all zero on a clean database).
+/// What [`SqliteStatsDb::repair_snapshots`] changed (all zero on a clean database).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct RepairSummary {
     /// Duplicate terminal rows removed.
@@ -486,7 +387,7 @@ fn unnormalized_rows() -> String {
     )
 }
 
-/// Number of rows [`StatsDb::repair_snapshots`] would change.
+/// Number of rows [`SqliteStatsDb::repair_snapshots`] would change.
 fn repair_pending_sql() -> String {
     format!(
         "SELECT (SELECT COUNT(*) FROM mr_snapshots WHERE {}) \
@@ -649,6 +550,32 @@ mod tests {
             pipeline_count: 0,
             pipeline_failure_count: 0,
         }
+    }
+
+    #[tokio::test]
+    async fn migrations_are_versioned_and_idempotent() {
+        let dir = std::env::temp_dir().join(format!("gt-migrate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("stats.db");
+        let path = path.to_str().unwrap();
+        let version = |db: &SqliteStatsDb| {
+            let pool = db.pool.clone();
+            async move {
+                sqlx::query_scalar::<_, i64>("PRAGMA user_version")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        let db = SqliteStatsDb::open(path).await.unwrap();
+        assert_eq!(version(&db).await, MIGRATIONS.len() as i64);
+        db.upsert_snapshot(&snap("1", None)).await.unwrap();
+        drop(db);
+        // Reopening applies nothing and keeps the data.
+        let db = SqliteStatsDb::open(path).await.unwrap();
+        assert_eq!(version(&db).await, MIGRATIONS.len() as i64);
+        assert_eq!(db.query(&SnapshotQuery::default()).await.unwrap().len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[tokio::test]

@@ -7,7 +7,7 @@ inventory::submit!(ColumnDef {
     label: "Activity",
     default_visible: false,
     priority: 0,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -15,7 +15,7 @@ inventory::submit!(ColumnDef {
     label: "Target branch",
     default_visible: false,
     priority: 1,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -23,7 +23,7 @@ inventory::submit!(ColumnDef {
     label: "Labels",
     default_visible: false,
     priority: 2,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -31,7 +31,7 @@ inventory::submit!(ColumnDef {
     label: "Milestone",
     default_visible: false,
     priority: 3,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -39,7 +39,7 @@ inventory::submit!(ColumnDef {
     label: "Notes",
     default_visible: false,
     priority: 4,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -47,7 +47,7 @@ inventory::submit!(ColumnDef {
     label: "Effort",
     default_visible: false,
     priority: 5,
-    requires_feature: None,
+    requires: None,
 });
 
 inventory::submit!(ColumnDef {
@@ -55,5 +55,5 @@ inventory::submit!(ColumnDef {
     label: "Behind",
     default_visible: false,
     priority: 6,
-    requires_feature: None,
+    requires: None,
 });

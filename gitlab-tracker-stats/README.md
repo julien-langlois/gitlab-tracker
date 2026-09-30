@@ -254,7 +254,6 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     │                        historical-baseline anomalies, QueueStatus
     │
     ├── report.rs            StatReport::load() / build_with_baseline()
-    │                        to_json() / to_csv_rows()
     │
     └── shortcuts.rs         inventory::submit! — auto-registers Stats shortcuts
                              in the [?] help popup
@@ -274,7 +273,7 @@ gitlab-tracker/src/ui/stats.rs                 (TUI shell in the binary crate)
 - ❌ No dependency on `ratatui`, `crossterm`, or any TUI crate
 - ❌ No dependency on `gitlab-tracker` (the binary) — fully standalone
 - ✅ All public types implement `serde::{Serialize, Deserialize}` — ready for future CLI export
-- ✅ `StatsDb` is a trait — swappable with an in-memory implementation for unit tests
+- ✅ `SqliteStatsDb` is tested against temporary / in-memory SQLite databases (no mock layer)
 
 The analytics engine lives in `gitlab-tracker-stats` and has no TUI dependency. The TUI rendering lives in `gitlab-tracker/src/ui/stats.rs` and its `stats/` submodules, which depend on this crate but not vice-versa — the separation mirrors `gitlab-tracker-core` ↔ `gitlab-tracker/src/ui/inspector.rs`.
 
@@ -282,15 +281,14 @@ The analytics engine lives in `gitlab-tracker-stats` and has no TUI dependency. 
 
 ## 🔮 Future: standalone CLI export
 
-The `StatReport` type is already serialisable. A future `gitlab-tracker-stats-cli` binary will expose:
+The `StatReport` type derives `Serialize`, so a future CLI can export it with `serde_json` in a few lines:
 
 ```bash
-# Not yet implemented — planned for a future release
+# Not yet implemented
 gitlab-tracker-stats --window 30d --output json
-gitlab-tracker-stats --milestone "Sprint 42" --output csv
 ```
 
-The library API is stable and ready for this — only the binary wrapper is missing.
+Only the rolling-window query is supported today; milestone windows and CSV export were removed as unused (they can come back with the CLI that needs them).
 
 ---
 

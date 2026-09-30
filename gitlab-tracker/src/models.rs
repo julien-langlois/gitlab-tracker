@@ -1,4 +1,8 @@
 use serde::{Deserialize, Serialize};
+
+// Domain enums live in `core` (no UI dependency); re-exported so `crate::models::…`
+// paths keep working.
+pub use gitlab_tracker_core::{GitlabMrState, MergeabilityStatus, PipelineState};
 use std::collections::{HashMap, HashSet};
 
 /// A GitLab label as returned by the `/projects/:id/labels` endpoint.
@@ -69,50 +73,6 @@ pub struct GitLabCommit {
     pub web_url: String,
 }
 
-/// Represents the GitLab-side lifecycle state of a merge request.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum GitlabMrState {
-    #[default]
-    Opened,
-    Merged,
-    Closed,
-}
-
-/// Represents the mergeability status of an open merge request as reported by GitLab.
-///
-/// Only meaningful for MRs in the `Opened` state — ignored for Merged/Closed.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-pub enum MergeabilityStatus {
-    /// GitLab reports the MR can be merged cleanly.
-    Mergeable,
-    /// The MR has conflicts that must be resolved before merging.
-    Conflict,
-    /// The MR branch is behind the target branch and needs a rebase.
-    NeedsRebase,
-    /// The MR is not open (already merged or closed in GitLab).
-    NotOpen,
-    /// The MR is a draft — intentionally not ready to merge.
-    Draft,
-    /// There are unresolved discussion threads on the MR.
-    DiscussionsNotResolved,
-    /// A CI pipeline is required before this MR can be merged.
-    CiMustPass,
-    /// A CI pipeline is currently running.
-    CiStillRunning,
-    /// Required approvals are missing.
-    NotApproved,
-    /// A reviewer has explicitly requested changes before the MR can be merged.
-    RequestedChanges,
-    /// GitLab is still computing mergeability; the fetcher will retry within the current run.
-    Retrying,
-    /// GitLab did not return a resolved mergeability status after the bounded retry window.
-    SyncFailed,
-    /// Status not yet fetched, not applicable, or an unrecognised value.
-    #[default]
-    Unknown,
-}
-
 #[derive(Deserialize, Debug, Clone)]
 pub struct GitLabMr {
     pub title: String,
@@ -164,63 +124,18 @@ pub struct GitLabRef {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SavedMr {
     pub id: String,
-    pub title: String,
-    pub sha: Option<String>,
     pub found_branches: HashSet<String>,
-    pub description: Option<String>,
-    pub author: Option<String>,
-    pub assignee: Option<String>,
-    /// Reviewer display strings — persisted across restarts.
-    #[serde(default)]
-    pub reviewers: Vec<String>,
-    pub milestone: Option<String>,
-    /// Milestone due date in `YYYY-MM-DD` format — persisted across restarts.
-    #[serde(default)]
-    pub milestone_due_date: Option<String>,
-    /// Milestone description — persisted across restarts.
-    /// Invalidated and re-populated whenever the milestone title changes.
-    #[serde(default)]
-    pub milestone_description: Option<String>,
-    pub web_url: Option<String>,
-    pub labels: Option<Vec<String>>,
-    #[serde(default)]
-    pub updated_at: Option<String>,
-    /// Source branch of the MR (the feature branch) — persisted across restarts.
-    #[serde(default)]
-    pub source_branch: Option<String>,
-    /// Target branch that this MR is intended to be merged into — persisted across restarts.
-    #[serde(default)]
-    pub target_branch: Option<String>,
-    #[serde(default)]
-    pub state: GitlabMrState,
-    /// User who merged the MR — `None` for open/closed MRs. Persisted across restarts.
-    #[serde(default)]
-    pub merged_by: Option<String>,
-    /// ISO 8601 timestamp when the MR was merged — `None` for open/closed MRs.
-    #[serde(default)]
-    pub merged_at: Option<String>,
-    /// Persisted pipeline snapshots — restored on startup, refreshed on each MR fetch.
-    #[serde(default)]
-    pub pipelines: Vec<Pipeline>,
-    /// Total number of user notes (comments + threads) — persisted across restarts.
-    #[serde(default)]
-    pub user_notes_count: u32,
     /// Whether the MR has been manually flagged by the user — persisted across restarts.
     #[serde(default)]
     pub flagged: bool,
-    /// ISO 8601 timestamp when the MR was created — immutable once set, persisted across restarts.
-    /// Populated on first fetch; subsequent restarts restore it from the saved state.
-    #[serde(default)]
-    pub created_at: Option<String>,
     /// Last resolved tracker ticket — persisted to avoid re-fetching the tracker on every restart.
     /// Re-fetched only when the detected ticket ID changes (title/description update).
     /// `None` when no tracker provider is configured or no ticket reference was found.
     #[serde(default)]
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
-    /// Diff statistics (files changed, additions, deletions) — persisted across restarts.
-    /// Refreshed only when `updated_at` changes (same cache strategy as pipelines).
-    #[serde(default)]
-    pub diff_stats: Option<DiffStats>,
+    /// GitLab data, flattened so the JSON layout matches older versions.
+    #[serde(flatten)]
+    pub data: MrData,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -248,6 +163,80 @@ pub struct SavedState {
     pub dismissed_mr_ids: HashSet<String>,
 }
 
+/// The GitLab-sourced data of a merge request, shared by the in-memory model
+/// ([`TrackedMr`]), the persisted state ([`SavedMr`]) and a fetch result
+/// ([`MrLoadedData`]) — declared once instead of being copied field by field.
+///
+/// Serialised flattened inside [`SavedMr`], so the state file keeps its layout.
+/// Every field has a default; the ones that older versions stored as `Option`
+/// also accept `null` (see [`null_as_default`]).
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct MrData {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub sha: Option<String>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub description: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub author: String,
+    #[serde(default)]
+    pub assignee: Option<String>,
+    /// Reviewer display strings — may be empty when no reviewer is assigned.
+    #[serde(default)]
+    pub reviewers: Vec<String>,
+    #[serde(default)]
+    pub milestone: Option<String>,
+    /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
+    #[serde(default)]
+    pub milestone_due_date: Option<String>,
+    /// Milestone description — `None` when not set or when no milestone is attached.
+    /// Persisted across restarts; invalidated when the milestone title changes.
+    #[serde(default)]
+    pub milestone_description: Option<String>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub web_url: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    /// Source branch of the MR (the feature branch).
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub source_branch: String,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub target_branch: String,
+    #[serde(default)]
+    pub state: GitlabMrState,
+    /// User who merged the MR — None for open/closed MRs.
+    #[serde(default)]
+    pub merged_by: Option<String>,
+    /// ISO 8601 timestamp when the MR was merged — None for open/closed MRs.
+    #[serde(default)]
+    pub merged_at: Option<String>,
+    /// ISO 8601 timestamp when the MR was created — immutable once set, persisted across restarts.
+    #[serde(default)]
+    pub created_at: Option<String>,
+    /// Pipelines fetched alongside the MR data and persisted across restarts.
+    #[serde(default)]
+    pub pipelines: Vec<Pipeline>,
+    /// Total number of user notes (comments + discussion threads) on this MR.
+    #[serde(default)]
+    pub user_notes_count: u32,
+    /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
+    #[serde(default)]
+    pub diff_stats: Option<DiffStats>,
+}
+
+/// Deserialises `null` as `T::default()`: older state files wrote `null` for fields
+/// that are no longer optional.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum MrStatus {
     Loading,
@@ -257,50 +246,36 @@ pub enum MrStatus {
 #[derive(Clone, Debug)]
 pub struct TrackedMr {
     pub id: String,
-    pub title: String,
     pub status: MrStatus,
-    pub sha: Option<String>,
-    pub description: String,
-    pub author: String,
-    pub assignee: Option<String>,
-    /// Reviewer display strings — may be empty when no reviewer is assigned.
-    pub reviewers: Vec<String>,
-    pub milestone: Option<String>,
-    /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
-    pub milestone_due_date: Option<String>,
-    /// Milestone description — `None` when not set or when no milestone is attached.
-    /// Persisted across restarts; invalidated when the milestone title changes.
-    pub milestone_description: Option<String>,
-    pub web_url: String,
-    pub labels: Vec<String>,
-    pub updated_at: Option<String>,
-    /// Source branch of the MR (the feature branch).
-    pub source_branch: String,
-    pub target_branch: String,
-    pub state: GitlabMrState,
-    /// User who merged the MR — None for open/closed MRs.
-    pub merged_by: Option<String>,
-    /// ISO 8601 timestamp when the MR was merged — None for open/closed MRs.
-    pub merged_at: Option<String>,
     /// Mergeability state for open MRs — drives the animated status badge.
     pub mergeability: MergeabilityStatus,
-    /// ISO 8601 timestamp when the MR was created — immutable once set, persisted across restarts.
-    pub created_at: Option<String>,
-    /// Pipelines fetched alongside the MR data and persisted across restarts.
-    pub pipelines: Vec<Pipeline>,
     /// Set to `true` when `updated_at` changed during the last refresh cycle.
     /// Drives the row highlight animation in the table. Reset after the fade window expires.
     pub recently_updated: bool,
-    /// Total number of user notes (comments + discussion threads) on this MR.
-    pub user_notes_count: u32,
     /// Manually flagged by the user (Space key) — persisted across restarts.
     /// Flagged MRs display a coloured chevron and can be isolated via the Flagged filter.
     pub flagged: bool,
     /// Ticket linked to this MR, resolved by the active `TrackerProvider`.
     /// `None` when no tracker provider is configured or no ticket reference was found.
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
-    /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
-    pub diff_stats: Option<DiffStats>,
+    /// GitLab data of the MR (title, branches, pipelines…), also reachable directly
+    /// through `Deref` (`mr.title`).
+    pub data: MrData,
+}
+
+// `TrackedMr` *is* an MR's data plus runtime state: `Deref` keeps `mr.title` working
+// everywhere instead of spelling `mr.data.title`.
+impl std::ops::Deref for TrackedMr {
+    type Target = MrData;
+    fn deref(&self) -> &MrData {
+        &self.data
+    }
+}
+
+impl std::ops::DerefMut for TrackedMr {
+    fn deref_mut(&mut self) -> &mut MrData {
+        &mut self.data
+    }
 }
 
 impl TrackedMr {
@@ -308,32 +283,19 @@ impl TrackedMr {
     pub fn placeholder(id: String, title: String, milestone: Option<String>) -> Self {
         Self {
             id,
-            title,
             status: MrStatus::Loading,
-            state: GitlabMrState::Opened,
             mergeability: MergeabilityStatus::Unknown,
-            sha: None,
-            description: String::new(),
-            author: "Loading".to_string(),
-            assignee: None,
-            reviewers: vec![],
-            milestone,
-            milestone_due_date: None,
-            milestone_description: None,
-            web_url: String::new(),
-            labels: vec![],
-            updated_at: None,
-            created_at: None,
-            source_branch: "unknown".to_string(),
-            target_branch: "unknown".to_string(),
-            merged_by: None,
-            merged_at: None,
-            pipelines: vec![],
             recently_updated: false,
-            user_notes_count: 0,
             flagged: false,
             linked_ticket: None,
-            diff_stats: None,
+            data: MrData {
+                title,
+                author: "Loading".to_string(),
+                milestone,
+                source_branch: "unknown".to_string(),
+                target_branch: "unknown".to_string(),
+                ..MrData::default()
+            },
         }
     }
 }
@@ -368,7 +330,7 @@ impl TrackedMr {
             milestone: self.milestone.clone(),
             labels: self.labels.clone(),
             target_branch: self.target_branch.clone(),
-            state: format!("{:?}", self.state).to_lowercase(),
+            state: self.state.as_str().to_string(),
             created_at: self.created_at.clone(),
             merged_at: self.merged_at.clone(),
             updated_at: self.updated_at.clone(),
@@ -391,41 +353,11 @@ impl TrackedMr {
 #[derive(Debug, Clone)]
 pub struct MrLoadedData {
     pub id: String,
-    pub title: String,
-    pub sha: Option<String>,
     pub branches: HashSet<String>,
-    pub description: String,
-    pub author: String,
-    pub assignee: Option<String>,
-    /// Reviewer display strings resolved from the GitLab API response.
-    pub reviewers: Vec<String>,
-    pub milestone: Option<String>,
-    /// Milestone due date in `YYYY-MM-DD` format — `None` when not set.
-    pub milestone_due_date: Option<String>,
-    /// Milestone description — `None` when not set or when no milestone is attached.
-    pub milestone_description: Option<String>,
-    pub web_url: String,
-    pub labels: Vec<String>,
-    pub updated_at: Option<String>,
-    /// Source branch of the MR (the feature branch).
-    pub source_branch: String,
-    pub target_branch: String,
-    pub state: GitlabMrState,
-    /// User who merged the MR — None for open/closed MRs.
-    pub merged_by: Option<String>,
-    /// ISO 8601 timestamp when the MR was merged — None for open/closed MRs.
-    pub merged_at: Option<String>,
     /// Mergeability resolved from the GitLab API response.
     pub mergeability: MergeabilityStatus,
-    /// ISO 8601 timestamp when the MR was created.
-    pub created_at: Option<String>,
-    /// Pipelines fetched in the same request batch as the MR data.
-    pub pipelines: Vec<Pipeline>,
-    /// Total number of user notes (comments + discussion threads) on this MR.
-    pub user_notes_count: u32,
-    /// Diff statistics fetched from the GitLab Changes API.
-    /// `None` until the first successful fetch or when the API returns no data.
-    pub diff_stats: Option<DiffStats>,
+    /// Fresh GitLab data of the MR.
+    pub data: MrData,
 }
 
 /// Diff statistics for a merge request: files changed, lines added, lines deleted.
@@ -502,22 +434,6 @@ impl Default for DifficultyProfile {
             hard_threshold: 1000,
         }
     }
-}
-
-/// Lifecycle state of a GitLab pipeline run.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum PipelineState {
-    Created,
-    Pending,
-    Running,
-    Success,
-    Failed,
-    Canceled,
-    Skipped,
-    #[serde(other)]
-    #[default]
-    Unknown,
 }
 
 /// A single job within a pipeline, as returned by the GitLab API.
@@ -627,18 +543,13 @@ pub enum AppEvent {
 }
 
 impl AppEvent {
-    /// Maps an [`AppEvent`] to the corresponding `MrLifecycleEvent`, if applicable.
-    ///
-    /// Not every `AppEvent` has a lifecycle meaning (e.g. `Tick`, `ActivitiesLoaded`
-    /// are purely infrastructural). Returns `None` for those cases.
-    pub fn as_lifecycle_event(&self) -> Option<gitlab_tracker_core::MrLifecycleEvent> {
-        use gitlab_tracker_core::MrLifecycleEvent;
-        match self {
-            AppEvent::MrAdded(_) => Some(MrLifecycleEvent::Added),
-            AppEvent::MrRemovedById(_) => Some(MrLifecycleEvent::Deleted),
-            AppEvent::MrLoaded(_) => Some(MrLifecycleEvent::Refreshed),
-            AppEvent::MrFailed { .. } => Some(MrLifecycleEvent::FetchFailed),
-            _ => None,
-        }
+    /// Whether applying this event changes the tracked-MR list or its data, so the
+    /// state file must be rewritten (once per drained batch, see the main loop).
+    /// A failed fetch does not persist: errors are not saved to disk.
+    pub fn persists_state(&self) -> bool {
+        matches!(
+            self,
+            AppEvent::MrAdded(_) | AppEvent::MrRemovedById(_) | AppEvent::MrLoaded(_)
+        )
     }
 }

@@ -1,13 +1,13 @@
 pub mod columns;
+pub mod domain;
 pub mod filters;
-pub mod lifecycle;
 pub mod provider;
 pub mod settings;
 pub mod shortcuts;
 
 pub use columns::{collect_all_columns, ColumnDef};
+pub use domain::{GitlabMrState, MergeabilityStatus, PipelineState, Requirement};
 pub use filters::{collect_all_filters, FilterDef, MrSnapshot};
-pub use lifecycle::{DefaultMrEventPolicy, MrEventPolicy, MrLifecycleEvent};
 pub use provider::{
     Activity, LabelColorMaps, LinkedTicket, TicketChange, TicketTransitionProvider,
     TicketTransitionTarget, TimeEntry, TimeEntryRequest, TrackerError, TrackerProvider,

@@ -299,7 +299,7 @@ impl QueueInsight {
 
 /// All Poisson-derived insights for a single report.
 ///
-/// Populated in [`crate::report::StatReport::build`] and serialised alongside
+/// Populated in [`crate::report::StatReport::build_with_baseline`] and serialised alongside
 /// correlations as a distinct section of the report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoissonInsights {
@@ -316,14 +316,6 @@ pub struct PoissonInsights {
 }
 
 impl PoissonInsights {
-    /// Derives all Poisson insights from already-computed aggregated stats.
-    ///
-    /// `sprint_weeks` controls the window used for sprint-pace forecasts —
-    /// read from `stats_sprint_weeks` in `projects.toml`, defaults to 2.
-    pub fn from_stats(stats: &AggregatedStats, sprint_weeks: u32) -> Self {
-        Self::from_stats_with_baseline(stats, None, sprint_weeks)
-    }
-
     /// Derives Poisson insights using an optional historical baseline.
     pub fn from_stats_with_baseline(
         stats: &AggregatedStats,

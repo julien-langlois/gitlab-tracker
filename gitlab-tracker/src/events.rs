@@ -206,18 +206,7 @@ pub async fn handle_key_event(
         // Up/Down move the cursor; Space toggles; Esc closes and persists.
         // ------------------------------------------------------------------
         InputMode::ColumnPicker => {
-            // Visible column count: only columns whose `requires_feature` is satisfied.
-            let has_tracker = app.tracker.is_some();
-            let visible_cols: Vec<&'static gitlab_tracker_core::ColumnDef> = app
-                .column_defs
-                .iter()
-                .copied()
-                .filter(|c| {
-                    c.requires_feature
-                        .map(|f| f == "tracker" && has_tracker)
-                        .unwrap_or(true)
-                })
-                .collect();
+            let visible_cols = app.visible_column_defs();
             let column_count = visible_cols.len();
 
             match key.code {

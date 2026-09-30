@@ -34,6 +34,10 @@ pub struct FilterDef {
     /// passes the input value to `apply` as the `query` argument.
     pub needs_text_input: bool,
 
+    /// When `Some`, the filter is only offered while this runtime condition holds
+    /// (e.g. the "me" filters need `gitlab_username`). `None`: always available.
+    pub requires: Option<crate::Requirement>,
+
     /// Pure predicate — returns `true` when the MR should be visible.
     ///
     /// `mr` is a borrowed [`MrSnapshot`] of the MR's fields, so `core` never depends
@@ -52,13 +56,14 @@ pub struct FilterDef {
 /// `ratatui`) into `core`. The orchestrator constructs this on each filter call.
 pub struct MrSnapshot<'a> {
     pub flagged: bool,
-    pub state: &'a str,
-    pub mergeability: &'a str,
+    pub state: crate::GitlabMrState,
+    pub mergeability: crate::MergeabilityStatus,
     pub user_notes_count: u32,
     pub milestone: Option<&'a str>,
     pub assignee: Option<&'a str>,
     pub linked_ticket: Option<&'a LinkedTicket>,
-    pub pipeline_status: Option<&'a str>,
+    /// Status of the most recent pipeline, if any.
+    pub pipeline_status: Option<crate::PipelineState>,
     /// Reviewer display strings for this MR (e.g. "Alice (@alice)").
     pub reviewers: &'a [String],
     /// GitLab username of the currently logged-in user, as configured in `projects.toml`.

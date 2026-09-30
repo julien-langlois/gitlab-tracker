@@ -149,7 +149,7 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
             user_notes_count: mr.user_notes_count,
             // Lets the fetcher detect Open → Merged transitions and invalidate the
             // notes cache accordingly.
-            cached_state: Some(mr.state.clone()),
+            cached_state: Some(mr.state),
             // Callers needing a forced re-sync override this (e.g. [R] sets ForceAll).
             cache_policy: CachePolicy::Normal,
         }
@@ -1001,7 +1001,7 @@ pub async fn fetch_gitlab_data(
     let updated_at = mr.updated_at.clone();
     let created_at = mr.created_at.clone();
     // Always read the state fresh from the API response — never served from cache.
-    let state = mr.state.clone().unwrap_or_default();
+    let state = mr.state.unwrap_or_default();
     // Fetch the real human-note count from the discussions endpoint.
     // The native `user_notes_count` field from the MR API is unreliable: it counts
     // ALL notes including system events (label changes, merge activity, etc.) and notes
@@ -1424,29 +1424,31 @@ pub async fn fetch_gitlab_data(
 
     Ok(MrLoadedData {
         id: mr_id.to_string(),
-        title,
-        sha,
         branches: found_branches,
-        description,
-        author,
-        assignee,
-        reviewers,
-        milestone,
-        milestone_due_date,
-        milestone_description,
-        web_url,
-        labels,
-        updated_at,
-        created_at,
-        source_branch,
-        target_branch,
-        state,
-        merged_by,
-        merged_at,
         mergeability,
-        pipelines,
-        user_notes_count,
-        diff_stats,
+        data: crate::models::MrData {
+            title,
+            sha,
+            description,
+            author,
+            assignee,
+            reviewers,
+            milestone,
+            milestone_due_date,
+            milestone_description,
+            web_url,
+            labels,
+            updated_at,
+            created_at,
+            source_branch,
+            target_branch,
+            state,
+            merged_by,
+            merged_at,
+            pipelines,
+            user_notes_count,
+            diff_stats,
+        },
     })
 }
 

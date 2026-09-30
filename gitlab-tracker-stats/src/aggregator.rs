@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Datelike, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::db::{SnapshotQuery, StatsDb, StatsError, StoredSnapshot};
+use crate::db::{SnapshotQuery, SqliteStatsDb, StatsError, StoredSnapshot};
 use crate::metrics::PerMrMetrics;
 use crate::snapshot::SnapshotTrigger;
 
@@ -13,8 +13,6 @@ use crate::snapshot::SnapshotTrigger;
 pub enum TimeWindow {
     /// Rolling window: include all snapshots recorded in the last N days.
     LastDays(u32),
-    /// Milestone-scoped: include all merged/closed snapshots for this milestone title.
-    Milestone(String),
     /// Explicit date range (ISO 8601 dates, inclusive start, exclusive end).
     Range { from: String, to: String },
 }
@@ -162,7 +160,7 @@ pub struct AggregatedStats {
 
 /// Loads snapshots from the DB for the given filter and computes aggregated statistics.
 pub async fn aggregate(
-    db: &dyn StatsDb,
+    db: &SqliteStatsDb,
     filter: &QueryFilter,
 ) -> Result<AggregatedStats, StatsError> {
     let snapshots = db.query(&build_snapshot_query(filter)).await?;
@@ -191,9 +189,6 @@ pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
         Some(TimeWindow::Range { from, to }) => {
             q.from_date = Some(crate::snapshot::normalize_timestamp(from));
             q.to_date = Some(crate::snapshot::normalize_timestamp(to));
-        }
-        Some(TimeWindow::Milestone(title)) => {
-            q.milestone = Some(title.clone());
         }
         None => {}
     }
@@ -484,8 +479,7 @@ fn compute_throughput_per_week(filter: &QueryFilter, merged_count: usize) -> Opt
             let t: DateTime<Utc> = to.parse().ok()?;
             t.signed_duration_since(f).num_days() as f64
         }
-        // Milestone windows have no fixed duration.
-        Some(TimeWindow::Milestone(_)) | None => return None,
+        None => return None,
     };
     if window_days <= 0.0 {
         return None;

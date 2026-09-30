@@ -9,5 +9,6 @@ inventory::submit!(FilterDef {
     active_label: "Has linked ticket 🎫",
     priority: 100,
     needs_text_input: false,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, _| mr.linked_ticket.is_some(),
 });

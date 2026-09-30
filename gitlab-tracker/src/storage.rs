@@ -1133,33 +1133,13 @@ pub async fn save_state_async(
             .iter()
             .map(|m| SavedMr {
                 id: m.id.clone(),
-                title: m.title.clone(),
-                sha: m.sha.clone(),
                 found_branches: match &m.status {
                     MrStatus::MergedIn(set) => set.clone(),
                     _ => HashSet::new(),
                 },
-                description: Some(m.description.clone()),
-                author: Some(m.author.clone()),
-                assignee: m.assignee.clone(),
-                reviewers: m.reviewers.clone(),
-                milestone: m.milestone.clone(),
-                milestone_due_date: m.milestone_due_date.clone(),
-                milestone_description: m.milestone_description.clone(),
-                web_url: Some(m.web_url.clone()),
-                labels: Some(m.labels.clone()),
-                updated_at: m.updated_at.clone(),
-                source_branch: Some(m.source_branch.clone()),
-                target_branch: Some(m.target_branch.clone()),
-                state: m.state.clone(),
-                merged_by: m.merged_by.clone(),
-                merged_at: m.merged_at.clone(),
-                pipelines: m.pipelines.clone(),
-                user_notes_count: m.user_notes_count,
                 flagged: m.flagged,
-                created_at: m.created_at.clone(),
                 linked_ticket: m.linked_ticket.clone(),
-                diff_stats: m.diff_stats.clone(),
+                data: m.data.clone(),
             })
             .collect(),
         // branches is no longer persisted here — it lives in projects.toml.
@@ -1183,6 +1163,28 @@ pub async fn save_state_async(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn legacy_state_file_still_parses() {
+        // Older versions stored `null` for optional fields and omitted newer ones.
+        let legacy = r#"{"mrs": [{
+            "id": "42", "title": "Fix login", "sha": null, "found_branches": ["main"],
+            "description": null, "author": null, "assignee": "None", "milestone": null,
+            "web_url": null, "labels": null
+        }], "branches": []}"#;
+        let state: SavedState = serde_json::from_str(legacy).expect("legacy file parses");
+        let mr = &state.mrs[0];
+        assert_eq!(
+            (mr.id.as_str(), mr.data.title.as_str()),
+            ("42", "Fix login")
+        );
+        assert_eq!(mr.data.description, "");
+        assert!(mr.data.labels.is_empty() && mr.data.pipelines.is_empty());
+        assert!(mr.found_branches.contains("main"));
+        // Written back flat, as before (no nested "data" object).
+        let json = serde_json::to_value(&state.mrs[0]).unwrap();
+        assert!(json.get("data").is_none() && json.get("title").is_some());
+    }
 
     #[test]
     fn saves_target_the_current_project_not_the_active_one() {

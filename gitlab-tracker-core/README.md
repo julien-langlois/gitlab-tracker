@@ -119,55 +119,6 @@ internal model — it only renders these fields.
 
 ---
 
-### `MrLifecycleEvent` + `MrEventPolicy` — reaction policy
-
-Defines **what the application should do** when a MR transitions between states,
-fully decoupled from the UI event loop.
-
-#### `MrLifecycleEvent`
-
-| Variant | When it fires |
-| :--- | :--- |
-| `Added` | User requested tracking a new MR |
-| `Deleted` | User removed a MR from the list |
-| `Refreshed` | A periodic refresh returned updated GitLab data |
-| `Merged` | State transition to `merged` detected in a refresh |
-| `Closed` | State transition to `closed` detected in a refresh |
-| `FetchFailed` | A GitLab API call for this MR failed |
-
-#### `MrEventPolicy` trait
-
-```rust
-pub trait MrEventPolicy: Send + Sync {
-    fn needs_refetch(&self, event: &MrLifecycleEvent) -> bool;
-    fn should_remove(&self, event: &MrLifecycleEvent) -> bool;
-    fn should_notify(&self, event: &MrLifecycleEvent) -> bool;
-    fn needs_persist(&self, event: &MrLifecycleEvent) -> bool;
-}
-```
-
-#### Default policy (`DefaultMrEventPolicy`)
-
-| Event | `needs_refetch` | `should_remove` | `should_notify` | `needs_persist` |
-| :--- | :---: | :---: | :---: | :---: |
-| `Added` | ✅ | ❌ | ❌ | ✅ |
-| `Deleted` | ❌ | ✅ | ❌ | ✅ |
-| `Refreshed` | ❌ | ❌ | ❌ | ✅ |
-| `Merged` | ❌ | ❌ | ✅ | ✅ |
-| `Closed` | ❌ | ❌ | ✅ | ✅ |
-| `FetchFailed` | ❌ | ❌ | ✅ | ❌ |
-
-To inject a custom policy (e.g. suppress all persists in demo mode):
-
-```rust
-app.event_policy = Arc::new(MyCustomPolicy);
-```
-
-No changes to `apply_event` are needed — the policy is the single place where
-these rules live.
-
----
-
 ### `FilterDef` — filter picker extension point
 
 Register a new filter without modifying any existing file:

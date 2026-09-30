@@ -3,7 +3,7 @@
 //! # Crate layout
 //!
 //! - [`snapshot`]    — [`MrStatsSnapshot`]: owned, borrow-free input DTO built by the orchestrator.
-//! - [`db`]          — [`StatsDb`] trait + [`SqliteStatsDb`]: persistence layer (SQLite via sqlx).
+//! - [`db`]          — [`SqliteStatsDb`]: persistence layer (SQLite via sqlx).
 //! - [`metrics`]     — pure functions computing per-MR durations and rates.
 //! - [`aggregator`]  — time-window and milestone aggregations over a set of snapshots.
 //! - [`correlation`] — Spearman rank correlation between pairs of metrics.
@@ -27,7 +27,7 @@ pub mod snapshot;
 
 pub use aggregator::{AggregatedStats, MrSizeBucketStats, QueryFilter, TimeWindow};
 pub use correlation::{CorrelationResult, CorrelationStrength, MetricPair};
-pub use db::{SqliteStatsDb, StatsDb, StatsError};
+pub use db::{SqliteStatsDb, StatsError};
 pub use metrics::PerMrMetrics;
 pub use poisson::{
     AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, QueueStatus, ThroughputForecast,

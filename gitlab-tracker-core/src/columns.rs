@@ -24,11 +24,9 @@ pub struct ColumnDef {
     /// Display order — lower values appear first in the column picker.
     pub priority: u16,
 
-    /// When `Some(feature)`, the column is only offered while that runtime feature is
-    /// active. The only value in use is `"tracker"` (a tracker provider is configured).
-    ///
-    /// `None` means the column is always available regardless of runtime state.
-    pub requires_feature: Option<&'static str>,
+    /// When `Some`, the column is only offered while this runtime condition holds.
+    /// `None` means the column is always available.
+    pub requires: Option<crate::Requirement>,
 }
 
 // Global registry — every `inventory::submit!(ColumnDef { … })` anywhere in the

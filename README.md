@@ -742,7 +742,7 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
     ├── aggregator.rs    # TimeWindow + AggregatedStats: percentiles, flow, quality, confidence, size buckets
     ├── correlation.rs   # Spearman ρ with tie-handling, p-value via t-distribution, CorrelationStrength
     ├── poisson.rs       # Forecasts, flow-pressure status, pressure signals, historical-baseline anomalies
-    ├── report.rs        # StatReport::load/build_with_baseline() → to_json() / to_csv_rows()
+    ├── report.rs        # StatReport::load/build_with_baseline()
     └── shortcuts.rs     # inventory::submit! — Stats keyboard shortcut block ([G], [W], scroll)
 
 gitlab-tracker/src/ui/stats.rs                 # Stats overlay shell: tabs, status bar, refresh trigger

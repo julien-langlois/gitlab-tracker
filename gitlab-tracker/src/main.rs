@@ -423,7 +423,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // or now), exactly like the live recorder, so all upserts are idempotent.
         {
             use crate::models::GitlabMrState;
-            use gitlab_tracker_stats::db::StatsDb as _;
             use gitlab_tracker_stats::snapshot::SnapshotTrigger;
 
             let backfill: Vec<_> = app

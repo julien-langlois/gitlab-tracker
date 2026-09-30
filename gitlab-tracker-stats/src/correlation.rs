@@ -131,11 +131,7 @@ fn extract_pair(m: &PerMrMetrics, pair: &MetricPair) -> Option<(f64, f64)> {
         MetricPair::PipelineFailuresVsCycleTime => {
             Some((m.pipeline_failure_rate?, m.cycle_time_hours?))
         }
-        MetricPair::CommitsCountVsCycleTime => {
-            // commits_count is not yet in PerMrMetrics — included for forward-compatibility.
-            // Will be wired once the DB schema carries it as a direct column.
-            None
-        }
+        MetricPair::CommitsCountVsCycleTime => Some((m.commits_count as f64, m.cycle_time_hours?)),
         MetricPair::DiffDifficultyVsCycleTime => Some((m.diff_difficulty?, m.cycle_time_hours?)),
     }
 }

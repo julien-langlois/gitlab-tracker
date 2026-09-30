@@ -122,24 +122,33 @@ Sleep 400ms
 Space
 Sleep 800ms
 
-# --- Filter demo: [F] cycles All → Flagged ★ → All ---
+# --- Filter demo: [F] opens the picker; select "Flagged ★", then back to "All" ---
 Type "f"
+Sleep 1s
+Down
+Sleep 400ms
+Enter
 Sleep 1.5s
 Type "f"
+Sleep 800ms
+Up
+Sleep 400ms
+Enter
 Sleep 1s
 
-# --- Column picker demo: [C] opens the picker, toggle target_branch and labels ---
+# --- Column picker demo: [C] opens the picker, Space toggles two optional columns ---
+# Enter (not Escape) closes the picker: VHS may send Escape before the popup is drawn.
 Type "c"
 Sleep 1s
 Down
 Sleep 400ms
-Enter
+Space
 Sleep 600ms
 Down
 Sleep 400ms
-Enter
+Space
 Sleep 600ms
-Type "c"
+Enter
 Sleep 1s
 
 Sleep 2s

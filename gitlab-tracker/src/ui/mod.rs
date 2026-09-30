@@ -747,20 +747,12 @@ fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
 ///
 /// Iterates `app.column_defs` (collected via `inventory` at startup) — no hardcoded
 /// index mapping needed. Plugin columns (e.g. Redmine's "Tracker") appear automatically
-/// when their crate is linked and the runtime condition (`requires_feature`) is met.
+/// when their crate is linked and their runtime `requires` condition is met.
 fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
-    let has_tracker = app.tracker.is_some();
-
-    // Build the visible entry list from registered ColumnDef, filtering out
-    // feature-gated columns whose runtime condition is not satisfied.
+    // Registered columns whose runtime requirement is met (`App::visible_column_defs`).
     let entries: Vec<(&str, bool)> = app
-        .column_defs
-        .iter()
-        .filter(|c| {
-            c.requires_feature
-                .map(|f| f == "tracker" && has_tracker)
-                .unwrap_or(true)
-        })
+        .visible_column_defs()
+        .into_iter()
         .map(|c| (c.label, app.config.visible_columns.is_visible(c.id)))
         .collect();
 

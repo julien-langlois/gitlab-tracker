@@ -1,13 +1,12 @@
 use crate::config::AppConfig;
-use crate::gitlab::{spawn_mr_fetch, CachePolicy, CachedMrData, CountApiCalls, FetchContext};
+use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
     AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
 };
 use crate::settings::SettingsEditorState;
 use crate::storage::ProjectEntry;
 use gitlab_tracker_core::{
-    collect_all_columns, collect_all_filters, ColumnDef, DefaultMrEventPolicy, FilterDef,
-    LinkedTicket, MrEventPolicy, MrLifecycleEvent, MrSnapshot,
+    collect_all_columns, collect_all_filters, ColumnDef, FilterDef, LinkedTicket, MrSnapshot,
 };
 use gitlab_tracker_notify as notify;
 use ratatui::widgets::TableState;
@@ -15,6 +14,17 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Semaphore;
+
+mod mr_changes;
+#[cfg(feature = "stats")]
+mod stats_recorder;
+mod tracker_sync;
+
+use mr_changes::branches_to_notify;
+pub use tracker_sync::{spawn_ticket_fetch, TimeLogState};
+use tracker_sync::{
+    spawn_ticket_transition_if_needed, transition_target_for_state, TicketTransitionRequest,
+};
 
 /// Shared handle to the active tracker provider (Redmine, Jira, Trello, …).
 ///
@@ -402,16 +412,6 @@ impl StatsWindow {
     }
 }
 
-/// Time entries of one ticket in the TimeLog view.
-#[derive(Debug, Clone)]
-pub enum TimeLogState {
-    /// Request in flight.
-    Loading,
-    Loaded(Vec<gitlab_tracker_core::TimeEntry>),
-    /// Fetch failed: the message is shown instead of an (empty) entry list.
-    Failed(String),
-}
-
 /// Shown in place of a missing assignee or milestone.
 pub const NO_VALUE: &str = "None";
 
@@ -557,12 +557,6 @@ pub struct App {
     /// provider registration needed in `main.rs`. The help popup iterates this list
     /// in collection order (link order: Core first, optional plugins after).
     pub shortcut_providers: Vec<gitlab_tracker_core::ShortcutBlock>,
-    /// Policy that governs reactions to MR lifecycle events (refetch, remove, notify, persist).
-    ///
-    /// Injected at construction time so tests and future callers can swap in a
-    /// custom policy without touching `apply_event`. Defaults to [`DefaultMrEventPolicy`].
-    pub event_policy: Arc<dyn MrEventPolicy>,
-
     /// UI state for the Stats fullscreen overlay.
     ///
     /// Holds the last computed report and the scroll offset.
@@ -711,7 +705,6 @@ impl App {
             visible_cache: None,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: Vec::new(),
-            event_policy: Arc::new(DefaultMrEventPolicy),
             #[cfg(feature = "stats")]
             stats_view: StatsViewState::default(),
             #[cfg(feature = "stats")]
@@ -925,19 +918,31 @@ impl App {
     /// Filters that require a configured `gitlab_username` ("Assigned to me",
     /// "Reviewer: me") are excluded when that value is absent in `projects.toml`.
     pub fn visible_filter_defs(&self) -> Vec<(usize, &'static FilterDef)> {
-        let has_username = self.config.gitlab_username.is_some();
         self.filter_defs
             .iter()
             .copied()
             .enumerate()
-            .filter(|(_, def)| {
-                if matches!(def.id, "assigned_to_me" | "reviewer_me") {
-                    has_username
-                } else {
-                    true
-                }
-            })
+            .filter(|(_, def)| def.requires.is_none_or(|r| self.requirement_met(r)))
             .collect()
+    }
+
+    /// Columns offered in the column picker: those whose requirement is met.
+    pub fn visible_column_defs(&self) -> Vec<&'static ColumnDef> {
+        self.column_defs
+            .iter()
+            .copied()
+            .filter(|c| c.requires.is_none_or(|r| self.requirement_met(r)))
+            .collect()
+    }
+
+    /// Whether an optional column / filter can be offered in this session.
+    pub fn requirement_met(&self, requirement: gitlab_tracker_core::Requirement) -> bool {
+        match requirement {
+            gitlab_tracker_core::Requirement::Tracker => self.tracker.is_some(),
+            gitlab_tracker_core::Requirement::GitlabUsername => {
+                self.config.gitlab_username.is_some()
+            }
+        }
     }
 
     /// Pure predicate — does not borrow `self`, usable inside `iter_mut` closures.
@@ -966,42 +971,13 @@ impl App {
             .map(|s| s.difficulty(complexity_profile));
         let snapshot = MrSnapshot {
             flagged: mr.flagged,
-            state: match &mr.state {
-                crate::models::GitlabMrState::Opened => "opened",
-                crate::models::GitlabMrState::Merged => "merged",
-                crate::models::GitlabMrState::Closed => "closed",
-            },
-            mergeability: match &mr.mergeability {
-                crate::models::MergeabilityStatus::Mergeable => "Mergeable",
-                crate::models::MergeabilityStatus::Conflict => "Conflict",
-                crate::models::MergeabilityStatus::NeedsRebase => "NeedsRebase",
-                crate::models::MergeabilityStatus::NotApproved => "NotApproved",
-                crate::models::MergeabilityStatus::RequestedChanges => "RequestedChanges",
-                crate::models::MergeabilityStatus::Draft => "Draft",
-                crate::models::MergeabilityStatus::DiscussionsNotResolved => {
-                    "DiscussionsNotResolved"
-                }
-                crate::models::MergeabilityStatus::CiMustPass => "CiMustPass",
-                crate::models::MergeabilityStatus::CiStillRunning => "CiStillRunning",
-                crate::models::MergeabilityStatus::NotOpen => "NotOpen",
-                crate::models::MergeabilityStatus::Retrying => "Retrying",
-                crate::models::MergeabilityStatus::SyncFailed => "SyncFailed",
-                crate::models::MergeabilityStatus::Unknown => "Unknown",
-            },
+            state: mr.state,
+            mergeability: mr.mergeability,
             user_notes_count: mr.user_notes_count,
             milestone: mr.milestone.as_deref(),
             assignee: mr.assignee.as_deref(),
             linked_ticket: mr.linked_ticket.as_ref(),
-            pipeline_status: mr.pipelines.first().map(|p| match &p.status {
-                crate::models::PipelineState::Failed => "Failed",
-                crate::models::PipelineState::Success => "Success",
-                crate::models::PipelineState::Running => "Running",
-                crate::models::PipelineState::Pending => "Pending",
-                crate::models::PipelineState::Canceled => "Canceled",
-                crate::models::PipelineState::Skipped => "Skipped",
-                crate::models::PipelineState::Created => "Created",
-                crate::models::PipelineState::Unknown => "Unknown",
-            }),
+            pipeline_status: mr.pipelines.first().map(|p| p.status),
             reviewers: &mr.reviewers,
             gitlab_username: gitlab_username.as_deref(),
             diff_difficulty,
@@ -1104,41 +1080,6 @@ impl App {
             .and_then(|i| self.visible_mrs().nth(i))
             .and_then(|mr| mr.linked_ticket.as_ref())
             .is_some()
-    }
-
-    /// Fetches the time entries of the selected MR's ticket when the TimeLog view is
-    /// shown and they are neither cached nor in flight. Called once per main-loop
-    /// iteration: navigation (keys, mouse, filters) never spawns a request itself,
-    /// and a ticket is fetched at most once per refresh cycle.
-    pub fn ensure_time_entries(&mut self, tx: &UnboundedSender<AppEvent>) {
-        if self.tracker_view != TrackerView::TimeLog {
-            return;
-        }
-        let Some(provider) = self.tracker.as_ref().map(Arc::clone) else {
-            return;
-        };
-        let Some(ticket_id) = self
-            .table_state
-            .selected()
-            .and_then(|i| self.visible_mrs().nth(i))
-            .and_then(|mr| mr.linked_ticket.as_ref())
-            .map(|t| t.id.clone())
-        else {
-            return;
-        };
-        if self.time_entries.contains_key(&ticket_id) {
-            return;
-        }
-        self.time_entries
-            .insert(ticket_id.clone(), TimeLogState::Loading);
-        let tx = tx.clone();
-        tokio::spawn(async move {
-            let entries = provider
-                .fetch_time_entries(&ticket_id)
-                .await
-                .map_err(|e| e.to_string());
-            let _ = tx.send(AppEvent::TimeEntriesLoaded { ticket_id, entries });
-        });
     }
 
     /// Copies the selected MR's `git clone -b <branch> <ssh url>` command to the clipboard.
@@ -1350,179 +1291,10 @@ pub trait TrackedMrExt {
     fn find_mut(&mut self, id: &str) -> Option<&mut TrackedMr>;
 }
 
-/// Branches an MR newly appeared on, for `mr_on_new_branch` notifications.
-///
-/// An MR with no persisted branch set (`previously_known == None`) seen during the
-/// startup sync is a first sighting, not a change: its branches are recorded
-/// silently instead of sending one notification per branch (first-launch avalanche).
-/// Once known — even with an empty set, e.g. an open MR — every new branch notifies,
-/// including changes that happened while the app was closed.
-fn branches_to_notify<'a>(
-    previously_known: Option<&HashSet<String>>,
-    branches: &'a HashSet<String>,
-    notify_allowed: bool,
-) -> Vec<&'a String> {
-    if previously_known.is_none() && !notify_allowed {
-        return Vec::new();
-    }
-    branches
-        .iter()
-        .filter(|b| !previously_known.is_some_and(|known| known.contains(*b)))
-        .collect()
-}
-
-/// Fetches a tracker ticket in the background and emits `TrackerTicketLoaded`.
-///
-/// On failure nothing is sent: the MR keeps its cached ticket (a network blip or
-/// an expired token must not blank the Tracker pane) and the error is logged.
-pub fn spawn_ticket_fetch(
-    provider: Arc<dyn gitlab_tracker_core::TrackerProvider>,
-    ticket_id: String,
-    mr_id: String,
-    tx: &UnboundedSender<AppEvent>,
-) {
-    let tx = tx.clone();
-    tokio::spawn(async move {
-        match provider.fetch_ticket(&ticket_id).await {
-            Ok(ticket) => {
-                let _ = tx.send(AppEvent::TrackerTicketLoaded {
-                    mr_id,
-                    ticket: Box::new(ticket),
-                });
-            }
-            Err(error) => {
-                tracing::warn!(ticket_id = %ticket_id, error = %error, "Tracker ticket fetch failed; keeping cached copy");
-            }
-        }
-    });
-}
-
 impl TrackedMrExt for Vec<TrackedMr> {
     fn find_mut(&mut self, id: &str) -> Option<&mut TrackedMr> {
         self.iter_mut().find(|m| m.id == id)
     }
-}
-
-fn transition_target_for_state(project: &ProjectEntry, state: &GitlabMrState) -> Option<String> {
-    let key = match state {
-        GitlabMrState::Merged => "merged",
-        GitlabMrState::Closed => "closed",
-        GitlabMrState::Opened => return None,
-    };
-
-    project
-        .tracker
-        .as_ref()?
-        .extra
-        .get("status_transitions")?
-        .as_table()?
-        .get("gitlab_state")?
-        .as_table()?
-        .get(key)?
-        .as_str()
-        .map(str::trim)
-        .filter(|target_id| !target_id.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-struct TicketTransitionRequest<'a> {
-    tracker: Option<&'a TrackerHandle>,
-    transitioner: Option<&'a TicketTransitionHandle>,
-    tx: &'a UnboundedSender<AppEvent>,
-    mr_id: &'a str,
-    mr_title: &'a str,
-    previous_state: &'a GitlabMrState,
-    current_state: &'a GitlabMrState,
-    previous_ticket: Option<LinkedTicket>,
-    target_id: Option<String>,
-}
-
-fn spawn_ticket_transition_if_needed(request: TicketTransitionRequest<'_>) {
-    if !matches!(
-        (request.previous_state, request.current_state),
-        (GitlabMrState::Opened, GitlabMrState::Merged)
-            | (GitlabMrState::Opened, GitlabMrState::Closed)
-    ) {
-        return;
-    }
-
-    let (Some(provider), Some(transitioner), Some(previous_ticket), Some(target_id)) = (
-        request.tracker,
-        request.transitioner,
-        request.previous_ticket,
-        request.target_id,
-    ) else {
-        return;
-    };
-
-    let provider = Arc::clone(provider);
-    let transitioner = Arc::clone(transitioner);
-    let tx = request.tx.clone();
-    let mr_id = request.mr_id.to_string();
-    let mr_title = request.mr_title.to_string();
-    let ticket_id = previous_ticket.id;
-    let expected_status = previous_ticket.status;
-
-    tokio::spawn(async move {
-        let upstream_ticket = match provider.fetch_ticket(&ticket_id).await {
-            Ok(ticket) => ticket,
-            Err(error) => {
-                tracing::warn!(ticket_id = %ticket_id, error = %error, "Skipping tracker transition: ticket refetch failed");
-                return;
-            }
-        };
-
-        if upstream_ticket.status != expected_status {
-            tracing::info!(
-                ticket_id = %ticket_id,
-                expected = %expected_status,
-                upstream = %upstream_ticket.status,
-                "Skipping tracker transition: upstream status changed since last local snapshot",
-            );
-            let _ = tx.send(AppEvent::TrackerTicketLoaded {
-                mr_id,
-                ticket: Box::new(upstream_ticket),
-            });
-            return;
-        }
-
-        if let Err(error) = transitioner
-            .transition_ticket_status(&ticket_id, &target_id)
-            .await
-        {
-            tracing::warn!(
-                ticket_id = %ticket_id,
-                target_id = %target_id,
-                error = %error,
-                "Tracker transition failed",
-            );
-            let _ = tx.send(AppEvent::TrackerTicketLoaded {
-                mr_id,
-                ticket: Box::new(upstream_ticket),
-            });
-            return;
-        }
-
-        tracing::info!(
-            ticket_id = %ticket_id,
-            target_id = %target_id,
-            "Tracker transition succeeded",
-        );
-
-        if let Ok(refreshed_ticket) = provider.fetch_ticket(&ticket_id).await {
-            notify::ticket_status_transitioned(
-                &ticket_id,
-                &mr_title,
-                &expected_status,
-                &refreshed_ticket.status,
-                &refreshed_ticket.url,
-            );
-            let _ = tx.send(AppEvent::TrackerTicketLoaded {
-                mr_id,
-                ticket: Box::new(refreshed_ticket),
-            });
-        }
-    });
 }
 
 impl App {
@@ -1616,80 +1388,39 @@ impl App {
                 MrStatus::Loading
             };
 
-            self.mrs.push(TrackedMr {
-                id: saved.id.clone(),
-                title: saved.title.clone(),
-                status: initial_status.clone(),
-                sha: saved.sha.clone(),
-                description: saved
-                    .description
-                    .clone()
-                    .unwrap_or_else(|| "No description cached.".to_string()),
-                author: saved
-                    .author
-                    .clone()
-                    .unwrap_or_else(|| "Unknown".to_string()),
-                assignee: crate::models::without_sentinel(saved.assignee.clone()),
-                reviewers: saved.reviewers.clone(),
-                milestone: crate::models::without_sentinel(saved.milestone.clone()),
-                milestone_due_date: saved.milestone_due_date.clone(),
-                milestone_description: saved.milestone_description.clone(),
-                web_url: saved.web_url.clone().unwrap_or_default(),
-                labels: saved.labels.clone().unwrap_or_default(),
-                updated_at: saved.updated_at.clone(),
-                source_branch: saved
-                    .source_branch
-                    .clone()
-                    .unwrap_or_else(|| "unknown".to_string()),
-                target_branch: saved
-                    .target_branch
-                    .clone()
-                    .unwrap_or_else(|| "unknown".to_string()),
-                state: saved.state.clone(),
-                merged_by: saved.merged_by.clone(),
-                merged_at: saved.merged_at.clone(),
-                // Mergeability is not persisted — reset to Unknown on restart and re-fetched live.
+            let mut data = saved.data;
+            // State files written before `Option` was used stored display sentinels.
+            data.assignee = crate::models::without_sentinel(data.assignee);
+            data.milestone = crate::models::without_sentinel(data.milestone);
+            let mr = TrackedMr {
+                id: saved.id,
+                status: initial_status,
+                // Not persisted — re-fetched live on startup.
                 mergeability: MergeabilityStatus::Unknown,
-                // created_at is immutable — restored from the saved state when available,
-                // falls back to None until the first successful fetch populates it.
-                created_at: saved.created_at.clone(),
-                // Restore persisted pipelines — refreshed on each MR fetch.
-                pipelines: saved.pipelines.clone(),
-                // On startup, no MR is considered recently updated.
                 recently_updated: false,
-                // Restore persisted notes count — refreshed on each MR fetch.
-                user_notes_count: saved.user_notes_count,
-                // Restore persisted flagged state.
                 flagged: saved.flagged,
-                // Restore persisted ticket — avoids a tracker request on every restart.
+                // Restored so the tracker is not queried again on every restart.
                 linked_ticket: saved.linked_ticket,
-                // Restore persisted diff stats — refreshed only when updated_at changes.
-                diff_stats: saved.diff_stats.clone(),
-            });
+                data,
+            };
 
-            if initial_status == MrStatus::Loading {
-                let cached = CachedMrData {
-                    title: Some(saved.title),
-                    description: saved.description,
-                    author: saved.author,
-                    web_url: saved.web_url,
-                    labels: saved.labels,
-                    updated_at: saved.updated_at,
-                    pipelines: saved.pipelines,
-                    diff_stats: saved.diff_stats,
-                    user_notes_count: saved.user_notes_count,
-                    // Restore the persisted state so the notes cache is considered valid
-                    // for already-merged MRs on restart — avoids a useless refetch.
-                    cached_state: Some(saved.state),
-                    cache_policy: CachePolicy::Normal,
-                };
-
+            if mr.status == MrStatus::Loading {
+                // Same cache hints as a refresh cycle: unchanged pipelines, diff stats
+                // and notes are reused; the persisted state keeps the notes cache of
+                // already-merged MRs valid.
+                let cached = CachedMrData::from(&mr);
                 // Count each pending fetch so we can suppress change notifications
                 // until the initial sync is complete (avoids spurious toasts on launch).
-                self.pending_initial_fetches.insert(saved.id.clone());
-
-                spawn_mr_fetch(ctx.clone(), saved.id, cached, semaphore.clone(), tx.clone());
+                self.pending_initial_fetches.insert(mr.id.clone());
+                spawn_mr_fetch(
+                    ctx.clone(),
+                    mr.id.clone(),
+                    cached,
+                    semaphore.clone(),
+                    tx.clone(),
+                );
             }
+            self.mrs.push(mr);
         }
 
         if !self.mrs.is_empty() {
@@ -1706,14 +1437,92 @@ impl App {
         self.startup_tracker_estimate = Some(self.estimated_tracker_calls);
     }
 
+    /// One-second tick: countdowns, debounced stats refresh, and — when the refresh
+    /// timer elapses — a full refresh cycle (discovery, MR and ticket re-fetches).
+    /// Returns whether state must be persisted.
+    fn on_tick(&mut self, semaphore: &Arc<Semaphore>, tx: &UnboundedSender<AppEvent>) -> bool {
+        #[cfg(feature = "stats")]
+        if std::mem::take(&mut self.stats_report_dirty) {
+            crate::ui::stats::trigger_background_stats_refresh(self, tx);
+        }
+
+        // Decrement the highlight fade countdown and clear flags when expired.
+        if self.update_highlight_ticks > 0 {
+            self.update_highlight_ticks -= 1;
+            if self.update_highlight_ticks == 0 {
+                for mr in &mut self.mrs {
+                    mr.recently_updated = false;
+                }
+            }
+        }
+
+        if self.time_left > 0 {
+            self.time_left -= 1;
+            return false;
+        }
+
+        // Timer elapsed — trigger a full refresh of all MRs.
+        self.time_left = self.refresh_interval_secs;
+        self.time_entries.clear();
+        let ctx = self.fetch_context();
+
+        // Discovery poller: find new MRs created by any team member since the
+        // discovery anchor, regardless of their current state. This prevents losing
+        // MRs opened and merged between two refresh cycles, which would otherwise
+        // make stats incomplete. Only active when `discover_new_mrs = true` in
+        // `[project.stats]` of `projects.toml`.
+        if self.discovery_enabled {
+            self.spawn_discovery(ctx.clone(), tx);
+        }
+
+        // Recompute GitLab + tracker estimates *before* spawning fetches so the
+        // counter reflects the actual cache state at trigger time.
+        self.recompute_api_call_estimate();
+
+        for mr in &mut self.mrs {
+            if let MrStatus::MergedIn(ref found) = mr.status {
+                // Skip refresh for MRs that are fully merged into all branches —
+                // state != Opened ensures we don't skip still-open MRs.
+                if self.branches.iter().all(|b| found.contains(b))
+                    && mr.sha.is_some()
+                    && mr.state != GitlabMrState::Opened
+                {
+                    continue;
+                }
+            }
+
+            mr.status = MrStatus::Loading;
+            let cached = CachedMrData::from(&*mr);
+            spawn_mr_fetch(
+                ctx.clone(),
+                mr.id.clone(),
+                cached,
+                semaphore.clone(),
+                tx.clone(),
+            );
+            // Track pending auto-refresh fetches to drive the spinner.
+            self.pending_refresh_fetches.insert(mr.id.clone());
+
+            // Re-fetch the tracker ticket unconditionally on each auto-refresh cycle,
+            // mirroring the manual [R] refresh behaviour. The GitLab MR may not have
+            // changed (was_updated = false) while the tracker ticket status, spent time,
+            // or priority did — the conditional re-fetch inside MrLoaded would miss this.
+            if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
+                if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
+                    spawn_ticket_fetch(provider, ticket_id, mr.id.clone(), tx);
+                }
+            }
+        }
+
+        false
+    }
+
     /// Applies a single `AppEvent` to the application state.
     ///
     /// This is the central event dispatch extracted from `main.rs` to keep the
     /// event loop thin. Returns `true` if the state was mutated in a way that
-    /// requires persisting (caller must then call `save_state_async`).
-    ///
-    /// Reactions to MR lifecycle transitions (refetch, remove, notify, persist) are
-    /// governed by `self.event_policy` — no hardcoded booleans here.
+    /// requires persisting (caller must then call `save_state_async`); see
+    /// [`AppEvent::persists_state`].
     pub async fn apply_event(
         &mut self,
         event: AppEvent,
@@ -1721,12 +1530,7 @@ impl App {
         tx: &UnboundedSender<AppEvent>,
         last_known_branches: &mut HashMap<String, HashSet<String>>,
     ) -> bool {
-        // Resolve the lifecycle event once upfront so every arm can query the policy.
-        let lifecycle: Option<MrLifecycleEvent> = event.as_lifecycle_event();
-        let needs_persist = lifecycle
-            .as_ref()
-            .map(|l| self.event_policy.needs_persist(l))
-            .unwrap_or(false);
+        let needs_persist = event.persists_state();
 
         match event {
             // ── Tracker ticket resolved ───────────────────────────────────────
@@ -1858,16 +1662,13 @@ impl App {
                 if pos.is_some() {
                     self.table_state.select(pos);
                 }
-                // Spawn the fetch only if the policy confirms a refetch is needed for Added.
-                if self.event_policy.needs_refetch(&MrLifecycleEvent::Added) {
-                    spawn_mr_fetch(
-                        self.fetch_context(),
-                        id,
-                        CachedMrData::default(),
-                        semaphore.clone(),
-                        tx.clone(),
-                    );
-                }
+                spawn_mr_fetch(
+                    self.fetch_context(),
+                    id,
+                    CachedMrData::default(),
+                    semaphore.clone(),
+                    tx.clone(),
+                );
                 self.recompute_api_call_estimate();
                 needs_persist
             }
@@ -1910,7 +1711,7 @@ impl App {
                     &data.branches,
                     notify_allowed,
                 ) {
-                    notify::mr_on_new_branch(&data.id, &data.title, b, &data.web_url);
+                    notify::mr_on_new_branch(&data.id, &data.data.title, b, &data.data.web_url);
                 }
 
                 // Update the persisted reference so subsequent refreshes won't re-notify.
@@ -1918,115 +1719,24 @@ impl App {
 
                 // Detect whether this MR was actually updated since the last refresh.
                 // We compare the old `updated_at` before overwriting it.
-                let was_updated = mr.updated_at.is_some() && mr.updated_at != data.updated_at;
-                let previous_state = mr.state.clone();
+                let was_updated = mr.updated_at.is_some() && mr.updated_at != data.data.updated_at;
+                let previous_state = mr.state;
                 let previous_ticket = mr.linked_ticket.clone();
 
-                // Trace field-level changes so they are visible in the log file.
-                // All comparisons happen before the fields are overwritten below.
-                if was_updated {
-                    tracing::info!(
-                        mr_id = %data.id,
-                        old = %mr.updated_at.as_deref().unwrap_or("none"),
-                        new = %data.updated_at.as_deref().unwrap_or("none"),
-                        "MR updated_at changed",
-                    );
-                    if notify_allowed {
-                        notify::mr_updated(
-                            &data.id,
-                            &data.title,
-                            data.updated_at.as_deref(),
-                            &data.web_url,
-                        );
-                    }
-                }
-                if mr.mergeability != data.mergeability {
-                    tracing::info!(
-                        mr_id = %data.id,
-                        old = ?mr.mergeability,
-                        new = ?data.mergeability,
-                        "MR mergeability changed",
-                    );
-                    if notify_allowed {
-                        notify::mr_mergeability_changed(
-                            &data.id,
-                            &data.title,
-                            &format!("{:?}", mr.mergeability),
-                            &format!("{:?}", data.mergeability),
-                            &data.web_url,
-                        );
-                    }
-                }
-                if mr.milestone != data.milestone {
-                    let old = mr.milestone.as_deref().unwrap_or(NO_VALUE);
-                    let new = data.milestone.as_deref().unwrap_or(NO_VALUE);
-                    tracing::info!(mr_id = %data.id, old, new, "MR milestone changed");
-                    if notify_allowed {
-                        notify::mr_milestone_changed(
-                            &data.id,
-                            &data.title,
-                            old,
-                            new,
-                            &data.web_url,
-                        );
-                    }
-                }
+                mr_changes::log_and_notify_changes(
+                    mr,
+                    &data,
+                    was_updated,
+                    notify_allowed,
+                    &self.config.complexity_profile,
+                );
 
-                mr.title = data.title;
-                mr.sha = data.sha;
                 mr.status = MrStatus::MergedIn(data.branches);
-                mr.description = data.description;
-                mr.author = data.author;
-                mr.assignee = data.assignee;
-                mr.reviewers = data.reviewers;
-                mr.milestone = data.milestone;
-                mr.milestone_due_date = data.milestone_due_date;
-                mr.milestone_description = data.milestone_description;
-                mr.web_url = data.web_url;
-                mr.labels = data.labels;
-                mr.updated_at = data.updated_at;
-                mr.created_at = data.created_at;
-                mr.source_branch = data.source_branch;
-                mr.target_branch = data.target_branch;
-                mr.state = data.state;
-                mr.merged_by = data.merged_by;
-                mr.merged_at = data.merged_at;
                 mr.mergeability = data.mergeability;
-                mr.pipelines = data.pipelines;
                 mr.recently_updated = was_updated;
-                mr.user_notes_count = data.user_notes_count;
 
-                // Detect complexity category changes (EASY / MEDIUM / COMPLEX) before
-                // overwriting the stored diff_stats. Only fires when both old and new
-                // stats are available and the category boundary is actually crossed.
-                {
-                    let complexity_label = |score: f64| -> &'static str {
-                        if score < 0.33 {
-                            "🟢 EASY"
-                        } else if score < 0.66 {
-                            "🟡 MEDIUM"
-                        } else {
-                            "🔴 COMPLEX"
-                        }
-                    };
-                    if let (Some(old_stats), Some(new_stats)) = (&mr.diff_stats, &data.diff_stats) {
-                        let old_label =
-                            complexity_label(old_stats.difficulty(&self.config.complexity_profile));
-                        let new_label =
-                            complexity_label(new_stats.difficulty(&self.config.complexity_profile));
-                        if old_label != new_label {
-                            notify::mr_complexity_changed(
-                                &mr.id,
-                                &mr.title,
-                                old_label,
-                                new_label,
-                                &mr.web_url,
-                            );
-                        }
-                    }
-                }
-
-                mr.diff_stats = data.diff_stats;
+                // All GitLab fields at once (title, branches, pipelines, diff stats…).
+                mr.data = data.data;
 
                 let target_id = transition_target_for_state(&self.project_settings, &mr.state);
                 spawn_ticket_transition_if_needed(TicketTransitionRequest {
@@ -2041,133 +1751,20 @@ impl App {
                     target_id,
                 });
 
-                // Capture the MR id before the stats block — `data` is fully consumed above.
-                #[cfg(feature = "stats")]
-                let data_id_for_stats = mr.id.clone();
+                let mr_id = mr.id.clone();
 
                 // Arm (or re-arm) the global fade countdown.
                 if was_updated {
                     self.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
                 }
-                // If a tracker provider is active, re-fetch the linked ticket when:
-                //   • the detected ticket ID is new or has changed (ID mismatch), OR
-                //   • the MR was updated since the last refresh (was_updated), which
-                //     implies that time entries or status may have changed on the
-                //     tracker side (e.g. after a manual [R] refresh).
-                if let Some(provider) = &self.tracker {
-                    let detected_id = provider.detect_ticket_id(&mr.title, &mr.description);
-                    let cached_id = mr.linked_ticket.as_ref().map(|t| t.id.clone());
-
-                    // Determine the ticket id to fetch:
-                    //   - If the detected id differs from the cache → use the new id.
-                    //   - If they match but we want a forced refresh → reuse the cached id.
-                    //   - If the cached ticket's schema is outdated → invalidate and re-fetch.
-                    //   - If nothing is detected and nothing cached → nothing to do.
-                    let cache_is_stale = mr.linked_ticket.as_ref().is_some_and(|t| {
-                        t.schema_version < gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION
-                    });
-
-                    let fetch_id: Option<String> = if detected_id != cached_id {
-                        // ID changed (or newly detected): always re-fetch.
-                        detected_id.clone()
-                    } else if detected_id.is_some() && was_updated && !completion.from_refresh_cycle
-                    {
-                        // Same ID but the MR was updated: refresh to pick up new spent hours.
-                        // Skipped for refresh-cycle fetches: the cycle already re-fetched
-                        // this ticket unconditionally, a second request would be a duplicate.
-                        detected_id.clone()
-                    } else if detected_id.is_some() && cache_is_stale {
-                        // Same ID but the cached struct is from an older schema version:
-                        // re-fetch silently to populate the new fields.
-                        detected_id.clone()
-                    } else {
-                        // No change needed.
-                        None
-                    };
-
-                    if let Some(raw_id) = fetch_id {
-                        spawn_ticket_fetch(Arc::clone(provider), raw_id, mr.id.clone(), tx);
-                    } else if detected_id.is_none() && cached_id.is_some() {
-                        // Ticket reference was removed from the MR — clear the cache.
-                        mr.linked_ticket = None;
-                    }
-                }
-
+                self.sync_linked_ticket(&mr_id, was_updated, completion.from_refresh_cycle, tx);
                 // Sorting is deferred to the end of the event drain (see
                 // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
                 self.needs_sort = true;
-
-                // ── Stats recording ───────────────────────────────────────────
-                // Record a snapshot into the stats DB when the feature is enabled.
-                // Three triggers are handled here:
-                //   • OnMerge / OnClose — on every load of a merged / closed MR. The
-                //     snapshot is dated at the real merge / close time
-                //     (`event_recorded_at`), so only the first one is stored; the
-                //     others hit the UNIQUE constraint.
-                //   • OnRefresh — at most once per calendar day for open MRs.
                 #[cfg(feature = "stats")]
-                if let Some(db) = self.stats_db.clone() {
-                    // Re-borrow after all mutations are applied so the snapshot
-                    // captures the final state written to `mr` just above.
-                    if let Some(mr) = self.mrs.find_mut(&data_id_for_stats) {
-                        use gitlab_tracker_stats::snapshot::SnapshotTrigger;
+                self.record_stats_snapshot(&mr_id, initial_fetches_completed, tx);
 
-                        let trigger = match &mr.state {
-                            GitlabMrState::Merged => Some(SnapshotTrigger::OnMerge),
-                            GitlabMrState::Closed => Some(SnapshotTrigger::OnClose),
-                            GitlabMrState::Opened => {
-                                // Record at most once per calendar day.
-                                let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-                                let last = self
-                                    .stats_last_refresh_date
-                                    .get(&mr.id)
-                                    .cloned()
-                                    .unwrap_or_default();
-                                if last == today {
-                                    None
-                                } else {
-                                    self.stats_last_refresh_date.insert(mr.id.clone(), today);
-                                    Some(SnapshotTrigger::OnRefresh)
-                                }
-                            }
-                        };
-
-                        if let Some(trigger) = trigger {
-                            let snap = mr.stats_snapshot(
-                                trigger,
-                                &self.project_id,
-                                &self.config.complexity_profile,
-                            );
-
-                            let project_id = self.project_id.clone();
-                            let tx2 = if initial_fetches_completed {
-                                Some(tx.clone())
-                            } else {
-                                None
-                            };
-                            tokio::spawn(async move {
-                                use gitlab_tracker_stats::StatsDb;
-
-                                if let Err(e) = db.upsert_snapshot(&snap).await {
-                                    tracing::warn!(
-                                        project_id = %project_id,
-                                        error = %e,
-                                        "Failed to record stats snapshot"
-                                    );
-                                    return;
-                                }
-
-                                // The report itself is recomputed on the next Tick
-                                // (debounced), not once per recorded snapshot.
-                                if let Some(tx2) = tx2 {
-                                    let _ = tx2.send(AppEvent::StatsSnapshotRecorded);
-                                }
-                            });
-                        }
-                    }
-                }
-
-                // MrLoaded maps to MrLifecycleEvent::Refreshed — persist driven by policy.
+                // MrLoaded persists state (see `AppEvent::persists_state`).
                 needs_persist
             }
 
@@ -2179,7 +1776,7 @@ impl App {
                 };
                 mr.title = format!("⚠️ ERROR: {}", error);
                 mr.status = MrStatus::Error;
-                // FetchFailed → policy returns false (errors are not persisted to disk).
+                // Not persisted: errors are not saved to disk (see `persists_state`).
                 needs_persist
             }
 
@@ -2285,82 +1882,7 @@ impl App {
                 }
             }
 
-            AppEvent::Tick => {
-                #[cfg(feature = "stats")]
-                if std::mem::take(&mut self.stats_report_dirty) {
-                    crate::ui::stats::trigger_background_stats_refresh(self, tx);
-                }
-
-                // Decrement the highlight fade countdown and clear flags when expired.
-                if self.update_highlight_ticks > 0 {
-                    self.update_highlight_ticks -= 1;
-                    if self.update_highlight_ticks == 0 {
-                        for mr in &mut self.mrs {
-                            mr.recently_updated = false;
-                        }
-                    }
-                }
-
-                if self.time_left > 0 {
-                    self.time_left -= 1;
-                    return false;
-                }
-
-                // Timer elapsed — trigger a full refresh of all MRs.
-                self.time_left = self.refresh_interval_secs;
-                self.time_entries.clear();
-                let ctx = self.fetch_context();
-
-                // Discovery poller: find new MRs created by any team member since the
-                // discovery anchor, regardless of their current state. This prevents losing
-                // MRs opened and merged between two refresh cycles, which would otherwise
-                // make stats incomplete. Only active when `discover_new_mrs = true` in
-                // `[project.stats]` of `projects.toml`.
-                if self.discovery_enabled {
-                    self.spawn_discovery(ctx.clone(), tx);
-                }
-
-                // Recompute GitLab + tracker estimates *before* spawning fetches so the
-                // counter reflects the actual cache state at trigger time.
-                self.recompute_api_call_estimate();
-
-                for mr in &mut self.mrs {
-                    if let MrStatus::MergedIn(ref found) = mr.status {
-                        // Skip refresh for MRs that are fully merged into all branches —
-                        // state != Opened ensures we don't skip still-open MRs.
-                        if self.branches.iter().all(|b| found.contains(b))
-                            && mr.sha.is_some()
-                            && mr.state != GitlabMrState::Opened
-                        {
-                            continue;
-                        }
-                    }
-
-                    mr.status = MrStatus::Loading;
-                    let cached = CachedMrData::from(&*mr);
-                    spawn_mr_fetch(
-                        ctx.clone(),
-                        mr.id.clone(),
-                        cached,
-                        semaphore.clone(),
-                        tx.clone(),
-                    );
-                    // Track pending auto-refresh fetches to drive the spinner.
-                    self.pending_refresh_fetches.insert(mr.id.clone());
-
-                    // Re-fetch the tracker ticket unconditionally on each auto-refresh cycle,
-                    // mirroring the manual [R] refresh behaviour. The GitLab MR may not have
-                    // changed (was_updated = false) while the tracker ticket status, spent time,
-                    // or priority did — the conditional re-fetch inside MrLoaded would miss this.
-                    if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
-                        if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
-                            spawn_ticket_fetch(provider, ticket_id, mr.id.clone(), tx);
-                        }
-                    }
-                }
-
-                false
-            }
+            AppEvent::Tick => self.on_tick(&semaphore, tx),
         }
     }
 }
@@ -2819,6 +2341,29 @@ mod tests {
         // Quitting needs a confirmation, as in the app.
         assert!(!press(&mut app, &tx, KeyCode::Esc).await);
         assert!(press(&mut app, &tx, KeyCode::Char('y')).await);
+    }
+
+    #[test]
+    fn requirements_hide_unavailable_filters_and_columns() {
+        let mut app = test_app();
+        let filter_ids = |app: &App| -> Vec<&str> {
+            app.visible_filter_defs()
+                .iter()
+                .map(|(_, f)| f.id)
+                .collect()
+        };
+        assert!(
+            !filter_ids(&app).contains(&"assigned_to_me"),
+            "no gitlab_username"
+        );
+        app.config.gitlab_username = Some("jane".into());
+        assert!(filter_ids(&app).contains(&"assigned_to_me"));
+        assert!(filter_ids(&app).contains(&"reviewer_me"));
+        // Columns that need a tracker are hidden without one.
+        assert!(app
+            .visible_column_defs()
+            .iter()
+            .all(|c| c.requires != Some(gitlab_tracker_core::Requirement::Tracker)));
     }
 
     #[test]

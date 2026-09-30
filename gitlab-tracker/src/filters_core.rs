@@ -1,5 +1,7 @@
 use crate::utils::matches_gitlab_username;
-use gitlab_tracker_core::{FilterDef, MrSnapshot};
+use gitlab_tracker_core::{
+    FilterDef, GitlabMrState, MergeabilityStatus, MrSnapshot, PipelineState, Requirement,
+};
 
 // ── Built-in GitLab filters — priority 0–99 ───────────────────────────────────
 
@@ -9,6 +11,7 @@ inventory::submit!(FilterDef {
     active_label: "All",
     priority: 0,
     needs_text_input: false,
+    requires: None,
     apply: |_mr: MrSnapshot<'_>, _query: &str| true,
 });
 
@@ -18,6 +21,7 @@ inventory::submit!(FilterDef {
     active_label: "Flagged ★",
     priority: 1,
     needs_text_input: false,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, _| mr.flagged,
 });
 
@@ -27,7 +31,8 @@ inventory::submit!(FilterDef {
     active_label: "State: Opened",
     priority: 2,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.state == "opened",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.state == GitlabMrState::Opened,
 });
 
 inventory::submit!(FilterDef {
@@ -36,7 +41,8 @@ inventory::submit!(FilterDef {
     active_label: "State: Merged",
     priority: 3,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.state == "merged",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.state == GitlabMrState::Merged,
 });
 
 inventory::submit!(FilterDef {
@@ -45,7 +51,8 @@ inventory::submit!(FilterDef {
     active_label: "State: Closed",
     priority: 4,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.state == "closed",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.state == GitlabMrState::Closed,
 });
 
 inventory::submit!(FilterDef {
@@ -54,7 +61,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Mergeable",
     priority: 5,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "Mergeable",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::Mergeable,
 });
 
 inventory::submit!(FilterDef {
@@ -63,7 +71,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Conflict",
     priority: 6,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "Conflict",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::Conflict,
 });
 
 inventory::submit!(FilterDef {
@@ -72,7 +81,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Needs Rebase",
     priority: 7,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "NeedsRebase",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::NeedsRebase,
 });
 
 inventory::submit!(FilterDef {
@@ -81,7 +91,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Not Approved",
     priority: 8,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "NotApproved",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::NotApproved,
 });
 
 inventory::submit!(FilterDef {
@@ -90,7 +101,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Requested Changes",
     priority: 9,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "RequestedChanges",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::RequestedChanges,
 });
 
 inventory::submit!(FilterDef {
@@ -99,7 +111,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Draft",
     priority: 10,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "Draft",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::Draft,
 });
 
 inventory::submit!(FilterDef {
@@ -108,7 +121,8 @@ inventory::submit!(FilterDef {
     active_label: "Mergeability: Discussions",
     priority: 11,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == "DiscussionsNotResolved",
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.mergeability == MergeabilityStatus::DiscussionsNotResolved,
 });
 
 inventory::submit!(FilterDef {
@@ -117,6 +131,7 @@ inventory::submit!(FilterDef {
     active_label: "Has comments 💬",
     priority: 12,
     needs_text_input: false,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, _| mr.user_notes_count > 0,
 });
 
@@ -126,7 +141,8 @@ inventory::submit!(FilterDef {
     active_label: "CI failing ❌",
     priority: 13,
     needs_text_input: false,
-    apply: |mr: MrSnapshot<'_>, _| mr.pipeline_status == Some("Failed"),
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| mr.pipeline_status == Some(PipelineState::Failed),
 });
 
 // ── "Me" filters — only shown when gitlab_username is configured (priority 14–15) ──
@@ -148,6 +164,7 @@ inventory::submit!(FilterDef {
     active_label: "Assigned to me 👤",
     priority: 14,
     needs_text_input: false,
+    requires: Some(Requirement::GitlabUsername),
     apply: |mr: MrSnapshot<'_>, _| {
         // Visible only when gitlab_username is configured; predicate is a no-op
         // otherwise (the filter is hidden from the picker before it can be selected).
@@ -165,6 +182,7 @@ inventory::submit!(FilterDef {
     active_label: "Reviewer: me 👁️",
     priority: 15,
     needs_text_input: false,
+    requires: Some(Requirement::GitlabUsername),
     apply: |mr: MrSnapshot<'_>, _| {
         // Visible only when gitlab_username is configured; predicate is a no-op
         // otherwise (the filter is hidden from the picker before it can be selected).
@@ -192,6 +210,7 @@ inventory::submit!(FilterDef {
     active_label: "Effort: Easy 🟢",
     priority: 16,
     needs_text_input: false,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d < 0.33) },
 });
 
@@ -201,6 +220,7 @@ inventory::submit!(FilterDef {
     active_label: "Effort: Complex 🔴",
     priority: 17,
     needs_text_input: false,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, _| { mr.diff_difficulty.is_some_and(|d| d >= 0.66) },
 });
 
@@ -212,6 +232,7 @@ inventory::submit!(FilterDef {
     active_label: "Milestone:",
     priority: 50,
     needs_text_input: true,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, query: &str| {
         if query.is_empty() {
             return true;
@@ -227,6 +248,7 @@ inventory::submit!(FilterDef {
     active_label: "Branch:",
     priority: 52,
     needs_text_input: true,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, query: &str| {
         if query.is_empty() {
             return true;
@@ -243,6 +265,7 @@ inventory::submit!(FilterDef {
     active_label: "Assignee:",
     priority: 51,
     needs_text_input: true,
+    requires: None,
     apply: |mr: MrSnapshot<'_>, query: &str| {
         if query.is_empty() {
             return true;

@@ -20,11 +20,6 @@ pub struct PerMrMetrics {
     /// `None` when `created_at` or `merged_at` is absent.
     pub cycle_time_hours: Option<f64>,
 
-    /// Elapsed time from the last pipeline run to merge, in hours.
-    /// Approximates "time spent waiting in review" after all CI gates passed.
-    /// `None` when pipeline data or `merged_at` is absent.
-    pub lead_time_hours: Option<f64>,
-
     /// Total changed lines (additions + deletions).
     pub diff_size: u32,
 
@@ -33,6 +28,9 @@ pub struct PerMrMetrics {
 
     /// Raw comment count.
     pub user_notes_count: u32,
+
+    /// Number of commits in the MR.
+    pub commits_count: u32,
 
     /// Fraction of pipeline runs that failed: `failure_count / total_count`.
     /// `None` when no pipelines were recorded.
@@ -72,10 +70,7 @@ impl PerMrMetrics {
             milestone: snap.snapshot.milestone.clone(),
             trigger: snap.snapshot.trigger,
             cycle_time_hours,
-            // Lead time requires pipeline data that is not yet stored as a precise
-            // "last pipeline finished_at" timestamp — approximated as None until
-            // the schema is extended with a `last_pipeline_finished_at` column.
-            lead_time_hours: None,
+            commits_count: snap.snapshot.commits_count,
             diff_size,
             diff_difficulty: snap.snapshot.diff_difficulty,
             user_notes_count: snap.snapshot.user_notes_count,
