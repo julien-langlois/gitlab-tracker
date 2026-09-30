@@ -1002,17 +1002,9 @@ pub async fn fetch_gitlab_data(
     let created_at = mr.created_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.unwrap_or_default();
-    // Fetch the real human-note count from the discussions endpoint.
-    // The native `user_notes_count` field from the MR API is unreliable: it counts
-    // ALL notes including system events (label changes, merge activity, etc.) and notes
-    // inside resolved threads. On a merged MR this can reach 100+ while the actual
-    // number of human comments is far lower.
-    //
-    // Instead we call GET /discussions which gives us the full thread graph:
-    //   - `notes[].system == true`  → skip (GitLab activity entries, not human comments)
-    //   - everything else           → count (thread starters + replies, resolved or not)
-    //
-    // This number reflects the real volume of review feedback left on the MR.
+    // Count the unresolved review threads from the discussions endpoint (see
+    // `fetch_notes_count`). The native `user_notes_count` field of the MR API is
+    // unreliable: it counts ALL notes, system events and resolved threads included.
     //
     // NOTE: intentionally NOT cached on `updated_at`. GitLab does NOT update the MR's
     // `updated_at` timestamp when a discussion thread is resolved or a note is added.
@@ -1193,6 +1185,8 @@ pub async fn fetch_gitlab_data(
     let title = if updated_at_unchanged {
         cached
             .title
+            // State files written before `MrStatus::Error(String)` stored the fetch
+            // error in the title: never reuse such a cached title.
             .filter(|t| !t.contains("⚠️ ERROR"))
             .unwrap_or(mr.title)
     } else {

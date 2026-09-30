@@ -240,7 +240,9 @@ where
 #[derive(Clone, Debug, PartialEq)]
 pub enum MrStatus {
     Loading,
-    Error,
+    /// The last fetch failed; carries the error message (shown in the inspector).
+    /// Never persisted, and never written into the MR title.
+    Error(String),
     MergedIn(HashSet<String>),
 }
 #[derive(Clone, Debug)]

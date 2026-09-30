@@ -47,7 +47,7 @@ pub struct StatusTransitionsConfig {
 }
 
 /// Per-project Redmine integration configuration embedded in `projects.toml`
-/// under `[project.redmine]`.
+/// under `[project.tracker]` (with `provider = "redmine"`).
 ///
 /// Each GitLab project can point to a **different** Redmine instance, enabling
 /// multi-tenant setups where project A uses `redmine-a.example.com` and project B
@@ -61,10 +61,11 @@ pub struct StatusTransitionsConfig {
 /// project_id = "12345678"
 /// gitlab_url = "https://gitlab.com"
 ///
-/// [project.redmine]
+/// [project.tracker]
+/// provider = "redmine"
 /// url = "https://redmine-a.example.com"
 ///
-/// [project.redmine.tracker_type_colors]
+/// [project.tracker.tracker_type_colors]
 /// "Bug" = { bg = "red", fg = "white" }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +87,7 @@ pub struct RedmineConfig {
     ///
     /// Example:
     /// ```toml
-    /// [project.redmine.tracker_type_colors]
+    /// [project.tracker.tracker_type_colors]
     /// "Bug"       = { bg = "red",      fg = "white" }
     /// "Evolution" = { bg = "cyan",     fg = "black" }
     /// "Support"   = { bg = "yellow",   fg = "black" }
@@ -103,7 +104,7 @@ pub struct RedmineConfig {
     ///
     /// Example:
     /// ```toml
-    /// [project.redmine.priority_colors]
+    /// [project.tracker.priority_colors]
     /// "Low"     = { bg = "dark_gray", fg = "white" }
     /// "Regular" = { bg = "dark_gray", fg = "white" }
     /// "High"    = { bg = "yellow",    fg = "black" }

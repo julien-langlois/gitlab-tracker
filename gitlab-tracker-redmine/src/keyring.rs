@@ -14,80 +14,21 @@ fn account_for(redmine_url: &str) -> String {
     format!("redmine_token::{}", redmine_url.trim_end_matches('/'))
 }
 
-/// Retrieves the Redmine API token for a specific Redmine instance URL using
-/// the following priority chain:
+/// Retrieves the Redmine API token for a specific Redmine instance URL:
+/// `REDMINE_TOKEN`, then the OS keyring entry for that URL, then a hidden prompt
+/// (see [`gitlab_tracker_core::secrets::resolve_secret`]).
 ///
-/// 1. `REDMINE_TOKEN` environment variable (shared across all instances; useful for CI).
-/// 2. OS keyring entry keyed by `redmine_url` (per-instance, multi-tenant safe).
-/// 3. Interactive hidden prompt (`rpassword`), then persisted to the keyring.
-///
-/// Returns `None` when the user explicitly skips the prompt (empty input),
-/// which causes the Redmine feature to stay inactive for this session.
-/// The token is wrapped in [`Zeroizing`] to erase it from memory on drop.
+/// Returns `None` when the user leaves the prompt empty, which keeps the Redmine
+/// feature inactive for this session.
 pub fn get_or_prompt_token(redmine_url: &str) -> Option<Zeroizing<String>> {
-    // 1. Environment variable — highest priority (CI / dotenv workflows).
-    if let Ok(tok) = std::env::var("REDMINE_TOKEN") {
-        let tok = Zeroizing::new(tok.trim().to_string());
-        if !tok.is_empty() {
-            tracing::info!("REDMINE_TOKEN loaded from environment variable");
-            return Some(tok);
-        }
-    }
-
-    let account = account_for(redmine_url);
-
-    // 2. OS keyring — keyed per Redmine instance URL.
-    match keyring::Entry::new(KEYRING_SERVICE, &account) {
-        Ok(entry) => match entry.get_password() {
-            Ok(pwd) => {
-                let pwd = Zeroizing::new(pwd.trim().to_string());
-                if !pwd.is_empty() {
-                    tracing::info!(url = %redmine_url, "REDMINE_TOKEN loaded from OS keyring");
-                    return Some(pwd);
-                }
-                tracing::debug!("Redmine keyring entry found but token is empty");
-            }
-            Err(e) => {
-                tracing::debug!(error = %e, "No Redmine token in OS keyring");
-            }
-        },
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to open Redmine keyring entry");
-        }
-    }
-
-    // 3. Interactive prompt — the user may leave it empty to skip.
-    println!("🔑 No REDMINE_TOKEN found for {redmine_url}.");
-    println!("   Leave empty to disable Redmine integration for this project.");
-    match rpassword::prompt_password("Redmine API token: ") {
-        Ok(raw) => {
-            let token = Zeroizing::new(raw.trim().to_string());
-            if token.is_empty() {
-                tracing::info!("Redmine integration disabled — no token provided");
-                return None;
-            }
-            // Persist to keyring keyed by this Redmine instance URL.
-            match keyring::Entry::new(KEYRING_SERVICE, &account) {
-                Ok(entry) => match entry.set_password(&token) {
-                    Ok(_) => {
-                        tracing::info!(url = %redmine_url, "Redmine token saved to OS keyring");
-                        println!("✅ Redmine token securely saved to OS Keyring!\n");
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to save Redmine token to OS keyring");
-                    }
-                },
-                Err(e) => {
-                    tracing::error!(error = %e, "Failed to open Redmine keyring entry for writing");
-                }
-            }
-            Some(token)
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to read Redmine token from prompt");
-            None
-        }
-    }
+    let hint = format!("For {redmine_url} — leave empty to disable Redmine for this project.");
+    gitlab_tracker_core::secrets::resolve_secret(&gitlab_tracker_core::secrets::SecretSource {
+        env_var: "REDMINE_TOKEN",
+        keyring_service: KEYRING_SERVICE,
+        keyring_account: &account_for(redmine_url),
+        label: "Redmine API token",
+        prompt_hint: Some(&hint),
+    })
 }
 
 /// Removes the stored Redmine token for a specific Redmine instance from the OS keyring.

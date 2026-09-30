@@ -415,6 +415,50 @@ impl StatsWindow {
 /// Shown in place of a missing assignee or milestone.
 pub const NO_VALUE: &str = "None";
 
+/// Scroll state of a pane (Inspector or Tracker): the offset, plus what the last
+/// render measured, so scrolling stops at the last line actually displayed.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PaneScroll {
+    /// Vertical scroll offset (in lines).
+    pub offset: u16,
+    /// Rendered (wrapped) line count, borders included — set at each render.
+    pub content_lines: u16,
+    /// Pane height, borders included — set at each render.
+    pub height: u16,
+}
+
+impl PaneScroll {
+    /// Scrolls down, never past the last line of content.
+    pub fn down(&mut self, amount: u16) {
+        let max = self.content_lines.saturating_sub(self.height);
+        self.offset = self.offset.saturating_add(amount).min(max);
+    }
+
+    pub fn up(&mut self, amount: u16) {
+        self.offset = self.offset.saturating_sub(amount);
+    }
+
+    /// Back to the top (e.g. when another MR is selected).
+    pub fn reset(&mut self) {
+        self.offset = 0;
+    }
+}
+
+/// UI state written by the renderer and read back by input handling: pane
+/// geometry (mouse hit-test), scroll limits and the spinner frame.
+#[derive(Debug, Default)]
+pub struct UiLayout {
+    pub inspector: PaneScroll,
+    pub tracker: PaneScroll,
+    /// Screen area of the Inspector pane at the last render.
+    pub inspector_area: ratatui::layout::Rect,
+    /// Screen area of the Tracker pane at the last render; `None` when hidden.
+    pub tracker_area: Option<ratatui::layout::Rect>,
+    /// Bumped on every render frame, to animate the spinner independently of the
+    /// one-second tick.
+    pub spinner_frame: usize,
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -438,25 +482,10 @@ pub struct App {
     pub active_pane: ActivePane,
     /// Which view is rendered inside the Inspector panel (`[P]` toggles).
     pub inspector_view: InspectorView,
-    /// Vertical scroll offset for the Inspector pane (in lines).
-    pub inspector_scroll: u16,
-    /// Total number of lines in the currently rendered Inspector content.
-    /// Updated at each render frame — used to clamp scroll and avoid blank space.
-    pub inspector_content_lines: u16,
-    /// Height (in rows) of the Inspector pane area, updated at each render frame.
-    pub inspector_pane_height: u16,
-    /// Screen area of the Inspector pane at the last render (mouse hit-test).
-    pub inspector_area: ratatui::layout::Rect,
-    /// Screen area of the Tracker pane at the last render; `None` when hidden.
-    pub tracker_area: Option<ratatui::layout::Rect>,
+    /// Pane geometry and scroll written by the renderer (see [`UiLayout`]).
+    pub layout: UiLayout,
     /// Which view is rendered inside the Tracker pane (`[P]` toggles when focused).
     pub tracker_view: TrackerView,
-    /// Vertical scroll offset for the Tracker pane (in lines).
-    pub tracker_scroll: u16,
-    /// Total number of lines in the currently rendered Tracker pane content.
-    pub tracker_content_lines: u16,
-    /// Height (in rows) of the Tracker pane area, updated at each render frame.
-    pub tracker_pane_height: u16,
     /// Index of the currently highlighted row in the column-picker popup (0-based).
     pub column_picker_cursor: usize,
     /// Draft state for the project settings popup.
@@ -499,6 +528,8 @@ pub struct App {
     /// Ids of MRs whose fetch from the current refresh cycle is still in flight.
     /// Drives the loading spinner in the status bar.
     pub pending_refresh_fetches: HashSet<String>,
+    /// Timing of the refresh cycle in flight, logged when its last MR is back.
+    refresh_cycle: Option<RefreshCycle>,
     /// Estimated GitLab API HTTP calls for the *next* refresh cycle (GitLab only).
     /// Computed just before fetches are spawned so it reflects the real cache state.
     pub estimated_gitlab_calls: usize,
@@ -544,9 +575,6 @@ pub struct App {
     /// (settings, branches, flags, refresh, MR imports). Events it sends to the bus
     /// (add / remove MR…) are not applied by the demo loop either.
     pub read_only: bool,
-    /// Monotonically incrementing counter bumped on every render frame (~20 fps).
-    /// Used to animate the spinner independently of the 1-second tick timer.
-    pub spinner_frame: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
@@ -660,15 +688,8 @@ impl App {
             sort_order: SortOrder::Descending,
             active_pane: ActivePane::default(),
             inspector_view: InspectorView::default(),
-            inspector_scroll: 0,
-            inspector_content_lines: 0,
-            inspector_pane_height: 0,
-            inspector_area: ratatui::layout::Rect::default(),
-            tracker_area: None,
+            layout: UiLayout::default(),
             tracker_view: TrackerView::default(),
-            tracker_scroll: 0,
-            tracker_content_lines: 0,
-            tracker_pane_height: 0,
             column_picker_cursor: 0,
             settings_editor,
             project_settings,
@@ -684,6 +705,7 @@ impl App {
             // before the first fetch cycle begins, then decrements it on each MrLoaded event.
             pending_initial_fetches: HashSet::new(),
             pending_refresh_fetches: HashSet::new(),
+            refresh_cycle: None,
             estimated_gitlab_calls: 0,
             estimated_tracker_calls: 0,
             startup_gitlab_estimate: None,
@@ -700,7 +722,6 @@ impl App {
             quit_confirm: false,
             read_only: false,
             theme,
-            spinner_frame: 0,
             needs_sort: false,
             visible_cache: None,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
@@ -783,7 +804,7 @@ impl App {
         } else {
             self.table_state.select(None);
         }
-        self.reset_inspector_scroll();
+        self.layout.inspector.reset();
     }
 
     /// Returns an iterator over the MRs that pass the current filter,
@@ -1037,42 +1058,6 @@ impl App {
         Some(selected)
     }
 
-    /// Scrolls the Inspector pane down by the given number of lines.
-    ///
-    /// Clamps the scroll so the user cannot scroll past the last line of content,
-    /// preventing blank space from appearing at the bottom of the Inspector pane.
-    pub fn inspector_scroll_down(&mut self, amount: u16) {
-        let max_scroll = self
-            .inspector_content_lines
-            .saturating_sub(self.inspector_pane_height);
-        self.inspector_scroll = self.inspector_scroll.saturating_add(amount).min(max_scroll);
-    }
-
-    /// Scrolls the Inspector pane up by the given number of lines.
-    pub fn inspector_scroll_up(&mut self, amount: u16) {
-        self.inspector_scroll = self.inspector_scroll.saturating_sub(amount);
-    }
-
-    /// Resets the Inspector scroll to the top (e.g. when selecting a new MR).
-    pub fn reset_inspector_scroll(&mut self) {
-        self.inspector_scroll = 0;
-    }
-
-    pub fn tracker_scroll_down(&mut self, amount: u16) {
-        let max_scroll = self
-            .tracker_content_lines
-            .saturating_sub(self.tracker_pane_height);
-        self.tracker_scroll = self.tracker_scroll.saturating_add(amount).min(max_scroll);
-    }
-
-    pub fn tracker_scroll_up(&mut self, amount: u16) {
-        self.tracker_scroll = self.tracker_scroll.saturating_sub(amount);
-    }
-
-    pub fn reset_tracker_scroll(&mut self) {
-        self.tracker_scroll = 0;
-    }
-
     /// Returns true when the selected MR has a linked tracker ticket.
     pub fn has_tracker_ticket(&self) -> bool {
         self.table_state
@@ -1132,7 +1117,7 @@ impl App {
         };
         self.table_state.select(Some(i));
         // Reset inspector scroll when the selected MR changes.
-        self.reset_inspector_scroll();
+        self.layout.inspector.reset();
     }
 
     pub fn prev_row(&mut self) {
@@ -1152,7 +1137,7 @@ impl App {
         };
         self.table_state.select(Some(i));
         // Reset inspector scroll when the selected MR changes.
-        self.reset_inspector_scroll();
+        self.layout.inspector.reset();
     }
 
     pub fn cycle_sort_column(&mut self) {
@@ -1183,11 +1168,38 @@ impl App {
         let notify_allowed = self.pending_initial_fetches.is_empty();
         let initial_sync_just_completed =
             self.pending_initial_fetches.remove(id) && self.pending_initial_fetches.is_empty();
+        let from_refresh_cycle = self.pending_refresh_fetches.remove(id);
+        if from_refresh_cycle && self.pending_refresh_fetches.is_empty() {
+            if let Some(cycle) = self.refresh_cycle.take() {
+                tracing::info!(
+                    kind = cycle.kind,
+                    mrs = cycle.mrs,
+                    estimated_gitlab_calls = cycle.estimated_gitlab_calls,
+                    elapsed_ms = cycle.started.elapsed().as_millis() as u64,
+                    "Refresh cycle complete"
+                );
+            }
+        }
         FetchCompletion {
             notify_allowed,
             initial_sync_just_completed,
-            from_refresh_cycle: self.pending_refresh_fetches.remove(id),
+            from_refresh_cycle,
         }
+    }
+
+    /// Starts timing the refresh cycle just spawned (`kind`: "auto" or "manual").
+    /// `complete_fetch` logs its duration once the last of its MRs is back, so a
+    /// real cycle can be measured from the log (`RUST_LOG=info`).
+    pub fn start_refresh_cycle(&mut self, kind: &'static str) {
+        if self.pending_refresh_fetches.is_empty() {
+            return;
+        }
+        self.refresh_cycle = Some(RefreshCycle {
+            started: std::time::Instant::now(),
+            kind,
+            mrs: self.pending_refresh_fetches.len(),
+            estimated_gitlab_calls: self.estimated_gitlab_calls,
+        });
     }
 
     /// Starts an MR discovery poll (auto-refresh cycle and manual `[R]`).
@@ -1273,6 +1285,15 @@ impl App {
             self.table_state.select(Some(new_idx));
         }
     }
+}
+
+/// A refresh cycle being timed (see `App::start_refresh_cycle`).
+#[derive(Debug)]
+struct RefreshCycle {
+    started: std::time::Instant,
+    kind: &'static str,
+    mrs: usize,
+    estimated_gitlab_calls: usize,
 }
 
 /// What [`App::complete_fetch`] knows about the fetch that just finished.
@@ -1513,6 +1534,7 @@ impl App {
                 }
             }
         }
+        self.start_refresh_cycle("auto");
 
         false
     }
@@ -1774,8 +1796,7 @@ impl App {
                 let Some(mr) = self.mrs.find_mut(&id) else {
                     return false;
                 };
-                mr.title = format!("⚠️ ERROR: {}", error);
-                mr.status = MrStatus::Error;
+                mr.status = MrStatus::Error(error);
                 // Not persisted: errors are not saved to disk (see `persists_state`).
                 needs_persist
             }
@@ -2091,8 +2112,8 @@ mod tests {
         use crossterm::event::{KeyModifiers, MouseEvent, MouseEventKind};
         use ratatui::layout::Rect;
         let mut app = test_app();
-        app.inspector_area = Rect::new(65, 0, 35, 20);
-        app.tracker_area = Some(Rect::new(65, 20, 35, 10));
+        app.layout.inspector_area = Rect::new(65, 0, 35, 20);
+        app.layout.tracker_area = Some(Rect::new(65, 20, 35, 10));
         let mut hover = |column, row| {
             let kind = MouseEventKind::Moved;
             let modifiers = KeyModifiers::NONE;
@@ -2364,6 +2385,62 @@ mod tests {
             .visible_column_defs()
             .iter()
             .all(|c| c.requires != Some(gitlab_tracker_core::Requirement::Tracker)));
+    }
+
+    #[tokio::test]
+    async fn failed_fetch_keeps_the_title() {
+        let mut app = app_with_mrs(&[("Fix login", "None")]).await;
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let error = AppEvent::MrFailed {
+            id: "1".into(),
+            error: "HTTP 502".into(),
+        };
+        let persist = app
+            .apply_event(error, Arc::new(Semaphore::new(1)), &tx, &mut HashMap::new())
+            .await;
+        assert_eq!(
+            app.mrs[0].title, "Fix login",
+            "the error is not written in the title"
+        );
+        assert_eq!(app.mrs[0].status, MrStatus::Error("HTTP 502".into()));
+        assert!(!persist, "errors are not persisted");
+    }
+
+    #[test]
+    fn pane_scroll_stops_at_the_last_rendered_line() {
+        let mut pane = PaneScroll {
+            offset: 0,
+            content_lines: 30,
+            height: 10,
+        };
+        pane.down(15);
+        assert_eq!(pane.offset, 15);
+        pane.down(15);
+        assert_eq!(pane.offset, 20, "30 lines in a 10-row pane: max offset 20");
+        pane.up(25);
+        assert_eq!(pane.offset, 0);
+        pane.down(3);
+        pane.reset();
+        assert_eq!(pane.offset, 0);
+    }
+
+    #[test]
+    fn refresh_cycle_is_timed_until_its_last_mr() {
+        let mut app = test_app();
+        app.pending_refresh_fetches
+            .extend(["1".to_string(), "2".to_string()]);
+        app.start_refresh_cycle("manual");
+        assert!(app.refresh_cycle.as_ref().is_some_and(|c| c.mrs == 2));
+        app.complete_fetch("1");
+        assert!(app.refresh_cycle.is_some(), "one MR still in flight");
+        app.complete_fetch("2");
+        assert!(
+            app.refresh_cycle.is_none(),
+            "logged and cleared on the last MR"
+        );
+        // Nothing in flight: nothing to time.
+        app.start_refresh_cycle("auto");
+        assert!(app.refresh_cycle.is_none());
     }
 
     #[test]

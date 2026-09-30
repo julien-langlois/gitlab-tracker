@@ -18,8 +18,11 @@ pub fn handle_mouse_event(mouse: MouseEvent, app: &mut App) {
     // Hit-test against the pane areas recorded by the last render, so the result
     // always matches what is on screen (layout, input bar height, cockpit…).
     let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
-    let in_tracker_pane = app.tracker_area.is_some_and(|area| area.contains(pos));
-    let in_inspector_pane = app.inspector_area.contains(pos);
+    let in_tracker_pane = app
+        .layout
+        .tracker_area
+        .is_some_and(|area| area.contains(pos));
+    let in_inspector_pane = app.layout.inspector_area.contains(pos);
 
     match mouse.kind {
         // Update focus based on where the cursor is.
@@ -35,18 +38,18 @@ pub fn handle_mouse_event(mouse: MouseEvent, app: &mut App) {
         // Route scroll to the pane under the cursor.
         MouseEventKind::ScrollDown => {
             if in_tracker_pane {
-                app.tracker_scroll_down(3);
+                app.layout.tracker.down(3);
             } else if in_inspector_pane {
-                app.inspector_scroll_down(3);
+                app.layout.inspector.down(3);
             } else {
                 app.next_row();
             }
         }
         MouseEventKind::ScrollUp => {
             if in_tracker_pane {
-                app.tracker_scroll_up(3);
+                app.layout.tracker.up(3);
             } else if in_inspector_pane {
-                app.inspector_scroll_up(3);
+                app.layout.inspector.up(3);
             } else {
                 app.prev_row();
             }
@@ -543,15 +546,15 @@ pub async fn handle_key_event(
 
                 // Arrow keys and j/k are routed based on the active pane.
                 KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
-                    ActivePane::Inspector => app.inspector_scroll_down(1),
-                    ActivePane::Tracker => app.tracker_scroll_down(1),
+                    ActivePane::Inspector => app.layout.inspector.down(1),
+                    ActivePane::Tracker => app.layout.tracker.down(1),
                     ActivePane::Dashboard => {
                         app.next_row();
                     }
                 },
                 KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
-                    ActivePane::Inspector => app.inspector_scroll_up(1),
-                    ActivePane::Tracker => app.tracker_scroll_up(1),
+                    ActivePane::Inspector => app.layout.inspector.up(1),
+                    ActivePane::Tracker => app.layout.tracker.up(1),
                     ActivePane::Dashboard => {
                         app.prev_row();
                     }
@@ -625,6 +628,7 @@ pub async fn handle_key_event(
                             }
                         }
                     }
+                    app.start_refresh_cycle("manual");
                 }
 
                 // [P] cycles the current pane's view:
@@ -635,12 +639,12 @@ pub async fn handle_key_event(
                     match app.active_pane {
                         ActivePane::Tracker => {
                             app.tracker_view = app.tracker_view.next();
-                            app.reset_tracker_scroll();
+                            app.layout.tracker.reset();
                         }
                         _ => {
                             // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
                             app.inspector_view = app.inspector_view.next();
-                            app.reset_inspector_scroll();
+                            app.layout.inspector.reset();
                         }
                     }
                 }

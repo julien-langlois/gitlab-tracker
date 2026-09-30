@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-stats)](https://crates.io/crates/gitlab-tracker-stats)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-stats)](https://crates.io/crates/gitlab-tracker-stats)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
 Optional analytics and velocity-tracking plugin for [gitlab-tracker](../README.md).
 
@@ -23,11 +23,11 @@ Automatically records MR snapshots into a local SQLite database and computes vel
 | **Cycle time** | Elapsed time from MR creation to merge (in hours) |
 | **Diff size** | Total changed lines (additions + deletions) |
 | **Diff difficulty** | Pre-computed review score in \[0.0, 1.0\] (from your `complexity_profile`) |
-| **Comment count** | Total human notes and discussion threads |
+| **Comment count** | Unresolved review threads at snapshot time (same count as the app's Notes column) |
 | **Comment density** | Notes per 100 changed lines — normalised discussion load |
 | **Pipeline failure rate** | Fraction of pipeline runs that ended in `Failed` state |
 
-### Aggregated statistics (per time window or milestone)
+### Aggregated statistics (per time window)
 
 Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state metrics use the latest known snapshot per MR, while merge-related metrics use one deduplicated `on_merge` snapshot per MR.
 
@@ -49,7 +49,7 @@ Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state m
 
 ### Spearman rank correlations
 
-All correlations use **Spearman's ρ** (rank-based, robust against outliers and non-normal distributions) with a two-tailed p-value approximated via the t-distribution.
+All correlations use **Spearman's ρ** (rank-based, robust against outliers and non-normal distributions) with a two-tailed p-value approximated via the t-distribution. Each MR contributes **one point** (its latest snapshot in the window): an MR open for 30 days has 30 daily snapshots, and counting each of them would inflate `n` and crush the p-values (pseudo-replication).
 
 | Pair | Question answered |
 | :--- | :--- |
@@ -72,7 +72,7 @@ Correlations are colour-coded by strength (|ρ|) and filtered for significance (
 
 ### Poisson insights
 
-The **Forecasts** tab uses Poisson probabilities for throughput forecasts and baseline-aware anomaly signals. Queue metrics are presented as a flow-pressure heuristic rather than an exact queueing model: they use observed merge throughput and median cycle time to estimate whether delivery is approaching capacity.
+The **Forecasts** tab uses Poisson probabilities for throughput forecasts and for the throughput anomaly; rates and durations use a ratio test. Queue metrics are presented as a flow-pressure heuristic rather than an exact queueing model: they use observed merge throughput and median cycle time to estimate whether delivery is approaching capacity.
 
 #### Throughput forecasts
 
@@ -119,7 +119,7 @@ Signals are split into two families:
 | Family | Source | Examples |
 | :--- | :--- | :--- |
 | **Pressure signals** | Deterministic thresholds on the current window | stale open MRs ≥7/14/30 days, high abandon rate, high pipeline failure rate, high comment density |
-| **Historical-baseline anomalies** | Poisson right-tail probability against the previous equivalent time window | throughput spike, pipeline failure rate spike, comment density spike, abandon rate spike, cycle-time P90 spike |
+| **Historical-baseline anomalies** | Comparison against the previous equivalent time window (see below) | throughput spike, pipeline failure rate spike, comment density spike, abandon rate spike, cycle-time P90 spike |
 
 Baseline selection is automatic when the active report has a duration:
 
@@ -127,18 +127,21 @@ Baseline selection is automatic when the active report has a duration:
 | :--- | :--- |
 | `LastDays(N)` | The previous `N` days immediately before the current window |
 | `Range { from, to }` | The same duration immediately before `from` |
-| `Milestone` / `All time` | No automatic baseline; only pressure signals are shown |
+| `All time` | No automatic baseline; only pressure signals are shown |
 
-Severity is derived from the right-tail p-value P(X ≥ observed | λ) for baseline anomalies:
+Two tests, depending on what the metric is:
 
-| Severity | p-value | Icon |
-| :--- | :--- | :--- |
-| Normal | > 0.10 | ✔ (not shown) |
-| Elevated | 0.05 – 0.10 | ↑ Cyan |
-| Warning | 0.01 – 0.05 | ⚠ Yellow |
-| Critical | ≤ 0.01 | ✘ Red |
+* **Throughput (a count) — Poisson test.** λ = baseline merges/week × weeks in the current window; the severity comes from the right-tail p-value P(X ≥ observed merges | λ).
+* **Rates and durations** (pipeline failure rate, abandon rate, comment density, cycle-time P90) **— ratio test**, `ratio = observed / baseline`. Poisson models counts, not shares in [0, 1] or hours: applied to those, any tiny increase over a low baseline was flagged. For the two shares (pipeline failure rate, abandon rate) the increase must also be at least **+5 points**, so 2 % → 4 % is not an alert. The pipeline failure rate is only tested when at least half of the MRs have pipeline data.
 
-Pressure signals are displayed as `pressure signal`; baseline anomalies show `observed`, `baseline`, and `p`.
+| Severity | Poisson p-value | Ratio | Icon |
+| :--- | :--- | :--- | :--- |
+| Normal | > 0.10 | < ×1.5 | ✔ (not shown) |
+| Elevated | 0.05 – 0.10 | ≥ ×1.5 | ↑ Cyan |
+| Warning | 0.01 – 0.05 | ≥ ×2 | ⚠ Yellow |
+| Critical | ≤ 0.01 | ≥ ×3 | ✘ Red |
+
+Each `AnomalySignal` carries `observed`, plus `baseline` for baseline anomalies, and either `p_value` (Poisson test) or `ratio` (ratio test). Pressure signals are displayed as `pressure signal`.
 
 ---
 
@@ -183,7 +186,7 @@ All shortcuts are registered automatically via `inventory::submit!` and appear i
 
 ## 🗄️ Data storage
 
-Snapshots are stored in a **SQLite database** alongside `tracker_state.json` in the XDG config directory:
+Snapshots are stored in a **SQLite database** alongside the `tracker_<hash>.json` state files in the XDG config directory:
 
 | Platform | Path |
 | :--- | :--- |
@@ -197,11 +200,19 @@ Three events cause a snapshot to be written:
 
 | Trigger | When | Data quality |
 | :--- | :--- | :--- |
-| `on_merge` | MR transitions to `Merged` | Complete — all timing fields present |
-| `on_close` | MR transitions to `Closed` | Complete — distinguishes abandonment from merge in throughput |
-| `on_refresh` | MR still open, at most once per calendar day | Partial — enables backlog age tracking and stagnation detection |
+| `on_merge` | MR transitions to `Merged` | Complete — all timing fields present; dated at `merged_at` |
+| `on_close` | MR transitions to `Closed` | Complete — distinguishes abandonment from merge in throughput; dated at `updated_at` (best proxy for the close) |
+| `on_refresh` | MR still open, at most once per calendar day | Partial — enables backlog age tracking and stagnation detection; dated now |
 
-Idempotency is enforced at the DB level: `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` prevents duplicate snapshots even if the application is restarted mid-day.
+Terminal snapshots are dated at the **real event**, not at the refresh that observed it, so an MR merged last week and discovered today does not inflate today's throughput. Every `recorded_at` is stored in one canonical form (UTC, second precision, `Z` suffix), so the lexicographic order used by SQL filters is the chronological order.
+
+Idempotency is enforced at the DB level: `UNIQUE(mr_id, project_id, recorded_date, trigger)` (where `recorded_date` is the `YYYY-MM-DD` of `recorded_at`) prevents duplicate snapshots even if the application is restarted mid-day, or re-records the same merged MR on every refresh.
+
+### Schema versioning, repair and backup
+
+* The schema version is stored in `PRAGMA user_version`. Migrations are the numbered files of [`migrations/`](migrations/), embedded in the binary and applied in order on open; a shipped migration is never edited.
+* On startup, `SqliteStatsDb::startup_maintenance` purges snapshots older than `retention_days`, repairs legacy rows (terminal snapshots dated at the refresh instead of the event, non-canonical timestamps) and backfills missing terminal snapshots for the tracked MRs.
+* The repair only runs when something needs fixing, and first writes a consistent copy of the database to **`stats.db.bak`** (`VACUUM INTO`). The log line `Repaired legacy stats snapshots deleted=… redated=… normalized=… backup=…` reports what changed.
 
 ### Retention policy
 
@@ -237,13 +248,16 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     ├── snapshot.rs          MrStatsSnapshot + SnapshotTrigger
     │                        ↑ constructed by the orchestrator (gitlab-tracker)
     │
-    ├── db.rs                StatsDb trait + SqliteStatsDb
-    │                        upsert_snapshot / query / purge_old_snapshots
+    ├── db.rs                SqliteStatsDb (inherent methods, no trait)
+    │                        open (runs migrations) / upsert_snapshot / query
+    │                        startup_maintenance → purge + repair_snapshots + backfill
+    │
+    ├── migrations/          0001_initial.sql … — versioned via PRAGMA user_version
     │
     ├── metrics.rs           PerMrMetrics — pure functions over StoredSnapshot
     │                        cycle_time_hours, pipeline_failure_rate, comment_density
     │
-    ├── aggregator.rs        TimeWindow (LastDays / Milestone / Range)
+    ├── aggregator.rs        TimeWindow (LastDays / Range)
     │                        aggregate() → AggregatedStats
     │                        flow, quality, confidence, stale backlog, size buckets
     │
@@ -251,9 +265,12 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     │                        compute_all_correlations() → Vec<CorrelationResult>
     │
     ├── poisson.rs           Poisson forecasts, flow pressure, pressure signals,
-    │                        historical-baseline anomalies, QueueStatus
+    │                        baseline anomalies (Poisson count / ratio), QueueStatus
     │
     ├── report.rs            StatReport::load() / build_with_baseline()
+    │                        (correlations: one point per MR)
+    │
+    ├── settings.rs          [project.stats] entries of the settings dashboard
     │
     └── shortcuts.rs         inventory::submit! — auto-registers Stats shortcuts
                              in the [?] help popup

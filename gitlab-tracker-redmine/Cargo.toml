@@ -3,6 +3,7 @@ name = "gitlab-tracker-redmine"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Optional Redmine integration plugin for gitlab-tracker"
@@ -10,7 +11,7 @@ keywords = ["gitlab", "redmine", "tracker", "tui"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-gitlab-tracker-core.workspace = true
+gitlab-tracker-core = { workspace = true, features = ["secrets"] }
 inventory.workspace = true
 async-trait.workspace = true
 serde.workspace = true
@@ -21,4 +22,3 @@ zeroize.workspace = true
 directories.workspace = true
 regex = "1"
 tracing.workspace = true
-rpassword.workspace = true

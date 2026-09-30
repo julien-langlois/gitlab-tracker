@@ -90,7 +90,7 @@ impl TrackerProvider for RedmineProvider {
         detector::detect_ticket_id(title, description, &self.ticket_patterns)
     }
 
-    /// Exposes the colour maps configured in `redmine.yaml` to the orchestrator.
+    /// Exposes the colour maps configured under `[project.tracker]` in `projects.toml` to the orchestrator.
     ///
     /// The orchestrator converts the raw strings to `ratatui::Color` values — this
     /// crate stays free of any UI/rendering dependency.

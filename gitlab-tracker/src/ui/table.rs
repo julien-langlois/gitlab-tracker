@@ -238,7 +238,7 @@ pub fn render_table(app: &App) -> Table<'_> {
             // Build the title cell — prepend a coloured flag chevron for flagged MRs.
             let title_cell = if mr.flagged {
                 let title_color = match mr.status {
-                    MrStatus::Error => palette.accent_red,
+                    MrStatus::Error(_) => palette.accent_red,
                     _ => palette.fg,
                 };
                 Cell::from(Line::from(vec![
@@ -252,7 +252,7 @@ pub fn render_table(app: &App) -> Table<'_> {
                 ]))
             } else {
                 Cell::from(mr.title.as_str()).fg(match mr.status {
-                    MrStatus::Error => palette.accent_red,
+                    MrStatus::Error(_) => palette.accent_red,
                     _ => palette.fg,
                 })
             };
@@ -452,7 +452,7 @@ pub fn render_table(app: &App) -> Table<'_> {
             for b in &app.branches {
                 let cell = match &mr.status {
                     MrStatus::Loading => Cell::from("⏳ LOADING...").yellow(),
-                    MrStatus::Error => Cell::from("❌ FAILED").red(),
+                    MrStatus::Error(_) => Cell::from("❌ FAILED").red(),
                     MrStatus::MergedIn(set) => {
                         if set.contains(b) {
                             Cell::from("🟢 PRESENT").green()

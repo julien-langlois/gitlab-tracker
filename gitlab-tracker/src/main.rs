@@ -217,7 +217,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `get_or_prompt_token` returns a `Zeroizing<String>` that wipes the secret
     // from memory when dropped. It is shared as-is (behind an `Arc`) by the app and
     // every fetch, so no plain-`String` copy of the token is ever made.
-    let token = Arc::new(get_or_prompt_token(&base_url));
+    let token = Arc::new(get_or_prompt_token(&base_url).ok_or(
+        "A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)",
+    )?);
 
     // ── Optional tracker integration ──────────────────────────────────────────
     // The tracker config lives inside the active `ProjectEntry` under the generic
@@ -434,10 +436,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         GitlabMrState::Closed => SnapshotTrigger::OnClose,
                         GitlabMrState::Opened => SnapshotTrigger::OnRefresh,
                     };
-                    let snap =
-                        mr.stats_snapshot(trigger, &project_id, &app.config.complexity_profile);
-                    let recorded_at = snap.event_recorded_at();
-                    (snap, recorded_at)
+                    mr.stats_snapshot(trigger, &project_id, &app.config.complexity_profile)
                 })
                 .collect();
             // Written before the repair modifies anything (only when it has to).
@@ -445,51 +444,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|d| d.join("stats.db.bak"))
                 .and_then(|p| p.to_str().map(str::to_string));
 
-            // Single transaction: one fsync for the whole backfill instead of
-            // one per snapshot / label / reviewer. It also patches `created_at`
-            // on rows inserted before that field was tracked.
-            //
-            // Purge, deduplication and backfill run in the background so
-            // the UI shows up immediately; the report is refreshed once
-            // they are done (StatsSnapshotRecorded → next Tick).
+            // Purge, repair and backfill run in the background so the UI shows up
+            // immediately; the report is refreshed once they are done
+            // (StatsSnapshotRecorded → next Tick).
             let db = Arc::clone(&db);
             let project_id = project_id.clone();
             let tx = tx.clone();
             tokio::spawn(async move {
-                // Purge snapshots older than the configured retention threshold.
-                let retention_days = stats_retention_days;
-                match db.purge_old_snapshots(&project_id, retention_days).await {
-                    Ok(n) if n > 0 => {
-                        tracing::info!(rows = n, retention_days, "Purged old stats snapshots")
-                    }
-                    Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
-                    _ => {}
-                }
-
-                // Fix rows written by older versions (duplicate / misdated merge and
-                // close events, mixed timestamp formats). A clean database is only read.
-                match db
-                    .repair_snapshots(&project_id, backup_path.as_deref())
-                    .await
-                {
-                    Ok(summary) if summary != Default::default() => tracing::info!(
-                        deleted = summary.deleted,
-                        redated = summary.redated,
-                        normalized = summary.normalized,
-                        backup = ?summary.backup_path,
-                        "Repaired legacy stats snapshots"
-                    ),
-                    Ok(_) => {}
-                    Err(e) => tracing::warn!(error = %e, "Stats repair failed"),
-                }
-
-                match db.backfill_snapshots(&backfill).await {
-                    Ok(()) => tracing::info!(
-                        count = backfill.len(),
-                        "Stats backfill from tracker_state.json complete"
-                    ),
-                    Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
-                }
+                db.startup_maintenance(
+                    &project_id,
+                    stats_retention_days,
+                    backup_path.as_deref(),
+                    &backfill,
+                )
+                .await;
                 let _ = tx.send(AppEvent::StatsSnapshotRecorded);
             });
         }

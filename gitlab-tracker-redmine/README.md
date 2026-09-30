@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-redmine)](https://crates.io/crates/gitlab-tracker-redmine)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-redmine)](https://crates.io/crates/gitlab-tracker-redmine)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
 Optional Redmine integration plugin for [gitlab-tracker](../README.md).
 
@@ -45,13 +45,13 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
 
   Notifications are suppressed during the initial sync (see [`gitlab-tracker-notify`](../gitlab-tracker-notify/README.md)).
 
-* **Time Log view (`P` × 2):** press `P` twice (when the Tracker pane is focused) to reach the **Time Log** view:
+* **Time Log view (`p` on the Tracker pane):** focus the Tracker pane (`Tab` or `t`), then press `p` to toggle Ticket Info ↔ **Time Log**:
   * A progress bar comparing time spent vs. the ticket's estimate.
-  * The full list of time entries (date, user, activity, duration, comment) fetched live from Redmine.
-  * Navigating between MRs with `↑`/`↓` while on this view automatically refreshes the entries for the newly selected ticket.
+  * The full list of time entries (date, user, activity, duration, comment), read page by page from Redmine (`limit=100&offset=…`) so tickets with many entries are complete.
+  * Entries are cached per ticket: navigating between MRs shows the cached list instantly; the cache is refreshed on each refresh cycle, on `r`, and after logging time.
 
-* **Log time (`L`):** open a popup to submit a new time entry directly to Redmine — select the activity category, enter a duration (e.g. `1h30`, `90m`, `1.5h`), optionally add a comment, and confirm with `Enter`.
-* **Tracker column** in the main table (toggleable via `C`) — shows ticket ID, status, and spent/estimated time at a glance.
+* **Log time (`l`):** open a popup to submit a new time entry directly to Redmine — select the activity category, enter a duration (e.g. `1h30`, `90m`, `1.5h`), optionally add a comment, and confirm with `Enter`.
+* **Tracker column** in the main table (toggleable via `c`, only offered when the integration is active) — shows ticket ID, status, and spent/estimated time at a glance.
 * **Status discovery CLI:** list Redmine issue status IDs from the terminal via `gitlab-tracker tracker-statuses`, backed by Redmine's `GET /issue_statuses.json` endpoint. This helps configure GitLab-to-Redmine status transition mappings without guessing numeric IDs.
 * **Safe automatic status transitions:** when configured, a GitLab MR transition from `Opened` to `Merged` or `Closed` can update the linked Redmine issue status. The update is guarded by an optimistic concurrency check: Redmine is changed only if its live status still matches the last status known locally, preventing accidental overwrite of manual workflow changes.
 * **Transition notifications:** after a successful automatic Redmine status transition, the desktop notification plugin emits an "Open ticket" notification showing the old and new statuses.
@@ -81,21 +81,11 @@ cargo install gitlab-tracker --features redmine
 
 Configuration lives directly inside `projects.toml` under a `[project.tracker]` section — **no separate file needed**. Each `[[project]]` entry can point to a different Redmine instance.
 
-On first launch with the feature enabled and no `[project.tracker]` section configured, the app interactively prompts for a Redmine URL:
+The integration is **opt-in**: without a `[project.tracker]` section whose `provider = "redmine"`, it stays silently inactive (no prompt). The `REDMINE_URL` environment variable overrides the configured `url`; a section with an empty URL disables the integration with a warning in the log.
 
-```text
-🌐 No Redmine URL found for this project.
-   Leave empty to disable Redmine integration.
-Redmine URL: https://redmine.my-company.com
-```
+Invalid provider-specific fields (e.g. a malformed `status_transitions` table) are logged and replaced by their defaults instead of aborting startup.
 
-Leaving the prompt **empty** silently disables the integration for that project — no error, no impact on the rest of the dashboard. You can also pre-configure via environment variable to skip the prompt entirely:
-
-```env
-REDMINE_URL=https://redmine.my-company.com
-```
-
-> **Upgrading from a previous version?** If you have a `redmine.yaml` file from an older release, the app performs a **silent one-time migration** on first startup: all settings are read from `redmine.yaml`, written into the `[project.tracker]` section of `projects.toml`, and the old file is no longer used.
+> `redmine.yaml` from very old releases is no longer read: move its content to `[project.tracker]` as shown below.
 
 ### `projects.toml` — full Redmine reference
 
@@ -250,6 +240,8 @@ Under the hood, the command uses:
 
 The Redmine token is resolved the same way as the TUI: `REDMINE_TOKEN`, then OS keyring keyed by Redmine URL, then interactive prompt.
 
+Redmine errors are typed (`TrackerError` from `gitlab-tracker-core`): HTTP 401/403 become `Auth`, 404 becomes `NotFound`, transport failures `Network`. Any failed ticket fetch is logged and keeps the previously cached ticket instead of wiping it; a failed time-entries fetch is shown as an error in the Time Log view.
+
 > **How to discover your Redmine's label values**
 >
 > Label names (tracker types, priorities) are instance-specific and may be in any language. Run these commands against any existing issue to see what your instance returns:
@@ -270,7 +262,7 @@ The Redmine token is resolved the same way as the TUI: `REDMINE_TOKEN`, then OS 
 
 ## Estimate to Complete (ETC) — automatic update on time entry submission
 
-When you log time via the `L` popup, the app automatically recomputes the **Estimate to Complete (ETC)** on the linked Redmine ticket and writes it back.
+When you log time via the `l` popup, the app automatically recomputes the **Estimate to Complete (ETC)** on the linked Redmine ticket and writes it back.
 
 > **ETC** (Estimate to Complete) is the standard project management term for the remaining effort needed to finish a task. It is sometimes labelled _Remaining time_ or _Reste à faire_ (RAF) in French Redmine instances.
 
@@ -310,10 +302,11 @@ The Redmine personal API token follows the same secure lookup chain as the GitLa
 ```text
 1. REDMINE_TOKEN environment variable (if set — shared across all instances, useful for CI)
 2. Native OS Keyring — keyed by Redmine URL (per-instance, multi-tenant safe)
-3. Interactive CLI prompt → saved to OS Keyring under that URL's key
+3. Hidden interactive prompt → saved to OS Keyring under that URL's key
+   (leave it empty to disable Redmine for this project and session)
 ```
 
-Because the keyring entry is keyed by URL, switching between two Redmine instances never clobbers the other's token.
+Because the keyring entry is keyed by URL, switching between two Redmine instances never clobbers the other's token. The lookup chain is the shared `gitlab_tracker_core::secrets::resolve_secret` helper (feature `secrets` of `gitlab-tracker-core`), also used for the GitLab token; the token is held in a `Zeroizing<String>` and wiped from memory on drop.
 
 ---
 
@@ -334,7 +327,8 @@ impl TrackerProvider for MyProvider {
 
     fn detect_ticket_id(&self, title: &str, description: &str) -> Option<String> { ... }
 
-    async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket> { ... }
+    // Typed errors: NotFound / Auth / Network / Unsupported / Other.
+    async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError> { ... }
 
     fn ticket_url(&self, ticket_id: &str) -> String { ... }
 }
@@ -348,10 +342,23 @@ impl TrackerProvider for MyProvider {
     // Omit to use the hard-coded fallback (dark_gray / white).
     fn label_colors(&self) -> LabelColorMaps { ... }
 
-    // Time-tracking support:
-    async fn fetch_activities(&self) -> Vec<Activity> { ... }
-    async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> { ... }
-    async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), String> { ... }
+    // Number of HTTP calls per fetch_ticket, for the API-call counter (default 1).
+    fn estimate_calls_per_ticket(&self) -> usize { ... }
+
+    // Time-tracking support (defaults: empty lists, log_time → Err(Unsupported)):
+    async fn fetch_activities(&self) -> Result<Vec<Activity>, TrackerError> { ... }
+    async fn fetch_time_entries(&self, ticket_id: &str) -> Result<Vec<TimeEntry>, TrackerError> { ... }
+    async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), TrackerError> { ... }
+```
+
+Status automation is a separate, optional trait (`TicketTransitionProvider`) so read-only providers do not have to implement it:
+
+```rust
+#[async_trait]
+impl TicketTransitionProvider for MyProvider {
+    async fn fetch_transition_targets(&self) -> Result<Vec<TicketTransitionTarget>, TrackerError> { ... }
+    async fn transition_ticket_status(&self, ticket_id: &str, target_id: &str) -> Result<(), TrackerError> { ... }
+}
 ```
 
 ### Wiring in `main.rs`
@@ -367,8 +374,9 @@ let my_tracker_provider: Option<app::TrackerHandle> = {
     if let Some(cfg) = tracker_cfg {
         let mut my_cfg: MyTrackerConfig = cfg.extra.clone().try_into().unwrap_or_default();
         my_cfg.url = cfg.url.clone();
+        // Zeroizing<String> from gitlab_tracker_core::secrets::resolve_secret.
         my_tracker_keyring::get_or_prompt_token(&cfg.url).map(|tok| {
-            let provider = MyTrackerProvider::new(my_cfg, tok.to_string());
+            let provider = MyTrackerProvider::new(my_cfg, tok);
             Arc::new(provider) as Arc<dyn gitlab_tracker_core::TrackerProvider>
         })
     } else {

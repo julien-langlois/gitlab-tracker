@@ -192,7 +192,7 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
         .count();
     if pending > 0 {
         const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let frame = SPINNER_FRAMES[(app.spinner_frame / 3) % SPINNER_FRAMES.len()];
+        let frame = SPINNER_FRAMES[(app.layout.spinner_frame / 3) % SPINNER_FRAMES.len()];
         spans.push(sep(muted_dim));
         spans.push(Span::styled(
             format!("{} Loading ({} pending)…", frame, pending),

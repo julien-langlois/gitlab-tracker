@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-notify)](https://crates.io/crates/gitlab-tracker-notify)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-notify)](https://crates.io/crates/gitlab-tracker-notify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
 Optional desktop notification plugin for [gitlab-tracker](../README.md).
 
@@ -14,7 +14,7 @@ Powered by [`notify-rust`](https://crates.io/crates/notify-rust), it surfaces MR
 
 ## Events
 
-Ten events trigger a desktop notification:
+Eleven events trigger a desktop notification:
 
 **GitLab MR events**
 
@@ -45,7 +45,13 @@ Tracker ticket notifications open the **ticket URL** (not the MR) when clicked.
 
 ## Clickable notifications
 
-Each notification includes an **"Open MR"** action button. Clicking it opens the MR directly in your default web browser — no need to switch to the terminal first. The URL is resolved from the `web_url` field returned by the GitLab API.
+Each MR notification includes an **"Open MR"** action button (tracker notifications: **"Open ticket"**). Clicking it opens the URL directly in your default web browser — no need to switch to the terminal first. The MR URL is the `web_url` field returned by the GitLab API.
+
+## Never blocks the UI
+
+The public functions only **queue** the notification. A single background worker thread (`notify`), started on first use, performs the synchronous D-Bus calls, so a slow or hung notification daemon cannot freeze the TUI loop.
+
+Waiting for a click needs one thread per notification, blocked until it closes. At most **8** such waiters run at once; beyond that the notification is still shown but clicking it does nothing.
 
 > **Platform support:** the click-to-open behaviour relies on D-Bus actions on Linux (GNOME, KDE, etc.) and the system `open` command on macOS. On environments without a notification daemon the click action is silently ignored.
 
@@ -53,14 +59,14 @@ Each notification includes an **"Open MR"** action button. Clicking it opens the
 
 ## Anti-spam on startup
 
-Change notifications (`updated_at`, mergeability, milestone) are **suppressed during the initial sync** — the first fetch cycle after launch. This prevents a flood of toasts when the app starts and reconciles its in-memory state with the GitLab API. Only genuine changes detected during subsequent background refreshes (or a manual `R` refresh) will produce notifications.
+Change notifications (`updated_at`, mergeability, milestone, complexity, ticket fields) are **suppressed during the initial sync** — the first fetch cycle after launch. This prevents a flood of toasts when the app starts and reconciles its in-memory state with the GitLab API. Only genuine changes detected during subsequent background refreshes (or a manual `R` refresh) will produce notifications.
 
 * ✅ **No duplicate alerts** when restarting the app with an unchanged state.
 * ✅ **No spam** during the initial sync or redundant refresh cycles.
 * ✅ **Reliable detection** of real changes across refreshes and restarts.
 * ✅ **One click to open** the MR in your browser directly from the notification.
 
-The last-known branch state per MR is persisted in `tracker_state.json` under the `last_known_branches` key.
+The last-known branch set per MR is persisted in the tenant-scoped state file `tracker_<hash>.json` (hash of the GitLab URL + project ID) under the `last_known_branches` key. An MR seen for the first time during the startup sync (no persisted branch set yet) is a **first sighting**: its branches are recorded silently instead of sending one "new branch" toast per branch. Once an MR is known — even with an empty set — every new branch notifies, including changes that happened while the app was closed.
 
 ---
 

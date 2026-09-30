@@ -21,7 +21,7 @@ use std::collections::HashMap;
 /// Colour maps (background + foreground) for tracker badge labels shown in the
 /// Tracker pane.
 ///
-/// Populated at startup from the active tracker's config file (e.g. `redmine.yaml`)
+/// Populated at startup from the active tracker's config (e.g. `[project.tracker]` in `projects.toml`)
 /// and forwarded to renderers so they stay fully agnostic of each tracker's data model.
 ///
 /// Any future tracker plugin (Jira, Linear, …) simply fills the same two maps —

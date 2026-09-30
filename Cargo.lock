@@ -1175,7 +1175,6 @@ dependencies = [
  "open",
  "ratatui",
  "reqwest",
- "rpassword",
  "serde",
  "serde_json",
  "terminal-colorsaurus",
@@ -1194,9 +1193,13 @@ version = "0.4.8"
 dependencies = [
  "async-trait",
  "inventory",
+ "keyring",
+ "rpassword",
  "serde",
  "thiserror 2.0.19",
  "toml",
+ "tracing",
+ "zeroize",
 ]
 
 [[package]]
@@ -1218,7 +1221,6 @@ dependencies = [
  "keyring",
  "regex",
  "reqwest",
- "rpassword",
  "serde",
  "thiserror 2.0.19",
  "tracing",

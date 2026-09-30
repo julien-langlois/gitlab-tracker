@@ -119,18 +119,15 @@ impl SqliteStatsDb {
         Ok(())
     }
 
-    /// Startup backfill: for each `(snapshot, recorded_at)` runs
-    /// [`upsert_snapshot_at`](Self::upsert_snapshot_at), then fills `created_at`
-    /// on that MR's rows where it is still NULL (rows inserted before the field
-    /// was tracked — INSERT OR IGNORE never updates them). Everything runs in a
-    /// single transaction: one fsync instead of one per row. Idempotent.
-    pub async fn backfill_snapshots(
-        &self,
-        items: &[(MrStatsSnapshot, String)],
-    ) -> Result<(), StatsError> {
+    /// Startup backfill: records each snapshot at its event date
+    /// ([`MrStatsSnapshot::event_recorded_at`], like the live recorder), then fills
+    /// `created_at` on that MR's rows where it is still NULL (rows inserted before
+    /// the field was tracked — INSERT OR IGNORE never updates them). Everything runs
+    /// in a single transaction: one fsync instead of one per row. Idempotent.
+    pub async fn backfill_snapshots(&self, items: &[MrStatsSnapshot]) -> Result<(), StatsError> {
         let mut tx = self.pool.begin().await?;
-        for (snap, recorded_at) in items {
-            insert_snapshot(&mut tx, snap, recorded_at).await?;
+        for snap in items {
+            insert_snapshot(&mut tx, snap, &snap.event_recorded_at()).await?;
             if let Some(created_at) = &snap.created_at {
                 sqlx::query(BACKFILL_CREATED_AT_SQL)
                     .bind(created_at)
@@ -142,6 +139,43 @@ impl SqliteStatsDb {
         }
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Startup maintenance, meant to run in the background once the UI is up:
+    /// purges snapshots older than `retention_days`, repairs rows written by older
+    /// versions ([`Self::repair_snapshots`], backed up to `backup_path` first when
+    /// needed), then backfills `items` (the MRs restored from the state file, so
+    /// stats are useful without waiting for live events). Each step logs its
+    /// outcome; a failing step does not stop the next ones.
+    pub async fn startup_maintenance(
+        &self,
+        project_id: &str,
+        retention_days: u32,
+        backup_path: Option<&str>,
+        items: &[MrStatsSnapshot],
+    ) {
+        match self.purge_old_snapshots(project_id, retention_days).await {
+            Ok(n) if n > 0 => {
+                tracing::info!(rows = n, retention_days, "Purged old stats snapshots")
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "Stats purge failed"),
+        }
+        match self.repair_snapshots(project_id, backup_path).await {
+            Ok(summary) if summary != RepairSummary::default() => tracing::info!(
+                deleted = summary.deleted,
+                redated = summary.redated,
+                normalized = summary.normalized,
+                backup = ?summary.backup_path,
+                "Repaired legacy stats snapshots"
+            ),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "Stats repair failed"),
+        }
+        match self.backfill_snapshots(items).await {
+            Ok(()) => tracing::info!(count = items.len(), "Stats backfill complete"),
+            Err(e) => tracing::warn!(error = %e, "Stats backfill failed"),
+        }
     }
 
     /// Returns all stored snapshots matching the given filter, ordered by `recorded_at` ASC.
@@ -666,12 +700,19 @@ mod tests {
         let at = "2024-01-02T00:00:00Z".to_string();
 
         // First run: created_at unknown. Second run: same row (ignored) but created_at patched.
-        db.backfill_snapshots(&[(snap("1", None), at.clone()), (snap("2", None), at.clone())])
+        // `snap` is an OnMerge merged at `at`: the backfill records it at that date.
+        db.backfill_snapshots(&[snap("1", None), snap("2", None)])
             .await
             .unwrap();
-        db.backfill_snapshots(&[(snap("1", Some("2024-01-01T00:00:00Z")), at)])
+        db.backfill_snapshots(&[snap("1", Some("2024-01-01T00:00:00Z"))])
             .await
             .unwrap();
+        assert!(db
+            .query(&SnapshotQuery::default())
+            .await
+            .unwrap()
+            .iter()
+            .all(|r| r.recorded_at == at));
 
         let rows = db.query(&SnapshotQuery::default()).await.unwrap();
         assert_eq!(rows.len(), 2);

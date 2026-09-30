@@ -836,92 +836,18 @@ pub fn migrate_legacy_keyring_entry(gitlab_url: &str) {
     }
 }
 
-/// Resolves the GitLab PAT for a specific GitLab instance using the following priority chain:
-///   1. `GITLAB_TOKEN` environment variable
-///   2. OS keyring entry keyed by `gitlab_url` (per-instance, multi-tenant safe)
-///   3. Interactive prompt (hidden input via `rpassword`, no terminal echo)
-///
-/// The returned value is wrapped in `Zeroizing<String>` so the secret bytes
-/// are overwritten in memory as soon as the caller drops the value.
-///
-/// # Panics
-/// Panics if no token is provided — the program cannot function without one.
-pub fn get_or_prompt_token(gitlab_url: &str) -> Zeroizing<String> {
-    // 1. Environment variable takes priority (CI / dotenv workflows).
-    if let Ok(tok) = std::env::var("GITLAB_TOKEN") {
-        let tok = Zeroizing::new(tok);
-        if !tok.trim().is_empty() {
-            tracing::info!("GITLAB_TOKEN loaded from environment variable");
-            return Zeroizing::new(tok.trim().to_string());
-        }
-    }
-
-    let account = account_for(gitlab_url);
-
-    // 2. Try the OS keyring — keyed per GitLab instance URL.
-    tracing::debug!(
-        service = KEYRING_SERVICE,
-        account = %account,
-        "Attempting to read token from OS keyring"
-    );
-    match keyring::Entry::new(KEYRING_SERVICE, &account) {
-        Ok(entry) => match entry.get_password() {
-            Ok(password) => {
-                let password = Zeroizing::new(password);
-                if !password.trim().is_empty() {
-                    tracing::info!(url = %gitlab_url, "GITLAB_TOKEN loaded from OS keyring");
-                    return Zeroizing::new(password.trim().to_string());
-                }
-                tracing::warn!("Keyring entry found but token is empty — falling back to prompt");
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "Failed to read token from OS keyring — falling back to prompt");
-            }
-        },
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to open keyring entry — falling back to prompt");
-        }
-    }
-
-    // 3. Interactive prompt as a last resort.
-    // `rpassword` disables terminal echo so the PAT never appears on screen
-    // and cannot end up in shell history, screen recordings or logs.
-    println!("🔑 No GITLAB_TOKEN found in environment or system Keyring.");
-    match rpassword::prompt_password("Please enter your GitLab Personal Access Token: ") {
-        Ok(raw) => {
-            let token = Zeroizing::new(raw);
-            if !token.trim().is_empty() {
-                let token = Zeroizing::new(token.trim().to_string());
-                tracing::debug!(
-                    service = KEYRING_SERVICE,
-                    account = %account,
-                    "Saving token to OS keyring"
-                );
-                match keyring::Entry::new(KEYRING_SERVICE, &account) {
-                    Ok(entry) => match entry.set_password(&token) {
-                        Ok(_) => {
-                            tracing::info!(url = %gitlab_url, "Token successfully saved to OS keyring");
-                            println!("✅ Token securely saved to OS Keyring!\n");
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, "Failed to save token to OS keyring");
-                        }
-                    },
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to open keyring entry for writing");
-                    }
-                }
-                return token;
-            }
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to read token from prompt");
-        }
-    }
-
-    // Panic is intentional here: without a token the program cannot function.
-    // In a future refactor this should become a Result<String, TokenError>.
-    panic!("Error: Personal Access Token is required to run gitlab_tracker.");
+/// Resolves the GitLab PAT for a specific GitLab instance: `GITLAB_TOKEN`, then the
+/// OS keyring entry for that URL, then a hidden prompt saved to the keyring
+/// (see [`gitlab_tracker_core::secrets::resolve_secret`]). `None` when no token is
+/// given — the caller stops, as nothing works without one.
+pub fn get_or_prompt_token(gitlab_url: &str) -> Option<Zeroizing<String>> {
+    gitlab_tracker_core::secrets::resolve_secret(&gitlab_tracker_core::secrets::SecretSource {
+        env_var: "GITLAB_TOKEN",
+        keyring_service: KEYRING_SERVICE,
+        keyring_account: &account_for(gitlab_url),
+        label: "GitLab Personal Access Token",
+        prompt_hint: None,
+    })
 }
 
 pub fn get_save_dir() -> Option<PathBuf> {

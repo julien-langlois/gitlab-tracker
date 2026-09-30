@@ -3,6 +3,7 @@ name = "gitlab-tracker-notify"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Optional desktop notification plugin for gitlab-tracker"

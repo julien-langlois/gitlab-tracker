@@ -811,7 +811,7 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
         },
         TrackedMr {
             id: "106".into(),
-            status: MrStatus::Error,
+            status: MrStatus::Error("GitLab API returned 502 Bad Gateway".into()),
             // Demo: simulate a cleanly mergeable MR.
             mergeability: MergeabilityStatus::Mergeable,
             recently_updated: false,

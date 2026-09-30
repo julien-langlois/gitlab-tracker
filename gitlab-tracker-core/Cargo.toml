@@ -3,6 +3,7 @@ name = "gitlab-tracker-core"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Shared contracts and domain types for gitlab-tracker plugins"
@@ -15,3 +16,11 @@ async-trait.workspace = true
 inventory.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+# Token resolution (env var → OS keyring → prompt), only for crates that need it.
+keyring = { workspace = true, optional = true }
+rpassword = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+zeroize = { workspace = true, optional = true }
+
+[features]
+secrets = ["dep:keyring", "dep:rpassword", "dep:tracing", "dep:zeroize"]

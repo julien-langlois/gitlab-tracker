@@ -2,6 +2,8 @@ pub mod columns;
 pub mod domain;
 pub mod filters;
 pub mod provider;
+#[cfg(feature = "secrets")]
+pub mod secrets;
 pub mod settings;
 pub mod shortcuts;
 

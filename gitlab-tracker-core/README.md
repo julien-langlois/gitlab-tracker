@@ -4,13 +4,42 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-core)](https://crates.io/crates/gitlab-tracker-core)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-core)](https://crates.io/crates/gitlab-tracker-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.97+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
 Shared domain library for [gitlab-tracker](../README.md).
 
-This crate defines **all extension points** of the tracker — trait contracts, domain types,
-and policy interfaces. It has **zero dependency on `ratatui`, `crossterm`, or any UI crate**,
+This crate defines **all extension points** of the tracker — trait contracts, registries and
+domain types. It has **zero dependency on `ratatui`, `crossterm`, or any UI crate**,
 so every public type can be used and tested in isolation.
+
+| Module | Content |
+| :--- | :--- |
+| `provider` | `TrackerProvider`, `TicketTransitionProvider`, `TrackerError`, `LinkedTicket`, `TicketChange`, time-tracking types |
+| `domain` | `GitlabMrState`, `MergeabilityStatus`, `PipelineState`, `Requirement` — typed enums shared by the app, the plugins and the stats crate |
+| `filters` | `FilterDef` + `MrSnapshot` + registry |
+| `columns` | `ColumnDef` + registry |
+| `shortcuts` | `ShortcutBlock` / `ShortcutEntry` / `ShortcutFactory` + registry |
+| `settings` | `ProjectSettingDef` / `ProjectSettingFactory` + registry (settings dashboard `,`) |
+| `secrets` *(feature `secrets`)* | `resolve_secret`: env var → OS keyring → hidden prompt saved to the keyring |
+
+### Feature `secrets`
+
+Off by default, so a plugin that needs no credential does not pull `keyring` / `rpassword`.
+The binary and `gitlab-tracker-redmine` enable it and share one token lookup chain:
+
+```rust
+use gitlab_tracker_core::secrets::{resolve_secret, SecretSource};
+
+let token: Option<zeroize::Zeroizing<String>> = resolve_secret(&SecretSource {
+    env_var: "MY_TRACKER_TOKEN",
+    keyring_service: "gitlab-tracker-my-tracker",
+    keyring_account: &format!("my_token::{url}"),   // one slot per instance
+    label: "My Tracker API token",
+    prompt_hint: Some("Leave empty to disable the integration."),
+});
+```
+
+`None` means the prompt was left empty (or could not be read); the token is zeroized on drop.
 
 Plugin crates (`gitlab-tracker-redmine`, future Jira/Linear integrations) depend only on
 this crate — never on the binary crate.
@@ -33,16 +62,17 @@ pub trait TrackerProvider: Send + Sync {
     /// Returns `None` when no reference is found.
     fn detect_ticket_id(&self, title: &str, description: &str) -> Option<String>;
 
-    /// Fetches a ticket by ID. Returns `None` on any error (network, auth, not found).
-    async fn fetch_ticket(&self, ticket_id: &str) -> Option<LinkedTicket>;
+    /// Fetches a ticket by ID. Typed error: Network / Auth / NotFound / Unsupported / Other.
+    async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError>;
 
     /// Builds the direct URL to open the ticket in a browser.
     fn ticket_url(&self, ticket_id: &str) -> String;
 
-    // Optional — all have default no-op implementations:
+    // Optional — all have default implementations (empty / 1 / Err(Unsupported)):
     fn label_colors(&self) -> LabelColorMaps { … }
-    async fn fetch_activities(&self) -> Vec<Activity> { … }
-    async fn fetch_time_entries(&self, ticket_id: &str) -> Vec<TimeEntry> { … }
+    fn estimate_calls_per_ticket(&self) -> usize { … }
+    async fn fetch_activities(&self) -> Result<Vec<Activity>, TrackerError> { … }
+    async fn fetch_time_entries(&self, ticket_id: &str) -> Result<Vec<TimeEntry>, TrackerError> { … }
     async fn log_time(&self, ticket_id: &str, entry: TimeEntryRequest) -> Result<(), TrackerError> { … }
 }
 ```
@@ -106,9 +136,9 @@ internal model — it only renders these fields.
 | `time_estimate` | `Option<u32>` | Estimated time in seconds |
 | `time_spent` | `Option<u32>` | Time already spent in seconds |
 | `time_remaining` | `Option<u32>` | Remaining time (ETC) in seconds |
-| `ticket_type` | `Option<String>` | Type label (e.g. `"Bug"`, `"Evolution"`) |
+| `tracker_type` | `Option<String>` | Type label (e.g. `"Bug"`, `"Evolution"`) |
 | `priority` | `Option<String>` | Priority label (e.g. `"Normal"`, `"High"`) |
-| `target_version` | `Option<String>` | Target release/version |
+| `version` | `Option<String>` | Target release/version |
 | `start_date` | `Option<String>` | Start date (`YYYY-MM-DD`) |
 | `done_ratio` | `Option<u32>` | Completion percentage (0–100) |
 | `schema_version` | `u32` | Cache invalidation guard — see `LINKED_TICKET_SCHEMA_VERSION` |
@@ -130,11 +160,16 @@ inventory::submit!(FilterDef {
     active_label:    "My filter",
     priority:        100,          // 0–99: built-in, 100–199: plugins, 200+: community
     needs_text_input: false,
-    apply:           |mr, _query| { /* return true when MR should be visible */ },
+    requires:        None,         // or Some(Requirement::Tracker / GitlabUsername)
+    apply:           |mr, _query| mr.state == GitlabMrState::Opened,
 });
 ```
 
 Filters are collected at startup via `collect_all_filters()` and sorted by `priority`.
+`apply` receives an `MrSnapshot` — a borrowed, UI-free view of the MR whose `state`,
+`mergeability` and `pipeline_status` are the typed enums of `domain`, so a typo in a
+variant is a compile error rather than a silently empty filter. An entry whose
+`requires` is not met at runtime is hidden from the picker.
 
 ---
 
@@ -144,14 +179,16 @@ Register a new optional table column:
 
 ```rust
 inventory::submit!(ColumnDef {
-    id:       "my_column",
-    label:    "My Column",
-    priority: 100,
+    id:              "my_column",
+    label:           "My Column",
+    default_visible: false,
+    priority:        100,
+    requires:        Some(Requirement::Tracker),  // hidden from the picker otherwise
 });
 ```
 
 Columns are collected at startup via `collect_all_columns()` and sorted by `priority`.
-The user toggles visibility via the `C` picker — the active set is persisted to `projects.toml`.
+The user toggles visibility via the `c` picker — the active set is persisted to `projects.toml`.
 
 ---
 
@@ -160,22 +197,48 @@ The user toggles visibility via the `C` picker — the active set is persisted t
 Register a block of keyboard shortcuts to appear in the `?` help popup:
 
 ```rust
-inventory::submit!(ShortcutBlock {
-    title:    "My Plugin",
-    priority: 100,
-    entries:  ShortcutFactory(&|| vec![
-        ShortcutEntry { key: "X", description: "Do something" },
-    ]),
-});
+fn my_shortcuts() -> ShortcutBlock {
+    ShortcutBlock {
+        section:  "My Plugin",
+        priority: 100,
+        entries:  &[ShortcutEntry {
+            key:         "x",
+            description: "Do something",
+            status_hint: None,          // Some("[x]: Thing") for a status-bar slot
+        }],
+    }
+}
+inventory::submit!(ShortcutFactory(my_shortcuts));
 ```
 
 Blocks are collected via `collect_all_blocks()` and displayed in priority order.
 
 ---
 
+### `ProjectSettingDef` — settings dashboard extension point
+
+A crate can expose its own settings in the `,` dashboard. `read` / `write` work on the
+active `[[project]]` TOML table, so the crate owns its nested section (e.g. `[project.stats]`):
+
+```rust
+fn my_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "my.enabled", section: "My Plugin", label: "Enabled",
+        help: "Turns the plugin on for this project", priority: 100,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(true),
+        read:  |t| ProjectSettingValue::Bool(t.get("my_enabled").and_then(|v| v.as_bool()).unwrap_or(true)),
+        write: |t, v| if let ProjectSettingValue::Bool(b) = v { t.insert("my_enabled".into(), b.into()); },
+    }
+}
+inventory::submit!(ProjectSettingFactory(my_setting));
+```
+
+---
+
 ## Priority conventions
 
-All three extension points (`FilterDef`, `ColumnDef`, `ShortcutBlock`) share the same
+All extension points (`FilterDef`, `ColumnDef`, `ShortcutBlock`, `ProjectSettingDef`) share the same
 priority band convention:
 
 | Range | Owner |

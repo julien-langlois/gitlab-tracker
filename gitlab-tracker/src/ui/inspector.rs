@@ -582,6 +582,17 @@ pub fn render_safe_inspector_text(
     lines.push(Line::from(vec![Span::raw("")]));
     lines.push(section_header("Status", palette));
 
+    // Last fetch failed: say why (the title is left untouched).
+    if let crate::models::MrStatus::Error(error) = &mr.status {
+        lines.push(Line::from(vec![
+            Span::raw("Fetch    : "),
+            Span::styled(
+                format!("failed — {error}"),
+                Style::default().fg(palette.accent_red),
+            ),
+        ]));
+    }
+
     // Mergeability — only meaningful for open MRs.
     // badge_label() centers the text to BADGE_WIDTH, matching the State badge width.
     if mr.state == GitlabMrState::Opened {

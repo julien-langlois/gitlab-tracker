@@ -12,6 +12,7 @@ members = [
 version = "0.4.8"
 authors = ["Julien Langlois <julien@julienlanglois.fr>"]
 edition = "2021"
+rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/julien-langlois/gitlab-tracker"
 
