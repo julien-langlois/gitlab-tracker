@@ -181,7 +181,7 @@ fn render_stats_tab_bar(f: &mut Frame, area: Rect, active: StatsTab) {
 ///
 /// Marks `stats_view.loading = true` immediately so the overlay shows a spinner,
 /// then spawns a Tokio task that queries the DB and sends the result back via
-/// `AppEvent::StatsReportReady`. This keeps the main event loop non-blocking.
+/// `AppEvent::StatsReportLoaded`. This keeps the main event loop non-blocking.
 pub fn trigger_stats_refresh(
     app: &mut App,
     tx: &tokio::sync::mpsc::UnboundedSender<crate::models::AppEvent>,
@@ -222,6 +222,7 @@ fn trigger_stats_report_refresh(
             app.stats_view.scroll = 0;
         }
 
+        let generation = app.stats_view.next_generation();
         let window = app.stats_view.window.to_query_window();
         let project_id = app.project_id.clone();
         let sprint_weeks = app.stats_view.sprint_weeks;
@@ -235,14 +236,11 @@ fn trigger_stats_report_refresh(
                 ..Default::default()
             };
 
-            match gitlab_tracker_stats::StatReport::load(db.as_ref(), &filter).await {
-                Ok(report) => {
-                    let _ = tx2.send(crate::models::AppEvent::StatsReportReady(Box::new(report)));
-                }
-                Err(e) => {
-                    let _ = tx2.send(crate::models::AppEvent::StatsReportFailed(e.to_string()));
-                }
-            }
+            let result = gitlab_tracker_stats::StatReport::load(db.as_ref(), &filter)
+                .await
+                .map(Box::new)
+                .map_err(|e| e.to_string());
+            let _ = tx2.send(crate::models::AppEvent::StatsReportLoaded { generation, result });
         });
     }
 }

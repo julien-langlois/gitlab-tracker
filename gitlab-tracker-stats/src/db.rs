@@ -93,15 +93,21 @@ pub trait StatsDb: Send + Sync {
         retention_days: u32,
     ) -> Result<u64, StatsError>;
 
-    /// Removes duplicate `on_merge` / `on_close` snapshots for the same MR,
-    /// keeping only the row with the highest `id` (most recently inserted).
+    /// Repairs rows written by older versions, on every startup (idempotent: a
+    /// clean database is only read):
+    /// 1. keeps one `on_merge` / `on_close` row per MR (the most recent `id`) — older
+    ///    versions recorded a new one, dated today, on every refresh;
+    /// 2. re-dates those rows at the real event time (`merged_at` / `updated_at`),
+    ///    which the dedup of step 1 used to throw away with the backfilled row;
+    /// 3. normalises every `recorded_at` to the canonical UTC format.
     ///
-    /// Duplicates arise when the startup backfill runs on multiple days: the
-    /// UNIQUE constraint prevents same-day duplicates but not cross-day ones.
-    /// Safe to call on every startup — idempotent when no duplicates exist.
-    ///
-    /// Returns the number of rows deleted.
-    async fn deduplicate_snapshots(&self, project_id: &str) -> Result<u64, StatsError>;
+    /// When anything needs fixing and `backup_path` is given, a consistent copy of
+    /// the database is written there first (`VACUUM INTO`).
+    async fn repair_snapshots(
+        &self,
+        project_id: &str,
+        backup_path: Option<&str>,
+    ) -> Result<RepairSummary, StatsError>;
 }
 
 /// SQLite-backed implementation of [`StatsDb`].
@@ -207,8 +213,8 @@ impl SqliteStatsDb {
 #[async_trait]
 impl StatsDb for SqliteStatsDb {
     async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError> {
-        let now = chrono::Utc::now().to_rfc3339();
-        self.upsert_snapshot_at(snap, &now).await
+        self.upsert_snapshot_at(snap, &snap.event_recorded_at())
+            .await
     }
 
     async fn upsert_snapshot_at(
@@ -322,10 +328,14 @@ impl StatsDb for SqliteStatsDb {
             let reviewers = parse_json_list(row.get("reviewers_json"))?;
 
             let trigger_str: String = row.get("trigger");
-            let trigger = match trigger_str.as_str() {
-                "on_merge" => crate::snapshot::SnapshotTrigger::OnMerge,
-                "on_close" => crate::snapshot::SnapshotTrigger::OnClose,
-                _ => crate::snapshot::SnapshotTrigger::OnRefresh,
+            let trigger = match trigger_str.parse::<crate::snapshot::SnapshotTrigger>() {
+                Ok(trigger) => trigger,
+                Err(e) => {
+                    // Skip the row (e.g. written by a newer version) instead of
+                    // counting it as an open-MR refresh or failing the whole report.
+                    tracing::warn!(snapshot_id = id, error = %e, "Skipping stats snapshot");
+                    continue;
+                }
             };
 
             results.push(StoredSnapshot {
@@ -369,7 +379,7 @@ impl StatsDb for SqliteStatsDb {
     ) -> Result<u64, StatsError> {
         let cutoff = chrono::Utc::now()
             .checked_sub_signed(chrono::Duration::days(retention_days as i64))
-            .map(|dt| dt.to_rfc3339())
+            .map(crate::snapshot::format_timestamp)
             .unwrap_or_default();
 
         let result =
@@ -382,31 +392,140 @@ impl StatsDb for SqliteStatsDb {
         Ok(result.rows_affected())
     }
 
-    async fn deduplicate_snapshots(&self, project_id: &str) -> Result<u64, StatsError> {
-        // For each (mr_id, trigger) pair, keep only the row with MAX(id) and
-        // delete all others. MAX(id) = most recently inserted = best data quality
-        // (created_at already backfilled, most up-to-date diff stats, etc.).
-        let result = sqlx::query(
-            r#"
-            DELETE FROM mr_snapshots
-            WHERE project_id = ?
-              AND trigger IN ('on_merge', 'on_close')
-              AND id NOT IN (
-                  SELECT MAX(id)
-                  FROM mr_snapshots
-                  WHERE project_id = ?
-                    AND trigger IN ('on_merge', 'on_close')
-                  GROUP BY mr_id, trigger
-              )
-            "#,
-        )
-        .bind(project_id)
-        .bind(project_id)
-        .execute(&self.pool)
-        .await?;
+    async fn repair_snapshots(
+        &self,
+        project_id: &str,
+        backup_path: Option<&str>,
+    ) -> Result<RepairSummary, StatsError> {
+        let pending: i64 = sqlx::query_scalar(&repair_pending_sql())
+            .bind(project_id)
+            .fetch_one(&self.pool)
+            .await?;
+        tracing::debug!(project_id, pending, "Stats repair check");
+        if pending == 0 {
+            return Ok(RepairSummary::default());
+        }
 
-        Ok(result.rows_affected())
+        let mut summary = RepairSummary::default();
+        if let Some(path) = backup_path {
+            // VACUUM INTO refuses to overwrite: drop a previous backup first.
+            let _ = std::fs::remove_file(path);
+            sqlx::query("VACUUM INTO ?")
+                .bind(path)
+                .execute(&self.pool)
+                .await?;
+            summary.backup_path = Some(path.to_string());
+        }
+
+        let mut tx = self.pool.begin().await?;
+        summary.deleted = sqlx::query(&repair_dedup_sql())
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        summary.redated = sqlx::query(&repair_redate_sql())
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        summary.normalized = sqlx::query(&repair_normalize_sql())
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        tx.commit().await?;
+        Ok(summary)
     }
+}
+
+/// What [`StatsDb::repair_snapshots`] changed (all zero on a clean database).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RepairSummary {
+    /// Duplicate terminal rows removed.
+    pub deleted: u64,
+    /// Terminal rows moved to their real merge / close date.
+    pub redated: u64,
+    /// Rows whose `recorded_at` was rewritten in the canonical format.
+    pub normalized: u64,
+    /// Where the pre-repair backup was written, if one was needed.
+    pub backup_path: Option<String>,
+}
+
+// SQLite's `strftime` parses ISO 8601 with fractional seconds and offsets and
+// converts to UTC — the same canonical form as `snapshot::format_timestamp`.
+
+/// The real event time of a terminal row, in canonical form.
+const EVENT_TIME: &str =
+    "strftime('%Y-%m-%dT%H:%M:%SZ', CASE trigger WHEN 'on_merge' THEN merged_at ELSE updated_at END)";
+/// A row's `recorded_at`, in canonical form.
+const CANONICAL_RECORDED_AT: &str = "strftime('%Y-%m-%dT%H:%M:%SZ', recorded_at)";
+const TERMINAL: &str = "trigger IN ('on_merge', 'on_close')";
+
+/// Terminal rows that are not the latest of their (MR, trigger) group.
+fn duplicate_terminal_rows() -> String {
+    format!(
+        "project_id = ?1 AND {TERMINAL} AND id NOT IN \
+         (SELECT MAX(id) FROM mr_snapshots WHERE project_id = ?1 AND {TERMINAL} \
+          GROUP BY mr_id, trigger)"
+    )
+}
+
+/// Terminal rows not dated at their real event time.
+fn misdated_terminal_rows() -> String {
+    format!(
+        "project_id = ?1 AND {TERMINAL} AND {EVENT_TIME} IS NOT NULL \
+         AND recorded_at != {EVENT_TIME}"
+    )
+}
+
+/// Rows whose `recorded_at` is not in canonical form.
+fn unnormalized_rows() -> String {
+    format!(
+        "project_id = ?1 AND {CANONICAL_RECORDED_AT} IS NOT NULL \
+         AND recorded_at != {CANONICAL_RECORDED_AT}"
+    )
+}
+
+/// Number of rows [`StatsDb::repair_snapshots`] would change.
+fn repair_pending_sql() -> String {
+    format!(
+        "SELECT (SELECT COUNT(*) FROM mr_snapshots WHERE {}) \
+              + (SELECT COUNT(*) FROM mr_snapshots WHERE {}) \
+              + (SELECT COUNT(*) FROM mr_snapshots WHERE {})",
+        duplicate_terminal_rows(),
+        misdated_terminal_rows(),
+        unnormalized_rows()
+    )
+}
+
+/// Step 1: one terminal row per (MR, trigger), the most recently inserted.
+fn repair_dedup_sql() -> String {
+    format!(
+        "DELETE FROM mr_snapshots WHERE {}",
+        duplicate_terminal_rows()
+    )
+}
+
+/// Step 2: terminal rows dated at the real event (no UNIQUE clash after step 1).
+fn repair_redate_sql() -> String {
+    format!(
+        "UPDATE OR IGNORE mr_snapshots \
+         SET recorded_at = {EVENT_TIME}, recorded_date = substr({EVENT_TIME}, 1, 10) \
+         WHERE {}",
+        misdated_terminal_rows()
+    )
+}
+
+/// Step 3: canonical `recorded_at` everywhere. `OR IGNORE`: a row whose UTC day
+/// changes and clashes with an existing one keeps its old (still readable) value.
+fn repair_normalize_sql() -> String {
+    format!(
+        "UPDATE OR IGNORE mr_snapshots \
+         SET recorded_at = {CANONICAL_RECORDED_AT}, \
+             recorded_date = substr({CANONICAL_RECORDED_AT}, 1, 10) \
+         WHERE {}",
+        unnormalized_rows()
+    )
 }
 
 /// Only fills `created_at` where it is NULL — never overwrites existing data.
@@ -420,10 +539,13 @@ async fn insert_snapshot(
     snap: &MrStatsSnapshot,
     recorded_at: &str,
 ) -> Result<(), StatsError> {
+    // One storage format for every row (UTC, seconds, `Z`): SQL filters compare
+    // `recorded_at` as text, and `recorded_date` must be the UTC calendar day.
+    let recorded_at = crate::snapshot::normalize_timestamp(recorded_at);
     // Derive the calendar date (YYYY-MM-DD) from recorded_at so it can be used
     // directly in the UNIQUE constraint column without relying on DATE() expressions,
     // which are not allowed in UNIQUE constraints on SQLite < 3.37.
-    let recorded_date = recorded_at.get(..10).unwrap_or(recorded_at);
+    let recorded_date = recorded_at.get(..10).unwrap_or(&recorded_at).to_string();
 
     let row = sqlx::query(
         r#"
@@ -443,8 +565,8 @@ async fn insert_snapshot(
         RETURNING id
         "#,
     )
-    .bind(recorded_at)
-    .bind(recorded_date)
+    .bind(&recorded_at)
+    .bind(&recorded_date)
     .bind(snap.trigger.as_str())
     .bind(&snap.mr_id)
     .bind(&snap.project_id)
@@ -527,6 +649,88 @@ mod tests {
             pipeline_count: 0,
             pipeline_failure_count: 0,
         }
+    }
+
+    #[tokio::test]
+    async fn repair_fixes_legacy_rows_and_throughput() {
+        use crate::aggregator::{QueryFilter, TimeWindow};
+        // A file database, as in the app (`VACUUM INTO` backs up the real file).
+        let dir = std::env::temp_dir().join(format!("gt-repair-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = SqliteStatsDb::open(dir.join("stats.db").to_str().unwrap())
+            .await
+            .unwrap();
+        let fmt = |days_ago: i64| {
+            crate::snapshot::format_timestamp(chrono::Utc::now() - chrono::Duration::days(days_ago))
+        };
+        // Legacy bug: a MR merged 60 days ago re-recorded "today" on two refresh days.
+        let merged_at = fmt(60); // computed once: `fmt` moves with the clock
+        let mut merged = snap("1", None);
+        merged.merged_at = Some(merged_at.clone());
+        db.upsert_snapshot_at(&merged, &fmt(1)).await.unwrap();
+        db.upsert_snapshot_at(&merged, &fmt(0)).await.unwrap();
+        // Legacy format: an open-MR refresh stored with `to_rfc3339()`'s offset.
+        let mut open = snap("2", None);
+        open.trigger = SnapshotTrigger::OnRefresh;
+        open.merged_at = None;
+        db.upsert_snapshot_at(&open, &fmt(2)).await.unwrap();
+        sqlx::query("UPDATE mr_snapshots SET recorded_at = replace(recorded_at, 'Z', '.5+00:00') WHERE mr_id = '2'")
+            .execute(&db.pool)
+            .await
+            .unwrap();
+
+        let last_30_days = QueryFilter {
+            window: Some(TimeWindow::LastDays(30)),
+            project_id: Some("p".into()),
+            ..Default::default()
+        };
+        let merged_last_30 = || async {
+            crate::aggregator::aggregate(&db, &last_30_days)
+                .await
+                .unwrap()
+                .merged_count
+        };
+        assert_eq!(
+            merged_last_30().await,
+            1,
+            "legacy rows count an old merge as recent"
+        );
+
+        let backup = dir.join("stats.db.bak");
+        let backup = backup.to_str().unwrap();
+        let summary = db.repair_snapshots("p", Some(backup)).await.unwrap();
+        assert_eq!(
+            (summary.deleted, summary.redated, summary.normalized),
+            (1, 1, 1)
+        );
+        assert!(
+            std::path::Path::new(backup).exists(),
+            "backup written before repairing"
+        );
+        std::fs::remove_file(backup).unwrap();
+
+        let rows = db.query(&SnapshotQuery::default()).await.unwrap();
+        let merge_rows: Vec<_> = rows.iter().filter(|r| r.snapshot.mr_id == "1").collect();
+        assert_eq!(merge_rows.len(), 1);
+        assert_eq!(merge_rows[0].recorded_at, merged_at);
+        assert!(rows
+            .iter()
+            .all(|r| r.recorded_at.ends_with('Z') && r.recorded_at.len() == 20));
+        assert_eq!(
+            merged_last_30().await,
+            0,
+            "the old merge left the 30-day window"
+        );
+
+        // Idempotent: a clean database is only read, no new backup.
+        let again = db.repair_snapshots("p", Some(backup)).await.unwrap();
+        assert_eq!(again, RepairSummary::default());
+        assert!(!std::path::Path::new(backup).exists());
+
+        // And the fixed recorder cannot re-create the bug: re-recording is a no-op.
+        db.upsert_snapshot(&merged).await.unwrap();
+        assert_eq!(merged_last_30().await, 0);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[tokio::test]

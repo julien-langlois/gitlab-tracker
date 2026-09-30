@@ -104,13 +104,28 @@ fn anomaly_signal_line(signal: &AnomalySignal) -> Line<'static> {
         AnomalySeverity::Elevated => ("↑ ELEVATED", Color::Cyan),
         AnomalySeverity::Normal => ("✔ NORMAL  ", Color::Green),
     };
-    let detail = if signal.baseline_lambda > 0.0 {
-        format!(
-            "observed={:<5} baseline={:.1}  p={:.3}",
-            signal.observed, signal.baseline_lambda, signal.p_value
-        )
-    } else {
-        format!("value={:<5} pressure signal", signal.observed)
+    // Integers (counts) without decimals, rates and durations with two.
+    let fmt = |v: f64| {
+        if v.fract() == 0.0 {
+            format!("{v:.0}")
+        } else {
+            format!("{v:.2}")
+        }
+    };
+    let detail = match (signal.baseline, signal.p_value, signal.ratio) {
+        (Some(expected), Some(p), _) => format!(
+            "observed={:<5} expected={:.1}  p={:.3}",
+            fmt(signal.observed),
+            expected,
+            p
+        ),
+        (Some(baseline), None, Some(ratio)) => format!(
+            "observed={:<5} baseline={}  ×{:.1}",
+            fmt(signal.observed),
+            fmt(baseline),
+            ratio
+        ),
+        _ => format!("value={:<5} pressure signal", fmt(signal.observed)),
     };
 
     Line::from(vec![

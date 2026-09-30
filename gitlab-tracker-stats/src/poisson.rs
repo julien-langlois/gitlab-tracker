@@ -124,17 +124,18 @@ impl ThroughputForecast {
 
 // ── Anomaly detection ─────────────────────────────────────────────────────────
 
-/// Severity level of an anomaly, derived from its right-tail p-value.
+/// Severity level of an anomaly: from the right-tail p-value for Poisson count
+/// tests, from `observed / baseline` for ratio tests (see [`AnomalySignal`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnomalySeverity {
-    /// p > 0.10 — within normal variation, no action needed.
+    /// p > 0.10, or ratio < ×1.5 — within normal variation, no action needed.
     Normal,
-    /// 0.05 < p ≤ 0.10 — slightly elevated, worth monitoring.
+    /// 0.05 < p ≤ 0.10, or ratio ≥ ×1.5 — slightly elevated, worth monitoring.
     Elevated,
-    /// 0.01 < p ≤ 0.05 — statistically significant at the 5% level.
+    /// 0.01 < p ≤ 0.05, or ratio ≥ ×2 — significant.
     Warning,
-    /// p ≤ 0.01 — highly anomalous, investigate immediately.
+    /// p ≤ 0.01, or ratio ≥ ×3 — highly anomalous, investigate immediately.
     Critical,
 }
 
@@ -158,37 +159,36 @@ impl AnomalySeverity {
 }
 
 /// An anomaly signal for a single metric dimension.
+///
+/// Three kinds of signal share this shape; the optional fields say which one it is:
+/// - **Poisson count test** (merges in the window vs the baseline pace):
+///   `baseline` is the expected count λ and `p_value` is P(X ≥ observed);
+/// - **ratio test** (rates and durations, compared to the baseline value in the same
+///   unit): `baseline` and `ratio` (= observed / baseline) are set, `p_value` is not;
+/// - **pressure signal** (fixed threshold, no baseline): only `observed`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnomalySignal {
     /// Human-readable name of the metric being monitored.
     pub metric: String,
 
-    /// Baseline mean rate λ derived from historical data.
-    pub baseline_lambda: f64,
+    /// Observed value in the current window, in the metric's own unit
+    /// (count, share, hours, percent for pressure rates…).
+    pub observed: f64,
 
-    /// Actually observed count in the current window.
-    pub observed: u32,
+    /// Baseline value in the same unit (expected λ for a Poisson count test).
+    pub baseline: Option<f64>,
 
-    /// P(X ≥ observed) under Poisson(baseline_lambda).
-    pub p_value: f64,
+    /// `observed / baseline`, for ratio-tested metrics.
+    pub ratio: Option<f64>,
 
-    /// Qualitative severity derived from the p-value.
+    /// P(X ≥ observed) under Poisson(λ) — Poisson count tests only.
+    pub p_value: Option<f64>,
+
+    /// Qualitative severity.
     pub severity: AnomalySeverity,
 }
 
 impl AnomalySignal {
-    /// Builds an anomaly signal for a single metric.
-    pub fn new(metric: impl Into<String>, baseline_lambda: f64, observed: u32) -> Self {
-        let p_value = exceedance_probability(baseline_lambda, observed);
-        Self {
-            metric: metric.into(),
-            baseline_lambda,
-            observed,
-            p_value,
-            severity: AnomalySeverity::from_p_value(p_value),
-        }
-    }
-
     /// Returns `true` when this signal is worth surfacing to the user.
     pub fn is_anomalous(&self) -> bool {
         self.severity.is_anomalous()
@@ -395,37 +395,36 @@ fn build_anomaly_signals(
         return signals;
     };
 
-    push_rate_anomaly(
-        &mut signals,
-        "throughput_spike",
-        baseline.throughput_per_week,
-        stats.throughput_per_week,
-    );
-    push_rate_anomaly(
+    push_count_anomaly(&mut signals, "throughput_spike", stats, baseline);
+    push_ratio_anomaly(
         &mut signals,
         "pipeline_failure_rate_spike",
         baseline.avg_pipeline_failure_rate,
         stats
             .avg_pipeline_failure_rate
             .filter(|_| stats.pipeline_data_coverage >= 0.5),
+        Some(MIN_SHARE_INCREASE),
     );
-    push_rate_anomaly(
+    push_ratio_anomaly(
         &mut signals,
         "comment_density_spike",
         baseline.avg_comment_density,
         stats.avg_comment_density,
+        None,
     );
-    push_rate_anomaly(
+    push_ratio_anomaly(
         &mut signals,
         "abandon_rate_spike",
         baseline.abandon_rate,
         stats.abandon_rate,
+        Some(MIN_SHARE_INCREASE),
     );
-    push_rate_anomaly(
+    push_ratio_anomaly(
         &mut signals,
         "cycle_time_p90_spike",
         baseline.cycle_time_p90_hours,
         stats.cycle_time_p90_hours,
+        None,
     );
 
     signals
@@ -502,39 +501,93 @@ fn pressure_signal(
 ) -> AnomalySignal {
     AnomalySignal {
         metric: metric.into(),
-        baseline_lambda: 0.0,
-        observed,
-        p_value: 0.0,
+        observed: f64::from(observed),
+        baseline: None,
+        ratio: None,
+        p_value: None,
         severity,
     }
 }
 
-fn push_rate_anomaly(
+/// Minimum absolute increase for shares in [0, 1] (failure, abandon rates): going
+/// from 1 % to 2 % doubles the rate but is noise, not an anomaly.
+const MIN_SHARE_INCREASE: f64 = 0.05;
+
+/// Severity of a rate or duration relative to its baseline (same unit, so the result
+/// does not depend on the unit: hours or days give the same answer).
+fn ratio_severity(ratio: f64) -> AnomalySeverity {
+    if ratio >= 3.0 {
+        AnomalySeverity::Critical
+    } else if ratio >= 2.0 {
+        AnomalySeverity::Warning
+    } else if ratio >= 1.5 {
+        AnomalySeverity::Elevated
+    } else {
+        AnomalySeverity::Normal
+    }
+}
+
+/// Ratio test for rates and durations. Poisson models counts, not shares in [0, 1]
+/// or hours: applied to those, any tiny increase over a low baseline was flagged.
+fn push_ratio_anomaly(
     signals: &mut Vec<AnomalySignal>,
     metric: &'static str,
-    baseline_rate: Option<f64>,
-    current_rate: Option<f64>,
+    baseline: Option<f64>,
+    current: Option<f64>,
+    min_increase: Option<f64>,
 ) {
-    let Some(baseline_rate) = baseline_rate else {
+    let (Some(baseline), Some(current)) = (baseline, current) else {
         return;
     };
-    let Some(current_rate) = current_rate else {
-        return;
-    };
-    if baseline_rate <= 0.0 || current_rate <= baseline_rate {
+    if baseline <= 0.0 || min_increase.is_some_and(|min| current - baseline < min) {
         return;
     }
+    let ratio = current / baseline;
+    let severity = ratio_severity(ratio);
+    if severity.is_anomalous() {
+        signals.push(AnomalySignal {
+            metric: metric.to_string(),
+            observed: current,
+            baseline: Some(baseline),
+            ratio: Some(ratio),
+            p_value: None,
+            severity,
+        });
+    }
+}
 
-    let observed = current_rate.ceil() as u32;
-    let baseline_lambda = baseline_rate.max(0.1);
-    let p_value = exceedance_probability(baseline_lambda, observed);
+/// Poisson test on the merge **count** of the current window against the baseline
+/// pace scaled to the same duration: λ = baseline merges/week × window weeks.
+fn push_count_anomaly(
+    signals: &mut Vec<AnomalySignal>,
+    metric: &'static str,
+    stats: &AggregatedStats,
+    baseline: &AggregatedStats,
+) {
+    let (Some(baseline_per_week), Some(current_per_week)) =
+        (baseline.throughput_per_week, stats.throughput_per_week)
+    else {
+        return;
+    };
+    if baseline_per_week <= 0.0 || current_per_week <= 0.0 {
+        return;
+    }
+    // throughput_per_week = merged_count / window_weeks, hence the window duration.
+    let window_weeks = stats.merged_count as f64 / current_per_week;
+    let expected = baseline_per_week * window_weeks;
+    let observed = stats.merged_count as u32;
+    if f64::from(observed) <= expected {
+        return;
+    }
+    let p_value = exceedance_probability(expected, observed);
     let severity = AnomalySeverity::from_p_value(p_value);
     if severity.is_anomalous() {
         signals.push(AnomalySignal {
             metric: metric.to_string(),
-            baseline_lambda,
-            observed,
-            p_value,
+            observed: f64::from(observed),
+            baseline: Some(expected),
+            ratio: None,
+            p_value: Some(p_value),
             severity,
         });
     }
@@ -544,6 +597,52 @@ fn push_rate_anomaly(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn rates_and_durations_use_ratios_not_poisson() {
+        let signal = |baseline, current, min| {
+            let mut signals = Vec::new();
+            push_ratio_anomaly(&mut signals, "m", Some(baseline), Some(current), min);
+            signals.pop().map(|s| s.severity)
+        };
+        // Share 5 % → 6 %: used to be ELEVATED under Poisson; now below the +5 pt floor.
+        assert_eq!(signal(0.05, 0.06, Some(MIN_SHARE_INCREASE)), None);
+        assert_eq!(
+            signal(0.10, 0.35, Some(MIN_SHARE_INCREASE)),
+            Some(AnomalySeverity::Critical)
+        );
+        // Durations: same answer whatever the unit.
+        assert_eq!(signal(10.0, 16.0, None), Some(AnomalySeverity::Elevated)); // hours
+        assert_eq!(
+            signal(10.0 / 24.0, 16.0 / 24.0, None),
+            Some(AnomalySeverity::Elevated)
+        ); // days
+        assert_eq!(signal(10.0, 21.0, None), Some(AnomalySeverity::Warning));
+        assert_eq!(signal(10.0, 14.0, None), None);
+    }
+
+    #[test]
+    fn throughput_is_a_poisson_count_over_the_window() {
+        let filter = crate::aggregator::QueryFilter::default();
+        let empty = crate::aggregator::compute_stats(&[], &[], &filter);
+        let (mut current, mut baseline) = (empty.clone(), empty);
+        // 20 merges in 4 weeks (5/week) against a usual pace of 2/week: λ = 8.
+        current.merged_count = 20;
+        current.throughput_per_week = Some(5.0);
+        baseline.throughput_per_week = Some(2.0);
+        let mut signals = Vec::new();
+        push_count_anomaly(&mut signals, "throughput_spike", &current, &baseline);
+        let signal = signals.pop().expect("20 merges vs λ = 8 is anomalous");
+        assert_eq!(signal.baseline, Some(8.0));
+        assert!(signal.p_value.unwrap() < 0.01);
+        assert_eq!(signal.severity, AnomalySeverity::Critical);
+        // At the usual pace: nothing.
+        current.merged_count = 8;
+        current.throughput_per_week = Some(2.0);
+        push_count_anomaly(&mut signals, "throughput_spike", &current, &baseline);
+        assert!(signals.is_empty());
+    }
+
     use super::*;
 
     #[test]

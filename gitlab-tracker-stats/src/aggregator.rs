@@ -185,12 +185,12 @@ pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
         Some(TimeWindow::LastDays(days)) => {
             let from = Utc::now()
                 .checked_sub_signed(Duration::days(*days as i64))
-                .map(|dt| dt.to_rfc3339());
+                .map(crate::snapshot::format_timestamp);
             q.from_date = from;
         }
         Some(TimeWindow::Range { from, to }) => {
-            q.from_date = Some(from.clone());
-            q.to_date = Some(to.clone());
+            q.from_date = Some(crate::snapshot::normalize_timestamp(from));
+            q.to_date = Some(crate::snapshot::normalize_timestamp(to));
         }
         Some(TimeWindow::Milestone(title)) => {
             q.milestone = Some(title.clone());
@@ -202,6 +202,25 @@ pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
 }
 
 /// Pure computation over already-loaded snapshots and their derived metrics.
+/// Index of the latest snapshot of each MR (snapshots are ordered by `recorded_at`).
+///
+/// Keyed by `(project_id, mr_id)`: an MR iid is only unique within its project.
+pub(crate) fn latest_per_mr(snapshots: &[StoredSnapshot]) -> Vec<usize> {
+    let mut latest = HashMap::<(&str, &str), usize>::new();
+    for (i, snap) in snapshots.iter().enumerate() {
+        latest.insert(
+            (
+                snap.snapshot.project_id.as_str(),
+                snap.snapshot.mr_id.as_str(),
+            ),
+            i,
+        );
+    }
+    let mut indices: Vec<usize> = latest.into_values().collect();
+    indices.sort_unstable(); // deterministic order (HashMap iteration is not)
+    indices
+}
+
 pub(crate) fn compute_stats(
     snapshots: &[StoredSnapshot],
     metrics: &[PerMrMetrics],
@@ -212,13 +231,7 @@ pub(crate) fn compute_stats(
     // older snapshots for the same MR.
     // `snapshots` and `metrics` are parallel slices, so the latest entry per MR is
     // tracked by index and both views borrow it — no metric is computed twice.
-    let latest_indices: Vec<usize> = {
-        let mut latest = HashMap::<&str, usize>::new();
-        for (i, snap) in snapshots.iter().enumerate() {
-            latest.insert(snap.snapshot.mr_id.as_str(), i);
-        }
-        latest.into_values().collect()
-    };
+    let latest_indices = latest_per_mr(snapshots);
     let latest_snapshots: Vec<&StoredSnapshot> =
         latest_indices.iter().map(|&i| &snapshots[i]).collect();
     let latest_metrics: Vec<&PerMrMetrics> = latest_indices.iter().map(|&i| &metrics[i]).collect();
@@ -632,6 +645,23 @@ mod tests {
                 pipeline_failure_count: 0,
             },
         }
+    }
+
+    #[test]
+    fn one_point_per_mr_keyed_by_project() {
+        use SnapshotTrigger::*;
+        // MR 1 refreshed on 3 days, MR 2 once, and another project's MR "1".
+        let mut other = stored(5, "1", OnRefresh, "opened", 9);
+        other.snapshot.project_id = "q".into();
+        let snapshots = vec![
+            stored(1, "1", OnRefresh, "opened", 10),
+            stored(2, "1", OnRefresh, "opened", 20),
+            stored(3, "2", OnRefresh, "opened", 5),
+            stored(4, "1", OnRefresh, "opened", 30),
+            other,
+        ];
+        // 3 MRs, not 5 snapshots; MR 1 is represented by its latest snapshot only.
+        assert_eq!(latest_per_mr(&snapshots), [2, 3, 4]);
     }
 
     #[test]

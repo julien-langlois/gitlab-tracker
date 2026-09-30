@@ -605,13 +605,14 @@ pub enum AppEvent {
     TimeLogFailed {
         error: String,
     },
-    /// Fired when the async stats aggregation completes successfully.
-    /// Boxed to keep the enum variant size in check (Clippy `large_enum_variant`).
+    /// Fired when an async stats aggregation finishes. `generation` identifies the
+    /// request (see `StatsViewState::apply_result`); the report is boxed to keep the
+    /// enum variant size in check (Clippy `large_enum_variant`).
     #[cfg(feature = "stats")]
-    StatsReportReady(Box<gitlab_tracker_stats::StatReport>),
-    /// Fired when the async stats aggregation fails.
-    #[cfg(feature = "stats")]
-    StatsReportFailed(String),
+    StatsReportLoaded {
+        generation: u64,
+        result: Result<Box<gitlab_tracker_stats::StatReport>, String>,
+    },
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,

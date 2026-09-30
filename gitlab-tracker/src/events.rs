@@ -984,7 +984,7 @@ pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('g') | KeyCode::Char('G') => {
             // Reuse a fake tx — demo mode has no async runtime wired to apply_event,
             // so we create a throwaway channel and discard the receiver.
-            // trigger_stats_refresh only needs tx to send StatsReportReady back.
+            // trigger_stats_refresh only needs tx to send StatsReportLoaded back.
             // In demo mode the rx is held by the main loop in demo.rs which drains it.
             // We can safely re-use the pattern: the demo loop already has a tx from
             // the Tick timer channel, but handle_key_event_demo doesn't receive it.

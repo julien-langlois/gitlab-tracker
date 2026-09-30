@@ -909,15 +909,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 }
                 // Route stats results into app state so the overlay re-renders.
                 #[cfg(feature = "stats")]
-                AppEvent::StatsReportReady(report) => {
-                    app.stats_view.loading = false;
-                    app.stats_view.error = None;
-                    app.stats_view.report = Some(*report);
-                }
-                #[cfg(feature = "stats")]
-                AppEvent::StatsReportFailed(err) => {
-                    app.stats_view.loading = false;
-                    app.stats_view.error = Some(err);
+                AppEvent::StatsReportLoaded { generation, result } => {
+                    app.stats_view.apply_result(generation, result);
                 }
                 _ => {}
             }

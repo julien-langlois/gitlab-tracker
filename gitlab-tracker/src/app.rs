@@ -252,6 +252,38 @@ pub struct StatsViewState {
     /// Sprint duration in weeks for throughput forecasts — read from
     /// `stats_sprint_weeks` in `projects.toml`, defaults to 2.
     pub sprint_weeks: u32,
+    /// Id of the latest report request; older responses are stale.
+    pub generation: u64,
+}
+
+#[cfg(feature = "stats")]
+impl StatsViewState {
+    /// Starts a new report request and returns its generation.
+    pub fn next_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+
+    /// Applies a finished report request, unless a newer one was started since
+    /// (e.g. the window changed with `[W]` while the old one was computing): a late
+    /// response must not replace the report of the window shown in the title.
+    pub fn apply_result(
+        &mut self,
+        generation: u64,
+        result: Result<Box<gitlab_tracker_stats::StatReport>, String>,
+    ) {
+        if generation != self.generation {
+            return;
+        }
+        self.loading = false;
+        match result {
+            Ok(report) => {
+                self.error = None;
+                self.report = Some(*report);
+            }
+            Err(error) => self.error = Some(error),
+        }
+    }
 }
 
 #[cfg(feature = "stats")]
@@ -265,6 +297,7 @@ impl Default for StatsViewState {
             window: StatsWindow::default(),
             tab: StatsTab::default(),
             sprint_weeks: 2,
+            generation: 0,
         }
     }
 }
@@ -2062,8 +2095,10 @@ impl App {
                 // ── Stats recording ───────────────────────────────────────────
                 // Record a snapshot into the stats DB when the feature is enabled.
                 // Three triggers are handled here:
-                //   • OnMerge  — when the MR just transitioned to Merged state.
-                //   • OnClose  — when the MR just transitioned to Closed state.
+                //   • OnMerge / OnClose — on every load of a merged / closed MR. The
+                //     snapshot is dated at the real merge / close time
+                //     (`event_recorded_at`), so only the first one is stored; the
+                //     others hit the UNIQUE constraint.
                 //   • OnRefresh — at most once per calendar day for open MRs.
                 #[cfg(feature = "stats")]
                 if let Some(db) = self.stats_db.clone() {
@@ -2145,23 +2180,14 @@ impl App {
 
             // ── Stats async results ───────────────────────────────────────────
             #[cfg(feature = "stats")]
-            AppEvent::StatsReportReady(report) => {
-                self.stats_view.loading = false;
-                self.stats_view.error = None;
-                self.stats_view.report = Some(*report);
+            AppEvent::StatsReportLoaded { generation, result } => {
+                self.stats_view.apply_result(generation, result);
                 false
             }
 
             #[cfg(feature = "stats")]
             AppEvent::StatsSnapshotRecorded => {
                 self.stats_report_dirty = true;
-                false
-            }
-
-            #[cfg(feature = "stats")]
-            AppEvent::StatsReportFailed(err) => {
-                self.stats_view.loading = false;
-                self.stats_view.error = Some(err);
                 false
             }
 
@@ -2708,6 +2734,23 @@ mod tests {
             Some("v1.0")
         );
         assert_eq!(without_sentinel(None), None);
+    }
+
+    #[cfg(feature = "stats")]
+    #[test]
+    fn stale_stats_report_is_ignored() {
+        let mut view = StatsViewState::default();
+        let old = view.next_generation(); // e.g. 30-day window
+        view.loading = true;
+        let new = view.next_generation(); // [W] pressed: 90-day window
+        view.apply_result(old, Err("old window".into()));
+        assert!(
+            view.loading && view.error.is_none(),
+            "late response ignored"
+        );
+        view.apply_result(new, Err("new window".into()));
+        assert!(!view.loading);
+        assert_eq!(view.error.as_deref(), Some("new window"));
     }
 
     #[test]

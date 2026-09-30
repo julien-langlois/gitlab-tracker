@@ -27,6 +27,37 @@ impl SnapshotTrigger {
     }
 }
 
+impl std::str::FromStr for SnapshotTrigger {
+    type Err = String;
+
+    /// Parses the `trigger` DB column. An unknown value is an error, never a silent
+    /// `OnRefresh`: a row written by a newer version must not be miscounted.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "on_merge" => Ok(SnapshotTrigger::OnMerge),
+            "on_close" => Ok(SnapshotTrigger::OnClose),
+            "on_refresh" => Ok(SnapshotTrigger::OnRefresh),
+            other => Err(format!("unknown snapshot trigger {other:?}")),
+        }
+    }
+}
+
+/// Formats an instant the way every `recorded_at` value is stored and compared:
+/// UTC, second precision, `Z` suffix (`2026-09-29T10:00:00Z`). With a single fixed-width
+/// format, the lexicographic order used by SQL filters is the chronological order.
+pub fn format_timestamp(instant: chrono::DateTime<chrono::Utc>) -> String {
+    instant.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
+/// Normalises any RFC 3339 timestamp (GitLab's `…T10:00:00.000Z`, `to_rfc3339()`'s
+/// `…+00:00`, other offsets) to [`format_timestamp`]'s form. Unparseable input is
+/// returned unchanged rather than dropped.
+pub fn normalize_timestamp(ts: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(ts)
+        .map(|dt| format_timestamp(dt.with_timezone(&chrono::Utc)))
+        .unwrap_or_else(|_| ts.to_string())
+}
+
 impl std::fmt::Display for SnapshotTrigger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
@@ -119,4 +150,59 @@ pub struct MrStatsSnapshot {
 
     /// Number of pipeline runs that ended in `Failed` state.
     pub pipeline_failure_count: u32,
+}
+
+impl MrStatsSnapshot {
+    /// When the event this snapshot records happened, normalised.
+    ///
+    /// Terminal events are dated at the real merge / close time (`updated_at` is the
+    /// best available proxy for a close), so re-recording the same MR on every refresh
+    /// hits the `UNIQUE(…, recorded_date, trigger)` constraint and is a no-op — instead
+    /// of adding a fresh row dated today that inflates recent throughput.
+    /// Open-MR refreshes are dated now.
+    pub fn event_recorded_at(&self) -> String {
+        let event_time = match self.trigger {
+            SnapshotTrigger::OnMerge => self.merged_at.as_deref(),
+            SnapshotTrigger::OnClose => self.updated_at.as_deref(),
+            SnapshotTrigger::OnRefresh => None,
+        };
+        event_time
+            .map(normalize_timestamp)
+            .unwrap_or_else(|| format_timestamp(chrono::Utc::now()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timestamps_share_one_sortable_format() {
+        // GitLab, `to_rfc3339()` and another offset all land on the same form.
+        for ts in [
+            "2026-09-29T10:00:00.000Z",
+            "2026-09-29T10:00:00.123456789+00:00",
+            "2026-09-29T12:00:00+02:00",
+        ] {
+            assert_eq!(normalize_timestamp(ts), "2026-09-29T10:00:00Z", "{ts}");
+        }
+        // The UTC day can differ from the local one: recorded_date follows UTC.
+        assert_eq!(
+            normalize_timestamp("2026-09-30T01:30:00+02:00"),
+            "2026-09-29T23:30:00Z"
+        );
+        assert_eq!(normalize_timestamp("not a date"), "not a date");
+    }
+
+    #[test]
+    fn unknown_trigger_is_an_error() {
+        for trigger in [
+            SnapshotTrigger::OnMerge,
+            SnapshotTrigger::OnClose,
+            SnapshotTrigger::OnRefresh,
+        ] {
+            assert_eq!(trigger.as_str().parse::<SnapshotTrigger>(), Ok(trigger));
+        }
+        assert!("on_reopen".parse::<SnapshotTrigger>().is_err());
+    }
 }

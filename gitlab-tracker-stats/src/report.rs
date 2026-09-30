@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::aggregator::latest_per_mr;
 use crate::aggregator::{
     aggregate, build_snapshot_query, compute_stats, AggregatedStats, QueryFilter, TimeWindow,
 };
@@ -43,6 +44,13 @@ impl StatReport {
             .map(PerMrMetrics::from_snapshot)
             .collect::<Vec<_>>();
         let aggregated = compute_stats(&snapshots, &metrics, filter);
+        // Correlations use one point per MR (its latest snapshot): an MR open for 30
+        // days has 30 daily refresh snapshots, and counting each of them would weigh
+        // it like 30 MRs and inflate n (pseudo-replication), crushing the p-values.
+        let latest_metrics: Vec<PerMrMetrics> = latest_per_mr(&snapshots)
+            .into_iter()
+            .map(|i| metrics[i].clone())
+            .collect();
         let baseline = match build_baseline_filter(filter) {
             Some(baseline_filter) => Some(aggregate(db, &baseline_filter).await?),
             None => None,
@@ -51,7 +59,7 @@ impl StatReport {
         Ok(Self::build_with_baseline(
             aggregated,
             baseline.as_ref(),
-            &metrics,
+            &latest_metrics,
             filter,
         ))
     }

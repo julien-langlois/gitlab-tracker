@@ -418,41 +418,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // already persisted on disk so stats are immediately useful
         // without waiting for live merge/close events.
         //
-        // Strategy:
-        //   • Merged/closed MRs  → OnMerge / OnClose snapshot
-        //     (recorded_at = merged_at / updated_at as best proxy)
-        //   • Open MRs           → OnRefresh snapshot (today)
-        //
-        // All upserts are idempotent: the UNIQUE constraint silently
-        // ignores duplicates if the DB already has data for today.
+        // Merged/closed MRs → OnMerge / OnClose, open MRs → OnRefresh. Each snapshot
+        // is dated by `MrStatsSnapshot::event_recorded_at` (real merge / close time,
+        // or now), exactly like the live recorder, so all upserts are idempotent.
         {
             use crate::models::GitlabMrState;
             use gitlab_tracker_stats::db::StatsDb as _;
             use gitlab_tracker_stats::snapshot::SnapshotTrigger;
 
-            let today = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-
-            let mut backfill = Vec::with_capacity(app.mrs.len());
-            for mr in &app.mrs {
-                let (trigger, recorded_at) = match &mr.state {
-                    GitlabMrState::Merged => (
-                        SnapshotTrigger::OnMerge,
-                        mr.merged_at.clone().unwrap_or_else(|| today.clone()),
-                    ),
-                    GitlabMrState::Closed => (
-                        SnapshotTrigger::OnClose,
-                        mr.updated_at.clone().unwrap_or_else(|| today.clone()),
-                    ),
-                    GitlabMrState::Opened => (SnapshotTrigger::OnRefresh, today.clone()),
-                };
-
-                let snap = mr.stats_snapshot(trigger, &project_id, &app.config.complexity_profile);
-
-                // `recorded_at` is explicit so merged MRs appear at their real
-                // merge date rather than today; open MRs land at today —
-                // correct behaviour for OnRefresh.
-                backfill.push((snap, recorded_at));
-            }
+            let backfill: Vec<_> = app
+                .mrs
+                .iter()
+                .map(|mr| {
+                    let trigger = match &mr.state {
+                        GitlabMrState::Merged => SnapshotTrigger::OnMerge,
+                        GitlabMrState::Closed => SnapshotTrigger::OnClose,
+                        GitlabMrState::Opened => SnapshotTrigger::OnRefresh,
+                    };
+                    let snap =
+                        mr.stats_snapshot(trigger, &project_id, &app.config.complexity_profile);
+                    let recorded_at = snap.event_recorded_at();
+                    (snap, recorded_at)
+                })
+                .collect();
+            // Written before the repair modifies anything (only when it has to).
+            let backup_path = storage::get_save_dir()
+                .map(|d| d.join("stats.db.bak"))
+                .and_then(|p| p.to_str().map(str::to_string));
 
             // Single transaction: one fsync for the whole backfill instead of
             // one per snapshot / label / reviewer. It also patches `created_at`
@@ -475,14 +467,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => {}
                 }
 
-                // Remove cross-day duplicates produced by repeated backfills:
-                // the UNIQUE constraint prevents same-day dupes but not cross-day ones.
-                match db.deduplicate_snapshots(&project_id).await {
-                    Ok(n) if n > 0 => {
-                        tracing::info!(rows = n, "Deduplicated stats snapshots")
-                    }
-                    Err(e) => tracing::warn!(error = %e, "Stats deduplication failed"),
-                    _ => {}
+                // Fix rows written by older versions (duplicate / misdated merge and
+                // close events, mixed timestamp formats). A clean database is only read.
+                match db
+                    .repair_snapshots(&project_id, backup_path.as_deref())
+                    .await
+                {
+                    Ok(summary) if summary != Default::default() => tracing::info!(
+                        deleted = summary.deleted,
+                        redated = summary.redated,
+                        normalized = summary.normalized,
+                        backup = ?summary.backup_path,
+                        "Repaired legacy stats snapshots"
+                    ),
+                    Ok(_) => {}
+                    Err(e) => tracing::warn!(error = %e, "Stats repair failed"),
                 }
 
                 match db.backfill_snapshots(&backfill).await {
