@@ -540,6 +540,10 @@ pub struct App {
     /// When `true`, the user has pressed Esc once and is being asked to confirm quitting.
     /// A second Esc (or `y`) confirms; any other key cancels.
     pub quit_confirm: bool,
+    /// Demo mode: the key handler skips every disk write and network request
+    /// (settings, branches, flags, refresh, MR imports). Events it sends to the bus
+    /// (add / remove MR…) are not applied by the demo loop either.
+    pub read_only: bool,
     /// Monotonically incrementing counter bumped on every render frame (~20 fps).
     /// Used to animate the spinner independently of the 1-second tick timer.
     pub spinner_frame: usize,
@@ -700,6 +704,7 @@ impl App {
             clipboard: None,
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
+            read_only: false,
             theme,
             spinner_frame: 0,
             needs_sort: false,
@@ -2363,6 +2368,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::KeyCode;
 
     fn test_app() -> App {
         App::new(AppInit {
@@ -2751,6 +2757,68 @@ mod tests {
         view.apply_result(new, Err("new window".into()));
         assert!(!view.loading);
         assert_eq!(view.error.as_deref(), Some("new window"));
+    }
+
+    async fn press(app: &mut App, tx: &UnboundedSender<AppEvent>, code: KeyCode) -> bool {
+        crate::events::handle_key_event(
+            crossterm::event::KeyEvent::from(code),
+            app,
+            &Arc::new(Semaphore::new(1)),
+            tx,
+            &mut HashMap::new(),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn read_only_mode_never_fetches_or_mutates() {
+        let mut app = app_with_mrs(&[("t", "None")]).await;
+        app.read_only = true;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        while rx.try_recv().is_ok() {} // setup events
+
+        // [R]: the countdown restarts, no MR is refetched.
+        app.time_left = 3;
+        press(&mut app, &tx, KeyCode::Char('r')).await;
+        assert_eq!(app.time_left, app.refresh_interval_secs);
+        assert!(app.pending_refresh_fetches.is_empty());
+
+        // Typing an MR id or a branch in the input: nothing is added.
+        app.input_mode = InputMode::Editing;
+        app.input = "999".into();
+        press(&mut app, &tx, KeyCode::Enter).await;
+        app.input_mode = InputMode::Editing;
+        app.input = "release".into();
+        press(&mut app, &tx, KeyCode::Enter).await;
+        assert!(rx.try_recv().is_err(), "no MrAdded sent");
+        assert!(!app.branches.contains(&"release".to_string()));
+    }
+
+    #[cfg(feature = "stats")]
+    #[tokio::test]
+    async fn demo_stats_overlay_uses_the_real_handler() {
+        let mut app = app_with_mrs(&[("t", "None")]).await;
+        app.read_only = true;
+        app.stats_db = crate::demo::seed_demo_stats_db("1").await;
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        press(&mut app, &tx, KeyCode::Char('g')).await;
+        assert_eq!(app.input_mode, InputMode::Stats);
+        let first = app.stats_view.generation;
+        assert!(first > 0, "opening the overlay starts a report");
+
+        // [W] used to change the title only: it now recomputes the report.
+        let window = app.stats_view.window;
+        press(&mut app, &tx, KeyCode::Char('w')).await;
+        assert_ne!(app.stats_view.window, window);
+        assert!(app.stats_view.generation > first);
+
+        // Esc used to quit the demo from the overlay: it closes the overlay.
+        assert!(!press(&mut app, &tx, KeyCode::Esc).await);
+        assert_eq!(app.input_mode, InputMode::Normal);
+        // Quitting needs a confirmation, as in the app.
+        assert!(!press(&mut app, &tx, KeyCode::Esc).await);
+        assert!(press(&mut app, &tx, KeyCode::Char('y')).await);
     }
 
     #[test]

@@ -86,10 +86,11 @@ pub async fn handle_key_event(
                 // immediately dispatch a bulk-add fetch for that milestone's MRs.
                 if !app.milestone_suggestions.is_empty() {
                     if let Some(title) = app.confirm_milestone_suggestion() {
-                        let ctx = app.fetch_context();
                         // Filter by milestone title — the GitLab MRs API uses the title,
                         // not the numeric milestone ID, for the `milestone` query parameter.
-                        spawn_milestone_mrs_fetch(ctx, title, tx.clone());
+                        if !app.read_only {
+                            spawn_milestone_mrs_fetch(app.fetch_context(), title, tx.clone());
+                        }
                         app.input.clear();
                         app.input_mode = InputMode::Normal;
                     }
@@ -239,12 +240,14 @@ pub async fn handle_key_event(
                 KeyCode::Esc | KeyCode::Enter => {
                     // Close the popup and persist the new column visibility to projects.toml.
                     app.input_mode = InputMode::Normal;
-                    save_visible_columns_async(
-                        &app.config.visible_columns,
-                        &app.base_url,
-                        &app.project_id,
-                    )
-                    .await;
+                    if !app.read_only {
+                        save_visible_columns_async(
+                            &app.config.visible_columns,
+                            &app.base_url,
+                            &app.project_id,
+                        )
+                        .await;
+                    }
                 }
                 _ => {}
             }
@@ -262,7 +265,9 @@ pub async fn handle_key_event(
             }
             KeyCode::Enter => {
                 let project_table = app.settings_editor.to_project_table();
-                if let Some(project) =
+                if app.read_only {
+                    app.settings_editor.cancel();
+                } else if let Some(project) =
                     save_project_settings_async(&project_table, &app.base_url, &app.project_id)
                         .await
                 {
@@ -587,6 +592,9 @@ pub async fn handle_key_event(
                 // Force a full refresh of all MRs (GitLab + Redmine tickets).
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     app.time_left = app.refresh_interval_secs;
+                    if app.read_only {
+                        return false; // demo: only the countdown restarts
+                    }
                     app.time_entries.clear();
                     let ctx = app.fetch_context();
 
@@ -698,7 +706,7 @@ pub async fn handle_key_event(
 
                 // Space toggles the flagged state of the selected MR and persists immediately.
                 KeyCode::Char(' ') => {
-                    if app.toggle_flag_selected().is_some() {
+                    if app.toggle_flag_selected().is_some() && !app.read_only {
                         save_state_async(
                             &app.mrs,
                             last_known_branches,
@@ -777,6 +785,11 @@ async fn handle_enter(
     if value.is_empty() {
         return;
     }
+    if app.read_only {
+        // Demo: adding / removing MRs and branches is a mutation — ignore it.
+        app.input.clear();
+        return;
+    }
 
     if value.starts_with('-') {
         // Remove an MR (numeric) or a branch (text).
@@ -821,190 +834,4 @@ async fn handle_enter(
     }
 
     app.input.clear();
-}
-
-/// Handles a keyboard event in demo mode (no network, no input field, no mutations).
-///
-/// Accepts both `Press` and `Repeat` kinds so held keys scroll smoothly.
-/// Returns `true` if the main loop should exit (Esc was pressed).
-pub fn handle_key_event_demo(key: KeyEvent, app: &mut App) -> bool {
-    // Filter picker popup intercepts all keys when open.
-    if app.input_mode == InputMode::FilterPicker {
-        let visible_filters = app.visible_filter_defs();
-        let last_idx = visible_filters.len().saturating_sub(1);
-        let needs_text_input = visible_filters
-            .get(app.filter_picker.cursor)
-            .map(|(_, def)| def.needs_text_input)
-            .unwrap_or(false);
-        match key.code {
-            KeyCode::Esc => {
-                app.input_mode = InputMode::Normal;
-                app.filter_picker = FilterPickerState::default();
-            }
-            KeyCode::Enter => {
-                app.apply_filter_picker();
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if app.filter_picker.cursor > 0 {
-                    app.filter_picker.cursor -= 1;
-                    app.filter_picker.input.clear();
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if app.filter_picker.cursor < last_idx {
-                    app.filter_picker.cursor += 1;
-                    app.filter_picker.input.clear();
-                }
-            }
-            KeyCode::Backspace if needs_text_input => {
-                app.filter_picker.input.pop();
-            }
-            KeyCode::Char(c) if needs_text_input => {
-                app.filter_picker.input.push(c);
-            }
-            _ => {}
-        }
-        return false;
-    }
-
-    // Column-picker popup intercepts all keys when open.
-    if app.input_mode == InputMode::ColumnPicker {
-        let has_tracker = app.tracker.is_some();
-        let visible_cols: Vec<&'static gitlab_tracker_core::ColumnDef> = app
-            .column_defs
-            .iter()
-            .copied()
-            .filter(|c| {
-                c.requires_feature
-                    .map(|f| f == "tracker" && has_tracker)
-                    .unwrap_or(true)
-            })
-            .collect();
-        let column_count = visible_cols.len();
-
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                if app.column_picker_cursor > 0 {
-                    app.column_picker_cursor -= 1;
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if column_count > 0 && app.column_picker_cursor < column_count - 1 {
-                    app.column_picker_cursor += 1;
-                }
-            }
-            KeyCode::Char(' ') => {
-                if let Some(col) = visible_cols.get(app.column_picker_cursor) {
-                    app.config.visible_columns.toggle(col.id);
-                }
-            }
-            // Close the popup — no disk write in demo mode.
-            // Enter is used in the demo tape instead of Esc because VHS may fire
-            // the Escape sequence before the column picker frame is rendered, causing
-            // it to be received in Normal mode and quitting the app instead.
-            KeyCode::Enter => {
-                app.input_mode = InputMode::Normal;
-            }
-            _ => {}
-        }
-        return false;
-    }
-
-    match key.code {
-        KeyCode::Esc => return true,
-
-        KeyCode::Tab => {
-            app.active_pane = app.active_pane.next(app.has_tracker_ticket());
-        }
-
-        KeyCode::Down | KeyCode::Char('j') => match app.active_pane {
-            ActivePane::Inspector => app.inspector_scroll_down(1),
-            ActivePane::Tracker => app.tracker_scroll_down(1),
-            ActivePane::Dashboard => app.next_row(),
-        },
-        KeyCode::Up | KeyCode::Char('k') => match app.active_pane {
-            ActivePane::Inspector => app.inspector_scroll_up(1),
-            ActivePane::Tracker => app.tracker_scroll_up(1),
-            ActivePane::Dashboard => app.prev_row(),
-        },
-
-        // Open the MR URL in the default browser (useful even in demo mode).
-        KeyCode::Char('o') | KeyCode::Char('O') => {
-            if let Some(selected) = app.table_state.selected() {
-                // Use visible_mrs() so the index is relative to the filtered list.
-                if let Some(mr) = app.visible_mrs().nth(selected) {
-                    let target_url = if !mr.web_url.is_empty() {
-                        mr.web_url.clone()
-                    } else {
-                        format!(
-                            "{}/projects/{}/merge_requests/{}",
-                            app.base_url, app.project_id, mr.id
-                        )
-                    };
-                    let _ = open::that(target_url);
-                }
-            }
-        }
-
-        // [Y]ank — copy the git clone command for the MR source branch to clipboard.
-        KeyCode::Char('y') | KeyCode::Char('Y') => app.yank_clone_command(),
-
-        // Reset the refresh timer display only (no actual network fetch in demo mode).
-        KeyCode::Char('r') | KeyCode::Char('R') => {
-            app.time_left = app.refresh_interval_secs;
-        }
-
-        KeyCode::Char('s') => app.cycle_sort_column(),
-        KeyCode::Char('S') => app.toggle_sort_order(),
-
-        // [F] opens the filter picker popup in demo mode.
-        KeyCode::Char('f') | KeyCode::Char('F') => {
-            app.open_filter_picker();
-        }
-
-        // Space toggles the flagged state of the selected MR in demo mode (no persistence).
-        KeyCode::Char(' ') => {
-            app.toggle_flag_selected();
-        }
-
-        // [P] cycles the Inspector view in demo mode (no network fetch).
-        KeyCode::Char('p') | KeyCode::Char('P') => match app.active_pane {
-            ActivePane::Tracker => {
-                app.tracker_view = app.tracker_view.next();
-                app.reset_tracker_scroll();
-            }
-            _ => {
-                app.inspector_view = app.inspector_view.next();
-                app.reset_inspector_scroll();
-            }
-        },
-
-        // [G] opens the Stats overlay in demo mode — uses the in-memory DB seeded at startup.
-        #[cfg(feature = "stats")]
-        KeyCode::Char('g') | KeyCode::Char('G') => {
-            // Reuse a fake tx — demo mode has no async runtime wired to apply_event,
-            // so we create a throwaway channel and discard the receiver.
-            // trigger_stats_refresh only needs tx to send StatsReportLoaded back.
-            // In demo mode the rx is held by the main loop in demo.rs which drains it.
-            // We can safely re-use the pattern: the demo loop already has a tx from
-            // the Tick timer channel, but handle_key_event_demo doesn't receive it.
-            // Solution: set mode + mark loading; the report will arrive via the Tick loop.
-            app.input_mode = crate::app::InputMode::Stats;
-            app.stats_view.loading = true;
-            app.stats_view.error = None;
-            app.stats_view.scroll = 0;
-        }
-
-        // [W] cycles the time window inside the Stats overlay in demo mode.
-        #[cfg(feature = "stats")]
-        KeyCode::Char('w') | KeyCode::Char('W')
-            if app.input_mode == crate::app::InputMode::Stats =>
-        {
-            app.stats_view.window = app.stats_view.window.next();
-        }
-
-        _ => {}
-    }
-
-    false
 }

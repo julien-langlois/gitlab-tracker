@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::app::AppInit;
 use crate::config::{AppConfig, VisibleColumns};
-use crate::events::{handle_key_event_demo, handle_mouse_event};
+use crate::events::{handle_key_event, handle_mouse_event};
 use crate::models::{
     AppEvent, GitlabMrState, MergeabilityStatus, MrStatus, Pipeline, PipelineJob, PipelineState,
     TrackedMr,
@@ -19,7 +19,7 @@ use std::time::Duration;
 ///
 /// The dataset covers ~90 days, 4 authors, 2 milestones, and enough merged MRs
 /// for Spearman correlations and P50/P90 percentiles to be computed.
-async fn seed_demo_stats_db(
+pub(crate) async fn seed_demo_stats_db(
     project_id: &str,
 ) -> Option<std::sync::Arc<gitlab_tracker_stats::SqliteStatsDb>> {
     use gitlab_tracker_stats::snapshot::{MrStatsSnapshot, SnapshotTrigger};
@@ -879,8 +879,14 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
     // so it lands at row 0 after sorting.
     app.sort_mrs();
     app.table_state.select(Some(0));
+    // The demo runs the real key handler; this flag turns off its disk writes and
+    // network requests.
+    app.read_only = true;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
+    // Required by the key handler's signature; unused in read-only mode.
+    let api_semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+    let mut last_known_branches = std::collections::HashMap::new();
     let tx_timer = tx.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
@@ -912,6 +918,8 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 AppEvent::StatsReportLoaded { generation, result } => {
                     app.stats_view.apply_result(generation, result);
                 }
+                // Everything else (add / remove MR…) would mutate or fetch: the demo
+                // is read-only, so those events are dropped.
                 _ => {}
             }
         }
@@ -923,19 +931,20 @@ pub async fn run_demo_mode(config: AppConfig) -> Result<(), Box<dyn std::error::
                 Event::Mouse(mouse) => {
                     handle_mouse_event(mouse, &mut app);
                 }
+                // Repeat too, so held keys scroll smoothly in recordings.
                 Event::Key(key)
                     if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
                 {
-                    // Quit on Esc/q (handle_key_event_demo returns true).
-                    let quit = handle_key_event_demo(key, &mut app);
+                    let quit = handle_key_event(
+                        key,
+                        &mut app,
+                        &api_semaphore,
+                        &tx,
+                        &mut last_known_branches,
+                    )
+                    .await;
                     if quit {
                         break;
-                    }
-                    // handle_key_event_demo is sync: when the key just opened the Stats
-                    // overlay, start the async aggregation here.
-                    #[cfg(feature = "stats")]
-                    if app.input_mode == crate::app::InputMode::Stats && app.stats_view.loading {
-                        crate::ui::stats::trigger_stats_refresh(&mut app, &tx);
                     }
                 }
                 _ => {}

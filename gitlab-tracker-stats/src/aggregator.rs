@@ -202,6 +202,11 @@ pub fn build_snapshot_query(filter: &QueryFilter) -> SnapshotQuery {
 }
 
 /// Pure computation over already-loaded snapshots and their derived metrics.
+/// Identity of a MR across projects: its iid is only unique within its project.
+fn mr_key(metric: &PerMrMetrics) -> (&str, &str) {
+    (metric.project_id.as_str(), metric.mr_id.as_str())
+}
+
 /// Index of the latest snapshot of each MR (snapshots are ordered by `recorded_at`).
 ///
 /// Keyed by `(project_id, mr_id)`: an MR iid is only unique within its project.
@@ -246,7 +251,7 @@ pub(crate) fn compute_stats(
             .zip(metrics.iter())
             .rev()
             .filter(|(_, metric)| {
-                metric.trigger == SnapshotTrigger::OnMerge && seen.insert(metric.mr_id.as_str())
+                metric.trigger == SnapshotTrigger::OnMerge && seen.insert(mr_key(metric))
             })
             .collect()
     };
@@ -260,7 +265,7 @@ pub(crate) fn compute_stats(
         metrics
             .iter()
             .rev()
-            .filter(|m| m.trigger == SnapshotTrigger::OnClose && seen.insert(m.mr_id.as_str()))
+            .filter(|m| m.trigger == SnapshotTrigger::OnClose && seen.insert(mr_key(m)))
             .count()
     };
 
@@ -433,7 +438,10 @@ where
 
     for snap in snapshots.rev() {
         if snap.snapshot.trigger != SnapshotTrigger::OnMerge
-            || !seen.insert(snap.snapshot.mr_id.as_str())
+            || !seen.insert((
+                snap.snapshot.project_id.as_str(),
+                snap.snapshot.mr_id.as_str(),
+            ))
         {
             continue;
         }
@@ -645,6 +653,24 @@ mod tests {
                 pipeline_failure_count: 0,
             },
         }
+    }
+
+    #[test]
+    fn same_iid_in_two_projects_counts_twice() {
+        use SnapshotTrigger::*;
+        let mut other = stored(2, "1", OnMerge, "merged", 10);
+        other.snapshot.project_id = "q".into();
+        other.snapshot.merged_at = Some(chrono::Utc::now().to_rfc3339());
+        let mut here = stored(1, "1", OnMerge, "merged", 10);
+        here.snapshot.merged_at = other.snapshot.merged_at.clone();
+        let snapshots = vec![here, other];
+        let metrics: Vec<_> = snapshots.iter().map(PerMrMetrics::from_snapshot).collect();
+        let stats = compute_stats(&snapshots, &metrics, &QueryFilter::default());
+        assert_eq!(
+            stats.merged_count, 2,
+            "MR !1 of project p and MR !1 of project q"
+        );
+        assert_eq!(stats.merged_last_7_days, 2);
     }
 
     #[test]
