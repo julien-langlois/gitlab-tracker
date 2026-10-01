@@ -61,6 +61,13 @@ refactor.
 through `Deref`, so a new field is declared once. Fetch failures are kept in memory
 only, as `MrStatus::Error(String)`, and shown in the Inspector.
 
+**Review data** comes with the discussions fetch (`gitlab::fetch_discussions`, no
+extra call): `MrData::threads` (resolvable threads, `review_threads`) and
+`MrData::review` (`ReviewActivity`: first review, approval, review requests, last
+push, last activity per user — `review_activity`, which matches GitLab's English
+system notes). `MrData::approved_by` comes from `/approvals`, refetched while the
+MR is open. `review: None` means "never fetched" and drives the discussions cache.
+
 **Branch presence** has two sources. `MrStatus::MergedIn` holds the branches that
 contain the MR's merge SHA (GitLab `/refs`, `gitlab::branches_containing`; a
 transient failure keeps the previous set). For the other branches,

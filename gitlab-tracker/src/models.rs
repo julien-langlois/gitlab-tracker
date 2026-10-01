@@ -219,7 +219,7 @@ pub struct MrData {
     /// Pipelines fetched alongside the MR data and persisted across restarts.
     #[serde(default)]
     pub pipelines: Vec<Pipeline>,
-    /// Total number of user notes (comments + discussion threads) on this MR.
+    /// Number of **unresolved review threads** (the name predates this meaning).
     #[serde(default)]
     pub user_notes_count: u32,
     /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
@@ -232,6 +232,46 @@ pub struct MrData {
     /// Fingerprint of the merge / squash commit (`sha`), fetched once per SHA.
     #[serde(default)]
     pub landed_fingerprint: Option<CommitFingerprint>,
+    /// Resolvable discussion threads (resolved or not), from the discussions fetch.
+    #[serde(default)]
+    pub threads: Vec<MrThread>,
+    /// Review timeline derived from the discussions; `None`: never fetched.
+    #[serde(default)]
+    pub review: Option<ReviewActivity>,
+    /// Usernames of the current approvers (`/approvals`, refreshed while open).
+    #[serde(default)]
+    pub approved_by: Vec<String>,
+}
+
+/// A resolvable discussion thread of an MR.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MrThread {
+    /// Id of the thread's first note: GitLab links to it as `<mr url>#note_<id>`.
+    pub note_id: u64,
+    /// Username of the first note's author.
+    pub author: String,
+    /// Start of the first note, on one line.
+    pub excerpt: String,
+    pub created_at: String,
+    pub last_note_at: String,
+    pub notes: u32,
+    pub resolved: bool,
+}
+
+/// When review things happened on an MR, read from its discussions (system notes
+/// included). Timestamps are GitLab's RFC 3339 strings; maps are keyed by username.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct ReviewActivity {
+    /// First comment or approval by someone other than the author.
+    pub first_review_at: Option<String>,
+    /// Last approval still standing (cleared by a later unapproval).
+    pub approved_at: Option<String>,
+    /// Latest review request per reviewer.
+    pub review_requested_at: std::collections::BTreeMap<String, String>,
+    /// Last commits pushed to the MR.
+    pub last_push_at: Option<String>,
+    /// Latest comment or approval per user.
+    pub last_activity_by: std::collections::BTreeMap<String, String>,
 }
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author

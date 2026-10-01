@@ -1,7 +1,7 @@
 use crate::models::{
     AppEvent, BranchCommits, CommitFingerprint, DiffStats, GitLabLabelDetail, GitLabMilestone,
-    GitLabMr, GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, Pipeline,
-    PipelineJob,
+    GitLabMr, GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, MrThread,
+    Pipeline, PipelineJob, ReviewActivity,
 };
 
 use std::collections::HashSet;
@@ -181,6 +181,9 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
                 crate::models::MrStatus::MergedIn(found) => found.clone(),
                 _ => HashSet::new(),
             },
+            threads: mr.threads.clone(),
+            review: mr.review.clone(),
+            approved_by: mr.approved_by.clone(),
         }
     }
 }
@@ -194,16 +197,17 @@ impl CountApiCalls for crate::models::TrackedMr {
         // ── 1. Base MR fetch — always 1 call ─────────────────────────────────
         let base = 1;
 
-        // ── 2. Discussions — always fired for open MRs; skipped for
-        //       closed/merged when a non-zero count is already cached ──────────
+        // ── 2. Discussions (+ approvals) — always fired for open MRs; skipped for
+        //       closed/merged once fetched ───────────────────────────────────────
         // We pessimistically assume 1 page (the common case). Extra pages are
         // rare and impossible to predict without knowing the actual count.
-        let discussions =
-            if *state != crate::models::GitlabMrState::Opened && self.user_notes_count > 0 {
-                0 // Served from cache — no network call.
-            } else {
-                1 // At least one page fetched.
-            };
+        let discussions = if *state == crate::models::GitlabMrState::Opened {
+            2 // One discussions page + the approvals call.
+        } else if self.review.is_some() {
+            0 // Served from cache — no network call.
+        } else {
+            1 // At least one page fetched.
+        };
 
         // ── 3. Branch detection via /refs — only when a merge SHA is present,
         //       plus the one-off fetch of the merge / squash commit fingerprint ──
@@ -332,6 +336,10 @@ pub struct CachedMrData {
     pub landed_fingerprint: Option<CommitFingerprint>,
     /// Branches the MR was found on: kept when branch detection fails transiently.
     pub branches: HashSet<String>,
+    /// Discussions-derived data and approvers, reused with `user_notes_count`.
+    pub threads: Vec<MrThread>,
+    pub review: Option<ReviewActivity>,
+    pub approved_by: Vec<String>,
 }
 
 /// Controls which cached fields are bypassed during a fetch cycle.
@@ -427,96 +435,172 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     pipelines
 }
 
-/// A discussion thread of the GitLab Discussions API (only what is counted).
+/// A discussion thread (`/merge_requests/:iid/discussions`); system notes such
+/// as "approved this merge request" come as single-note discussions.
 #[derive(serde::Deserialize)]
 struct Discussion {
     #[serde(default)]
     notes: Vec<DiscussionNote>,
 }
 
-/// `Option`s: GitLab omits (or nulls) both fields on notes that cannot be resolved.
+/// `Option`s: GitLab omits (or nulls) `resolvable` / `resolved` on notes that
+/// cannot be resolved.
 #[derive(serde::Deserialize)]
 struct DiscussionNote {
+    #[serde(default)]
+    id: u64,
+    author: Option<crate::models::GitLabUser>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    created_at: String,
+    #[serde(default)]
+    system: bool,
     resolvable: Option<bool>,
     resolved: Option<bool>,
 }
 
-/// A thread is "unresolved" when at least one of its notes is resolvable (a proper
-/// review thread, not a plain comment) and not yet resolved. Threads are counted,
-/// not individual notes or replies.
-fn count_unresolved_threads(discussions: &[Discussion]) -> u32 {
-    discussions
-        .iter()
-        .filter(|d| {
-            d.notes
-                .iter()
-                .any(|n| n.resolvable.unwrap_or(false) && !n.resolved.unwrap_or(false))
-        })
-        .count() as u32
+impl DiscussionNote {
+    fn username(&self) -> &str {
+        self.author.as_ref().map_or("", |a| a.username.as_str())
+    }
 }
 
-/// Counts the **unresolved review threads** of a MR (GitLab Discussions API).
-///
-/// `GET /projects/:id/merge_requests/:iid/discussions` returns all discussion threads.
-/// A thread counts once when at least one of its notes is resolvable and not yet
-/// resolved; plain comments, replies and resolved threads are not counted.
-/// (The result is stored in `user_notes_count`, whose name predates this logic.)
-///
-/// Falls back to `0` on any network or parse error — this is a best-effort enrichment.
-async fn fetch_notes_count(ctx: &FetchContext, mr_id: &str, client: &reqwest::Client) -> u32 {
-    let mut total: u32 = 0;
-    let mut page: u32 = 1;
+/// Characters kept from a thread's first note.
+const EXCERPT_CHARS: usize = 200;
 
-    loop {
-        let url = format!(
-            "{}/api/v4/projects/{}/merge_requests/{}/discussions?per_page=100&page={}",
-            ctx.base_url, ctx.project_id, mr_id, page
-        );
+/// The resolvable threads (proper review threads, not plain comments or system
+/// notes). A thread is unresolved while one of its resolvable notes is.
+fn review_threads(discussions: &[Discussion]) -> Vec<MrThread> {
+    discussions
+        .iter()
+        .filter(|d| d.notes.iter().any(|n| n.resolvable.unwrap_or(false)))
+        .filter_map(|d| {
+            let first = d.notes.first()?;
+            let excerpt: String = first.body.split_whitespace().collect::<Vec<_>>().join(" ");
+            Some(MrThread {
+                note_id: first.id,
+                author: first.username().to_string(),
+                excerpt: excerpt.chars().take(EXCERPT_CHARS).collect(),
+                created_at: first.created_at.clone(),
+                last_note_at: d
+                    .notes
+                    .iter()
+                    .map(|n| n.created_at.as_str())
+                    .max()?
+                    .to_string(),
+                notes: u32::try_from(d.notes.len()).unwrap_or(u32::MAX),
+                resolved: !d
+                    .notes
+                    .iter()
+                    .any(|n| n.resolvable.unwrap_or(false) && !n.resolved.unwrap_or(false)),
+            })
+        })
+        .collect()
+}
 
-        let res = match client
-            .get(&url)
-            .header("PRIVATE-TOKEN", ctx.token.as_str())
-            .send()
-            .await
-        {
-            Ok(r) if r.status().is_success() => r,
-            Ok(r) => {
-                tracing::warn!(
-                    "Discussions API returned non-2xx for MR {}: {}",
-                    mr_id,
-                    r.status()
-                );
-                break;
+/// Review timeline of an MR authored by `author` (username), from its notes in
+/// chronological order. System notes are matched on GitLab's English wording
+/// ("approved this merge request", "requested review from @x", "added 2 commits"):
+/// GitLab stores them in English whatever the user's locale.
+fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
+    let mut notes: Vec<&DiscussionNote> = discussions.iter().flat_map(|d| &d.notes).collect();
+    notes.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    let mut activity = ReviewActivity::default();
+    for note in notes {
+        let user = note.username();
+        let at = &note.created_at;
+        let body = note.body.trim();
+        let reviewed = if note.system {
+            if body == "approved this merge request" {
+                activity.approved_at = Some(at.clone());
+                true
+            } else if body == "unapproved this merge request" {
+                activity.approved_at = None;
+                false
+            } else if let Some(who) = body.strip_prefix("requested review from ") {
+                for reviewer in mentions(who) {
+                    activity
+                        .review_requested_at
+                        .insert(reviewer.to_string(), at.clone());
+                }
+                false
+            } else if let Some(who) = body.strip_prefix("removed review request for ") {
+                for reviewer in mentions(who) {
+                    activity.review_requested_at.remove(reviewer);
+                }
+                false
+            } else {
+                if body.starts_with("added ") && body.contains(" commit") {
+                    activity.last_push_at = Some(at.clone());
+                }
+                false
             }
-            Err(e) => {
-                tracing::warn!("Discussions API network error for MR {}: {}", mr_id, e);
-                break;
-            }
+        } else {
+            true
         };
-
-        let discussions: Vec<Discussion> = match res.json().await {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("Failed to deserialize discussions for MR {}: {}", mr_id, e);
-                break;
+        if reviewed && !user.is_empty() {
+            activity
+                .last_activity_by
+                .insert(user.to_string(), at.clone());
+            if user != author && activity.first_review_at.is_none() {
+                activity.first_review_at = Some(at.clone());
             }
-        };
-
-        if discussions.is_empty() {
-            break;
         }
-
-        let page_count = discussions.len();
-
-        total += count_unresolved_threads(&discussions);
-        // If fewer than 100 results were returned, this was the last page.
-        if page_count < 100 {
-            break;
-        }
-        page += 1;
     }
+    activity
+}
 
-    total
+/// Usernames mentioned as `@name` in a system note ("@alice, @bob and @carol").
+fn mentions(text: &str) -> impl Iterator<Item = &str> {
+    text.split_whitespace()
+        .filter_map(|word| word.strip_prefix('@'))
+        .map(|name| name.trim_end_matches([',', '.', ';']))
+        .filter(|name| !name.is_empty())
+}
+
+/// All discussions of a MR (`None` when a page failed: the cache is kept).
+async fn fetch_discussions(ctx: &FetchContext, mr_id: &str) -> Option<Vec<Discussion>> {
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/discussions?",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    get_all_pages(ctx, &url).await
+}
+
+/// `/approvals` response: only the current approvers matter.
+#[derive(serde::Deserialize)]
+struct Approvals {
+    #[serde(default)]
+    approved_by: Vec<Approver>,
+}
+
+#[derive(serde::Deserialize)]
+struct Approver {
+    user: crate::models::GitLabUser,
+}
+
+/// Usernames of the MR's current approvers (`None` on any error).
+async fn fetch_approved_by(ctx: &FetchContext, mr_id: &str) -> Option<Vec<String>> {
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/approvals",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let res = http_client()
+        .get(url)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
+        .send()
+        .await
+        .ok()
+        .filter(|r| r.status().is_success())?;
+    let approvals: Approvals = res.json().await.ok()?;
+    Some(
+        approvals
+            .approved_by
+            .into_iter()
+            .map(|a| a.user.username)
+            .collect(),
+    )
 }
 
 /// Fetches the number of commits the source branch is behind the target branch.
@@ -1190,20 +1274,50 @@ pub async fn fetch_gitlab_data(
     //      Open → Merged we must refetch, because threads may have been resolved or added
     //      between the last Open refresh and the merge event.
     let state_unchanged = cached.cached_state.as_ref().is_some_and(|s| s == &state);
-    // Reuse the cached notes count only when ALL conditions hold:
+    // Reuse the cached discussions (threads, review timeline) only when ALL hold:
     //   1. The cache policy does not demand a forced re-fetch (e.g. manual [R]).
     //   2. The MR is non-Open — discussion history is frozen once merged/closed.
-    //   3. A non-zero count is already recorded — zero could mean "never fetched".
+    //   3. They were fetched before (`review` is `None` until then).
     //   4. The cached state matches the fresh state — guards against Open → Merged
     //      transitions where threads may have been resolved just before the merge.
-    let user_notes_count = if !cached.cache_policy.notes_stale()
+    let discussions_frozen = !cached.cache_policy.notes_stale()
         && state != GitlabMrState::Opened
-        && cached.user_notes_count > 0
-        && state_unchanged
-    {
-        cached.user_notes_count
+        && cached.review.is_some()
+        && state_unchanged;
+    let (user_notes_count, threads, review) = if discussions_frozen {
+        (
+            cached.user_notes_count,
+            cached.threads.clone(),
+            cached.review.clone(),
+        )
     } else {
-        fetch_notes_count(ctx, mr_id, client).await
+        match fetch_discussions(ctx, mr_id).await {
+            Some(discussions) => {
+                let threads = review_threads(&discussions);
+                let unresolved = threads.iter().filter(|t| !t.resolved).count();
+                let author = mr.author.as_ref().map_or("", |a| a.username.as_str());
+                (
+                    u32::try_from(unresolved).unwrap_or(u32::MAX),
+                    threads,
+                    Some(review_activity(&discussions, author)),
+                )
+            }
+            // A failed page says nothing about the threads: keep what was known.
+            None => (
+                cached.user_notes_count,
+                cached.threads.clone(),
+                cached.review.clone(),
+            ),
+        }
+    };
+    // Approvers change while the MR is open (approvals, resets on push): refetched
+    // then, frozen afterwards.
+    let approved_by = if state == GitlabMrState::Opened {
+        fetch_approved_by(ctx, mr_id)
+            .await
+            .unwrap_or_else(|| cached.approved_by.clone())
+    } else {
+        cached.approved_by.clone()
     };
 
     // Resolve mergeability with the following priority:
@@ -1562,6 +1676,9 @@ pub async fn fetch_gitlab_data(
             diff_stats,
             commits,
             landed_fingerprint,
+            threads,
+            review,
+            approved_by,
         },
     })
 }
@@ -1598,7 +1715,68 @@ mod tests {
             {"notes": [{"resolvable": true}]}
         ]"#;
         let discussions: Vec<super::Discussion> = serde_json::from_str(json).unwrap();
-        assert_eq!(super::count_unresolved_threads(&discussions), 2);
+        let threads = review_threads(&discussions);
+        // Plain comments and notes with null fields are not review threads.
+        assert_eq!(threads.len(), 3);
+        assert_eq!(threads.iter().filter(|t| !t.resolved).count(), 2);
+    }
+
+    #[test]
+    fn review_activity_reads_comments_approvals_requests_and_pushes() {
+        let json = r#"[
+            {"notes": [{"id": 1, "system": true, "author": {"username": "dev", "name": "Dev"},
+                        "body": "requested review from @alice and @bob", "created_at": "2026-09-01T09:00:00.000Z"}]},
+            {"notes": [{"id": 2, "author": {"username": "dev", "name": "Dev"},
+                        "body": "Self note", "created_at": "2026-09-01T09:30:00.000Z"}]},
+            {"notes": [
+                {"id": 3, "author": {"username": "alice", "name": "Alice"}, "resolvable": true, "resolved": false,
+                 "body": "Why\n  this   change?", "created_at": "2026-09-01T10:00:00.000Z"},
+                {"id": 4, "author": {"username": "dev", "name": "Dev"}, "resolvable": true, "resolved": false,
+                 "body": "Because.", "created_at": "2026-09-01T11:00:00.000Z"}]},
+            {"notes": [{"id": 5, "system": true, "author": {"username": "dev", "name": "Dev"},
+                        "body": "added 2 commits\n\n<ul><li>abc</li></ul>", "created_at": "2026-09-01T12:00:00.000Z"}]},
+            {"notes": [{"id": 6, "system": true, "author": {"username": "bob", "name": "Bob"},
+                        "body": "approved this merge request", "created_at": "2026-09-01T13:00:00.000Z"}]},
+            {"notes": [{"id": 7, "system": true, "author": {"username": "bob", "name": "Bob"},
+                        "body": "unapproved this merge request", "created_at": "2026-09-01T14:00:00.000Z"}]},
+            {"notes": [{"id": 8, "system": true, "author": {"username": "dev", "name": "Dev"},
+                        "body": "removed review request for @bob", "created_at": "2026-09-01T15:00:00.000Z"}]}
+        ]"#;
+        let discussions: Vec<Discussion> = serde_json::from_str(json).unwrap();
+
+        let activity = review_activity(&discussions, "dev");
+        // The author's own note is not a review; Alice's comment is the first one.
+        assert_eq!(
+            activity.first_review_at.as_deref(),
+            Some("2026-09-01T10:00:00.000Z")
+        );
+        assert_eq!(activity.approved_at, None, "unapproved afterwards");
+        assert_eq!(
+            activity.last_push_at.as_deref(),
+            Some("2026-09-01T12:00:00.000Z")
+        );
+        let requested: Vec<&str> = activity
+            .review_requested_at
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(requested, ["alice"]);
+        assert_eq!(
+            activity.last_activity_by.get("bob").map(String::as_str),
+            Some("2026-09-01T13:00:00.000Z")
+        );
+        assert_eq!(
+            activity.last_activity_by.get("dev").map(String::as_str),
+            Some("2026-09-01T11:00:00.000Z")
+        );
+
+        let threads = review_threads(&discussions);
+        assert_eq!(threads.len(), 1);
+        let thread = &threads[0];
+        assert_eq!((thread.note_id, thread.author.as_str()), (3, "alice"));
+        assert_eq!(thread.excerpt, "Why this change?");
+        assert_eq!((thread.notes, thread.resolved), (2, false));
+        assert_eq!(thread.last_note_at, "2026-09-01T11:00:00.000Z");
     }
 
     #[test]
