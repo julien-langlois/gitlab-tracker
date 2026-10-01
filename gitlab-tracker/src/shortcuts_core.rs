@@ -73,6 +73,11 @@ fn core_shortcuts() -> ShortcutBlock {
                 status_hint: Some("[Esc]: Quit"),
             },
             ShortcutEntry {
+                key: "m / M",
+                description: "Hide / show merged MRs (they stay tracked)",
+                status_hint: None,
+            },
+            ShortcutEntry {
                 key: "y / Y",
                 description: "Copy `git clone` command for the MR branch",
                 status_hint: None,

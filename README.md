@@ -93,6 +93,8 @@
   * **Milestone** — free-text search on the milestone title (case-insensitive)
   * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
 
+  Merged MRs can also be hidden with `m`, on top of any filter. They stay tracked and refreshed, so this only declutters the remaining work; the status bar shows `merged hidden` while the toggle is on.
+
   The active filter is shown in the table header. Flagged state is **persisted across restarts** via a tenant-scoped state file (`tracker_<hash>.json`, where the hash is derived from your GitLab URL and project ID).
 
   #### 👤 "Assigned to me" and "Reviewer: me" filters
@@ -369,6 +371,10 @@ activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 # is available. Set to false to keep the dashboard table-only for this project.
 # Default: true. Editable from the in-app settings dashboard with [,].
 show_cockpit = true
+
+# Hide merged MRs from the table to focus on what is left to do. They stay tracked
+# (refreshed, notified, recorded in stats). Default: false. Toggle with [m] or [,].
+hide_merged = false
 
 # Operational cockpit thresholds. Omit this table to use the defaults below.
 [project.cockpit_thresholds]
@@ -658,6 +664,7 @@ Shortcut keys are active. The input field is passive. Letter shortcuts are case-
 | `r`                    | Force immediate network refresh for all MRs                                                                                |
 | `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
 | `S`                    | Toggle sort direction (ascending / descending)                                                                             |
+| `m`                    | **Hide / show merged MRs** — they stay tracked; saved per project (`hide_merged`)                                          |
 | `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
 | `f`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |
 | `g`                    | **Open Stats overlay** — velocity metrics & Spearman correlations *(requires `--features stats`)*                          |

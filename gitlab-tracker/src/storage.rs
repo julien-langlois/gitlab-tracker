@@ -65,6 +65,10 @@ pub struct ProjectEntry {
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_cockpit: Option<bool>,
+    /// Hides merged MRs from the table while keeping them tracked. Defaults to `false`.
+    /// Toggled with `m` in the TUI.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hide_merged: Option<bool>,
     /// Thresholds used by the operational cockpit metrics and release risk detection.
     ///
     /// Example in `projects.toml`:
@@ -653,6 +657,14 @@ async fn update_project_entry(
     update(entry);
     save_projects_toml(&cfg).await;
     true
+}
+
+/// Persists the "hide merged MRs" toggle of the current project into `projects.toml`.
+pub async fn save_hide_merged_async(hide: bool, gitlab_url: &str, project_id: &str) {
+    update_project_entry(gitlab_url, project_id, |entry| {
+        entry.hide_merged = Some(hide);
+    })
+    .await;
 }
 
 /// Persists the column visibility settings of the current project into `projects.toml`.

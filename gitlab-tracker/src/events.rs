@@ -8,7 +8,8 @@ use crate::app::{ActivePane, App, FilterPickerState, InputMode, LogTimeField, Lo
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData};
 use crate::models::{AppEvent, MrStatus};
 use crate::storage::{
-    save_branches_async, save_project_settings_async, save_state_async, save_visible_columns_async,
+    save_branches_async, save_hide_merged_async, save_project_settings_async, save_state_async,
+    save_visible_columns_async,
 };
 use crate::utils::parse_duration_to_hours;
 
@@ -706,6 +707,17 @@ pub async fn handle_key_event(
                             &app.project_id.clone(),
                         )
                         .await;
+                    }
+                }
+
+                // [M] hides / shows merged MRs (they stay tracked); saved per project.
+                KeyCode::Char('m') | KeyCode::Char('M') => {
+                    let hide = !app.config.hide_merged;
+                    app.config.hide_merged = hide;
+                    app.project_settings.hide_merged = Some(hide);
+                    app.clamp_selection();
+                    if !app.read_only {
+                        save_hide_merged_async(hide, &app.base_url, &app.project_id).await;
                     }
                 }
 

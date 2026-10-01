@@ -185,6 +185,13 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
             .add_modifier(Modifier::BOLD),
     ));
 
+    if app.config.hide_merged {
+        spans.push(Span::styled(
+            " · merged hidden",
+            Style::default().fg(accent_yellow),
+        ));
+    }
+
     // ── 8. Loading spinner ────────────────────────────────────────────────────
     let pending = app
         .pending_initial_fetches

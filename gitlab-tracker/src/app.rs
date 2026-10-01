@@ -736,19 +736,25 @@ impl App {
         let active = self.active_filter.clone();
         let complexity_profile = self.config.complexity_profile.clone();
         let gitlab_username = self.config.gitlab_username.clone();
+        let hide_merged = self.config.hide_merged;
         self.mrs.iter_mut().filter(move |mr| {
-            Self::apply_filter(
-                &filter_defs,
-                &active,
-                mr,
-                &complexity_profile,
-                &gitlab_username,
-            )
+            !(hide_merged && mr.state == GitlabMrState::Merged)
+                && Self::apply_filter(
+                    &filter_defs,
+                    &active,
+                    mr,
+                    &complexity_profile,
+                    &gitlab_username,
+                )
         })
     }
 
-    /// Returns `true` when `mr` passes the currently active filter.
+    /// Returns `true` when `mr` passes the currently active filter and is not
+    /// hidden by the "hide merged" toggle.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
+        if self.config.hide_merged && mr.state == GitlabMrState::Merged {
+            return false;
+        }
         Self::apply_filter(
             &self.filter_defs,
             &self.active_filter,
@@ -921,7 +927,7 @@ impl App {
     }
 
     /// Keeps the selection inside the visible list after it shrinks.
-    fn clamp_selection(&mut self) {
+    pub(crate) fn clamp_selection(&mut self) {
         let count = self.visible_mrs().count();
         let selected = match self.table_state.selected() {
             _ if count == 0 => None,
@@ -1765,6 +1771,7 @@ mod tests {
                 activity_stale_days: None,
                 activity_recent_days: None,
                 show_cockpit: None,
+                hide_merged: None,
                 cockpit_thresholds: None,
                 stats: None,
                 visible_columns: None,
@@ -1862,6 +1869,17 @@ mod tests {
 
         assert_eq!(live, ["2"]);
         assert_eq!(cached, live);
+    }
+
+    #[tokio::test]
+    async fn hide_merged_keeps_merged_mrs_tracked_but_invisible() {
+        let mut app = app_with_mrs(&[("fix login", "None"), ("add stats", "None")]).await;
+        app.mrs[0].state = GitlabMrState::Merged;
+        app.config.hide_merged = true;
+
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["2"]);
+        assert_eq!(app.mrs.len(), 2);
     }
 
     #[tokio::test]

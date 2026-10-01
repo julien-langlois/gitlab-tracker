@@ -136,6 +136,9 @@ pub struct AppConfig {
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
+    /// Hides merged MRs from the table (they stay tracked, refreshed and recorded).
+    #[serde(default)]
+    pub hide_merged: bool,
     /// Thresholds used by the operational cockpit metrics and release risk detection.
     #[serde(default)]
     pub cockpit_thresholds: CockpitThresholds,
@@ -237,6 +240,7 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             show_cockpit: default_show_cockpit(),
+            hide_merged: false,
             cockpit_thresholds: CockpitThresholds::default(),
             visible_columns: VisibleColumns::default(),
             complexity_profile: crate::models::DifficultyProfile::default(),

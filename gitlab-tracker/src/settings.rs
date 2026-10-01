@@ -131,6 +131,9 @@ impl SettingsEditorState {
                 ("core.show_cockpit", ProjectSettingValue::Bool(value)) => {
                     app.config.show_cockpit = *value;
                 }
+                ("core.hide_merged", ProjectSettingValue::Bool(value)) => {
+                    app.config.hide_merged = *value;
+                }
                 ("core.discover_new_mrs", ProjectSettingValue::Bool(value)) => {
                     app.discovery_enabled = *value;
                 }

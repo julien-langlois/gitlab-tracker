@@ -61,6 +61,20 @@ fn discover_new_mrs_setting() -> ProjectSettingDef {
     }
 }
 
+fn hide_merged_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "core.hide_merged",
+        section: "Core",
+        label: "Hide merged MRs",
+        help: "Hide merged MRs from the table; they stay tracked. Also toggled with [m].",
+        priority: 15,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(false),
+        read: |project| read_bool(project, "hide_merged", false),
+        write: |project, value| write_bool(project, "hide_merged", value),
+    }
+}
+
 fn refresh_interval_setting() -> ProjectSettingDef {
     ProjectSettingDef {
         id: "core.refresh_interval_secs",
@@ -104,6 +118,7 @@ fn activity_stale_setting() -> ProjectSettingDef {
 }
 
 inventory::submit!(ProjectSettingFactory(show_cockpit_setting));
+inventory::submit!(ProjectSettingFactory(hide_merged_setting));
 inventory::submit!(ProjectSettingFactory(discover_new_mrs_setting));
 inventory::submit!(ProjectSettingFactory(refresh_interval_setting));
 inventory::submit!(ProjectSettingFactory(activity_recent_setting));
