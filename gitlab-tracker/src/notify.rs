@@ -117,11 +117,12 @@ pub fn mr_on_new_branch(mr_id: &str, title: &str, branch: &str, web_url: &str) {
     });
 }
 
-/// Notify that an MR reached a tracked branch through a cherry-pick (`-x` trailer).
-pub fn mr_cherry_picked(mr_id: &str, title: &str, branch: &str, web_url: &str) {
+/// Notify that an MR reached a tracked branch under other SHAs; `how` is
+/// "merged", "cherry-picked" or "copied" (see `BranchPresence`).
+pub fn mr_copied_to_branch(mr_id: &str, title: &str, branch: &str, how: &str, web_url: &str) {
     send(Toast {
         summary: "GitLab MR Tracker".to_string(),
-        body: format!("MR !{mr_id} ({title}) was cherry-picked to branch '{branch}' 🍒"),
+        body: format!("MR !{mr_id} ({title}) was {how} to branch '{branch}' 🍒"),
         icon: "dialog-information",
         action_label: "Open MR",
         url: web_url.to_owned(),

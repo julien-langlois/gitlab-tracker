@@ -441,6 +441,8 @@ pub fn render_table(app: &App) -> Table<'_> {
                 let cell = match (&mr.status, app.branch_presence(mr, b)) {
                     (_, Some(BranchPresence::Present)) => Cell::from("🟢 PRESENT").green(),
                     (_, Some(BranchPresence::CherryPicked)) => Cell::from("🍒 PICKED").yellow(),
+                    (_, Some(BranchPresence::Copied)) => Cell::from("≈ COPIED").cyan(),
+                    (_, Some(BranchPresence::Partial)) => Cell::from("◐ PARTIAL").magenta(),
                     (_, Some(BranchPresence::Absent)) => Cell::from("🔴 ABSENT").red(),
                     (MrStatus::Error(_), None) => Cell::from("❌ FAILED").red(),
                     (_, None) => Cell::from("⏳ LOADING...").yellow(),

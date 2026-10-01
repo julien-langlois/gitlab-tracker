@@ -435,7 +435,7 @@ async fn build_session(
 }
 
 /// `checklist` subcommand: loads the project like the TUI does, waits for every
-/// MR fetch and cherry-pick scan, then prints the Markdown checklist on stdout.
+/// MR fetch and branch scan, then prints the Markdown checklist on stdout.
 /// Read-only: no state file, stats snapshot or tracker status transition is written.
 async fn run_checklist(
     global_config: &config::AppConfig,
@@ -490,7 +490,7 @@ async fn run_checklist(
         app.apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches);
     }
 
-    // Every MR first, then the cherry-pick scans their branch status calls for.
+    // Every MR first, then the branch scans their branch status calls for.
     let mut scans_spawned = false;
     loop {
         let loading = app
@@ -498,10 +498,10 @@ async fn run_checklist(
             .iter()
             .any(|mr| mr.status == models::MrStatus::Loading);
         if !loading && !scans_spawned {
-            app.spawn_cherry_pick_scans(&tx);
+            app.spawn_branch_scans(&tx);
             scans_spawned = true;
         }
-        if scans_spawned && app.pending_cherry_pick_scans == 0 {
+        if scans_spawned && app.pending_branch_scans == 0 {
             break;
         }
         let event = rx.recv().await.context("event channel closed")?;

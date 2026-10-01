@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
-**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification (a cherry-picked commit has a different SHA and is therefore never reported as present — it is shown as 🍒 picked instead).
+**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification first, then recognising MRs that reached a branch under other SHAs (cherry-pick with or without `-x`, rebase, commit-by-commit ports).
 
 ![gitlab-tracker demo](assets/demo.gif)
 
@@ -18,14 +18,21 @@
   * **Customizable Palette:** Map label names or wildcard patterns (e.g., `deploy::*`) to custom terminal colors or standard HEX codes (`#FF5733`) via `[project.label_colors]` in `projects.toml`. Labels without a config override automatically fall back to their **GitLab-side colour** (fetched at startup), with foreground computed for legibility.
 * ⚡ **High Performance & Asynchronous:** Powered by `tokio` and `reqwest`, utilizing non-blocking event loops and bounded concurrent requests via semaphores to protect GitLab API rate limits.
 * 🛡️ **`updated_at`-Guarded Caching:** MR metadata (state, assignee, milestone, labels, mergeability) is read fresh on every refresh. The expensive per-MR calls — diff stats and pipelines — are reused while the MR's `updated_at` is unchanged; transient pipelines (running / pending / created) are always refetched because they can finish without touching `updated_at`. Unresolved-thread counts are refetched for open MRs and frozen once an MR is merged or closed. With `RUST_LOG=info`, each cycle logs a `Refresh cycle complete` line (MR count, estimated GitLab calls, elapsed time).
-* 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
-* 🍒 **Cherry-pick Detection:** A merged MR that is absent from a tracked branch by SHA, but whose merge / squash commit is named by a `(cherry picked from commit <sha>)` trailer on that branch (added by `git cherry-pick -x` and by GitLab's *Cherry-pick* button), shows `🍒 PICKED` instead of `🔴 ABSENT`. After each refresh cycle, the commits of each branch are scanned from the oldest merge still missing there; branches with nothing missing cost no API call. A desktop notification fires when a new cherry-pick is detected (the first scan of each session only records, so restarting never re-notifies). Cherry-picks done without `-x`, per-commit picks of multi-commit MRs and fast-forward merges are not detected.
+* 🔍 **Branch Presence Detection:** Each branch cell tells how an MR reached that branch — whatever the promotion workflow (merge, `reset --hard`, cherry-pick from the CLI, GitLab or SmartGit, rebase, commit by commit). See [How Branch Presence Is Detected](#-how-branch-presence-is-detected) for the details and limits:
+
+  | Cell | Meaning |
+  | :--- | :--- |
+  | `🟢 PRESENT` | The MR's merge / squash commit (or all its commits) is on the branch under the same SHA — merge, fast-forward, `reset --hard`. |
+  | `🍒 PICKED` | Copied with an explicit `(cherry picked from commit <sha>)` trailer — `git cherry-pick -x`, GitLab's *Cherry-pick* button. |
+  | `≈ COPIED` | Copied without trailer: commits with the **same author, author date and title** are on the branch — plain cherry-pick, rebase, SmartGit. Inferred. |
+  | `◐ PARTIAL` | Only some of the MR's commits reached the branch (by any of the above). |
+  | `🔴 ABSENT` | Nothing of the MR was found on the branch. |
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
-* 📋 **Markdown Release Checklist (`E`):** Copies the rows currently visible (active filter, search and hidden merged MRs applied) to the clipboard as a Markdown table — MR link, title, state, and one column per tracked branch with `✅` present, `🍒` cherry-picked, `❌` absent or `…` still loading. Paste it into a release ticket, a wiki page or a chat message. Combine with `m` to export only what is left to deploy.
+* 📋 **Markdown Release Checklist (`E`):** Copies the rows currently visible (active filter, search and hidden merged MRs applied) to the clipboard as a Markdown table — MR link, title, state, and one column per tracked branch with `✅` present, `🍒` cherry-picked, `≈` copied, `◐` partially copied, `❌` absent or `…` still loading. Paste it into a release ticket, a wiki page or a chat message. Combine with `m` to export only what is left to deploy.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
-* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance (including cherry-picks 🍒), MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
+* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance (including cherry-picks and copies), MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
 * 🗞️ **Since Last Session:** Once the startup sync is over, the status bar summarises for ~20 s what changed while the app was closed — e.g. `Since last session: 2 merged · 3 new on a branch · 1 CI failing` (MRs merged or closed, new branch arrivals, pipelines that started failing). Nothing is shown when nothing changed.
 * ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
@@ -95,7 +102,7 @@
   * **Effort: Complex 🔴** — MRs whose review-difficulty score is at or above 0.66
   * **Milestone** — free-text search on the milestone title (case-insensitive)
   * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
-  * **Absent from branch** — type a tracked branch name (e.g. `production`, case-insensitive) to list the MRs known to be missing from it: not there by SHA and not cherry-picked. MRs still loading are left out. With `m` and `e`, this gives the Markdown checklist of what is left to deploy
+  * **Absent from branch** — type a tracked branch name (e.g. `production`, case-insensitive) to list the MRs known to be missing from it: `🔴 ABSENT` or `◐ PARTIAL` (anything present, picked or copied is excluded). MRs still loading are left out. With `m` and `e`, this gives the Markdown checklist of what is left to deploy
 
   Merged MRs can also be hidden with `m`, on top of any filter. They stay tracked and refreshed, so this only declutters the remaining work; the status bar shows `merged hidden` while the toggle is on.
 
@@ -504,6 +511,20 @@ MR notifications include a clickable **"Open MR"** button; tracker notifications
 
 ---
 
+#### 🔎 How Branch Presence Is Detected
+
+For each MR and each tracked branch, the checks run in this order and the first match wins:
+
+1. **Same SHA (`🟢 PRESENT`).** The MR's merge commit, else its squash commit, else — for a merged fast-forward MR — its HEAD, is looked up with the GitLab Refs API (`/commits/:sha/refs?type=branch`): the branches *containing* that commit. This covers merges, fast-forwards and `git reset --hard origin/develop`. If GitLab answers 404 (commit garbage-collected after a force-push), the MR's target branch is assumed. If the call fails transiently (rate limit, 5xx, network), the branches found earlier are kept — never shown as absent because of an outage.
+2. **Copies (`🍒` / `≈` / `◐`).** After every refresh cycle, each branch that some MR is missing from is scanned: its commits since the oldest such MR was created, at most 90 days back. A branch with nothing missing costs no API call. Each scanned commit gives three keys: its SHA, the SHAs named by `(cherry picked from commit …)` trailers, and its **fingerprint** — author e-mail, author date and title. `git cherry-pick` and `git rebase` keep the author and the author date, so the fingerprint survives a copy even when conflicts changed the patch. Surrounding quotes added to titles by some tools (`'#1410856: …'`) are ignored.
+   * First the MR's merge / squash commit is matched (by SHA, trailer, then fingerprint): the whole MR was copied at once.
+   * Otherwise its own commits are matched **one by one** (the MR's commit list is fetched with the diff stats, behind the same `updated_at` cache): all found → `PRESENT` / `PICKED` / `COPIED` (the weakest proof wins), some found → `◐ PARTIAL`.
+   * Open and closed MRs are checked too: an urgent fix can be cherry-picked from an open MR, or land through another MR.
+
+**Limits.** A copy is not recognised when its author date was reset (`git rebase --ignore-date`, `--reset-author`, `git commit --amend --reset-author`), when its title was reworded, or when it is older than the 90-day scan window. `≈ COPIED` is an inference: a rewritten commit that kept the author, the author date and the title would match too. Squash-merging a branch of several MRs into another (e.g. a release branch) creates a new commit with a new author date, which none of them can be matched to. For an exact `🍒`, cherry-pick with `-x` or with GitLab's *Cherry-pick* button.
+
+A desktop notification fires when an MR newly reaches a branch through a copy. The first scan of each session only records, so restarting never re-notifies.
+
 #### 🌿 How Branch Resolution Works
 
 Tracked branches (the columns shown in the MR table) are resolved in this priority order at startup:
@@ -657,7 +678,7 @@ gitlab-tracker checklist --absent-from production         # what is left to depl
 gitlab-tracker --project backend checklist --milestone "1.2.0" --absent-from production > release.md
 ```
 
-The project is loaded exactly like the TUI loads it (same settings, branches and token lookup). The command waits for every MR fetch and cherry-pick scan, so cells are never `…`; MRs that failed to load are shown with `…`. It is read-only: no state file, stats snapshot or tracker status transition is written, and merged MRs are listed even when `hide_merged` is on. `--absent-from` must name a tracked branch.
+The project is loaded exactly like the TUI loads it (same settings, branches and token lookup). The command waits for every MR fetch and branch scan, so cells are never `…`; MRs that failed to load are shown with `…`. It is read-only: no state file, stats snapshot or tracker status transition is written, and merged MRs are listed even when `hide_merged` is on. `--absent-from` must name a tracked branch.
 
 ## ⌨️ Dashboard Navigation & Shortcuts
 
@@ -684,7 +705,7 @@ Shortcut keys are active. The input field is passive. Letter shortcuts are case-
 | `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
 | `S`                    | Toggle sort direction (ascending / descending)                                                                             |
 | `w`                    | **Switch project** — pick another `projects.toml` entry; the current state is saved and the chosen project loads in place |
-| `e`                    | **Copy a Markdown release checklist** of the visible rows (MR link, title, state, ✅ / 🍒 / ❌ per branch)                  |
+| `e`                    | **Copy a Markdown release checklist** of the visible rows (MR link, title, state, ✅ / 🍒 / ≈ / ◐ / ❌ per branch)                  |
 | `m`                    | **Hide / show merged MRs** — they stay tracked; saved per project (`hide_merged`)                                          |
 | `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
 | `f`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |

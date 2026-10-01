@@ -1,6 +1,7 @@
 use crate::models::{
-    AppEvent, DiffStats, GitLabLabelDetail, GitLabMilestone, GitLabMr, GitLabRef, GitlabMrState,
-    MergeabilityStatus, MrLoadedData, Pipeline, PipelineJob,
+    AppEvent, BranchCommits, CommitFingerprint, DiffStats, GitLabLabelDetail, GitLabMilestone,
+    GitLabMr, GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, Pipeline,
+    PipelineJob,
 };
 
 use std::collections::HashSet;
@@ -127,11 +128,14 @@ fn count_diff_lines(diff: &str) -> (u32, u32) {
 ///   `added_lines` / `removed_lines` fields, which do not exist in the GitLab API;
 /// - `files_changed > 0` with 0 commits: written before `commits_count` existed
 ///   (serde default), since a real MR with changes always has at least one commit.
-fn diff_stats_cache_valid(stats: Option<&crate::models::DiffStats>) -> bool {
+/// - a commit list that does not match `commits_count`: written before the MR
+///   commits were cached (they are needed to recognise copies on other branches).
+fn diff_stats_cache_valid(stats: Option<&crate::models::DiffStats>, commits: &[MrCommit]) -> bool {
     stats.is_some_and(|s| {
         let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
         let commits_ok = s.commits_count > 0 || s.files_changed == 0;
-        lines_ok && commits_ok
+        let list_ok = s.commits_count as usize == commits.len();
+        lines_ok && commits_ok && list_ok
     })
 }
 
@@ -170,6 +174,13 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
             cached_state: Some(mr.state),
             // Callers needing a forced re-sync override this (e.g. [R] sets ForceAll).
             cache_policy: CachePolicy::Normal,
+            commits: mr.commits.clone(),
+            sha: mr.sha.clone(),
+            landed_fingerprint: mr.landed_fingerprint.clone(),
+            branches: match &mr.status {
+                crate::models::MrStatus::MergedIn(found) => found.clone(),
+                _ => HashSet::new(),
+            },
         }
     }
 }
@@ -194,14 +205,17 @@ impl CountApiCalls for crate::models::TrackedMr {
                 1 // At least one page fetched.
             };
 
-        // ── 3. Branch detection via /refs — only when a merge SHA is present ──
-        let refs = if has_merge_sha { 1 } else { 0 };
+        // ── 3. Branch detection via /refs — only when a merge SHA is present,
+        //       plus the one-off fetch of the merge / squash commit fingerprint ──
+        let landed_fetch = usize::from(self.sha.is_some() && self.landed_fingerprint.is_none());
+        let refs = usize::from(has_merge_sha) + landed_fetch;
 
         // ── 4. Diff stats: changes + commits pagination ───────────────────────
         // Mirrors the cache-validity check in fetch_gitlab_data:
         //   • Skip when updated_at is unchanged AND the cached stats are valid.
         //   • \"Valid\" means lines_ok && commits_ok (matches `cached_diff_stats_valid`).
-        let diff_stats_cached_valid = diff_stats_cache_valid(self.diff_stats.as_ref());
+        let diff_stats_cached_valid =
+            diff_stats_cache_valid(self.diff_stats.as_ref(), &self.commits);
         let diff_stats = if self.updated_at.is_some() && diff_stats_cached_valid {
             // Cache hit — no calls needed.
             // (The real guard also checks updated_at == fresh updated_at, which we
@@ -311,6 +325,13 @@ pub struct CachedMrData {
     /// Callers that need to force a full re-sync (e.g. manual `[R]`, post-merge
     /// housekeeping) set this to `CachePolicy::ForceAll` or a targeted variant.
     pub cache_policy: CachePolicy,
+    /// MR commits from the previous fetch — reused with the diff stats.
+    pub commits: Vec<MrCommit>,
+    /// Merge / squash commit SHA and its fingerprint from the previous fetch.
+    pub sha: Option<String>,
+    pub landed_fingerprint: Option<CommitFingerprint>,
+    /// Branches the MR was found on: kept when branch detection fails transiently.
+    pub branches: HashSet<String>,
 }
 
 /// Controls which cached fields are bypassed during a fetch cycle.
@@ -600,7 +621,13 @@ fn diff_totals(body: &MrChanges) -> (u32, u32, u32) {
 ///
 /// Returns `None` on any network or parse error — diff stats are best-effort
 /// and must not block the MR data from being displayed.
-async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> {
+/// Diff totals from the Changes API; `commits_count` comes from the MR commit list
+/// fetched alongside (0 when it failed: the cache then retries next cycle).
+async fn fetch_diff_stats(
+    ctx: &FetchContext,
+    mr_id: &str,
+    commits_count: u32,
+) -> Option<DiffStats> {
     let client = http_client();
     let url = format!(
         "{}/api/v4/projects/{}/merge_requests/{}/changes",
@@ -624,67 +651,6 @@ async fn fetch_diff_stats(ctx: &FetchContext, mr_id: &str) -> Option<DiffStats> 
 
     let body: MrChanges = res.json().await.ok()?;
     let (files_changed, additions, deletions) = diff_totals(&body);
-
-    // Fetch the commit count via the dedicated commits endpoint —
-    // GET /projects/:id/merge_requests/:iid/commits returns a paginated list.
-    // Fast path: one 1-item page and the `X-Total` header. GitLab omits that header
-    // for very large collections, so fall back to counting all pages (100 per page).
-    let commits_total_url = format!(
-        "{}/api/v4/projects/{}/merge_requests/{}/commits?per_page=1",
-        ctx.base_url, ctx.project_id, mr_id
-    );
-    let header_total = client
-        .get(&commits_total_url)
-        .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
-        .await
-        .ok()
-        .filter(|r| r.status().is_success())
-        .and_then(|r| {
-            r.headers()
-                .get("x-total")?
-                .to_str()
-                .ok()?
-                .parse::<u32>()
-                .ok()
-        });
-    let commits_count = if let Some(total) = header_total {
-        total
-    } else {
-        let mut total: u32 = 0;
-        let mut page: u32 = 1;
-        loop {
-            let commits_url = format!(
-                "{}/api/v4/projects/{}/merge_requests/{}/commits?per_page=100&page={}",
-                ctx.base_url, ctx.project_id, mr_id, page
-            );
-            let res = client
-                .get(&commits_url)
-                .header("PRIVATE-TOKEN", ctx.token.as_str())
-                .send()
-                .await;
-            match res {
-                Ok(r) if r.status().is_success() => {
-                    // Only the count matters: skip deserialising commit bodies.
-                    match r.json::<Vec<serde::de::IgnoredAny>>().await {
-                        Ok(page_commits) if !page_commits.is_empty() => {
-                            total += page_commits.len() as u32;
-                            // If fewer than 100 results, this is the last page.
-                            if page_commits.len() < 100 {
-                                break;
-                            }
-                            page += 1;
-                        }
-                        // Empty page or parse error — stop paginating.
-                        _ => break,
-                    }
-                }
-                // Network or HTTP error — stop paginating, keep what we have.
-                _ => break,
-            }
-        }
-        total
-    };
 
     Some(DiffStats {
         files_changed,
@@ -752,18 +718,54 @@ pub fn cherry_pick_sources(message: &str) -> impl Iterator<Item = &str> {
     })
 }
 
-/// Only the message of a commit list entry.
+/// A commit as returned by GitLab's commit list / detail endpoints.
 #[derive(serde::Deserialize)]
-struct CommitMessage {
+struct CommitJson {
+    id: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
     message: String,
+    #[serde(default)]
+    author_email: String,
+    authored_date: Option<String>,
+}
+
+impl CommitJson {
+    /// `None` when GitLab did not return a parsable author date.
+    fn fingerprint(&self) -> Option<CommitFingerprint> {
+        let authored = chrono::DateTime::parse_from_rfc3339(self.authored_date.as_deref()?).ok()?;
+        Some(CommitFingerprint {
+            author_email: self.author_email.trim().to_lowercase(),
+            authored_at: authored.timestamp(),
+            title: normalize_title(&self.title),
+        })
+    }
+}
+
+/// Title as compared between copies: some tools wrap it in quotes when they
+/// cherry-pick or reword (`'#1410856: Drupal core update'`), so surrounding
+/// quotes and whitespace are dropped.
+fn normalize_title(title: &str) -> String {
+    title.trim().trim_matches(['\'', '"']).trim().to_string()
+}
+
+/// Indexes a branch's commits by SHA, cherry-pick trailer and fingerprint.
+fn index_branch_commits(commits: &[CommitJson]) -> BranchCommits {
+    let mut index = BranchCommits::default();
+    for c in commits {
+        index.shas.insert(c.id.clone());
+        index
+            .picked_from
+            .extend(cherry_pick_sources(&c.message).map(str::to_owned));
+        index.fingerprints.extend(c.fingerprint());
+    }
+    index
 }
 
 /// Spawns a scan of the commits on `branch` since `since` (RFC 3339) and emits
-/// `AppEvent::CherryPicksLoaded` with every cherry-pick source SHA found, or
-/// `None` when a page failed.
-// ponytail: re-scans from the oldest absent merged MR on every cycle (capped at
-// MAX_PAGES); remember the last scanned SHA per branch if large repos need it.
-pub fn spawn_cherry_picks_fetch(
+/// `AppEvent::BranchCommitsLoaded` with their index, or `None` when a page failed.
+pub fn spawn_branch_commits_fetch(
     ctx: FetchContext,
     branch: String,
     since: String,
@@ -777,17 +779,48 @@ pub fn spawn_cherry_picks_fetch(
             urlencoding::encode(&branch),
             urlencoding::encode(&since)
         );
-        let sources = get_all_pages::<CommitMessage>(&ctx, &url)
+        let commits = get_all_pages::<CommitJson>(&ctx, &url)
             .await
-            .map(|commits| {
-                commits
-                    .iter()
-                    .flat_map(|c| cherry_pick_sources(&c.message))
-                    .map(str::to_owned)
-                    .collect()
-            });
-        let _ = tx.send(AppEvent::CherryPicksLoaded { branch, sources });
+            .map(|commits| index_branch_commits(&commits));
+        let _ = tx.send(AppEvent::BranchCommitsLoaded { branch, commits });
     });
+}
+
+/// The MR's commits with their fingerprints (`None` when a page failed).
+async fn fetch_mr_commits(ctx: &FetchContext, mr_id: &str) -> Option<Vec<MrCommit>> {
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/commits?",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let commits = get_all_pages::<CommitJson>(ctx, &url).await?;
+    Some(
+        commits
+            .into_iter()
+            .filter_map(|c| {
+                let fingerprint = c.fingerprint()?;
+                Some(MrCommit {
+                    sha: c.id,
+                    fingerprint,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Fingerprint of commit `sha` (best-effort: `None` on any error).
+async fn fetch_commit_fingerprint(ctx: &FetchContext, sha: &str) -> Option<CommitFingerprint> {
+    let url = format!(
+        "{}/api/v4/projects/{}/repository/commits/{}",
+        ctx.base_url, ctx.project_id, sha
+    );
+    let res = http_client()
+        .get(url)
+        .header("PRIVATE-TOKEN", ctx.token.as_str())
+        .send()
+        .await
+        .ok()
+        .filter(|r| r.status().is_success())?;
+    res.json::<CommitJson>().await.ok()?.fingerprint()
 }
 
 /// Only the project-scoped id of a MR list entry.
@@ -993,6 +1026,66 @@ async fn fetch_single_mr(
 const REFS_PER_PAGE: usize = 100;
 /// Upper bound on `/refs` pages fetched per MR (10 000 branches).
 const REFS_MAX_PAGES: usize = 100;
+
+/// Outcome of a `/refs` lookup for one commit.
+enum RefsLookup {
+    /// Every page read: the tracked branches containing the commit.
+    Found(HashSet<String>),
+    /// 404: the commit no longer exists (garbage-collected).
+    CommitGone,
+    /// Rate limit, server or network error: the branches found before it failed.
+    Failed(HashSet<String>),
+}
+
+/// Tracked branches containing `commit_sha` (GitLab `/commits/:sha/refs`). The
+/// endpoint is paginated: an old commit can be in many branches, so pages are read
+/// while they are full and some tracked branch is still missing.
+async fn branches_containing(
+    client: &reqwest::Client,
+    ctx: &FetchContext,
+    commit_sha: &str,
+) -> RefsLookup {
+    let refs_url = format!(
+        "{}/api/v4/projects/{}/repository/commits/{}/refs?type=branch&per_page={REFS_PER_PAGE}",
+        ctx.base_url, ctx.project_id, commit_sha
+    );
+    let mut found = HashSet::new();
+    for page in 1..=REFS_MAX_PAGES {
+        let res = match client
+            .get(format!("{refs_url}&page={page}"))
+            .header("PRIVATE-TOKEN", ctx.token.as_str())
+            .send()
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::warn!(error = %e, commit_sha, "Network error on /refs");
+                return RefsLookup::Failed(found);
+            }
+        };
+        if res.status() == reqwest::StatusCode::NOT_FOUND && page == 1 {
+            return RefsLookup::CommitGone;
+        }
+        if !res.status().is_success() {
+            tracing::warn!(status = %res.status(), commit_sha, "Non-2xx on /refs");
+            return RefsLookup::Failed(found);
+        }
+        let refs = match res.json::<Vec<GitLabRef>>().await {
+            Ok(refs) => refs,
+            Err(e) => {
+                tracing::warn!(error = %e, commit_sha, "Undecodable /refs response");
+                return RefsLookup::Failed(found);
+            }
+        };
+        let full_page = refs.len() == REFS_PER_PAGE;
+        collect_tracked_refs(refs, &ctx.branches, &mut found);
+        if !full_page || found.len() == ctx.branches.len() {
+            break;
+        }
+    }
+    tracing::debug!(commit_sha, found = ?found, "Branch detection via /refs");
+    RefsLookup::Found(found)
+}
 
 /// Adds every ref from `refs` that is one of the tracked `branches` to `found`.
 fn collect_tracked_refs(refs: Vec<GitLabRef>, branches: &[String], found: &mut HashSet<String>) {
@@ -1287,119 +1380,68 @@ pub async fn fetch_gitlab_data(
     // The assignee can change at any time: always take it from the fresh payload.
     let assignee = mr.assignee.map(|u| format!("{} (@{})", u.name, u.username));
 
-    let mut found_branches = HashSet::new();
-
-    if let Some(ref commit_sha) = merge_sha {
-        let refs_url = format!(
-            "{}/api/v4/projects/{}/repository/commits/{}/refs?type=branch&per_page={REFS_PER_PAGE}",
-            ctx.base_url, ctx.project_id, commit_sha
-        );
-        match client
-            .get(&refs_url)
-            .header("PRIVATE-TOKEN", ctx.token.as_str())
-            .send()
-            .await
-        {
-            Ok(refs_res) if refs_res.status().is_success() => {
-                match refs_res.json::<Vec<GitLabRef>>().await {
-                    Ok(refs) => {
-                        // The endpoint is paginated: an old commit can be contained in
-                        // many branches, so a tracked one may sit beyond page 1. Keep
-                        // paging while pages are full and some tracked branch is missing.
-                        let mut page_len = refs.len();
-                        collect_tracked_refs(refs, &ctx.branches, &mut found_branches);
-                        let mut page = 2;
-                        while page_len == REFS_PER_PAGE
-                            && found_branches.len() < ctx.branches.len()
-                            && page <= REFS_MAX_PAGES
-                        {
-                            let Some(next) = client
-                                .get(format!("{refs_url}&page={page}"))
-                                .header("PRIVATE-TOKEN", ctx.token.as_str())
-                                .send()
-                                .await
-                                .ok()
-                                .filter(|r| r.status().is_success())
-                            else {
-                                break;
-                            };
-                            let Ok(refs) = next.json::<Vec<GitLabRef>>().await else {
-                                break;
-                            };
-                            page_len = refs.len();
-                            collect_tracked_refs(refs, &ctx.branches, &mut found_branches);
-                            page += 1;
-                        }
-                        tracing::debug!(
-                            mr_id = %mr_id,
-                            commit_sha = %commit_sha,
-                            found = ?found_branches,
-                            "Branch detection via /refs",
-                        );
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            mr_id = %mr_id,
-                            commit_sha = %commit_sha,
-                            error = %e,
-                            "Failed to deserialize /refs response — skipping branch detection",
-                        );
-                    }
-                }
-            }
-            Ok(refs_res) => {
-                // GitLab returns 404 when the commit has been garbage-collected
-                // (e.g. force-push after merge, or squash with no merge commit kept).
-                // Fall back to the MR target_branch as a best-effort signal: if the MR
-                // is confirmed merged by GitLab, it was at least present on its target.
-                let status = refs_res.status();
+    let found_branches = match &merge_sha {
+        Some(commit_sha) => match branches_containing(client, ctx, commit_sha).await {
+            RefsLookup::Found(found) => found,
+            RefsLookup::CommitGone => {
+                // GitLab answers 404 when the commit was garbage-collected (force-push
+                // after merge…). A merged MR was at least on its target branch.
                 tracing::warn!(
                     mr_id = %mr_id,
                     commit_sha = %commit_sha,
-                    http_status = %status,
-                    "Non-2xx on /refs — commit may be garbage-collected; falling back to target_branch",
+                    "Commit not found on /refs — falling back to the target branch",
                 );
-                // `target_branch` is resolved later; use the raw field from the API response
-                // to avoid a forward-reference. Only inject if it is one of the tracked branches.
-                if let Some(ref tb) = mr.target_branch {
-                    if ctx.branches.contains(tb) {
-                        found_branches.insert(tb.clone());
-                        tracing::debug!(
-                            mr_id = %mr_id,
-                            target_branch = %tb,
-                            "Inserted target_branch into found_branches via fallback",
-                        );
-                    }
-                }
+                mr.target_branch
+                    .iter()
+                    .filter(|tb| ctx.branches.contains(tb))
+                    .cloned()
+                    .collect()
             }
-            Err(e) => {
+            RefsLookup::Failed(partial) => {
+                // A transient failure (rate limit, 5xx, network) says nothing about
+                // the branches: keep what was known rather than showing "absent".
                 tracing::warn!(
                     mr_id = %mr_id,
                     commit_sha = %commit_sha,
-                    error = %e,
-                    "Network error on /refs — skipping branch detection",
+                    "Branch detection failed — keeping the previously found branches",
                 );
+                partial.union(&cached.branches).cloned().collect()
             }
+        },
+        None => {
+            tracing::debug!(
+                mr_id = %mr_id,
+                state = ?state,
+                "No merge SHA available — skipping branch detection (MR not yet merged)",
+            );
+            HashSet::new()
         }
-    } else {
-        tracing::debug!(
-            mr_id = %mr_id,
-            state = ?state,
-            "No merge SHA available — skipping branch detection (MR not yet merged)",
-        );
-    }
+    };
 
     // Fetch diff statistics (files changed, additions, deletions) from the Changes API.
     // We cache this behind the same `updated_at` guard as pipelines to avoid hammering
     // the API: if the MR hasn't changed, the diff hasn't changed either.
-    let cached_diff_stats = cached.diff_stats.clone();
-    let cached_diff_stats_valid = diff_stats_cache_valid(cached_diff_stats.as_ref());
-    let diff_stats =
+    // The MR commits are cached with them (same guard): one list call gives both
+    // the commit count and the fingerprints used to recognise copies.
+    let cached_diff_stats_valid =
+        diff_stats_cache_valid(cached.diff_stats.as_ref(), &cached.commits);
+    let (diff_stats, commits) =
         if updated_at.is_some() && updated_at == cached.updated_at && cached_diff_stats_valid {
-            cached_diff_stats
+            (cached.diff_stats.clone(), cached.commits.clone())
         } else {
-            fetch_diff_stats(ctx, mr_id).await
+            let commits = fetch_mr_commits(ctx, mr_id).await.unwrap_or_default();
+            let count = u32::try_from(commits.len()).unwrap_or(u32::MAX);
+            (fetch_diff_stats(ctx, mr_id, count).await, commits)
         };
+
+    // The merge / squash commit never changes for a given SHA: fetched once.
+    let landed_fingerprint = match &sha {
+        Some(s) if cached.sha.as_ref() == Some(s) && cached.landed_fingerprint.is_some() => {
+            cached.landed_fingerprint.clone()
+        }
+        Some(s) => fetch_commit_fingerprint(ctx, s).await,
+        None => None,
+    };
 
     // Resolve the number of commits the source branch is behind the target branch.
     //
@@ -1505,12 +1547,15 @@ pub async fn fetch_gitlab_data(
             pipelines,
             user_notes_count,
             diff_stats,
+            commits,
+            landed_fingerprint,
         },
     })
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn cherry_pick_sources_reads_every_full_sha_trailer() {
@@ -1575,11 +1620,49 @@ mod tests {
             commits_count,
             ..DiffStats::default()
         };
-        assert!(!diff_stats_cache_valid(None));
-        assert!(diff_stats_cache_valid(Some(&stats(3, 10, 2))));
-        assert!(diff_stats_cache_valid(Some(&stats(0, 0, 0)))); // empty MR
-        assert!(!diff_stats_cache_valid(Some(&stats(3, 0, 2)))); // old line fields
-        assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 0)))); // before commits_count
+        let commit = |sha: &str| MrCommit {
+            sha: sha.into(),
+            fingerprint: CommitFingerprint {
+                author_email: "a@b".into(),
+                authored_at: 0,
+                title: sha.into(),
+            },
+        };
+        let two = [commit("1"), commit("2")];
+        assert!(!diff_stats_cache_valid(None, &[]));
+        assert!(diff_stats_cache_valid(Some(&stats(3, 10, 2)), &two));
+        assert!(diff_stats_cache_valid(Some(&stats(0, 0, 0)), &[])); // empty MR
+        assert!(!diff_stats_cache_valid(Some(&stats(3, 0, 2)), &two)); // old line fields
+        assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 0)), &[])); // before commits_count
+        assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 2)), &[])); // before the commit list
+    }
+
+    #[test]
+    fn branch_index_matches_copies_across_time_zones() {
+        let commits: Vec<CommitJson> = serde_json::from_str(&format!(
+            r#"[
+                {{"id": "c1", "title": " Fix login ", "message": "Fix login\n\n(cherry picked from commit {sha})",
+                  "author_email": "Dev@Example.com", "authored_date": "2026-09-28T15:03:01.000+02:00"}},
+                {{"id": "c2", "title": "No date", "message": "No date", "author_email": "x@y"}}
+            ]"#,
+            sha = "a".repeat(40)
+        ))
+        .unwrap();
+        let index = index_branch_commits(&commits);
+
+        assert!(index.shas.contains("c1") && index.shas.contains("c2"));
+        assert!(index.picked_from.contains(&"a".repeat(40)));
+        // Same instant written in UTC, e-mail case and title padding normalised.
+        let copy = CommitFingerprint {
+            author_email: "dev@example.com".into(),
+            authored_at: chrono::DateTime::parse_from_rfc3339("2026-09-28T13:03:01Z")
+                .unwrap()
+                .timestamp(),
+            title: "Fix login".into(),
+        };
+        assert_eq!(index.fingerprints, HashSet::from([copy]));
+        assert_eq!(normalize_title(" '#1410856: Update' "), "#1410856: Update");
+        assert_eq!(normalize_title("\"Revert \"x\"\""), "Revert \"x");
     }
 
     #[test]
@@ -1591,8 +1674,6 @@ mod tests {
         let with_headers = "--- a/f.rs\n+++ b/f.rs\n@@ -1 +1 @@\n-a\n+b";
         assert_eq!(count_diff_lines(with_headers), (1, 1));
     }
-
-    use super::*;
 
     #[test]
     fn discovery_anchor_advances_but_never_moves_back() {

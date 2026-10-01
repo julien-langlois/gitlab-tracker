@@ -225,6 +225,89 @@ pub struct MrData {
     /// Diff statistics (files changed, additions, deletions) for the review-difficulty badge.
     #[serde(default)]
     pub diff_stats: Option<DiffStats>,
+    /// The MR's own commits (`/merge_requests/:iid/commits`), cached with the diff
+    /// stats: lets copies of the MR be recognised commit by commit on other branches.
+    #[serde(default)]
+    pub commits: Vec<MrCommit>,
+    /// Fingerprint of the merge / squash commit (`sha`), fetched once per SHA.
+    #[serde(default)]
+    pub landed_fingerprint: Option<CommitFingerprint>,
+}
+
+/// What survives when a commit is cherry-picked or rebased: git keeps the author
+/// and the author date, and the title (first message line) is rarely edited.
+/// Two commits with the same fingerprint are taken as copies of each other.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CommitFingerprint {
+    /// Lower-cased author e-mail.
+    pub author_email: String,
+    /// Author date as a Unix timestamp (time zone independent).
+    pub authored_at: i64,
+    pub title: String,
+}
+
+/// One commit of an MR.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MrCommit {
+    pub sha: String,
+    pub fingerprint: CommitFingerprint,
+}
+
+/// What a tracked branch contains, from a scan of its recent commits: enough to
+/// recognise an MR that reached it under other SHAs (cherry-pick, rebase).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BranchCommits {
+    /// SHAs of the scanned commits.
+    pub shas: HashSet<String>,
+    /// SHAs named by `(cherry picked from commit <sha>)` trailers.
+    pub picked_from: HashSet<String>,
+    pub fingerprints: HashSet<CommitFingerprint>,
+}
+
+impl BranchCommits {
+    /// How an MR absent from this branch by its merge SHA got there anyway:
+    /// first through its merge / squash commit (`landed_sha` / `landed`), then
+    /// through its own `commits` one by one (some found: [`BranchPresence::Partial`]).
+    pub fn presence_of(
+        &self,
+        landed_sha: Option<&str>,
+        landed: Option<&CommitFingerprint>,
+        commits: &[MrCommit],
+    ) -> BranchPresence {
+        if let Some(sha) = landed_sha {
+            if self.shas.contains(sha) {
+                return BranchPresence::Present;
+            }
+            if self.picked_from.contains(sha) {
+                return BranchPresence::CherryPicked;
+            }
+        }
+        if landed.is_some_and(|fp| self.fingerprints.contains(fp)) {
+            return BranchPresence::Copied;
+        }
+        let (mut by_sha, mut by_trailer, mut by_fingerprint) = (0, 0, 0);
+        for commit in commits {
+            if self.shas.contains(&commit.sha) {
+                by_sha += 1;
+            } else if self.picked_from.contains(&commit.sha) {
+                by_trailer += 1;
+            } else if self.fingerprints.contains(&commit.fingerprint) {
+                by_fingerprint += 1;
+            }
+        }
+        let found = by_sha + by_trailer + by_fingerprint;
+        if found == 0 {
+            BranchPresence::Absent
+        } else if found < commits.len() {
+            BranchPresence::Partial
+        } else if by_fingerprint > 0 {
+            BranchPresence::Copied
+        } else if by_trailer > 0 {
+            BranchPresence::CherryPicked
+        } else {
+            BranchPresence::Present
+        }
+    }
 }
 
 /// Deserialises `null` as `T::default()`: older state files wrote `null` for fields
@@ -246,14 +329,28 @@ pub enum MrStatus {
     MergedIn(HashSet<String>),
 }
 /// How an MR shows up on one tracked branch (a table cell / export cell).
+/// See [`BranchCommits::presence_of`] for everything but `Present` by SHA.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BranchPresence {
-    /// Its merge / squash commit is on the branch (strict SHA check).
+    /// Its commits are on the branch under their own SHAs (merge, fast-forward,
+    /// `reset --hard`…).
     Present,
-    /// Not on the branch by SHA, but a commit there carries a
-    /// `(cherry picked from commit <its sha>)` trailer.
+    /// Copied with an explicit `(cherry picked from commit <sha>)` trailer
+    /// (`git cherry-pick -x`, GitLab's "Cherry-pick" button).
     CherryPicked,
+    /// Copied without trailer: commits with the same author, author date and
+    /// title are on the branch (plain cherry-pick, rebase, SmartGit…). Inferred.
+    Copied,
+    /// Only some of the MR's commits reached the branch (by any of the above).
+    Partial,
     Absent,
+}
+
+impl BranchPresence {
+    /// Still has to reach the branch: nothing or only part of it is there.
+    pub fn is_missing(self) -> bool {
+        matches!(self, BranchPresence::Absent | BranchPresence::Partial)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -582,12 +679,11 @@ pub enum AppEvent {
         mr_ids: Vec<String>,
         next_anchor: String,
     },
-    /// Original SHAs named by `(cherry picked from commit …)` trailers on `branch`,
-    /// scanned since the oldest merged MR still absent from it (`None`: the scan
-    /// failed, the previous result is kept).
-    CherryPicksLoaded {
+    /// Recent commits of `branch`, scanned to recognise MRs copied there under
+    /// other SHAs (`None`: the scan failed, the previous result is kept).
+    BranchCommitsLoaded {
         branch: String,
-        sources: Option<HashSet<String>>,
+        commits: Option<BranchCommits>,
     },
     Tick,
 }
@@ -601,5 +697,59 @@ impl AppEvent {
             self,
             AppEvent::MrAdded(_) | AppEvent::MrRemovedById(_) | AppEvent::MrLoaded(_)
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fp(title: &str) -> CommitFingerprint {
+        CommitFingerprint {
+            author_email: "dev@example.com".into(),
+            authored_at: 1_700_000_000,
+            title: title.into(),
+        }
+    }
+
+    fn commit(sha: &str) -> MrCommit {
+        MrCommit {
+            sha: sha.into(),
+            fingerprint: fp(sha),
+        }
+    }
+
+    #[test]
+    fn presence_covers_every_way_an_mr_reaches_a_branch() {
+        let index = BranchCommits {
+            shas: HashSet::from(["on-branch".to_string()]),
+            picked_from: HashSet::from(["picked".to_string()]),
+            fingerprints: HashSet::from([fp("squash"), fp("c2")]),
+        };
+        let presence =
+            |sha: Option<&str>, landed: Option<CommitFingerprint>, commits: &[MrCommit]| {
+                index.presence_of(sha, landed.as_ref(), commits)
+            };
+        use BranchPresence::*;
+
+        // Merge / squash commit: same SHA, -x trailer, then fingerprint (plain cherry-pick).
+        assert_eq!(presence(Some("on-branch"), None, &[]), Present);
+        assert_eq!(presence(Some("picked"), None, &[]), CherryPicked);
+        assert_eq!(presence(Some("x"), Some(fp("squash")), &[]), Copied);
+        // Commit by commit (fast-forward MRs, picks of the original commits).
+        let (c1, c2, c3) = (commit("on-branch"), commit("c2"), commit("picked"));
+        assert_eq!(presence(None, None, std::slice::from_ref(&c1)), Present);
+        assert_eq!(
+            presence(None, None, &[c1.clone(), c3.clone()]),
+            CherryPicked
+        );
+        assert_eq!(presence(None, None, &[c1.clone(), c2.clone(), c3]), Copied);
+        assert_eq!(presence(None, None, &[c2, commit("missing")]), Partial);
+        assert_eq!(
+            presence(Some("x"), Some(fp("other")), &[commit("missing")]),
+            Absent
+        );
+        assert_eq!(presence(None, None, &[]), Absent);
+        assert!(Partial.is_missing() && Absent.is_missing() && !Copied.is_missing());
     }
 }

@@ -61,6 +61,17 @@ refactor.
 through `Deref`, so a new field is declared once. Fetch failures are kept in memory
 only, as `MrStatus::Error(String)`, and shown in the Inspector.
 
+**Branch presence** has two sources. `MrStatus::MergedIn` holds the branches that
+contain the MR's merge SHA (GitLab `/refs`, `gitlab::branches_containing`; a
+transient failure keeps the previous set). For the other branches,
+`App::branch_commits` holds one `BranchCommits` index per branch (SHAs, `-x`
+trailer sources, `CommitFingerprint`s), rebuilt by `spawn_branch_scans` after each
+startup load / refresh cycle and never persisted. `BranchCommits::presence_of`
+matches an MR's merge / squash commit (`MrData::sha` + `landed_fingerprint`) and
+then its own `MrData::commits` against it. `App::branch_presence` combines both,
+and every consumer (table, export, `absent_branches` filter, notifications) goes
+through it.
+
 ---
 
 ## Error handling

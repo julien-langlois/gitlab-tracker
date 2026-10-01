@@ -551,6 +551,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
                 time_remaining: Some(10800),   // 3 h
             }),
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "feat(api): Introduce GraphQL endpoint for MR metadata".into(),
                 state: GitlabMrState::Merged,
                 sha: Some("c9d0e1f2".into()),
@@ -670,6 +672,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
             flagged: false,
             linked_ticket: None,
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "feat(auth): Add OAuth2 PKCE flow for mobile clients".into(),
                 state: GitlabMrState::Merged,
                 sha: Some("a1b2c3d4".into()),
@@ -723,6 +727,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
                 time_remaining: Some(9000),   // 2 h 30
             }),
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "fix(db): Resolve connection pool deadlocks under heavy load".into(),
                 state: GitlabMrState::Opened,
                 sha: Some("e5f6g7h8".into()),
@@ -756,6 +762,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
             flagged: false,
             linked_ticket: None,
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "refactor(ui): Optimize Ratatui render loop with double buffering".into(),
                 state: GitlabMrState::Opened,
                 sha: None,
@@ -787,6 +795,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
             flagged: false,
             linked_ticket: None,
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "fix(ci): Repair flaky integration tests in pipeline stage 3".into(),
                 state: GitlabMrState::Closed,
                 sha: Some("3a4b5c6d".into()),
@@ -819,6 +829,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
             flagged: false,
             linked_ticket: None,
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "chore(deps): Bump tokio to 1.37 and update async ecosystem".into(),
                 state: GitlabMrState::Opened,
                 sha: Some("7e8f9a0b".into()),
@@ -852,6 +864,8 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
             flagged: true,
             linked_ticket: None,
             data: crate::models::MrData {
+                commits: Vec::new(),
+                landed_fingerprint: None,
                 title: "feat(notif): Add desktop notifications on branch status change".into(),
                 state: GitlabMrState::Opened,
                 sha: None,

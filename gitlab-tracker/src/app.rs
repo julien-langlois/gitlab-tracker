@@ -1,8 +1,8 @@
 use crate::config::AppConfig;
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
-    AppEvent, BranchPresence, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus,
-    PipelineState, SavedMr, TrackedMr,
+    AppEvent, BranchCommits, BranchPresence, GitLabMilestone, GitlabMrState, MergeabilityStatus,
+    MrStatus, PipelineState, SavedMr, TrackedMr,
 };
 use crate::notify;
 use crate::settings::SettingsEditorState;
@@ -420,11 +420,11 @@ pub struct App {
     /// (settings, branches, flags, refresh, MR imports). Events it sends to the bus
     /// (add / remove MR…) are not applied by the demo loop either.
     pub read_only: bool,
-    /// Cherry-pick source SHAs found on each tracked branch (`CherryPicksLoaded`),
-    /// rescanned after every refresh cycle — never persisted.
-    pub cherry_picks: HashMap<String, HashSet<String>>,
-    /// Cherry-pick scans spawned and not answered yet.
-    pub pending_cherry_pick_scans: usize,
+    /// Recent commits of each tracked branch (`BranchCommitsLoaded`), to recognise
+    /// MRs copied there under other SHAs; rescanned after every refresh cycle.
+    pub branch_commits: HashMap<String, BranchCommits>,
+    /// Branch scans spawned and not answered yet.
+    pub pending_branch_scans: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
@@ -576,8 +576,8 @@ impl App {
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
             read_only: false,
-            cherry_picks: HashMap::new(),
-            pending_cherry_pick_scans: 0,
+            branch_commits: HashMap::new(),
+            pending_branch_scans: 0,
             theme,
             needs_sort: false,
             visible_cache: None,
@@ -778,7 +778,10 @@ impl App {
         let absent_branches: Vec<&str> = self
             .branches
             .iter()
-            .filter(|b| self.branch_presence(mr, b) == Some(BranchPresence::Absent))
+            .filter(|b| {
+                self.branch_presence(mr, b)
+                    .is_some_and(BranchPresence::is_missing)
+            })
             .map(String::as_str)
             .collect();
         let snapshot = MrSnapshot {
@@ -944,6 +947,8 @@ impl App {
                 out.push_str(match self.branch_presence(mr, b) {
                     Some(BranchPresence::Present) => " ✅ |",
                     Some(BranchPresence::CherryPicked) => " 🍒 |",
+                    Some(BranchPresence::Copied) => " ≈ |",
+                    Some(BranchPresence::Partial) => " ◐ |",
                     Some(BranchPresence::Absent) => " ❌ |",
                     None => " … |",
                 });
@@ -1186,22 +1191,39 @@ struct RefreshCycle {
     estimated_gitlab_calls: usize,
 }
 
-/// MRs absent from `branch` by SHA whose merge commit is a cherry-pick source in
-/// `after` but was not in `before`: they just reached the branch by cherry-pick.
-fn newly_cherry_picked<'a>(
+/// How far back a branch scan looks for copies of the MRs missing from it.
+const BRANCH_SCAN_LOOKBACK_DAYS: i64 = 90;
+
+/// How `mr`, absent from a branch by SHA, reached it according to its `index`.
+fn copy_presence(mr: &TrackedMr, index: &BranchCommits) -> BranchPresence {
+    index.presence_of(
+        mr.sha.as_deref(),
+        mr.landed_fingerprint.as_ref(),
+        &mr.commits,
+    )
+}
+
+/// MRs absent from `branch` by SHA that were missing from it in the `before` scan
+/// and are fully there in the `after` one, with how they got there (for toasts).
+fn newly_copied<'a>(
     mrs: &'a [TrackedMr],
     branch: &'a str,
-    before: &'a HashSet<String>,
-    after: &'a HashSet<String>,
-) -> impl Iterator<Item = &'a TrackedMr> {
-    mrs.iter().filter(move |mr| {
-        let absent_by_sha =
-            matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(branch));
-        absent_by_sha
-            && mr
-                .sha
-                .as_ref()
-                .is_some_and(|sha| after.contains(sha) && !before.contains(sha))
+    before: &'a BranchCommits,
+    after: &'a BranchCommits,
+) -> impl Iterator<Item = (&'a TrackedMr, &'static str)> {
+    mrs.iter().filter_map(move |mr| {
+        if !matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(branch)) {
+            return None;
+        }
+        if !copy_presence(mr, before).is_missing() {
+            return None;
+        }
+        match copy_presence(mr, after) {
+            BranchPresence::Present => Some((mr, "merged")),
+            BranchPresence::CherryPicked => Some((mr, "cherry-picked")),
+            BranchPresence::Copied => Some((mr, "copied")),
+            BranchPresence::Partial | BranchPresence::Absent => None,
+        }
     })
 }
 
@@ -1358,48 +1380,43 @@ impl App {
         if found.contains(branch) {
             return Some(BranchPresence::Present);
         }
-        // `sha` is the merge / squash commit. ponytail: per-commit cherry-picks of
-        // multi-commit MRs (and fast-forward merges, which have no merge SHA) are
-        // not matched; fetch the MR commit SHAs if needed.
-        let picked = mr.sha.as_ref().is_some_and(|sha| {
-            self.cherry_picks
+        Some(
+            self.branch_commits
                 .get(branch)
-                .is_some_and(|sources| sources.contains(sha))
-        });
-        Some(if picked {
-            BranchPresence::CherryPicked
-        } else {
-            BranchPresence::Absent
-        })
+                .map_or(BranchPresence::Absent, |index| copy_presence(mr, index)),
+        )
     }
 
-    /// Scans each tracked branch for cherry-picks of the merged MRs still absent
-    /// from it, from the oldest such merge on. Branches with none are skipped (no
-    /// API call) and their previous scan is dropped.
-    pub fn spawn_cherry_pick_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
+    /// Scans the recent commits of each tracked branch that some MR is missing from
+    /// by SHA (any state: an open MR's commits can be cherry-picked early), from the
+    /// oldest such MR's creation on, at most [`BRANCH_SCAN_LOOKBACK_DAYS`] back.
+    /// Branches with no such MR are skipped (no API call) and their index dropped.
+    pub fn spawn_branch_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
         if self.read_only {
             return;
         }
+        let floor = chrono::Utc::now() - chrono::TimeDelta::days(BRANCH_SCAN_LOOKBACK_DAYS);
         for branch in self.branches.clone() {
-            let since = self
+            let oldest = self
                 .mrs
                 .iter()
-                .filter(|mr| mr.state == GitlabMrState::Merged)
                 .filter(|mr| matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(&branch)))
-                .filter_map(|mr| mr.merged_at.as_deref())
-                .min_by_key(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
-            match since {
-                Some(since) => {
-                    crate::gitlab::spawn_cherry_picks_fetch(
+                .filter_map(|mr| mr.created_at.as_deref())
+                .filter_map(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                .map(|at| at.with_timezone(&chrono::Utc))
+                .min();
+            match oldest {
+                Some(oldest) => {
+                    crate::gitlab::spawn_branch_commits_fetch(
                         self.fetch_context(),
                         branch,
-                        since.to_string(),
+                        oldest.max(floor).to_rfc3339(),
                         tx.clone(),
                     );
-                    self.pending_cherry_pick_scans += 1;
+                    self.pending_branch_scans += 1;
                 }
                 None => {
-                    self.cherry_picks.remove(&branch);
+                    self.branch_commits.remove(&branch);
                 }
             }
         }
@@ -1504,7 +1521,7 @@ impl App {
     /// The startup load or a refresh cycle just finished: scan for cherry-picks and,
     /// after the startup load, summarise what changed while the app was closed.
     fn on_fetches_settled(&mut self, initial_sync: bool, tx: &UnboundedSender<AppEvent>) {
-        self.spawn_cherry_pick_scans(tx);
+        self.spawn_branch_scans(tx);
         if initial_sync {
             let baseline = std::mem::take(&mut self.startup_baseline);
             if let Some(digest) = session_digest(&baseline, &self.mrs) {
@@ -1937,19 +1954,19 @@ impl App {
                 }
             }
 
-            AppEvent::CherryPicksLoaded { branch, sources } => {
-                self.pending_cherry_pick_scans = self.pending_cherry_pick_scans.saturating_sub(1);
-                let Some(sources) = sources else {
-                    return false; // failed scan: keep the previous result
+            AppEvent::BranchCommitsLoaded { branch, commits } => {
+                self.pending_branch_scans = self.pending_branch_scans.saturating_sub(1);
+                let Some(index) = commits else {
+                    return false; // failed scan: keep the previous index
                 };
                 // The first scan of a branch in a session only records: restarting must
-                // not toast every cherry-pick already there.
-                if let Some(before) = self.cherry_picks.get(&branch) {
-                    for mr in newly_cherry_picked(&self.mrs, &branch, before, &sources) {
-                        notify::mr_cherry_picked(&mr.id, &mr.title, &branch, &mr.web_url);
+                // not toast every copy already there.
+                if let Some(before) = self.branch_commits.get(&branch) {
+                    for (mr, how) in newly_copied(&self.mrs, &branch, before, &index) {
+                        notify::mr_copied_to_branch(&mr.id, &mr.title, &branch, how, &mr.web_url);
                     }
                 }
-                self.cherry_picks.insert(branch, sources);
+                self.branch_commits.insert(branch, index);
                 false
             }
 
@@ -2125,12 +2142,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn branch_presence_reports_cherry_picks_separately() {
+    async fn branch_presence_reports_branch_commits_separately() {
         let mut app = app_with_mrs(&[("fix login", "None")]).await;
         app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
         app.mrs[0].data.sha = Some("abc".into());
-        app.cherry_picks
-            .insert("staging".into(), HashSet::from(["abc".to_string()]));
+        let picked = BranchCommits {
+            picked_from: HashSet::from(["abc".to_string()]),
+            ..BranchCommits::default()
+        };
+        app.branch_commits.insert("staging".into(), picked);
         let mr = &app.mrs[0];
 
         assert_eq!(
@@ -2174,8 +2194,11 @@ mod tests {
         app.mrs[1].status = MrStatus::MergedIn(HashSet::from(["main".into(), "prod".into()]));
         app.mrs[2].status = on_main(); // cherry-picked to prod
         app.mrs[2].data.sha = Some("abc".into());
-        app.cherry_picks
-            .insert("prod".into(), HashSet::from(["abc".to_string()]));
+        let picked = BranchCommits {
+            picked_from: HashSet::from(["abc".to_string()]),
+            ..BranchCommits::default()
+        };
+        app.branch_commits.insert("prod".into(), picked);
         app.mrs[3].status = MrStatus::Loading;
         let index = app
             .filter_defs
@@ -2192,21 +2215,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn only_new_cherry_picks_of_absent_mrs_are_reported() {
+    async fn only_mrs_that_just_reached_a_branch_are_reported() {
         let mut app = app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None")]).await;
         for (mr, sha) in app.mrs.iter_mut().zip(["s1", "s2", "s3"]) {
             mr.status = MrStatus::MergedIn(HashSet::new());
             mr.data.sha = Some(sha.into());
         }
         app.mrs[2].status = MrStatus::MergedIn(HashSet::from(["prod".to_string()]));
-        let before = HashSet::from(["s1".to_string()]);
-        let after = HashSet::from(["s1".into(), "s2".into(), "s3".to_string()]);
+        let picked = |shas: &[&str]| BranchCommits {
+            picked_from: shas.iter().map(|s| s.to_string()).collect(),
+            ..BranchCommits::default()
+        };
+        let (before, after) = (picked(&["s1"]), picked(&["s1", "s2", "s3"]));
 
-        let ids: Vec<&str> = newly_cherry_picked(&app.mrs, "prod", &before, &after)
-            .map(|mr| mr.id.as_str())
+        let reached: Vec<(&str, &str)> = newly_copied(&app.mrs, "prod", &before, &after)
+            .map(|(mr, how)| (mr.id.as_str(), how))
             .collect();
         // s1 was already picked; s3's MR is on prod by SHA anyway.
-        assert_eq!(ids, ["2"]);
+        assert_eq!(reached, [("2", "cherry-picked")]);
     }
 
     #[tokio::test]
