@@ -1,6 +1,8 @@
 use crate::config::AppConfig;
-use crate::models::{DifficultyProfile, Effort, GitlabMrState, Pipeline, PipelineState, TrackedMr};
-use crate::ui::table::{badge_label, behind_colors, mergeability_badge, Behind};
+use crate::models::{
+    BranchRow, DifficultyProfile, Effort, GitlabMrState, Pipeline, PipelineState, TrackedMr,
+};
+use crate::ui::table::{badge_label, behind_colors, mergeability_badge, presence_badge, Behind};
 use crate::ui::theme::Palette;
 use crate::utils::{format_relative_date, matches_gitlab_username};
 use ratatui::style::{Color, Modifier, Style};
@@ -342,8 +344,56 @@ fn render_diff_stats_lines(
     ]
 }
 
+/// One line per tracked branch (`name : badge`), aligned on the longest name;
+/// a partial port adds `n/total commits` and lists the commits still missing,
+/// slightly indented under the branch.
+fn render_branch_lines(
+    branches: &[BranchRow],
+    total_commits: usize,
+    failed: bool,
+    palette: Palette,
+) -> Vec<Line<'static>> {
+    let width = branches
+        .iter()
+        .map(|row| Span::raw(row.branch.as_str()).width())
+        .max()
+        .unwrap_or(0);
+    let mut lines = Vec::new();
+    for row in branches {
+        let (label, colour) = presence_badge(row.presence, failed);
+        let pad = " ".repeat(width - Span::raw(row.branch.as_str()).width());
+        let mut spans = vec![
+            Span::raw(format!("{}{pad} : ", row.branch)),
+            Span::styled(
+                label,
+                Style::default().fg(colour).add_modifier(Modifier::BOLD),
+            ),
+        ];
+        if !row.missing.is_empty() {
+            let found = total_commits.saturating_sub(row.missing.len());
+            spans.push(Span::styled(
+                format!("  {found}/{total_commits} commits"),
+                Style::default().fg(palette.muted),
+            ));
+        }
+        lines.push(Line::from(spans));
+        for commit in &row.missing {
+            lines.push(Line::from(vec![
+                Span::styled("  ✘ ", Style::default().fg(palette.accent_red)),
+                Span::styled(
+                    commit.sha.get(..8).unwrap_or(&commit.sha).to_string(),
+                    Style::default().fg(palette.muted),
+                ),
+                Span::raw(format!(" {}", commit.fingerprint.title)),
+            ]));
+        }
+    }
+    lines
+}
+
 pub fn render_safe_inspector_text(
     mr: &TrackedMr,
+    branches: &[BranchRow],
     config: &AppConfig,
     palette: Palette,
 ) -> Text<'static> {
@@ -743,6 +793,18 @@ pub fn render_safe_inspector_text(
             "None",
             Style::default().fg(palette.muted),
         )]));
+    }
+
+    // ── SECTION 6: Branches ──────────────────────────────────────────────────
+    if !branches.is_empty() {
+        lines.push(Line::from(vec![Span::raw("")]));
+        lines.push(section_header("Branches", palette));
+        lines.extend(render_branch_lines(
+            branches,
+            mr.commits.len(),
+            matches!(mr.status, crate::models::MrStatus::Error(_)),
+            palette,
+        ));
     }
 
     // ── Description ──────────────────────────────────────────────────────────

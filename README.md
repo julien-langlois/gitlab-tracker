@@ -25,7 +25,7 @@
   | `🟢 PRESENT` | The MR's merge / squash commit (or all its commits) is on the branch under the same SHA — merge, fast-forward, `reset --hard`. |
   | `🍒 PICKED` | Copied with an explicit `(cherry picked from commit <sha>)` trailer — `git cherry-pick -x`, GitLab's *Cherry-pick* button. |
   | `≈ COPIED` | Copied without trailer: commits with the **same author, author date and title** are on the branch — plain cherry-pick, rebase, SmartGit. Inferred. |
-  | `◐ PARTIAL` | Only some of the MR's commits reached the branch (by any of the above). |
+  | `◐ PARTIAL` | Only some of the MR's commits reached the branch (by any of the above); the Inspector lists the missing ones. |
   | `🔴 ABSENT` | Nothing of the MR was found on the branch. |
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
@@ -205,6 +205,15 @@
 * 🔎 **HEAD SHA & Pipeline Summary in Inspector:** The MR metadata panel (default side panel) surfaces two additional at-a-glance fields without requiring a switch to the Pipeline view:
   * **HEAD SHA** — the abbreviated commit SHA (8 chars) of the MR's source branch tip, useful for cross-referencing with CI logs or `git log`.
   * **Pipeline summary** — the latest pipeline status (`✔ passed`, `✘ failed`, `⟳ running`, …) with its total execution time and a `[P] details` hint to open the full pipeline inspector.
+  * **Branches** (after *Diff & Effort* and *Labels*) — the presence of the MR on every tracked branch, with the same badges as the table. For a `◐ PARTIAL` port it shows how many commits arrived (`2/3 commits`) and lists the ones still missing, by short SHA and title:
+
+    ```text
+    ── Branches ──
+    develop       : 🟢 PRESENT
+    preproduction : ◐ PARTIAL  2/3 commits
+      ✘ 3f9c2a1b fix: #123456 Fix issue.
+    main        : 🔴 ABSENT
+    ```
 
 ---
 

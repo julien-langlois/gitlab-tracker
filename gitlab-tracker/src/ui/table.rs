@@ -18,6 +18,20 @@ pub const BADGE_WIDTH: usize = 18;
 /// "1000 behind" is 11 chars — add 1 char each side → 13. Column constraint must match.
 pub const BEHIND_WIDTH: usize = 13;
 
+/// Label and colour of a branch cell (`None`: the MR is loading, or `failed`).
+/// Shared by the table and the Inspector so both read the same.
+pub fn presence_badge(presence: Option<BranchPresence>, failed: bool) -> (&'static str, Color) {
+    match presence {
+        Some(BranchPresence::Present) => ("🟢 PRESENT", Color::Green),
+        Some(BranchPresence::CherryPicked) => ("🍒 PICKED", Color::Yellow),
+        Some(BranchPresence::Copied) => ("≈ COPIED", Color::Cyan),
+        Some(BranchPresence::Partial) => ("◐ PARTIAL", Color::Magenta),
+        Some(BranchPresence::Absent) => ("🔴 ABSENT", Color::Red),
+        None if failed => ("❌ FAILED", Color::Red),
+        None => ("⏳ LOADING...", Color::Yellow),
+    }
+}
+
 /// Centers `text` inside a field of exactly `BADGE_WIDTH` characters.
 /// Excess space is distributed evenly left and right (left-biased on odd remainder).
 pub fn badge_label(text: &str) -> String {
@@ -438,16 +452,9 @@ pub fn render_table(app: &App) -> Table<'_> {
             }
 
             for b in &app.branches {
-                let cell = match (&mr.status, app.branch_presence(mr, b)) {
-                    (_, Some(BranchPresence::Present)) => Cell::from("🟢 PRESENT").green(),
-                    (_, Some(BranchPresence::CherryPicked)) => Cell::from("🍒 PICKED").yellow(),
-                    (_, Some(BranchPresence::Copied)) => Cell::from("≈ COPIED").cyan(),
-                    (_, Some(BranchPresence::Partial)) => Cell::from("◐ PARTIAL").magenta(),
-                    (_, Some(BranchPresence::Absent)) => Cell::from("🔴 ABSENT").red(),
-                    (MrStatus::Error(_), None) => Cell::from("❌ FAILED").red(),
-                    (_, None) => Cell::from("⏳ LOADING...").yellow(),
-                };
-                cells.push(maybe_highlight(cell, highlight));
+                let failed = matches!(mr.status, MrStatus::Error(_));
+                let (label, colour) = presence_badge(app.branch_presence(mr, b), failed);
+                cells.push(maybe_highlight(Cell::from(label).fg(colour), highlight));
             }
 
             Row::new(cells)

@@ -1,8 +1,8 @@
 use crate::config::AppConfig;
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
-    AppEvent, BranchCommits, BranchPresence, GitLabMilestone, GitlabMrState, MergeabilityStatus,
-    MrStatus, PipelineState, SavedMr, TrackedMr,
+    AppEvent, BranchCommits, BranchPresence, BranchRow, GitLabMilestone, GitlabMrState,
+    MergeabilityStatus, MrStatus, PipelineState, SavedMr, TrackedMr,
 };
 use crate::notify;
 use crate::settings::SettingsEditorState;
@@ -1387,6 +1387,31 @@ impl App {
         )
     }
 
+    /// One row per tracked branch for the Inspector, with the commits still
+    /// missing from the branches the MR only partially reached.
+    pub fn branch_rows(&self, mr: &TrackedMr) -> Vec<BranchRow> {
+        self.branches
+            .iter()
+            .map(|branch| {
+                let presence = self.branch_presence(mr, branch);
+                let missing = match (presence, self.branch_commits.get(branch)) {
+                    (Some(BranchPresence::Partial), Some(index)) => mr
+                        .commits
+                        .iter()
+                        .filter(|c| !index.contains_copy_of(c))
+                        .cloned()
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                BranchRow {
+                    branch: branch.clone(),
+                    presence,
+                    missing,
+                }
+            })
+            .collect()
+    }
+
     /// Scans the recent commits of each tracked branch that some MR is missing from
     /// by SHA (any state: an open MR's commits can be cherry-picked early), from the
     /// oldest such MR's creation on, at most [`BRANCH_SCAN_LOOKBACK_DAYS`] back.
@@ -2233,6 +2258,35 @@ mod tests {
             .collect();
         // s1 was already picked; s3's MR is on prod by SHA anyway.
         assert_eq!(reached, [("2", "cherry-picked")]);
+    }
+
+    #[tokio::test]
+    async fn branch_rows_list_the_commits_missing_from_a_partial_port() {
+        use crate::models::{CommitFingerprint, MrCommit};
+        let mut app = app_with_mrs(&[("a", "None")]).await;
+        app.branches = vec!["main".into(), "prod".into()];
+        let commit = |sha: &str| MrCommit {
+            sha: sha.into(),
+            fingerprint: CommitFingerprint {
+                author_email: "dev@example.com".into(),
+                authored_at: 0,
+                title: sha.into(),
+            },
+        };
+        app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
+        app.mrs[0].data.commits = vec![commit("c1"), commit("c2")];
+        let prod = BranchCommits {
+            shas: HashSet::from(["c1".to_string()]),
+            ..BranchCommits::default()
+        };
+        app.branch_commits.insert("prod".into(), prod);
+
+        let rows = app.branch_rows(&app.mrs[0]);
+        assert_eq!(rows[0].presence, Some(BranchPresence::Present));
+        assert!(rows[0].missing.is_empty());
+        assert_eq!(rows[1].presence, Some(BranchPresence::Partial));
+        let missing: Vec<&str> = rows[1].missing.iter().map(|c| c.sha.as_str()).collect();
+        assert_eq!(missing, ["c2"]);
     }
 
     #[tokio::test]

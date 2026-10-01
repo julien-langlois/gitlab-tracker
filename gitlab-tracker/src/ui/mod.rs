@@ -174,7 +174,8 @@ fn render_frame(f: &mut Frame, app: &mut App) {
             let mr = app.visible_mrs().nth(i)?;
             let text = match app.inspector_view {
                 InspectorView::MrInfo => {
-                    inspector::render_safe_inspector_text(mr, &app.config, app.theme)
+                    let branches = app.branch_rows(mr);
+                    inspector::render_safe_inspector_text(mr, &branches, &app.config, app.theme)
                 }
                 InspectorView::Pipelines => inspector::render_pipelines_text(mr, app.theme),
             };

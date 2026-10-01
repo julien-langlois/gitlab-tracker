@@ -286,6 +286,7 @@ impl BranchCommits {
             return BranchPresence::Copied;
         }
         let (mut by_sha, mut by_trailer, mut by_fingerprint) = (0, 0, 0);
+        // Kept in sync with `contains_copy_of`, which only needs the yes / no.
         for commit in commits {
             if self.shas.contains(&commit.sha) {
                 by_sha += 1;
@@ -308,6 +309,23 @@ impl BranchCommits {
             BranchPresence::Present
         }
     }
+
+    /// Whether `commit` is on this branch, by SHA, trailer or fingerprint.
+    pub fn contains_copy_of(&self, commit: &MrCommit) -> bool {
+        self.shas.contains(&commit.sha)
+            || self.picked_from.contains(&commit.sha)
+            || self.fingerprints.contains(&commit.fingerprint)
+    }
+}
+
+/// One tracked branch as shown in the Inspector: how the MR reached it and,
+/// for a partial port, which of its commits are still missing there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BranchRow {
+    pub branch: String,
+    /// `None` while the MR is loading or failed.
+    pub presence: Option<BranchPresence>,
+    pub missing: Vec<MrCommit>,
 }
 
 /// Deserialises `null` as `T::default()`: older state files wrote `null` for fields
