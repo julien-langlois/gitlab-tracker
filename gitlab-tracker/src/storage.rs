@@ -641,6 +641,31 @@ pub fn is_same_project(entry: &ProjectEntry, gitlab_url: &str, project_id: &str)
         && entry.project_id == project_id
 }
 
+/// Marks `(gitlab_url, project_id)` as the only `active` entry of `projects.toml`,
+/// so the next launch opens it. No-op when the project is not listed.
+pub async fn set_active_project_async(gitlab_url: &str, project_id: &str) {
+    let mut cfg = load_projects_toml().await;
+    if !mark_active(&mut cfg, gitlab_url, project_id) {
+        return;
+    }
+    save_projects_toml(&cfg).await;
+}
+
+/// Sets `active` on the matching entry only; `false` when none matches.
+fn mark_active(cfg: &mut ProjectsConfig, gitlab_url: &str, project_id: &str) -> bool {
+    if !cfg
+        .projects
+        .iter()
+        .any(|p| is_same_project(p, gitlab_url, project_id))
+    {
+        return false;
+    }
+    for p in &mut cfg.projects {
+        p.active = is_same_project(p, gitlab_url, project_id);
+    }
+    true
+}
+
 /// Loads `projects.toml`, applies `update` to the current project's entry and saves.
 ///
 /// Returns `false` (and writes nothing) when the project is not in `projects.toml`,
@@ -1144,6 +1169,28 @@ pub async fn save_state_async(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mark_active_keeps_a_single_active_entry() {
+        use super::{mark_active, ProjectEntry, ProjectsConfig};
+        let entry = |id: &str, active: bool| ProjectEntry {
+            gitlab_url: "https://g".into(),
+            project_id: id.into(),
+            active,
+            ..ProjectEntry::default()
+        };
+        let mut cfg = ProjectsConfig {
+            projects: vec![entry("1", true), entry("2", false)],
+        };
+        assert!(mark_active(&mut cfg, "https://g/", "2"));
+        let active: Vec<bool> = cfg.projects.iter().map(|p| p.active).collect();
+        assert_eq!(active, [false, true]);
+        assert!(
+            !mark_active(&mut cfg, "https://g", "3"),
+            "unknown project: untouched"
+        );
+        assert!(cfg.projects[1].active);
+    }
 
     #[test]
     fn legacy_state_file_still_parses() {

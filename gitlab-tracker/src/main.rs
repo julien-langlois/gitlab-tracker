@@ -434,6 +434,87 @@ async fn build_session(
     })
 }
 
+/// `checklist` subcommand: loads the project like the TUI does, waits for every
+/// MR fetch and cherry-pick scan, then prints the Markdown checklist on stdout.
+/// Read-only: no state file, stats snapshot or tracker status transition is written.
+async fn run_checklist(
+    global_config: &config::AppConfig,
+    project: ProjectEntry,
+    milestone: Option<&str>,
+    absent_from: Option<&str>,
+) -> anyhow::Result<()> {
+    let shared = Shared {
+        palette: ui::theme::Palette::for_mode(ui::theme::ThemeMode::Dark),
+        #[cfg(feature = "stats")]
+        stats_db: None,
+    };
+    let Session {
+        mut app,
+        tx,
+        mut rx,
+        api_semaphore,
+        mut last_known_branches,
+    } = build_session(global_config, project, &shared).await?;
+    app.tracker = None;
+    app.ticket_transitioner = None;
+    app.config.hide_merged = false;
+
+    if let Some(branch) = absent_from {
+        if !app.branches.iter().any(|b| b.eq_ignore_ascii_case(branch)) {
+            anyhow::bail!(
+                "branch '{branch}' is not tracked (tracked: {})",
+                app.branches.join(", ")
+            );
+        }
+        let index = app
+            .filter_defs
+            .iter()
+            .position(|d| d.id == "absent_from_branch")
+            .context("the absent_from_branch filter is not registered")?;
+        app.active_filter = app::ActiveFilter {
+            index,
+            query: branch.to_string(),
+        };
+    }
+
+    if let Some(title) = milestone {
+        let ids = gitlab::fetch_milestone_mr_ids(&app.fetch_context(), title).await;
+        if ids.is_empty() {
+            anyhow::bail!("no MR found for milestone '{title}'");
+        }
+        app.mrs.retain(|mr| ids.contains(&mr.id));
+        let event = AppEvent::MilestoneMrsLoaded {
+            milestone_title: title.to_string(),
+            mr_ids: ids,
+        };
+        app.apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches);
+    }
+
+    // Every MR first, then the cherry-pick scans their branch status calls for.
+    let mut scans_spawned = false;
+    loop {
+        let loading = app
+            .mrs
+            .iter()
+            .any(|mr| mr.status == models::MrStatus::Loading);
+        if !loading && !scans_spawned {
+            app.spawn_cherry_pick_scans(&tx);
+            scans_spawned = true;
+        }
+        if scans_spawned && app.pending_cherry_pick_scans == 0 {
+            break;
+        }
+        let event = rx.recv().await.context("event channel closed")?;
+        // Ticks would start refresh cycles: this run is a single snapshot.
+        if !matches!(event, AppEvent::Tick) {
+            app.apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches);
+        }
+    }
+
+    print!("{}", app.markdown_checklist());
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
@@ -466,6 +547,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Resolve the selected project from CLI flags, projects.toml, env vars, or prompt.
     let project = cli::resolve_project(&args).await;
+    if let Some(cli::Command::Checklist {
+        milestone,
+        absent_from,
+    }) = &args.command
+    {
+        return run_checklist(
+            &global_config,
+            project,
+            milestone.as_deref(),
+            absent_from.as_deref(),
+        )
+        .await;
+    }
     if cli::run_command(args.command.as_ref(), &project).await? {
         return Ok(());
     }
@@ -644,6 +738,12 @@ async fn main() -> anyhow::Result<()> {
                             match built {
                                 Ok(session) => {
                                     app = session.app;
+                                    // The next launch opens the project picked here.
+                                    storage::set_active_project_async(
+                                        &app.base_url,
+                                        &app.project_id,
+                                    )
+                                    .await;
                                     let name = app.project_name.clone();
                                     app.flash(
                                         format!(

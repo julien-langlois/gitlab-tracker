@@ -2,7 +2,7 @@ use crate::config::AppConfig;
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
     AppEvent, BranchPresence, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus,
-    SavedMr, TrackedMr,
+    PipelineState, SavedMr, TrackedMr,
 };
 use crate::notify;
 use crate::settings::SettingsEditorState;
@@ -339,6 +339,9 @@ pub struct App {
     pub update_highlight_ticks: u64,
     /// Short-lived feedback shown in the status bar (copy done, switch failed…).
     pub flash: Option<Flash>,
+    /// State of the MRs fetched at startup as it was saved, compared once the
+    /// initial sync is over for the "since last session" summary.
+    startup_baseline: HashMap<String, MrBaseline>,
     /// List of active/upcoming milestones fetched from GitLab on startup.
     /// Used to power the milestone autocomplete in the input field.
     pub milestones: Vec<GitLabMilestone>,
@@ -420,6 +423,8 @@ pub struct App {
     /// Cherry-pick source SHAs found on each tracked branch (`CherryPicksLoaded`),
     /// rescanned after every refresh cycle — never persisted.
     pub cherry_picks: HashMap<String, HashSet<String>>,
+    /// Cherry-pick scans spawned and not answered yet.
+    pub pending_cherry_pick_scans: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
@@ -543,6 +548,7 @@ impl App {
             project_settings,
             update_highlight_ticks: 0,
             flash: None,
+            startup_baseline: HashMap::new(),
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
@@ -571,6 +577,7 @@ impl App {
             quit_confirm: false,
             read_only: false,
             cherry_picks: HashMap::new(),
+            pending_cherry_pick_scans: 0,
             theme,
             needs_sort: false,
             visible_cache: None,
@@ -1200,6 +1207,52 @@ fn newly_cherry_picked<'a>(
 
 /// Ticks (~seconds) a [`Flash`] message stays in the status bar.
 const FLASH_TICKS: u8 = 4;
+/// The "since last session" summary is longer to read: it stays longer.
+const DIGEST_TICKS: u8 = 20;
+
+/// What a restored MR looked like when the app was last closed.
+#[derive(Debug, Clone)]
+struct MrBaseline {
+    state: GitlabMrState,
+    branches: HashSet<String>,
+    pipeline: Option<PipelineState>,
+}
+
+/// One-line summary of what changed between the saved `baseline` and the freshly
+/// fetched `mrs`, or `None` when nothing worth reporting did.
+fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> Option<String> {
+    let (mut merged, mut closed, mut arrivals, mut ci_failing) = (0, 0, 0, 0);
+    let failed = Some(PipelineState::Failed);
+    for mr in mrs {
+        let Some(before) = baseline.get(&mr.id) else {
+            continue;
+        };
+        if mr.state != before.state {
+            match mr.state {
+                GitlabMrState::Merged => merged += 1,
+                GitlabMrState::Closed => closed += 1,
+                GitlabMrState::Opened => {}
+            }
+        }
+        if let MrStatus::MergedIn(found) = &mr.status {
+            arrivals += found.difference(&before.branches).count();
+        }
+        if mr.pipelines.first().map(|p| p.status) == failed && before.pipeline != failed {
+            ci_failing += 1;
+        }
+    }
+    let parts: Vec<String> = [
+        (merged, "merged"),
+        (closed, "closed"),
+        (arrivals, "new on a branch"),
+        (ci_failing, "CI failing"),
+    ]
+    .into_iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, label)| format!("{n} {label}"))
+    .collect();
+    (!parts.is_empty()).then(|| format!("Since last session: {}", parts.join(" · ")))
+}
 
 /// A transient status-bar message: the result of an action that has no other
 /// visible effect (clipboard copy, failed project switch…).
@@ -1323,7 +1376,7 @@ impl App {
     /// Scans each tracked branch for cherry-picks of the merged MRs still absent
     /// from it, from the oldest such merge on. Branches with none are skipped (no
     /// API call) and their previous scan is dropped.
-    fn spawn_cherry_pick_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
+    pub fn spawn_cherry_pick_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
         if self.read_only {
             return;
         }
@@ -1336,12 +1389,15 @@ impl App {
                 .filter_map(|mr| mr.merged_at.as_deref())
                 .min_by_key(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
             match since {
-                Some(since) => crate::gitlab::spawn_cherry_picks_fetch(
-                    self.fetch_context(),
-                    branch,
-                    since.to_string(),
-                    tx.clone(),
-                ),
+                Some(since) => {
+                    crate::gitlab::spawn_cherry_picks_fetch(
+                        self.fetch_context(),
+                        branch,
+                        since.to_string(),
+                        tx.clone(),
+                    );
+                    self.pending_cherry_pick_scans += 1;
+                }
                 None => {
                     self.cherry_picks.remove(&branch);
                 }
@@ -1399,6 +1455,14 @@ impl App {
                 // Count each pending fetch so we can suppress change notifications
                 // until the initial sync is complete (avoids spurious toasts on launch).
                 self.pending_initial_fetches.insert(mr.id.clone());
+                self.startup_baseline.insert(
+                    mr.id.clone(),
+                    MrBaseline {
+                        state: mr.state,
+                        branches: saved.found_branches,
+                        pipeline: mr.pipelines.first().map(|p| p.status),
+                    },
+                );
                 spawn_mr_fetch(
                     ctx.clone(),
                     mr.id.clone(),
@@ -1426,11 +1490,27 @@ impl App {
 
     /// Shows `text` in the status bar for a few seconds (red when `is_error`).
     pub fn flash(&mut self, text: impl Into<String>, is_error: bool) {
+        self.flash_for(text, is_error, FLASH_TICKS);
+    }
+
+    fn flash_for(&mut self, text: impl Into<String>, is_error: bool, ticks: u8) {
         self.flash = Some(Flash {
             text: text.into(),
             is_error,
-            ticks_left: FLASH_TICKS,
+            ticks_left: ticks,
         });
+    }
+
+    /// The startup load or a refresh cycle just finished: scan for cherry-picks and,
+    /// after the startup load, summarise what changed while the app was closed.
+    fn on_fetches_settled(&mut self, initial_sync: bool, tx: &UnboundedSender<AppEvent>) {
+        self.spawn_cherry_pick_scans(tx);
+        if initial_sync {
+            let baseline = std::mem::take(&mut self.startup_baseline);
+            if let Some(digest) = session_digest(&baseline, &self.mrs) {
+                self.flash_for(digest, false, DIGEST_TICKS);
+            }
+        }
     }
 
     /// Ages the flash message by one tick, clearing it once expired.
@@ -1768,7 +1848,7 @@ impl App {
                 }
                 self.sync_linked_ticket(&mr_id, was_updated, completion.from_refresh_cycle, tx);
                 if fetches_settled {
-                    self.spawn_cherry_pick_scans(tx);
+                    self.on_fetches_settled(completion.initial_sync_just_completed, tx);
                 }
                 // Sorting is deferred to the end of the event drain (see
                 // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
@@ -1783,13 +1863,12 @@ impl App {
             AppEvent::MrFailed { id, error } => {
                 // A failed fetch is finished too — otherwise the spinner never stops.
                 let completion = self.complete_fetch(&id);
-                if self.fetches_just_settled(completion) {
-                    self.spawn_cherry_pick_scans(tx);
+                if let Some(mr) = self.mrs.find_mut(&id) {
+                    mr.status = MrStatus::Error(error.to_string());
                 }
-                let Some(mr) = self.mrs.find_mut(&id) else {
-                    return false;
-                };
-                mr.status = MrStatus::Error(error.to_string());
+                if self.fetches_just_settled(completion) {
+                    self.on_fetches_settled(completion.initial_sync_just_completed, tx);
+                }
                 // Not persisted: errors are not saved to disk (see `persists_state`).
                 needs_persist
             }
@@ -1859,6 +1938,10 @@ impl App {
             }
 
             AppEvent::CherryPicksLoaded { branch, sources } => {
+                self.pending_cherry_pick_scans = self.pending_cherry_pick_scans.saturating_sub(1);
+                let Some(sources) = sources else {
+                    return false; // failed scan: keep the previous result
+                };
                 // The first scan of a branch in a session only records: restarting must
                 // not toast every cherry-pick already there.
                 if let Some(before) = self.cherry_picks.get(&branch) {
@@ -1916,6 +1999,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Pipeline;
     use crossterm::event::KeyCode;
 
     fn test_app() -> App {
@@ -2133,6 +2217,38 @@ mod tests {
 
         assert_eq!(app.toggle_flag_selected().as_deref(), Some("2"));
         assert!(app.mrs[1].flagged && !app.mrs[0].flagged);
+    }
+
+    #[tokio::test]
+    async fn session_digest_counts_what_changed_while_closed() {
+        let mut app = app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None")]).await;
+        let opened = |branches: &[&str]| MrBaseline {
+            state: GitlabMrState::Opened,
+            branches: branches.iter().map(|b| b.to_string()).collect(),
+            pipeline: Some(PipelineState::Success),
+        };
+        let baseline = HashMap::from([
+            ("1".to_string(), opened(&[])),
+            ("2".to_string(), opened(&["main"])),
+            ("3".to_string(), opened(&[])),
+        ]);
+        // !1 got merged and reached main + staging; !2 now fails CI; !3 is unchanged.
+        app.mrs[0].data.state = GitlabMrState::Merged;
+        app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".into(), "staging".into()]));
+        app.mrs[1].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
+        app.mrs[1].data.pipelines = vec![Pipeline {
+            id: 1,
+            status: PipelineState::Failed,
+            created_at: None,
+            jobs: vec![],
+        }];
+        app.mrs[2].status = MrStatus::MergedIn(HashSet::new());
+
+        assert_eq!(
+            session_digest(&baseline, &app.mrs).as_deref(),
+            Some("Since last session: 1 merged · 2 new on a branch · 1 CI failing")
+        );
+        assert_eq!(session_digest(&baseline, &app.mrs[2..]), None);
     }
 
     #[test]

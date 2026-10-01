@@ -26,6 +26,7 @@
 * 📋 **Markdown Release Checklist (`E`):** Copies the rows currently visible (active filter, search and hidden merged MRs applied) to the clipboard as a Markdown table — MR link, title, state, and one column per tracked branch with `✅` present, `🍒` cherry-picked, `❌` absent or `…` still loading. Paste it into a release ticket, a wiki page or a chat message. Combine with `m` to export only what is left to deploy.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance (including cherry-picks 🍒), MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
+* 🗞️ **Since Last Session:** Once the startup sync is over, the status bar summarises for ~20 s what changed while the app was closed — e.g. `Since last session: 2 merged · 3 new on a branch · 1 CI failing` (MRs merged or closed, new branch arrivals, pipelines that started failing). Nothing is shown when nothing changed.
 * ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
 * 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
 * **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `refresh_interval_secs` in `projects.toml`.
@@ -251,7 +252,7 @@ For teams and CI pipelines, you can still pre-configure everything via a `.env` 
 3. first `[[project]]` with `active = true` in `projects.toml`, else the first entry
 4. one-time migration from a legacy `config.json`, else the first-run prompt
 
-Press `w` in the dashboard to switch to another `projects.toml` entry without restarting: the current project's state is saved, then the chosen one is loaded with its own settings (`GITLAB_TRACKER_*` variables still apply; `GITLAB_URL` / `GITLAB_PROJECT_ID` only select the project at launch). The switch lasts for the session — the `active` flag is not changed. If the new project has no token in `GITLAB_TOKEN` or the keyring, the dashboard briefly gives way to the token prompt.
+Press `w` in the dashboard to switch to another `projects.toml` entry without restarting: the current project's state is saved, then the chosen one is loaded with its own settings (`GITLAB_TRACKER_*` variables still apply; `GITLAB_URL` / `GITLAB_PROJECT_ID` only select the project at launch). The chosen project becomes the `active` entry of `projects.toml`, so the next launch opens it (`--project` and `GITLAB_URL` / `GITLAB_PROJECT_ID` still take precedence). If the new project has no token in `GITLAB_TOKEN` or the keyring, the dashboard briefly gives way to the token prompt.
 
 Settings edited from the TUI (columns `C`, branches in Insert mode, settings dashboard `,`) are always saved to **the project currently loaded**, never to another `projects.toml` entry.
 
@@ -644,6 +645,19 @@ Requirements:
 * the Redmine token must be available via `REDMINE_TOKEN`, OS keyring, or the interactive token prompt.
 
 ---
+
+### `checklist`
+
+Prints the Markdown release checklist (the same table as `e` in the dashboard) on stdout, without starting the TUI — handy in a release script, a CI job or a merge-request description:
+
+```bash
+gitlab-tracker checklist                                  # every tracked MR
+gitlab-tracker checklist --milestone "Sprint 42"          # the milestone's MRs, tracked or not
+gitlab-tracker checklist --absent-from production         # what is left to deploy
+gitlab-tracker --project backend checklist --milestone "1.2.0" --absent-from production > release.md
+```
+
+The project is loaded exactly like the TUI loads it (same settings, branches and token lookup). The command waits for every MR fetch and cherry-pick scan, so cells are never `…`; MRs that failed to load are shown with `…`. It is read-only: no state file, stats snapshot or tracker status transition is written, and merged MRs are listed even when `hide_merged` is on. `--absent-from` must name a tracked branch.
 
 ## ⌨️ Dashboard Navigation & Shortcuts
 

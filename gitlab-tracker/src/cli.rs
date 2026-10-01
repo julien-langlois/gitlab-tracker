@@ -28,6 +28,15 @@ pub struct Args {
 pub enum Command {
     /// Print tracker-specific status IDs that can be used in projects.toml mappings.
     TrackerStatuses,
+    /// Print the tracked MRs as a Markdown release checklist (one column per branch).
+    Checklist {
+        /// Only the MRs of this milestone (exact title); untracked ones are fetched too.
+        #[arg(long)]
+        milestone: Option<String>,
+        /// Only the MRs missing from this tracked branch (not merged, not cherry-picked).
+        #[arg(long)]
+        absent_from: Option<String>,
+    },
 }
 
 /// Resolves the project requested by CLI flags or falls back to the active project.
@@ -72,7 +81,8 @@ pub async fn run_command(
             print_tracker_statuses(project).await?;
             Ok(true)
         }
-        None => Ok(false),
+        // Needs a full project session: run by `main`.
+        Some(Command::Checklist { .. }) | None => Ok(false),
     }
 }
 

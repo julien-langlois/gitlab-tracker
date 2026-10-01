@@ -583,10 +583,11 @@ pub enum AppEvent {
         next_anchor: String,
     },
     /// Original SHAs named by `(cherry picked from commit …)` trailers on `branch`,
-    /// scanned since the oldest merged MR still absent from it.
+    /// scanned since the oldest merged MR still absent from it (`None`: the scan
+    /// failed, the previous result is kept).
     CherryPicksLoaded {
         branch: String,
-        sources: HashSet<String>,
+        sources: Option<HashSet<String>>,
     },
     Tick,
 }

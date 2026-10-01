@@ -759,8 +759,8 @@ struct CommitMessage {
 }
 
 /// Spawns a scan of the commits on `branch` since `since` (RFC 3339) and emits
-/// `AppEvent::CherryPicksLoaded` with every cherry-pick source SHA found.
-/// Nothing is emitted when a page fails: the previous scan stays in place.
+/// `AppEvent::CherryPicksLoaded` with every cherry-pick source SHA found, or
+/// `None` when a page failed.
 // ponytail: re-scans from the oldest absent merged MR on every cycle (capped at
 // MAX_PAGES); remember the last scanned SHA per branch if large repos need it.
 pub fn spawn_cherry_picks_fetch(
@@ -777,14 +777,15 @@ pub fn spawn_cherry_picks_fetch(
             urlencoding::encode(&branch),
             urlencoding::encode(&since)
         );
-        let Some(commits) = get_all_pages::<CommitMessage>(&ctx, &url).await else {
-            return;
-        };
-        let sources = commits
-            .iter()
-            .flat_map(|c| cherry_pick_sources(&c.message))
-            .map(str::to_owned)
-            .collect();
+        let sources = get_all_pages::<CommitMessage>(&ctx, &url)
+            .await
+            .map(|commits| {
+                commits
+                    .iter()
+                    .flat_map(|c| cherry_pick_sources(&c.message))
+                    .map(str::to_owned)
+                    .collect()
+            });
         let _ = tx.send(AppEvent::CherryPicksLoaded { branch, sources });
     });
 }
