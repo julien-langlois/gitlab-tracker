@@ -73,6 +73,11 @@ fn core_shortcuts() -> ShortcutBlock {
                 status_hint: Some("[Esc]: Quit"),
             },
             ShortcutEntry {
+                key: "w / W",
+                description: "Switch to another projects.toml project",
+                status_hint: Some("[W]: Project"),
+            },
+            ShortcutEntry {
                 key: "m / M",
                 description: "Hide / show merged MRs (they stay tracked)",
                 status_hint: None,
@@ -81,6 +86,11 @@ fn core_shortcuts() -> ShortcutBlock {
                 key: "y / Y",
                 description: "Copy `git clone` command for the MR branch",
                 status_hint: None,
+            },
+            ShortcutEntry {
+                key: "e / E",
+                description: "Copy visible MRs as a Markdown release checklist",
+                status_hint: Some("[E]: Export"),
             },
             ShortcutEntry {
                 key: "p / P",

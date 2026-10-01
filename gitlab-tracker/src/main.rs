@@ -23,6 +23,7 @@ use events::{handle_key_event, handle_mouse_event};
 use futures::StreamExt;
 use gitlab::MAX_CONCURRENT_REQUESTS;
 use models::AppEvent;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use storage::{
@@ -151,46 +152,36 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     config.gitlab_username = project.gitlab_username.clone();
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let args = cli::Args::parse();
+/// Long-lived values shared by every project session.
+struct Shared {
+    palette: crate::ui::theme::Palette,
+    #[cfg(feature = "stats")]
+    stats_db: Option<Arc<gitlab_tracker_stats::SqliteStatsDb>>,
+}
 
-    let default_panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        utils::restore_terminal();
-        default_panic(info);
-    }));
+/// Everything bound to one loaded project: switching project builds a new one.
+/// The fresh channel drops the events of the previous project's in-flight tasks
+/// (their `tx.send` fails once the old receiver is gone).
+struct Session {
+    app: App,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    rx: tokio::sync::mpsc::UnboundedReceiver<AppEvent>,
+    api_semaphore: Arc<Semaphore>,
+    last_known_branches: HashMap<String, HashSet<String>>,
+}
 
-    // Load .env before anything else so that all std::env::var() calls below
-    // (including inside load_or_create_config_async) already see the env vars.
-    if dotenvy::dotenv().is_err() {
-        if let Some(config_dir) = storage::get_save_dir() {
-            let global_env = config_dir.join(".env");
-            let _ = dotenvy::from_path(global_env);
-        }
-    }
-
-    // Initialise logging right after .env (which may set RUST_LOG) so that config
-    // loading, project resolution and tracker wiring below are logged too.
-    // The guard must stay alive for the duration of the program.
-    let _log_guard = init_logging();
-
-    let mut config = load_or_create_config_async().await;
-
-    if args.demo {
-        return demo::run_demo_mode(config).await;
-    }
-
-    // Resolve the selected project from CLI flags, projects.toml, env vars, or prompt.
-    // Project-scoped settings override the global config.json values when present.
-    let project = cli::resolve_project(&args).await;
+/// Loads `project` on top of `global_config` (config.json + defaults): settings,
+/// token (keyring or prompt — the terminal must be in cooked mode), tracker,
+/// saved state, then spawns the startup fetches and the tick timer.
+async fn build_session(
+    global_config: &config::AppConfig,
+    project: ProjectEntry,
+    shared: &Shared,
+) -> anyhow::Result<Session> {
+    let mut config = global_config.clone();
     apply_project_overrides(&mut config, &project);
     // GITLAB_TRACKER_* variables win over projects.toml too.
     let config = storage::apply_env_overrides(config);
-
-    if cli::run_command(args.command.as_ref(), &project).await? {
-        return Ok(());
-    }
 
     let project_settings = project.clone();
 
@@ -289,32 +280,10 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Detect the terminal colour scheme BEFORE ratatui::init() takes ownership of
-    // the terminal (raw mode). terminal-colorsaurus sends an OSC 11 query and reads
-    // back the background colour; it must run while the terminal is still in cooked
-    // mode. Falls back to Dark when the terminal does not respond (TTY, tmux, etc.).
-    let theme_mode = {
-        use terminal_colorsaurus::{theme_mode, QueryOptions};
-        match theme_mode(QueryOptions::default()) {
-            Ok(terminal_colorsaurus::ThemeMode::Light) => crate::ui::theme::ThemeMode::Light,
-            _ => crate::ui::theme::ThemeMode::Dark,
-        }
-    };
-    let palette = crate::ui::theme::Palette::for_mode(theme_mode);
-    crate::ui::theme::set_light(matches!(theme_mode, crate::ui::theme::ThemeMode::Light));
-    tracing::info!(mode = ?theme_mode, "Terminal theme detected");
-
-    // Enable mouse capture so we can detect hover and scroll events per pane.
-    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)
-        .context("Failed to enable mouse capture")?;
-
-    let mut terminal = ratatui::init();
-    let _terminal_guard = crate::utils::TerminalGuard;
-
     let (
         saved_mrs,
         migrated_branches,
-        mut last_known_branches,
+        last_known_branches,
         saved_discovery_started_at,
         dismissed_mr_ids,
     ) = load_state_async(&base_url, &project_id).await;
@@ -326,7 +295,7 @@ async fn main() -> anyhow::Result<()> {
         project_name,
         refresh_interval_secs,
         config,
-        theme: palette,
+        theme: shared.palette,
         project_settings,
     });
 
@@ -354,7 +323,7 @@ async fn main() -> anyhow::Result<()> {
     // Restore manually dismissed MRs so discovery does not re-add them after restart.
     app.dismissed_mr_ids = dismissed_mr_ids;
 
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
 
     // Inject the tracker provider and derive colour maps from it.
@@ -369,39 +338,10 @@ async fn main() -> anyhow::Result<()> {
         app.ticket_transitioner = Some(transitioner);
     }
 
-    // Collect all shortcut blocks registered via inventory::submit! across every
-    // linked crate (Core, Redmine if feature-enabled, any future plugin).
-    // No explicit mention of any provider crate is needed here — adding a new
-    // plugin only requires linking it (i.e. enabling its feature in Cargo.toml).
-    app.shortcut_providers = gitlab_tracker_core::collect_all_blocks();
-
-    // ── Stats DB initialisation ───────────────────────────────────────────────
-    // Opened before `restore_from_saved` so that the very first MrLoaded events
-    // can already record snapshots. The DB file lives alongside tracker_state.json
-    // in the XDG config directory.
     #[cfg(feature = "stats")]
     {
-        use std::sync::Arc;
-
-        // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
-        // We pass the plain absolute path — `create_if_missing(true)` handles file creation.
-        let db_path = storage::get_save_dir()
-            .map(|d| d.join("stats.db"))
-            .and_then(|p| p.to_str().map(|s| s.to_string()));
-
-        if let Some(path) = db_path {
-            match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
-                Ok(db) => {
-                    let db = Arc::new(db);
-
-                    app.stats_view.sprint_weeks = stats_sprint_weeks;
-                    app.stats_db = Some(db);
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, path, "Failed to open stats DB — stats disabled");
-                }
-            }
-        }
+        app.stats_db = shared.stats_db.clone();
+        app.stats_view.sprint_weeks = stats_sprint_weeks;
     }
 
     // Restore previously tracked MRs from disk, spawning background fetches as needed.
@@ -478,9 +418,115 @@ async fn main() -> anyhow::Result<()> {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
-            let _ = tx_timer.send(AppEvent::Tick);
+            // Stops once the session's receiver is gone (project switch).
+            if tx_timer.send(AppEvent::Tick).is_err() {
+                break;
+            }
         }
     });
+
+    Ok(Session {
+        app,
+        tx,
+        rx,
+        api_semaphore,
+        last_known_branches,
+    })
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let args = cli::Args::parse();
+
+    let default_panic = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        utils::restore_terminal();
+        default_panic(info);
+    }));
+
+    // Load .env before anything else so that all std::env::var() calls below
+    // (including inside load_or_create_config_async) already see the env vars.
+    if dotenvy::dotenv().is_err() {
+        if let Some(config_dir) = storage::get_save_dir() {
+            let global_env = config_dir.join(".env");
+            let _ = dotenvy::from_path(global_env);
+        }
+    }
+
+    // Initialise logging right after .env (which may set RUST_LOG) so that config
+    // loading, project resolution and tracker wiring below are logged too.
+    // The guard must stay alive for the duration of the program.
+    let _log_guard = init_logging();
+
+    let global_config = load_or_create_config_async().await;
+
+    if args.demo {
+        return demo::run_demo_mode(global_config).await;
+    }
+
+    // Resolve the selected project from CLI flags, projects.toml, env vars, or prompt.
+    let project = cli::resolve_project(&args).await;
+    if cli::run_command(args.command.as_ref(), &project).await? {
+        return Ok(());
+    }
+
+    // Detect the terminal colour scheme BEFORE ratatui::init() takes ownership of
+    // the terminal (raw mode). terminal-colorsaurus sends an OSC 11 query and reads
+    // back the background colour; it must run while the terminal is still in cooked
+    // mode. Falls back to Dark when the terminal does not respond (TTY, tmux, etc.).
+    let theme_mode = {
+        use terminal_colorsaurus::{theme_mode, QueryOptions};
+        match theme_mode(QueryOptions::default()) {
+            Ok(terminal_colorsaurus::ThemeMode::Light) => crate::ui::theme::ThemeMode::Light,
+            _ => crate::ui::theme::ThemeMode::Dark,
+        }
+    };
+    let palette = crate::ui::theme::Palette::for_mode(theme_mode);
+    crate::ui::theme::set_light(matches!(theme_mode, crate::ui::theme::ThemeMode::Light));
+    tracing::info!(mode = ?theme_mode, "Terminal theme detected");
+
+    // ── Stats DB initialisation ───────────────────────────────────────────────
+    // One file for every project (rows are keyed by project id), opened once and
+    // before the first session so its very first MrLoaded events can record snapshots.
+    #[cfg(feature = "stats")]
+    let stats_db = {
+        // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
+        // We pass the plain absolute path — `create_if_missing(true)` handles file creation.
+        let db_path = storage::get_save_dir()
+            .map(|d| d.join("stats.db"))
+            .and_then(|p| p.to_str().map(|s| s.to_string()));
+        match db_path {
+            Some(path) => match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
+                Ok(db) => Some(Arc::new(db)),
+                Err(e) => {
+                    tracing::warn!(error = %e, path, "Failed to open stats DB — stats disabled");
+                    None
+                }
+            },
+            None => None,
+        }
+    };
+    let shared = Shared {
+        palette,
+        #[cfg(feature = "stats")]
+        stats_db,
+    };
+
+    // Built before ratatui::init(): the token lookup may prompt on stdin.
+    let Session {
+        mut app,
+        mut tx,
+        mut rx,
+        mut api_semaphore,
+        mut last_known_branches,
+    } = build_session(&global_config, project, &shared).await?;
+
+    // Enable mouse capture so we can detect hover and scroll events per pane.
+    crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture)
+        .context("Failed to enable mouse capture")?;
+
+    let mut terminal = ratatui::init();
+    let _terminal_guard = crate::utils::TerminalGuard;
 
     // ── Main event loop ───────────────────────────────────────────────────────
     // The loop sleeps until terminal input, an async event, or (only while the
@@ -508,8 +554,8 @@ async fn main() -> anyhow::Result<()> {
                 &last_known_branches,
                 app.discovery_started_at.as_deref(),
                 &app.dismissed_mr_ids,
-                &base_url,
-                &project_id,
+                &app.base_url,
+                &app.project_id,
             )
             .await;
         }
@@ -526,6 +572,7 @@ async fn main() -> anyhow::Result<()> {
                 app::InputMode::FilterPicker => "🔍 Filter",
                 app::InputMode::LogTime => "⏱️  Log Time",
                 app::InputMode::Help => "❓ Help",
+                app::InputMode::ProjectPicker => "📁 Projects",
                 app::InputMode::Normal => "Normal",
                 #[cfg(feature = "stats")]
                 app::InputMode::Stats => "📊 Stats",
@@ -572,6 +619,42 @@ async fn main() -> anyhow::Result<()> {
                         .await;
                         if quit {
                             break;
+                        }
+                        if let Some(next) = app.switch_to.take() {
+                            save_state_async(
+                                &app.mrs,
+                                &last_known_branches,
+                                app.discovery_started_at.as_deref(),
+                                &app.dismissed_mr_ids,
+                                &app.base_url,
+                                &app.project_id,
+                            )
+                            .await;
+                            // Leave raw mode while loading: the token lookup may prompt.
+                            // The input stream is replaced first so it cannot read stdin.
+                            terminal_events = EventStream::new();
+                            utils::restore_terminal();
+                            let built = build_session(&global_config, next, &shared).await;
+                            crossterm::execute!(
+                                std::io::stdout(),
+                                crossterm::event::EnableMouseCapture
+                            )
+                            .context("Failed to enable mouse capture")?;
+                            terminal = ratatui::init();
+                            match built {
+                                Ok(session) => {
+                                    app = session.app;
+                                    tx = session.tx;
+                                    rx = session.rx;
+                                    api_semaphore = session.api_semaphore;
+                                    last_known_branches = session.last_known_branches;
+                                    pending_event = None;
+                                }
+                                Err(e) => tracing::warn!(
+                                    error = %e,
+                                    "Project switch failed — staying on the current project"
+                                ),
+                            }
                         }
                     }
                     _ => {}

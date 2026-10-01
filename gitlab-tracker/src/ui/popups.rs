@@ -442,6 +442,60 @@ pub(super) fn render_column_picker(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, popup_area, &mut list_state);
 }
 
+/// Renders the project picker: one line per `projects.toml` entry, the current
+/// project marked with `●`.
+pub(super) fn render_project_picker(f: &mut Frame, app: &App, area: Rect) {
+    let labels: Vec<(String, bool)> = app
+        .project_picker
+        .iter()
+        .map(|p| {
+            let name = p.name.as_deref().unwrap_or(&p.project_id);
+            let host = p.gitlab_url.trim_start_matches("https://");
+            (
+                format!("{name}  ({host} #{})", p.project_id),
+                crate::storage::is_same_project(p, &app.base_url, &app.project_id),
+            )
+        })
+        .collect();
+
+    let widest = labels
+        .iter()
+        .map(|(l, _)| Span::raw(l).width())
+        .max()
+        .unwrap_or(0);
+    let popup_width = u16::try_from(widest + 8).unwrap_or(u16::MAX).max(30);
+    let popup_height = u16::try_from(labels.len() + 2).unwrap_or(u16::MAX);
+    let popup_area = centered_popup(area, popup_width, popup_height);
+    f.render_widget(Clear, popup_area);
+
+    let items: Vec<ListItem> = labels
+        .into_iter()
+        .enumerate()
+        .map(|(i, (label, current))| {
+            let style = if i == app.project_picker_cursor {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(crate::ui::theme::fg())
+            };
+            let marker = if current { "● " } else { "  " };
+            ListItem::new(Line::from(Span::styled(format!(" {marker}{label}"), style)))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(" Projects "),
+    );
+    let mut list_state = ListState::default();
+    list_state.select(Some(app.project_picker_cursor));
+    f.render_stateful_widget(list, popup_area, &mut list_state);
+}
+
 /// Renders the project settings popup centred over the terminal area.
 ///
 /// Settings are collected through `inventory`, so optional crates can expose their

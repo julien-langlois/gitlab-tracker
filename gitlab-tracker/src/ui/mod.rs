@@ -13,12 +13,13 @@ use crate::app::{ActivePane, App, InputMode, InspectorView, SortColumn, SortOrde
 use help_popup::render_help_popup;
 use popups::{
     render_column_picker, render_filter_picker, render_log_time_popup,
-    render_milestone_autocomplete, render_settings_popup,
+    render_milestone_autocomplete, render_project_picker, render_settings_popup,
 };
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
+    text::Span,
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
@@ -38,6 +39,35 @@ fn pane_border_style(is_active: bool) -> Style {
 /// smaller than the popup (so borders and cursor never land off-screen).
 pub(crate) fn centered_popup(area: Rect, width: u16, height: u16) -> Rect {
     area.centered(Constraint::Length(width), Constraint::Length(height))
+}
+
+/// Joins `parts` then `pinned` into a ` a │ b ` bar title of at most `width`
+/// display columns: `pinned` always stays, `parts` are kept in order until the
+/// next one would overflow.
+fn fit_hints(parts: &[&str], pinned: &[&str], width: usize) -> String {
+    const SEP: &str = " │ ";
+    let cols = |s: &str| Span::raw(s).width();
+    // Two edge spaces plus the pinned hints and their separators.
+    let mut used = 2
+        + pinned.iter().map(|p| cols(p)).sum::<usize>()
+        + cols(SEP) * pinned.len().saturating_sub(1);
+    let mut kept = Vec::new();
+    for part in parts {
+        let cost = cols(part) + cols(SEP);
+        if used + cost > width {
+            break;
+        }
+        used += cost;
+        kept.push(*part);
+    }
+    format!(
+        " {} ",
+        kept.iter()
+            .chain(pinned)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(SEP)
+    )
 }
 
 pub fn render_ui(f: &mut Frame, app: &mut App) {
@@ -264,6 +294,10 @@ fn render_frame(f: &mut Frame, app: &mut App) {
             " COLUMNS │ [↑/↓]: Navigate │ [Space]: Toggle │ [Esc]: Close & Save ".to_string(),
             Style::default().fg(Color::Cyan),
         ),
+        InputMode::ProjectPicker => (
+            " PROJECTS │ [↑/↓]: Navigate │ [Enter]: Switch │ [Esc]: Close ".to_string(),
+            Style::default().fg(Color::Cyan),
+        ),
         InputMode::Settings => (
             " SETTINGS │ [↑/↓]: Navigate │ [←/→]: Adjust │ [Space]: Toggle │ [Enter]: Save │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Cyan),
@@ -281,22 +315,29 @@ fn render_frame(f: &mut Frame, app: &mut App) {
                 .iter()
                 .flat_map(|block| block.entries.iter())
                 .filter_map(|e| e.status_hint)
-                // Skip the static hints we handle dynamically below (Insert, Scroll, Quit, …)
-                // so they don't appear twice. The dynamic ones are injected at fixed positions.
-                .filter(|h| !matches!(*h, "[i]/[/]: Insert" | "[▲/▼]: Scroll" | "[Esc]: Quit"))
+                // Skip the static hints placed explicitly below (Insert, Scroll, Help, Quit)
+                // so they don't appear twice.
+                .filter(|h| {
+                    !matches!(
+                        *h,
+                        "[i]/[/]: Insert" | "[▲/▼]: Scroll" | "[?]: Help" | "[Esc]: Quit"
+                    )
+                })
                 .collect();
 
             // Build the full bar: dynamic hints first, then plugin-contributed hints.
             // Borrowed `&str` parts: only the two dynamic hints and the joined title allocate.
             let tab_hint = format!("[Tab]: {pane_hint}");
             let sort_hint = format!("[S/s]: {sort_status}");
+            // Priority order: the hints that do not fit the bar are dropped from the end;
+            // Help (lists every shortcut) and Quit are always shown.
             let parts: Vec<&str> = ["[i] or [/]: Insert mode", "[,]: Settings", &tab_hint, &sort_hint]
                 .into_iter()
                 .chain(plugin_hints)
-                .chain(["[▲/▼]: Scroll", "[Esc]: Quit"])
+                .chain(["[▲/▼]: Scroll"])
                 .collect();
-
-            let title = format!(" {} ", parts.join(" │ "));
+            let width = usize::from(chunks[1].width.saturating_sub(2));
+            let title = fit_hints(&parts, &["[?]: Help", "[Esc]: Quit"], width);
             (title, Style::default())
         }
         InputMode::FilterPicker => (
@@ -335,6 +376,10 @@ fn render_frame(f: &mut Frame, app: &mut App) {
         render_column_picker(f, app, f.area());
     }
 
+    if app.input_mode == InputMode::ProjectPicker {
+        render_project_picker(f, app, f.area());
+    }
+
     // Render the filter picker popup on top of the UI when active.
     if app.input_mode == InputMode::FilterPicker {
         render_filter_picker(f, app, f.area());
@@ -371,6 +416,18 @@ fn render_frame(f: &mut Frame, app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hint_bar_drops_low_priority_hints_but_keeps_pinned_ones() {
+        let parts = ["[a]: Alpha", "[b]: Beta", "[c]: Gamma"];
+        let pinned = ["[?]: Help"];
+        let wide = fit_hints(&parts, &pinned, 200);
+        assert_eq!(wide, " [a]: Alpha │ [b]: Beta │ [c]: Gamma │ [?]: Help ");
+        let narrow = fit_hints(&parts, &pinned, 30);
+        assert_eq!(narrow, " [a]: Alpha │ [?]: Help ");
+        assert!(Span::raw(&narrow).width() <= 30);
+        assert_eq!(fit_hints(&parts, &pinned, 5), " [?]: Help ");
+    }
 
     #[test]
     fn centered_popup_stays_inside_small_terminal() {

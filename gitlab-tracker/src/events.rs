@@ -247,6 +247,30 @@ pub async fn handle_key_event(
         }
 
         // ------------------------------------------------------------------
+        // Project picker: Up/Down move; Enter switches project; Esc closes.
+        // ------------------------------------------------------------------
+        InputMode::ProjectPicker => match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.project_picker_cursor = app.project_picker_cursor.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let last = app.project_picker.len().saturating_sub(1);
+                app.project_picker_cursor = (app.project_picker_cursor + 1).min(last);
+            }
+            KeyCode::Enter => {
+                app.input_mode = InputMode::Normal;
+                let chosen = app.project_picker.get(app.project_picker_cursor);
+                if let Some(entry) = chosen
+                    .filter(|p| !crate::storage::is_same_project(p, &app.base_url, &app.project_id))
+                {
+                    app.switch_to = Some(entry.clone());
+                }
+            }
+            KeyCode::Esc => app.input_mode = InputMode::Normal,
+            _ => {}
+        },
+
+        // ------------------------------------------------------------------
         // Settings mode: the project settings popup is open.
         // Up/Down navigate; Space toggles booleans; arrows adjust numbers;
         // printable chars edit text settings; Enter saves; Esc cancels.
@@ -582,6 +606,9 @@ pub async fn handle_key_event(
                 // [Y]ank — copy the git clone command for the MR source branch to clipboard.
                 KeyCode::Char('y') | KeyCode::Char('Y') => app.yank_clone_command(),
 
+                // [E]xport — copy the visible MRs as a Markdown release checklist.
+                KeyCode::Char('e') | KeyCode::Char('E') => app.yank_markdown_checklist(),
+
                 // Force a full refresh of all MRs (GitLab + Redmine tickets).
                 KeyCode::Char('r') | KeyCode::Char('R') => {
                     app.time_left = app.refresh_interval_secs;
@@ -719,6 +746,19 @@ pub async fn handle_key_event(
                     if !app.read_only {
                         save_hide_merged_async(hide, &app.base_url, &app.project_id).await;
                     }
+                }
+
+                // [W] opens the project picker (switching needs the network: not in demo).
+                KeyCode::Char('w') | KeyCode::Char('W') if !app.read_only => {
+                    app.project_picker = crate::storage::load_projects_toml().await.projects;
+                    app.project_picker_cursor = app
+                        .project_picker
+                        .iter()
+                        .position(|p| {
+                            crate::storage::is_same_project(p, &app.base_url, &app.project_id)
+                        })
+                        .unwrap_or(0);
+                    app.input_mode = InputMode::ProjectPicker;
                 }
 
                 // [C] opens the column-picker popup.

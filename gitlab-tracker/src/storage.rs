@@ -630,10 +630,15 @@ fn find_project_mut<'c>(
     gitlab_url: &str,
     project_id: &str,
 ) -> Option<&'c mut ProjectEntry> {
-    let url = gitlab_url.trim_end_matches('/');
     cfg.projects
         .iter_mut()
-        .find(|p| p.gitlab_url.trim_end_matches('/') == url && p.project_id == project_id)
+        .find(|p| is_same_project(p, gitlab_url, project_id))
+}
+
+/// Whether `entry` is the project `(gitlab_url, project_id)` (trailing `/` ignored).
+pub fn is_same_project(entry: &ProjectEntry, gitlab_url: &str, project_id: &str) -> bool {
+    entry.gitlab_url.trim_end_matches('/') == gitlab_url.trim_end_matches('/')
+        && entry.project_id == project_id
 }
 
 /// Loads `projects.toml`, applies `update` to the current project's entry and saves.

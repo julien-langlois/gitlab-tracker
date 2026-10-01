@@ -741,6 +741,54 @@ async fn get_all_pages<T: serde::de::DeserializeOwned>(
     }
 }
 
+/// Original commit SHAs named by `(cherry picked from commit <sha>)` trailers, the
+/// line added by `git cherry-pick -x` and by GitLab's "Cherry-pick" button.
+pub fn cherry_pick_sources(message: &str) -> impl Iterator<Item = &str> {
+    const MARKER: &str = "(cherry picked from commit ";
+    message.match_indices(MARKER).filter_map(|(i, _)| {
+        let start = i + MARKER.len();
+        let sha = message.get(start..start + 40)?;
+        sha.bytes().all(|b| b.is_ascii_hexdigit()).then_some(sha)
+    })
+}
+
+/// Only the message of a commit list entry.
+#[derive(serde::Deserialize)]
+struct CommitMessage {
+    message: String,
+}
+
+/// Spawns a scan of the commits on `branch` since `since` (RFC 3339) and emits
+/// `AppEvent::CherryPicksLoaded` with every cherry-pick source SHA found.
+/// Nothing is emitted when a page fails: the previous scan stays in place.
+// ponytail: re-scans from the oldest absent merged MR on every cycle (capped at
+// MAX_PAGES); remember the last scanned SHA per branch if large repos need it.
+pub fn spawn_cherry_picks_fetch(
+    ctx: FetchContext,
+    branch: String,
+    since: String,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    tokio::spawn(async move {
+        let url = format!(
+            "{}/api/v4/projects/{}/repository/commits?ref_name={}&since={}",
+            ctx.base_url,
+            ctx.project_id,
+            urlencoding::encode(&branch),
+            urlencoding::encode(&since)
+        );
+        let Some(commits) = get_all_pages::<CommitMessage>(&ctx, &url).await else {
+            return;
+        };
+        let sources = commits
+            .iter()
+            .flat_map(|c| cherry_pick_sources(&c.message))
+            .map(str::to_owned)
+            .collect();
+        let _ = tx.send(AppEvent::CherryPicksLoaded { branch, sources });
+    });
+}
+
 /// Only the project-scoped id of a MR list entry.
 #[derive(serde::Deserialize)]
 struct MrIid {
@@ -1462,6 +1510,23 @@ pub async fn fetch_gitlab_data(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn cherry_pick_sources_reads_every_full_sha_trailer() {
+        let a = "a".repeat(40);
+        let b = "0123456789abcdef0123456789abcdef01234567";
+        let msg = format!(
+            "Fix login\n\n(cherry picked from commit {a})\n(cherry picked from commit {b})"
+        );
+        let found: Vec<&str> = super::cherry_pick_sources(&msg).collect();
+        assert_eq!(found, [a.as_str(), b]);
+        assert_eq!(super::cherry_pick_sources("plain commit").count(), 0);
+        // A truncated or non-hex SHA is not a cherry-pick source.
+        assert_eq!(
+            super::cherry_pick_sources("(cherry picked from commit abc123)").count(),
+            0
+        );
+    }
 
     #[test]
     fn unresolved_threads_ignore_plain_and_resolved_notes() {

@@ -1,5 +1,7 @@
 use crate::app::App;
-use crate::models::{Effort, GitlabMrState, MergeabilityStatus, MrStatus, PipelineState};
+use crate::models::{
+    BranchPresence, Effort, GitlabMrState, MergeabilityStatus, MrStatus, PipelineState,
+};
 use crate::ui::inspector::create_chip_span;
 use ratatui::{
     layout::Constraint,
@@ -436,16 +438,12 @@ pub fn render_table(app: &App) -> Table<'_> {
             }
 
             for b in &app.branches {
-                let cell = match &mr.status {
-                    MrStatus::Loading => Cell::from("⏳ LOADING...").yellow(),
-                    MrStatus::Error(_) => Cell::from("❌ FAILED").red(),
-                    MrStatus::MergedIn(set) => {
-                        if set.contains(b) {
-                            Cell::from("🟢 PRESENT").green()
-                        } else {
-                            Cell::from("🔴 ABSENT").red()
-                        }
-                    }
+                let cell = match (&mr.status, app.branch_presence(mr, b)) {
+                    (_, Some(BranchPresence::Present)) => Cell::from("🟢 PRESENT").green(),
+                    (_, Some(BranchPresence::CherryPicked)) => Cell::from("🍒 PICKED").yellow(),
+                    (_, Some(BranchPresence::Absent)) => Cell::from("🔴 ABSENT").red(),
+                    (MrStatus::Error(_), None) => Cell::from("❌ FAILED").red(),
+                    (_, None) => Cell::from("⏳ LOADING...").yellow(),
                 };
                 cells.push(maybe_highlight(cell, highlight));
             }

@@ -245,6 +245,17 @@ pub enum MrStatus {
     Error(String),
     MergedIn(HashSet<String>),
 }
+/// How an MR shows up on one tracked branch (a table cell / export cell).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BranchPresence {
+    /// Its merge / squash commit is on the branch (strict SHA check).
+    Present,
+    /// Not on the branch by SHA, but a commit there carries a
+    /// `(cherry picked from commit <its sha>)` trailer.
+    CherryPicked,
+    Absent,
+}
+
 #[derive(Clone, Debug)]
 pub struct TrackedMr {
     pub id: String,
@@ -570,6 +581,12 @@ pub enum AppEvent {
     NewMrsDiscovered {
         mr_ids: Vec<String>,
         next_anchor: String,
+    },
+    /// Original SHAs named by `(cherry picked from commit …)` trailers on `branch`,
+    /// scanned since the oldest merged MR still absent from it.
+    CherryPicksLoaded {
+        branch: String,
+        sources: HashSet<String>,
     },
     Tick,
 }

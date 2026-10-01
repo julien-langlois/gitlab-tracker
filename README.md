@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
 
-**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification (a cherry-picked commit has a different SHA and is therefore not reported as present).
+**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification (a cherry-picked commit has a different SHA and is therefore never reported as present — it is shown as 🍒 picked instead).
 
 ![gitlab-tracker demo](assets/demo.gif)
 
@@ -19,9 +19,11 @@
 * ⚡ **High Performance & Asynchronous:** Powered by `tokio` and `reqwest`, utilizing non-blocking event loops and bounded concurrent requests via semaphores to protect GitLab API rate limits.
 * 🛡️ **`updated_at`-Guarded Caching:** MR metadata (state, assignee, milestone, labels, mergeability) is read fresh on every refresh. The expensive per-MR calls — diff stats and pipelines — are reused while the MR's `updated_at` is unchanged; transient pipelines (running / pending / created) are always refetched because they can finish without touching `updated_at`. Unresolved-thread counts are refetched for open MRs and frozen once an MR is merged or closed. With `RUST_LOG=info`, each cycle logs a `Refresh cycle complete` line (MR count, estimated GitLab calls, elapsed time).
 * 🔍 **Strict SHA Verification:** Validates merge/squash commit SHAs against target branches via the GitLab Refs API (`/commits/:sha/refs?type=branch`). Zero false positives — if the SHA is not an ancestor of the branch, the MR is not considered present, regardless of title similarity or branch naming conventions.
+* 🍒 **Cherry-pick Detection:** A merged MR that is absent from a tracked branch by SHA, but whose merge / squash commit is named by a `(cherry picked from commit <sha>)` trailer on that branch (added by `git cherry-pick -x` and by GitLab's *Cherry-pick* button), shows `🍒 PICKED` instead of `🔴 ABSENT`. After each refresh cycle, the commits of each branch are scanned from the oldest merge still missing there; branches with nothing missing cost no API call. Cherry-picks done without `-x`, per-commit picks of multi-commit MRs and fast-forward merges are not detected.
 * 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
 * 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
 * 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
+* 📋 **Markdown Release Checklist (`E`):** Copies the rows currently visible (active filter, search and hidden merged MRs applied) to the clipboard as a Markdown table — MR link, title, state, and one column per tracked branch with `✅` present, `🍒` cherry-picked, `❌` absent or `…` still loading. Paste it into a release ticket, a wiki page or a chat message. Combine with `m` to export only what is left to deploy.
 * 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
 * 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance, MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
 * ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
@@ -247,6 +249,8 @@ For teams and CI pipelines, you can still pre-configure everything via a `.env` 
 2. `GITLAB_URL` + `GITLAB_PROJECT_ID` (shell or `.env`, both required) — if `projects.toml` has an entry with that URL and project ID, its per-project settings are used; otherwise the project runs on defaults
 3. first `[[project]]` with `active = true` in `projects.toml`, else the first entry
 4. one-time migration from a legacy `config.json`, else the first-run prompt
+
+Press `w` in the dashboard to switch to another `projects.toml` entry without restarting: the current project's state is saved, then the chosen one is loaded with its own settings (`GITLAB_TRACKER_*` variables still apply; `GITLAB_URL` / `GITLAB_PROJECT_ID` only select the project at launch). The switch lasts for the session — the `active` flag is not changed. If the new project has no token in `GITLAB_TOKEN` or the keyring, the dashboard briefly gives way to the token prompt.
 
 Settings edited from the TUI (columns `C`, branches in Insert mode, settings dashboard `,`) are always saved to **the project currently loaded**, never to another `projects.toml` entry.
 
@@ -664,6 +668,8 @@ Shortcut keys are active. The input field is passive. Letter shortcuts are case-
 | `r`                    | Force immediate network refresh for all MRs                                                                                |
 | `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
 | `S`                    | Toggle sort direction (ascending / descending)                                                                             |
+| `w`                    | **Switch project** — pick another `projects.toml` entry; the current state is saved and the chosen project loads in place |
+| `e`                    | **Copy a Markdown release checklist** of the visible rows (MR link, title, state, ✅ / 🍒 / ❌ per branch)                  |
 | `m`                    | **Hide / show merged MRs** — they stay tracked; saved per project (`hide_merged`)                                          |
 | `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
 | `f`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |

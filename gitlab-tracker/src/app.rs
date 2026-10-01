@@ -1,7 +1,8 @@
 use crate::config::AppConfig;
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
 use crate::models::{
-    AppEvent, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus, SavedMr, TrackedMr,
+    AppEvent, BranchPresence, GitLabMilestone, GitlabMrState, MergeabilityStatus, MrStatus,
+    SavedMr, TrackedMr,
 };
 use crate::notify;
 use crate::settings::SettingsEditorState;
@@ -93,6 +94,8 @@ pub enum InputMode {
     /// `[Esc]` or `[G]` closes it and returns to Normal mode.
     #[cfg(feature = "stats")]
     Stats,
+    /// The project picker popup is open — arrow keys navigate, Enter switches.
+    ProjectPicker,
 }
 
 /// Which field is focused inside the Log Time popup.
@@ -319,6 +322,12 @@ pub struct App {
     pub tracker_view: TrackerView,
     /// Index of the currently highlighted row in the column-picker popup (0-based).
     pub column_picker_cursor: usize,
+    /// `projects.toml` entries listed by the project picker (loaded when it opens).
+    pub project_picker: Vec<ProjectEntry>,
+    pub project_picker_cursor: usize,
+    /// Project chosen in the picker; the main loop saves the current one and
+    /// rebuilds the session for it.
+    pub switch_to: Option<ProjectEntry>,
     /// Draft state for the project settings popup.
     pub settings_editor: SettingsEditorState,
     /// The active project entry as loaded from `projects.toml`.
@@ -406,6 +415,9 @@ pub struct App {
     /// (settings, branches, flags, refresh, MR imports). Events it sends to the bus
     /// (add / remove MR…) are not applied by the demo loop either.
     pub read_only: bool,
+    /// Cherry-pick source SHAs found on each tracked branch (`CherryPicksLoaded`),
+    /// rescanned after every refresh cycle — never persisted.
+    pub cherry_picks: HashMap<String, HashSet<String>>,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
@@ -522,6 +534,9 @@ impl App {
             layout: UiLayout::default(),
             tracker_view: TrackerView::default(),
             column_picker_cursor: 0,
+            project_picker: Vec::new(),
+            project_picker_cursor: 0,
+            switch_to: None,
             settings_editor,
             project_settings,
             update_highlight_ticks: 0,
@@ -552,11 +567,12 @@ impl App {
             log_time_form: LogTimeForm::default(),
             quit_confirm: false,
             read_only: false,
+            cherry_picks: HashMap::new(),
             theme,
             needs_sort: false,
             visible_cache: None,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
-            shortcut_providers: Vec::new(),
+            shortcut_providers: gitlab_tracker_core::collect_all_blocks(),
             #[cfg(feature = "stats")]
             stats_view: StatsViewState::default(),
             #[cfg(feature = "stats")]
@@ -914,13 +930,54 @@ impl App {
         else {
             return;
         };
+        self.copy_to_clipboard(cmd);
+    }
+
+    /// Copies the visible rows (filter, search and "hide merged" applied) as a
+    /// Markdown release checklist: one row per MR, one column per tracked branch.
+    pub fn yank_markdown_checklist(&mut self) {
+        let checklist = self.markdown_checklist();
+        self.copy_to_clipboard(checklist);
+    }
+
+    /// Markdown table of the visible MRs and their presence on each tracked branch.
+    pub fn markdown_checklist(&self) -> String {
+        let escape = |s: &str| s.replace('|', "\\|");
+        let mut out = String::from("| MR | Title | State |");
+        for b in &self.branches {
+            out.push_str(&format!(" {} |", escape(b)));
+        }
+        out.push_str("\n|---|---|---|");
+        out.push_str(&"---|".repeat(self.branches.len()));
+        for mr in self.visible_mrs() {
+            out.push_str(&format!(
+                "\n| [!{}]({}) | {} | {} |",
+                mr.id,
+                mr.web_url,
+                escape(&mr.title),
+                mr.state.as_str()
+            ));
+            for b in &self.branches {
+                out.push_str(match self.branch_presence(mr, b) {
+                    Some(BranchPresence::Present) => " ✅ |",
+                    Some(BranchPresence::CherryPicked) => " 🍒 |",
+                    Some(BranchPresence::Absent) => " ❌ |",
+                    None => " … |",
+                });
+            }
+        }
+        out.push('\n');
+        out
+    }
+
+    fn copy_to_clipboard(&mut self, text: String) {
         if self.clipboard.is_none() {
             self.clipboard = arboard::Clipboard::new()
                 .map_err(|e| tracing::warn!(error = %e, "Clipboard unavailable"))
                 .ok();
         }
         if let Some(clipboard) = &mut self.clipboard {
-            if let Err(e) = clipboard.set_text(cmd) {
+            if let Err(e) = clipboard.set_text(text) {
                 tracing::warn!(error = %e, "Failed to copy to clipboard");
             }
         }
@@ -1022,6 +1079,14 @@ impl App {
             initial_sync_just_completed,
             from_refresh_cycle,
         }
+    }
+
+    /// `completion` ended the startup load or a refresh cycle and nothing else is
+    /// in flight: branch data is fresh, so dependent scans can run.
+    fn fetches_just_settled(&self, completion: FetchCompletion) -> bool {
+        (completion.initial_sync_just_completed || completion.from_refresh_cycle)
+            && self.pending_initial_fetches.is_empty()
+            && self.pending_refresh_fetches.is_empty()
     }
 
     /// Starts timing the refresh cycle just spawned (`kind`: "auto" or "manual").
@@ -1217,6 +1282,58 @@ impl App {
             token: self.token.clone(),
             project_id: self.project_id.clone(),
             branches: self.branches.clone(),
+        }
+    }
+
+    /// How `mr` shows up on `branch`; `None` while it is loading or failed.
+    pub fn branch_presence(&self, mr: &TrackedMr, branch: &str) -> Option<BranchPresence> {
+        let MrStatus::MergedIn(found) = &mr.status else {
+            return None;
+        };
+        if found.contains(branch) {
+            return Some(BranchPresence::Present);
+        }
+        // `sha` is the merge / squash commit. ponytail: per-commit cherry-picks of
+        // multi-commit MRs (and fast-forward merges, which have no merge SHA) are
+        // not matched; fetch the MR commit SHAs if needed.
+        let picked = mr.sha.as_ref().is_some_and(|sha| {
+            self.cherry_picks
+                .get(branch)
+                .is_some_and(|sources| sources.contains(sha))
+        });
+        Some(if picked {
+            BranchPresence::CherryPicked
+        } else {
+            BranchPresence::Absent
+        })
+    }
+
+    /// Scans each tracked branch for cherry-picks of the merged MRs still absent
+    /// from it, from the oldest such merge on. Branches with none are skipped (no
+    /// API call) and their previous scan is dropped.
+    fn spawn_cherry_pick_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
+        if self.read_only {
+            return;
+        }
+        for branch in self.branches.clone() {
+            let since = self
+                .mrs
+                .iter()
+                .filter(|mr| mr.state == GitlabMrState::Merged)
+                .filter(|mr| matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(&branch)))
+                .filter_map(|mr| mr.merged_at.as_deref())
+                .min_by_key(|at| chrono::DateTime::parse_from_rfc3339(at).ok());
+            match since {
+                Some(since) => crate::gitlab::spawn_cherry_picks_fetch(
+                    self.fetch_context(),
+                    branch,
+                    since.to_string(),
+                    tx.clone(),
+                ),
+                None => {
+                    self.cherry_picks.remove(&branch);
+                }
+            }
         }
     }
 
@@ -1555,6 +1672,7 @@ impl App {
                 // startup notification fence stay consistent.
                 let completion = self.complete_fetch(&data.id);
                 let notify_allowed = completion.notify_allowed;
+                let fetches_settled = self.fetches_just_settled(completion);
                 #[cfg(feature = "stats")]
                 let initial_fetches_completed = completion.initial_sync_just_completed;
 
@@ -1616,6 +1734,9 @@ impl App {
                     self.update_highlight_ticks = RECENT_UPDATE_FADE_TICKS;
                 }
                 self.sync_linked_ticket(&mr_id, was_updated, completion.from_refresh_cycle, tx);
+                if fetches_settled {
+                    self.spawn_cherry_pick_scans(tx);
+                }
                 // Sorting is deferred to the end of the event drain (see
                 // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
                 self.needs_sort = true;
@@ -1628,7 +1749,10 @@ impl App {
 
             AppEvent::MrFailed { id, error } => {
                 // A failed fetch is finished too — otherwise the spinner never stops.
-                self.complete_fetch(&id);
+                let completion = self.complete_fetch(&id);
+                if self.fetches_just_settled(completion) {
+                    self.spawn_cherry_pick_scans(tx);
+                }
                 let Some(mr) = self.mrs.find_mut(&id) else {
                     return false;
                 };
@@ -1699,6 +1823,11 @@ impl App {
                 } else {
                     false
                 }
+            }
+
+            AppEvent::CherryPicksLoaded { branch, sources } => {
+                self.cherry_picks.insert(branch, sources);
+                false
             }
 
             AppEvent::NewMrsDiscovered {
@@ -1872,6 +2001,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn branch_presence_reports_cherry_picks_separately() {
+        let mut app = app_with_mrs(&[("fix login", "None")]).await;
+        app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
+        app.mrs[0].data.sha = Some("abc".into());
+        app.cherry_picks
+            .insert("staging".into(), HashSet::from(["abc".to_string()]));
+        let mr = &app.mrs[0];
+
+        assert_eq!(
+            app.branch_presence(mr, "main"),
+            Some(BranchPresence::Present)
+        );
+        assert_eq!(
+            app.branch_presence(mr, "staging"),
+            Some(BranchPresence::CherryPicked)
+        );
+        assert_eq!(
+            app.branch_presence(mr, "prod"),
+            Some(BranchPresence::Absent)
+        );
+    }
+
+    #[tokio::test]
+    async fn markdown_checklist_lists_visible_rows_per_branch() {
+        let mut app = app_with_mrs(&[("fix | login", "None"), ("add stats", "None")]).await;
+        app.branches = vec!["main".into(), "staging".into()];
+        app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
+        app.mrs[0].data.web_url = "https://g/mr/1".into();
+        app.mrs[1].status = MrStatus::Loading;
+
+        let md = app.markdown_checklist();
+        let lines: Vec<&str> = md.lines().collect();
+        assert_eq!(lines[0], "| MR | Title | State | main | staging |");
+        assert_eq!(lines[1], "|---|---|---|---|---|");
+        assert!(lines[2].starts_with("| [!1](https://g/mr/1) | fix \\| login |"));
+        assert!(lines[2].ends_with(" ✅ | ❌ |"));
+        assert!(lines[3].ends_with(" … | … |"));
+    }
+
+    #[tokio::test]
     async fn hide_merged_keeps_merged_mrs_tracked_but_invisible() {
         let mut app = app_with_mrs(&[("fix login", "None"), ("add stats", "None")]).await;
         app.mrs[0].state = GitlabMrState::Merged;
@@ -1987,7 +2156,6 @@ mod tests {
         let mut app = app_with_mrs(&[("fix login", "v1.0"), ("add stats", "None")]).await;
         app.theme = Palette::for_mode(ThemeMode::Light);
         app.table_state.select(Some(0));
-        app.shortcut_providers = gitlab_tracker_core::collect_all_blocks();
         theme::set_light(true);
 
         let dark = Palette::for_mode(ThemeMode::Dark);
@@ -2155,6 +2323,35 @@ mod tests {
             &mut HashMap::new(),
         )
         .await
+    }
+
+    #[tokio::test]
+    async fn project_picker_only_switches_to_another_project() {
+        let mut app = test_app();
+        let entry = |url: &str, id: &str| ProjectEntry {
+            gitlab_url: url.into(),
+            project_id: id.into(),
+            ..ProjectEntry::default()
+        };
+        // The current project (trailing slash ignored), then another one.
+        app.project_picker = vec![
+            entry("https://gitlab.example/", "1"),
+            entry("https://gitlab.example", "2"),
+        ];
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.input_mode = InputMode::ProjectPicker;
+        press(&mut app, &tx, KeyCode::Enter).await;
+        assert!(
+            app.switch_to.is_none(),
+            "re-selecting the current project is a no-op"
+        );
+
+        app.input_mode = InputMode::ProjectPicker;
+        press(&mut app, &tx, KeyCode::Down).await;
+        press(&mut app, &tx, KeyCode::Enter).await;
+        assert_eq!(app.switch_to.map(|p| p.project_id), Some("2".to_string()));
+        assert_eq!(app.input_mode, InputMode::Normal);
     }
 
     #[tokio::test]
