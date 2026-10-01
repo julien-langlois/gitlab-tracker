@@ -9,6 +9,7 @@ use crate::correlation::{compute_all_correlations, CorrelationResult};
 use crate::db::{SqliteStatsDb, StatsError};
 use crate::metrics::PerMrMetrics;
 use crate::poisson::PoissonInsights;
+use crate::promotion::{lead_times, PromotionLeadTime};
 
 /// The final, fully-computed analytics report.
 ///
@@ -31,6 +32,11 @@ pub struct StatReport {
 
     /// Poisson-based forecasts, anomaly signals, and queue insights.
     pub poisson: PoissonInsights,
+
+    /// Promotion lead time per branch (arrivals within the window). Empty when no
+    /// project is selected or nothing was promoted yet.
+    #[serde(default)]
+    pub promotions: Vec<PromotionLeadTime>,
 }
 
 impl StatReport {
@@ -56,12 +62,23 @@ impl StatReport {
             None => None,
         };
 
-        Ok(Self::build_with_baseline(
-            aggregated,
-            baseline.as_ref(),
-            &latest_metrics,
-            filter,
-        ))
+        let window = build_snapshot_query(filter);
+        let promotions = match &filter.project_id {
+            Some(project_id) => lead_times(
+                &db.query_branch_arrivals(
+                    project_id,
+                    window.from_date.as_deref(),
+                    window.to_date.as_deref(),
+                )
+                .await?,
+            ),
+            None => Vec::new(),
+        };
+
+        Ok(Self {
+            promotions,
+            ..Self::build_with_baseline(aggregated, baseline.as_ref(), &latest_metrics, filter)
+        })
     }
 
     /// Builds a [`StatReport`] using an optional historical baseline for anomaly detection.
@@ -80,6 +97,7 @@ impl StatReport {
             aggregated,
             correlations: compute_all_correlations(metrics),
             poisson,
+            promotions: Vec::new(),
         }
     }
 }

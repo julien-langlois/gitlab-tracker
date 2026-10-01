@@ -9,13 +9,68 @@ use ratatui::{
 
 use crate::ui::theme;
 
-use super::common::{split_horizontal_thirds, styled_block, truncate};
+use super::common::{format_duration_hours, split_horizontal_thirds, styled_block, truncate};
 
 pub(super) fn render_flow_tab(f: &mut Frame, report: &StatReport, area: Rect) {
-    let [left, mid, right] = split_horizontal_thirds(area);
+    // Promotion lead time below the cycle-time charts: one row per branch.
+    let promotion_height = u16::try_from(report.promotions.len().max(1) + 3).unwrap_or(u16::MAX);
+    let [charts, promotions] =
+        Layout::vertical([Constraint::Fill(1), Constraint::Length(promotion_height)]).areas(area);
+    render_promotion_block(f, report, promotions);
+    let [left, mid, right] = split_horizontal_thirds(charts);
     render_by_author_block(f, report, left);
     render_by_reviewer_block(f, report, mid);
     render_by_milestone_block(f, report, right);
+}
+
+/// Promotion lead time per branch: merge on the target branch → arrival there.
+fn render_promotion_block(f: &mut Frame, report: &StatReport, area: Rect) {
+    let block = styled_block(" Promotion Lead Time (merge → branch) ");
+    let muted = Style::default().fg(theme::muted());
+    if report.promotions.is_empty() {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "  No promotion recorded yet — arrivals on the other tracked branches are recorded from now on.",
+                muted,
+            ))
+            .block(block),
+            area,
+        );
+        return;
+    }
+    let width = report
+        .promotions
+        .iter()
+        .map(|p| Span::raw(p.branch.as_str()).width())
+        .max()
+        .unwrap_or(0)
+        .max("Branch".len());
+    let hours = |h: Option<f64>| h.map_or_else(|| "—".to_string(), format_duration_hours);
+    let mut lines = vec![Line::from(Span::styled(
+        format!(
+            "  {:<width$}  {:>5}  {:>8}  {:>8}  {:>8}  {:>9}",
+            "Branch", "MRs", "Median", "P90", "Max", "Via copy"
+        ),
+        muted,
+    ))];
+    for p in &report.promotions {
+        let pad = " ".repeat(width - Span::raw(p.branch.as_str()).width());
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {}{pad}", p.branch),
+                Style::default().fg(theme::fg()),
+            ),
+            Span::raw(format!(
+                "  {:>5}  {:>8}  {:>8}  {:>8}  {:>8.0}%",
+                p.arrivals,
+                hours(p.median_hours),
+                hours(p.p90_hours),
+                hours(p.max_hours),
+                p.copied_share * 100.0
+            )),
+        ]));
+    }
+    f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 /// Horizontal bar chart for cycle time by author.

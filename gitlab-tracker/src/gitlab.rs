@@ -729,6 +729,8 @@ struct CommitJson {
     #[serde(default)]
     author_email: String,
     authored_date: Option<String>,
+    /// When the commit was made on the branch (a copy's arrival date).
+    committed_date: Option<String>,
 }
 
 impl CommitJson {
@@ -750,15 +752,26 @@ fn normalize_title(title: &str) -> String {
     title.trim().trim_matches(['\'', '"']).trim().to_string()
 }
 
-/// Indexes a branch's commits by SHA, cherry-pick trailer and fingerprint.
+/// Indexes a branch's commits by SHA, cherry-pick trailer and fingerprint, the
+/// copy keys mapped to the commit date (the author date when GitLab omits it).
 fn index_branch_commits(commits: &[CommitJson]) -> BranchCommits {
     let mut index = BranchCommits::default();
     for c in commits {
         index.shas.insert(c.id.clone());
-        index
-            .picked_from
-            .extend(cherry_pick_sources(&c.message).map(str::to_owned));
-        index.fingerprints.extend(c.fingerprint());
+        let fingerprint = c.fingerprint();
+        let committed_at = c
+            .committed_date
+            .as_deref()
+            .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+            .map(|d| d.timestamp())
+            .or(fingerprint.as_ref().map(|fp| fp.authored_at))
+            .unwrap_or_default();
+        for source in cherry_pick_sources(&c.message) {
+            index.picked_from.insert(source.to_owned(), committed_at);
+        }
+        if let Some(fp) = fingerprint {
+            index.fingerprints.insert(fp, committed_at);
+        }
     }
     index
 }
@@ -1556,6 +1569,7 @@ pub async fn fetch_gitlab_data(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn cherry_pick_sources_reads_every_full_sha_trailer() {
@@ -1642,7 +1656,8 @@ mod tests {
         let commits: Vec<CommitJson> = serde_json::from_str(&format!(
             r#"[
                 {{"id": "c1", "title": " Fix login ", "message": "Fix login\n\n(cherry picked from commit {sha})",
-                  "author_email": "Dev@Example.com", "authored_date": "2026-09-28T15:03:01.000+02:00"}},
+                  "author_email": "Dev@Example.com", "authored_date": "2026-09-28T15:03:01.000+02:00",
+                  "committed_date": "2026-09-30T08:00:00Z"}},
                 {{"id": "c2", "title": "No date", "message": "No date", "author_email": "x@y"}}
             ]"#,
             sha = "a".repeat(40)
@@ -1651,7 +1666,10 @@ mod tests {
         let index = index_branch_commits(&commits);
 
         assert!(index.shas.contains("c1") && index.shas.contains("c2"));
-        assert!(index.picked_from.contains(&"a".repeat(40)));
+        let committed = chrono::DateTime::parse_from_rfc3339("2026-09-30T08:00:00Z")
+            .unwrap()
+            .timestamp();
+        assert_eq!(index.picked_from.get(&"a".repeat(40)), Some(&committed));
         // Same instant written in UTC, e-mail case and title padding normalised.
         let copy = CommitFingerprint {
             author_email: "dev@example.com".into(),
@@ -1660,7 +1678,7 @@ mod tests {
                 .timestamp(),
             title: "Fix login".into(),
         };
-        assert_eq!(index.fingerprints, HashSet::from([copy]));
+        assert_eq!(index.fingerprints, HashMap::from([(copy, committed)]));
         assert_eq!(normalize_title(" '#1410856: Update' "), "#1410856: Update");
         assert_eq!(normalize_title("\"Revert \"x\"\""), "Revert \"x");
     }

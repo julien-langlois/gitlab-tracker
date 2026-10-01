@@ -7,6 +7,7 @@
 //! - [`metrics`]     — pure functions computing per-MR durations and rates.
 //! - [`aggregator`]  — time-window and milestone aggregations over a set of snapshots.
 //! - [`correlation`] — Spearman rank correlation between pairs of metrics.
+//! - [`promotion`]   — promotion lead time: merge → arrival on the other tracked branches.
 //! - [`report`]      — [`StatReport`]: final output, serialisable to JSON or CSV.
 //!
 //! # Design constraints
@@ -20,6 +21,7 @@ pub mod correlation;
 pub mod db;
 pub mod metrics;
 pub mod poisson;
+pub mod promotion;
 pub mod report;
 pub mod settings;
 pub mod shortcuts;
@@ -32,5 +34,6 @@ pub use metrics::PerMrMetrics;
 pub use poisson::{
     AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, QueueStatus, ThroughputForecast,
 };
+pub use promotion::{ArrivalKind, BranchArrival, PromotionLeadTime};
 pub use report::StatReport;
 pub use snapshot::{MrStatsSnapshot, SnapshotTrigger};

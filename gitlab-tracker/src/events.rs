@@ -855,6 +855,8 @@ async fn handle_enter(
         // Add a new branch to track.
         if !app.branches.contains(&value) {
             app.branches.push(value.clone());
+            // MRs already on it did not just arrive there (no toast, no arrival).
+            app.just_added_branches.insert(value.clone());
             // Branches live in projects.toml — persist there, not in tracker_state.json.
             save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
 

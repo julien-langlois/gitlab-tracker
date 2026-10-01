@@ -423,6 +423,10 @@ pub struct App {
     /// Recent commits of each tracked branch (`BranchCommitsLoaded`), to recognise
     /// MRs copied there under other SHAs; rescanned after every refresh cycle.
     pub branch_commits: HashMap<String, BranchCommits>,
+    /// Branches added in this session whose MRs have not all been re-fetched yet:
+    /// an MR already on such a branch did not just "arrive" there, so it is neither
+    /// notified nor recorded as a branch arrival.
+    pub just_added_branches: HashSet<String>,
     /// Branch scans spawned and not answered yet.
     pub pending_branch_scans: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
@@ -578,6 +582,7 @@ impl App {
             read_only: false,
             branch_commits: HashMap::new(),
             pending_branch_scans: 0,
+            just_added_branches: HashSet::new(),
             theme,
             needs_sort: false,
             visible_cache: None,
@@ -1191,6 +1196,26 @@ struct RefreshCycle {
     estimated_gitlab_calls: usize,
 }
 
+/// Branches an MR reached since it was last loaded (`known`), other than its
+/// `target` and the branches just added to tracking. Empty on first sighting:
+/// when it got there is unknown.
+#[cfg_attr(not(feature = "stats"), allow(dead_code))]
+fn reached_branches(
+    known: Option<&HashSet<String>>,
+    found: &HashSet<String>,
+    target: &str,
+    just_added: &HashSet<String>,
+) -> Vec<String> {
+    let Some(known) = known else {
+        return Vec::new();
+    };
+    found
+        .iter()
+        .filter(|b| !known.contains(*b) && *b != target && !just_added.contains(*b))
+        .cloned()
+        .collect()
+}
+
 /// How far back a branch scan looks for copies of the MRs missing from it.
 const BRANCH_SCAN_LOOKBACK_DAYS: i64 = 90;
 
@@ -1385,6 +1410,16 @@ impl App {
                 .get(branch)
                 .map_or(BranchPresence::Absent, |index| copy_presence(mr, index)),
         )
+    }
+
+    /// Once no MR is loading any more, every MR has been fetched since the last
+    /// branch was added: its arrivals are real again.
+    fn release_added_branches(&mut self) {
+        if !self.just_added_branches.is_empty()
+            && !self.mrs.iter().any(|mr| mr.status == MrStatus::Loading)
+        {
+            self.just_added_branches.clear();
+        }
     }
 
     /// One row per tracked branch for the Inspector, with the commits still
@@ -1842,8 +1877,19 @@ impl App {
                     &data.branches,
                     notify_allowed,
                 ) {
-                    notify::mr_on_new_branch(&data.id, &data.data.title, b, &data.data.web_url);
+                    if !self.just_added_branches.contains(b) {
+                        notify::mr_on_new_branch(&data.id, &data.data.title, b, &data.data.web_url);
+                    }
                 }
+                // Branches reached since the last load (never on first sighting: when it
+                // got there is unknown), for the promotion lead time.
+                #[cfg(feature = "stats")]
+                let reached = reached_branches(
+                    last_known_branches.get(&data.id),
+                    &data.branches,
+                    &data.data.target_branch,
+                    &self.just_added_branches,
+                );
 
                 // Update the persisted reference so subsequent refreshes won't re-notify.
                 last_known_branches.insert(data.id.clone(), data.branches.clone());
@@ -1897,6 +1943,9 @@ impl App {
                 self.needs_sort = true;
                 #[cfg(feature = "stats")]
                 self.record_stats_snapshot(&mr_id, initial_fetches_completed, tx);
+                #[cfg(feature = "stats")]
+                self.record_sha_arrivals(&mr_id, reached, tx);
+                self.release_added_branches();
 
                 // MrLoaded persists state (see `AppEvent::persists_state`).
                 needs_persist
@@ -1908,6 +1957,7 @@ impl App {
                 if let Some(mr) = self.mrs.find_mut(&id) {
                     mr.status = MrStatus::Error(error.to_string());
                 }
+                self.release_added_branches();
                 if self.fetches_just_settled(completion) {
                     self.on_fetches_settled(completion.initial_sync_just_completed, tx);
                 }
@@ -1991,6 +2041,8 @@ impl App {
                         notify::mr_copied_to_branch(&mr.id, &mr.title, &branch, how, &mr.web_url);
                     }
                 }
+                #[cfg(feature = "stats")]
+                self.record_copy_arrivals(&branch, &index, tx);
                 self.branch_commits.insert(branch, index);
                 false
             }
@@ -2172,7 +2224,7 @@ mod tests {
         app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
         app.mrs[0].data.sha = Some("abc".into());
         let picked = BranchCommits {
-            picked_from: HashSet::from(["abc".to_string()]),
+            picked_from: HashMap::from([("abc".to_string(), 0)]),
             ..BranchCommits::default()
         };
         app.branch_commits.insert("staging".into(), picked);
@@ -2220,7 +2272,7 @@ mod tests {
         app.mrs[2].status = on_main(); // cherry-picked to prod
         app.mrs[2].data.sha = Some("abc".into());
         let picked = BranchCommits {
-            picked_from: HashSet::from(["abc".to_string()]),
+            picked_from: HashMap::from([("abc".to_string(), 0)]),
             ..BranchCommits::default()
         };
         app.branch_commits.insert("prod".into(), picked);
@@ -2248,7 +2300,7 @@ mod tests {
         }
         app.mrs[2].status = MrStatus::MergedIn(HashSet::from(["prod".to_string()]));
         let picked = |shas: &[&str]| BranchCommits {
-            picked_from: shas.iter().map(|s| s.to_string()).collect(),
+            picked_from: shas.iter().map(|s| (s.to_string(), 0)).collect(),
             ..BranchCommits::default()
         };
         let (before, after) = (picked(&["s1"]), picked(&["s1", "s2", "s3"]));
@@ -2287,6 +2339,20 @@ mod tests {
         assert_eq!(rows[1].presence, Some(BranchPresence::Partial));
         let missing: Vec<&str> = rows[1].missing.iter().map(|c| c.sha.as_str()).collect();
         assert_eq!(missing, ["c2"]);
+    }
+
+    #[test]
+    fn reached_branches_skip_first_sighting_target_and_new_columns() {
+        let set = |bs: &[&str]| bs.iter().map(|b| b.to_string()).collect::<HashSet<_>>();
+        let found = set(&["develop", "preprod", "master", "release"]);
+        let just_added = set(&["release"]);
+
+        assert!(reached_branches(None, &found, "develop", &just_added).is_empty());
+        let reached = reached_branches(Some(&set(&["develop"])), &found, "develop", &just_added);
+        assert_eq!(
+            set(&reached.iter().map(String::as_str).collect::<Vec<_>>()),
+            set(&["preprod", "master"])
+        );
     }
 
     #[tokio::test]

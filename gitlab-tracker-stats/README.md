@@ -46,6 +46,7 @@ Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state m
 | **Data confidence** | Sample-size and metadata coverage indicators for total MRs, merged cycle-time sample, pipelines, reviewers, and milestones |
 | **MR size buckets** | Small / Medium / Large / Huge diff-size buckets with total MRs, merged MRs, and median cycle time |
 | **Diff size / comments / pipeline failure rate** | Averages across deduplicated MRs in the window |
+| **Promotion lead time** | Per tracked branch other than the target: arrivals in the window, median / P90 / max hours from `merged_at` to the arrival, and the share of copies (cherry-pick with or without `-x`). An arrival before the merge (copied from an open MR) counts as 0 |
 
 ### Spearman rank correlations
 
@@ -208,6 +209,10 @@ Terminal snapshots are dated at the **real event**, not at the refresh that obse
 
 Idempotency is enforced at the DB level: `UNIQUE(mr_id, project_id, recorded_date, trigger)` (where `recorded_date` is the `YYYY-MM-DD` of `recorded_at`) prevents duplicate snapshots even if the application is restarted mid-day, or re-records the same merged MR on every refresh.
 
+### Branch arrivals
+
+The `mr_branch_arrivals` table (migration `0002`) keeps, per project, MR and branch, the **first** arrival of an MR on a tracked branch other than its target: `arrived_at` (canonical UTC), `how` (`merge`, `cherry_pick`, `copy`) and `merged_at`. The orchestrator records it through `SqliteStatsDb::record_branch_arrival` — a later arrival of the same MR on the same branch is ignored, except that a merge date learnt since fills a missing one. Copies are dated at the copied commit's date; same-SHA arrivals at the refresh that observed them. Arrivals follow the snapshot retention.
+
 ### Schema versioning, repair and backup
 
 * The schema version is stored in `PRAGMA user_version`. Migrations are the numbered files of [`migrations/`](migrations/), embedded in the binary and applied in order on open; a shipped migration is never edited.
@@ -250,9 +255,13 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     │
     ├── db.rs                SqliteStatsDb (inherent methods, no trait)
     │                        open (runs migrations) / upsert_snapshot / query
+    │                        record_branch_arrival / query_branch_arrivals
     │                        startup_maintenance → purge + repair_snapshots + backfill
     │
-    ├── migrations/          0001_initial.sql … — versioned via PRAGMA user_version
+    ├── migrations/          0001_initial.sql, 0002_branch_arrivals.sql — versioned
+    │                        via PRAGMA user_version
+    │
+    ├── promotion.rs         BranchArrival / ArrivalKind, lead_times() → PromotionLeadTime
     │
     ├── metrics.rs           PerMrMetrics — pure functions over StoredSnapshot
     │                        cycle_time_hours, pipeline_failure_rate, comment_density
@@ -280,7 +289,8 @@ gitlab-tracker/src/ui/stats.rs                 (TUI shell in the binary crate)
     └── stats/
         ├── common.rs       Shared layout, blocks, scrolling, formatting helpers
         ├── overview.rs     Overview tab: throughput, cycle time, backlog, pressure
-        ├── flow.rs         Flow tab: author/reviewer/milestone cycle-time bars
+        ├── flow.rs         Flow tab: author/reviewer/milestone cycle-time bars,
+        │                   promotion lead time per branch
         ├── quality.rs      Quality tab: data confidence and MR size buckets
         ├── forecasts.rs    Forecasts tab: throughput forecasts and signals
         └── correlations.rs Correlations tab: Spearman rows and significance styling

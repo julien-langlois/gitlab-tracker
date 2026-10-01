@@ -255,13 +255,15 @@ pub struct MrCommit {
 
 /// What a tracked branch contains, from a scan of its recent commits: enough to
 /// recognise an MR that reached it under other SHAs (cherry-pick, rebase).
+/// The copy keys map to the commit date (Unix timestamp) of the copy on the
+/// branch: when it arrived there.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BranchCommits {
     /// SHAs of the scanned commits.
     pub shas: HashSet<String>,
     /// SHAs named by `(cherry picked from commit <sha>)` trailers.
-    pub picked_from: HashSet<String>,
-    pub fingerprints: HashSet<CommitFingerprint>,
+    pub picked_from: HashMap<String, i64>,
+    pub fingerprints: HashMap<CommitFingerprint, i64>,
 }
 
 impl BranchCommits {
@@ -278,11 +280,11 @@ impl BranchCommits {
             if self.shas.contains(sha) {
                 return BranchPresence::Present;
             }
-            if self.picked_from.contains(sha) {
+            if self.picked_from.contains_key(sha) {
                 return BranchPresence::CherryPicked;
             }
         }
-        if landed.is_some_and(|fp| self.fingerprints.contains(fp)) {
+        if landed.is_some_and(|fp| self.fingerprints.contains_key(fp)) {
             return BranchPresence::Copied;
         }
         let (mut by_sha, mut by_trailer, mut by_fingerprint) = (0, 0, 0);
@@ -290,9 +292,9 @@ impl BranchCommits {
         for commit in commits {
             if self.shas.contains(&commit.sha) {
                 by_sha += 1;
-            } else if self.picked_from.contains(&commit.sha) {
+            } else if self.picked_from.contains_key(&commit.sha) {
                 by_trailer += 1;
-            } else if self.fingerprints.contains(&commit.fingerprint) {
+            } else if self.fingerprints.contains_key(&commit.fingerprint) {
                 by_fingerprint += 1;
             }
         }
@@ -312,9 +314,42 @@ impl BranchCommits {
 
     /// Whether `commit` is on this branch, by SHA, trailer or fingerprint.
     pub fn contains_copy_of(&self, commit: &MrCommit) -> bool {
-        self.shas.contains(&commit.sha)
-            || self.picked_from.contains(&commit.sha)
-            || self.fingerprints.contains(&commit.fingerprint)
+        self.shas.contains(&commit.sha) || self.copy_date(commit).is_some()
+    }
+
+    /// Commit date of the copy of `commit` on this branch (trailer, then fingerprint).
+    fn copy_date(&self, commit: &MrCommit) -> Option<i64> {
+        self.picked_from
+            .get(&commit.sha)
+            .or_else(|| self.fingerprints.get(&commit.fingerprint))
+            .copied()
+    }
+
+    /// When an MR fully copied to this branch arrived there: the commit date of the
+    /// copy of its merge / squash commit, else of the last of its copied commits.
+    /// `None` unless [`presence_of`](Self::presence_of) is `CherryPicked` or `Copied`.
+    // Only the stats recorder dates arrivals.
+    #[cfg_attr(not(feature = "stats"), allow(dead_code))]
+    pub fn copied_at(
+        &self,
+        landed_sha: Option<&str>,
+        landed: Option<&CommitFingerprint>,
+        commits: &[MrCommit],
+    ) -> Option<i64> {
+        let presence = self.presence_of(landed_sha, landed, commits);
+        if !matches!(
+            presence,
+            BranchPresence::CherryPicked | BranchPresence::Copied
+        ) {
+            return None;
+        }
+        let landed_copy = landed_sha
+            .and_then(|sha| self.picked_from.get(sha))
+            .or_else(|| landed.and_then(|fp| self.fingerprints.get(fp)));
+        match landed_copy {
+            Some(at) => Some(*at),
+            None => commits.iter().filter_map(|c| self.copy_date(c)).max(),
+        }
     }
 }
 
@@ -741,8 +776,8 @@ mod tests {
     fn presence_covers_every_way_an_mr_reaches_a_branch() {
         let index = BranchCommits {
             shas: HashSet::from(["on-branch".to_string()]),
-            picked_from: HashSet::from(["picked".to_string()]),
-            fingerprints: HashSet::from([fp("squash"), fp("c2")]),
+            picked_from: HashMap::from([("picked".to_string(), 10)]),
+            fingerprints: HashMap::from([(fp("squash"), 20), (fp("c2"), 30)]),
         };
         let presence =
             |sha: Option<&str>, landed: Option<CommitFingerprint>, commits: &[MrCommit]| {
@@ -769,5 +804,22 @@ mod tests {
         );
         assert_eq!(presence(None, None, &[]), Absent);
         assert!(Partial.is_missing() && Absent.is_missing() && !Copied.is_missing());
+
+        // Arrival date: the copy of the landed commit, else the last copied commit.
+        let copied_at =
+            |sha: Option<&str>, landed: Option<CommitFingerprint>, commits: &[MrCommit]| {
+                index.copied_at(sha, landed.as_ref(), commits)
+            };
+        assert_eq!(copied_at(Some("picked"), None, &[]), Some(10));
+        assert_eq!(copied_at(Some("x"), Some(fp("squash")), &[]), Some(20));
+        assert_eq!(
+            copied_at(None, None, &[commit("picked"), commit("c2")]),
+            Some(30)
+        );
+        assert_eq!(copied_at(Some("on-branch"), None, &[]), None); // same SHA: not a copy
+        assert_eq!(
+            copied_at(None, None, &[commit("c2"), commit("missing")]),
+            None
+        ); // partial
     }
 }

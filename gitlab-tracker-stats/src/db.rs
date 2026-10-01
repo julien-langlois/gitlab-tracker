@@ -1,5 +1,6 @@
 use sqlx::SqlitePool;
 
+use crate::promotion::{ArrivalKind, BranchArrival};
 use crate::snapshot::MrStatsSnapshot;
 
 /// Typed error returned by all [`SqliteStatsDb`] operations.
@@ -13,7 +14,10 @@ pub enum StatsError {
 }
 
 /// Schema migrations, in order (see `SqliteStatsDb::run_migrations`).
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_initial.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_initial.sql"),
+    include_str!("../migrations/0002_branch_arrivals.sql"),
+];
 
 /// A stored snapshot as returned by [`SqliteStatsDb::query`].
 ///
@@ -294,6 +298,69 @@ impl SqliteStatsDb {
         Ok(results)
     }
 
+    /// Records the first arrival of an MR on a branch. Later arrivals of the same
+    /// MR on the same branch are ignored, except that a merge date learnt since
+    /// (an MR copied before its merge) fills the missing one. Returns whether a
+    /// row was written, so callers refresh the report only when something changed.
+    pub async fn record_branch_arrival(&self, arrival: &BranchArrival) -> Result<bool, StatsError> {
+        let result = sqlx::query(
+            "INSERT INTO mr_branch_arrivals (project_id, mr_id, branch, arrived_at, how, merged_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT (project_id, mr_id, branch) DO UPDATE SET merged_at = excluded.merged_at
+             WHERE merged_at IS NULL AND excluded.merged_at IS NOT NULL",
+        )
+        .bind(&arrival.project_id)
+        .bind(&arrival.mr_id)
+        .bind(&arrival.branch)
+        .bind(crate::snapshot::format_timestamp(arrival.arrived_at))
+        .bind(arrival.how.as_str())
+        .bind(
+            arrival
+                .merged_at
+                .as_deref()
+                .map(crate::snapshot::normalize_timestamp),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Branch arrivals of `project_id` dated within `[from, to)` (canonical UTC
+    /// timestamps; `None`: unbounded). Rows with an unknown `how` are skipped.
+    pub async fn query_branch_arrivals(
+        &self,
+        project_id: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+    ) -> Result<Vec<BranchArrival>, StatsError> {
+        let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT mr_id, branch, arrived_at, how, merged_at FROM mr_branch_arrivals
+             WHERE project_id = ?
+               AND (? IS NULL OR arrived_at >= ?)
+               AND (? IS NULL OR arrived_at < ?)",
+        )
+        .bind(project_id)
+        .bind(from)
+        .bind(from)
+        .bind(to)
+        .bind(to)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(mr_id, branch, arrived_at, how, merged_at)| {
+                Some(BranchArrival {
+                    project_id: project_id.to_string(),
+                    mr_id,
+                    branch,
+                    arrived_at: arrived_at.parse().ok()?,
+                    how: ArrivalKind::parse(&how)?,
+                    merged_at,
+                })
+            })
+            .collect())
+    }
+
     /// Deletes all snapshots older than `retention_days` for the given project.
     ///
     /// Called once on startup when `stats_retention_days` is set in `projects.toml`.
@@ -313,6 +380,12 @@ impl SqliteStatsDb {
                 .bind(&cutoff)
                 .execute(&self.pool)
                 .await?;
+        // Branch arrivals follow the same retention.
+        sqlx::query("DELETE FROM mr_branch_arrivals WHERE project_id = ? AND arrived_at < ?")
+            .bind(project_id)
+            .bind(&cutoff)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.rows_affected())
     }
@@ -692,6 +765,53 @@ mod tests {
         db.upsert_snapshot(&merged).await.unwrap();
         assert_eq!(merged_last_30().await, 0);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn branch_arrivals_keep_the_first_one_and_fill_the_merge_date() {
+        use crate::promotion::{ArrivalKind, BranchArrival};
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        let arrival = |at: &str, how, merged: Option<&str>| BranchArrival {
+            project_id: "p".into(),
+            mr_id: "1".into(),
+            branch: "preprod".into(),
+            arrived_at: at.parse().unwrap(),
+            how,
+            merged_at: merged.map(str::to_string),
+        };
+        // Copied before the merge, seen again later (merged by then, by SHA).
+        let copy = arrival("2026-09-01T10:00:00Z", ArrivalKind::Copy, None);
+        assert!(db.record_branch_arrival(&copy).await.unwrap());
+        assert!(
+            !db.record_branch_arrival(&copy).await.unwrap(),
+            "unchanged: no write"
+        );
+        let merged = arrival(
+            "2026-09-05T10:00:00Z",
+            ArrivalKind::Merge,
+            Some("2026-09-02T08:00:00.000+02:00"),
+        );
+        assert!(
+            db.record_branch_arrival(&merged).await.unwrap(),
+            "merge date filled"
+        );
+        assert!(!db.record_branch_arrival(&merged).await.unwrap());
+
+        let rows = db.query_branch_arrivals("p", None, None).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].how, ArrivalKind::Copy);
+        assert_eq!(rows[0].arrived_at.to_rfc3339(), "2026-09-01T10:00:00+00:00");
+        assert_eq!(rows[0].merged_at.as_deref(), Some("2026-09-02T06:00:00Z"));
+        let window = db
+            .query_branch_arrivals("p", Some("2026-09-02T00:00:00Z"), None)
+            .await
+            .unwrap();
+        assert!(window.is_empty());
+        assert!(db
+            .query_branch_arrivals("other", None, None)
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]

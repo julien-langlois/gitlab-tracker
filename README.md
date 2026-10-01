@@ -168,12 +168,17 @@
   | Tab | Content |
   | :--- | :--- |
   | **Overview** | Throughput, cycle time P50/P75/P90, backlog aging, flow-pressure status, and top delivery signal |
-  | **Flow** | Median cycle time by author, reviewer, and milestone using horizontal bar charts |
+  | **Flow** | Median cycle time by author, reviewer, and milestone using horizontal bar charts, and the **promotion lead time** per branch (see below) |
   | **Quality** | Data-confidence indicators, pipeline/reviewer/milestone coverage, and MR size buckets with median cycle time |
   | **Forecasts** | Poisson throughput forecasts plus pressure signals and historical-baseline anomalies (Poisson test on throughput, ratio test on shares) |
   | **Correlations** | Spearman metric correlations ranked by \|ρ\| with p-values, strength labels, and sample sizes |
 
   Use `Tab` / `Shift+Tab` to switch tabs, `1`–`5` to jump directly to a tab, `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time), `R` to refresh, and `↑`/`↓`, `j`/`k`, or `PgUp`/`PgDn` to scroll the active tab. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly created MRs at each refresh cycle, including MRs already merged between two cycles, independently of whether the `stats` feature is active.
+
+  **Promotion lead time** — how long a merged MR takes to reach each other tracked branch (e.g. `develop` → `preproduction` → `master`), per branch: number of MRs, median, P90 and max delay since the merge, and the share that arrived by copy (cherry-pick) rather than by merge. An arrival is recorded the first time the tracker sees the MR on a branch other than its target:
+  * by **copy** (`🍒` / `≈`): dated at the copied commit's date — exact, even if the app was closed;
+  * by **same SHA** (merge, fast-forward, `reset --hard`): dated at the refresh that saw it — so within one refresh interval, or at the next launch if it happened while the app was closed;
+  * never for an MR already on the branch when it was first seen, nor for the MRs of a branch you just added to the columns (their arrival date is unknown). Recording starts with this version, so the table fills up over time.
 
   See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
 

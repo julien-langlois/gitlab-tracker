@@ -464,6 +464,35 @@ pub(crate) async fn seed_demo_stats_db(
         let _ = db.upsert_snapshot_at(&snap, &recorded_at).await;
     }
 
+    // Promotion lead time: every MR reaches staging a few hours after its merge
+    // on main, the ones older than a week reach production too; one in three is
+    // a copy (cherry-pick) rather than a merge.
+    for (i, mr) in dataset.iter().enumerate() {
+        use gitlab_tracker_stats::{ArrivalKind, BranchArrival};
+        let merged = chrono::Utc::now() - chrono::Duration::days(mr.merged_days_ago);
+        let staging_delay = chrono::Duration::hours(2 + (i as i64 * 7) % 30);
+        let production_delay = chrono::Duration::hours(30 + (i as i64 * 13) % 120);
+        let mut arrivals = vec![("staging", staging_delay)];
+        if mr.merged_days_ago > 7 {
+            arrivals.push(("production", production_delay));
+        }
+        for (branch, delay) in arrivals {
+            let arrival = BranchArrival {
+                project_id: project_id.to_string(),
+                mr_id: mr.id.to_string(),
+                branch: branch.to_string(),
+                arrived_at: merged + delay,
+                how: if i % 3 == 0 {
+                    ArrivalKind::Copy
+                } else {
+                    ArrivalKind::Merge
+                },
+                merged_at: Some(merged.to_rfc3339()),
+            };
+            let _ = db.record_branch_arrival(&arrival).await;
+        }
+    }
+
     Some(Arc::new(db))
 }
 

@@ -72,6 +72,12 @@ then its own `MrData::commits` against it. `App::branch_presence` combines both,
 and every consumer (table, export, `absent_branches` filter, notifications) goes
 through it.
 
+With `stats`, the first arrival of an MR on each branch other than its target is
+recorded (`app/stats_recorder.rs`): same-SHA arrivals from `MrLoaded` (branches new
+since `last_known_branches`, see `reached_branches`), copies from
+`BranchCommitsLoaded` (dated by `BranchCommits::copied_at`). Branches added in the
+session are ignored until every MR has been re-fetched (`just_added_branches`).
+
 ---
 
 ## Error handling
