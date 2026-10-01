@@ -289,3 +289,18 @@ inventory::submit!(FilterDef {
         gitlab_match || tracker_match
     },
 });
+
+inventory::submit!(FilterDef {
+    id: "absent_from_branch",
+    label: "Absent from branch… (type below)",
+    active_label: Some("Absent from:"),
+    priority: 53,
+    needs_text_input: true,
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, query: &str| {
+        let query = query.trim();
+        mr.absent_branches
+            .iter()
+            .any(|b| b.eq_ignore_ascii_case(query))
+    },
+});

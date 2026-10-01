@@ -337,6 +337,8 @@ pub struct App {
     /// Reset to `RECENT_UPDATE_FADE_TICKS` each time a MR update is detected.
     /// Decremented on every Tick; rows are highlighted while this is > 0.
     pub update_highlight_ticks: u64,
+    /// Short-lived feedback shown in the status bar (copy done, switch failed…).
+    pub flash: Option<Flash>,
     /// List of active/upcoming milestones fetched from GitLab on startup.
     /// Used to power the milestone autocomplete in the input field.
     pub milestones: Vec<GitLabMilestone>,
@@ -540,6 +542,7 @@ impl App {
             settings_editor,
             project_settings,
             update_highlight_ticks: 0,
+            flash: None,
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
@@ -593,8 +596,9 @@ impl App {
     /// Returns the MR id if a MR was toggled, `None` if no MR is selected.
     pub fn toggle_flag_selected(&mut self) -> Option<String> {
         let selected = self.table_state.selected()?;
-        // When a filter is active the visible index differs from `self.mrs` index.
-        let mr = self.visible_mrs_mut().nth(selected)?;
+        // The selection indexes the visible list (filter + search ranking), not `self.mrs`.
+        let index = *self.compute_visible_indices().get(selected)?;
+        let mr = &mut self.mrs[index];
         mr.flagged = !mr.flagged;
         Some(mr.id.clone())
     }
@@ -746,38 +750,46 @@ impl App {
         scored.into_iter().map(|(_, i)| i).collect()
     }
 
-    /// Returns a mutable iterator over the MRs that pass the current filter.
-    fn visible_mrs_mut(&mut self) -> impl Iterator<Item = &mut TrackedMr> {
-        let filter_defs = self.filter_defs.clone();
-        let active = self.active_filter.clone();
-        let complexity_profile = self.config.complexity_profile.clone();
-        let gitlab_username = self.config.gitlab_username.clone();
-        let hide_merged = self.config.hide_merged;
-        self.mrs.iter_mut().filter(move |mr| {
-            !(hide_merged && mr.state == GitlabMrState::Merged)
-                && Self::apply_filter(
-                    &filter_defs,
-                    &active,
-                    mr,
-                    &complexity_profile,
-                    &gitlab_username,
-                )
-        })
-    }
-
     /// Returns `true` when `mr` passes the currently active filter and is not
     /// hidden by the "hide merged" toggle.
+    ///
+    /// Builds a [`MrSnapshot`] and delegates to the registered `FilterDef::apply`
+    /// function — no match arm needed when a new filter is added.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
         if self.config.hide_merged && mr.state == GitlabMrState::Merged {
             return false;
         }
-        Self::apply_filter(
-            &self.filter_defs,
-            &self.active_filter,
-            mr,
-            &self.config.complexity_profile,
-            &self.config.gitlab_username,
-        )
+        let Some(def) = self.filter_defs.get(self.active_filter.index) else {
+            return true; // Unknown index → show all.
+        };
+        // The effort filters only need relative bands (< 0.33 / >= 0.66) of the
+        // score computed with the project's complexity profile.
+        let diff_difficulty = mr
+            .diff_stats
+            .as_ref()
+            .map(|s| s.difficulty(&self.config.complexity_profile));
+        let absent_branches: Vec<&str> = self
+            .branches
+            .iter()
+            .filter(|b| self.branch_presence(mr, b) == Some(BranchPresence::Absent))
+            .map(String::as_str)
+            .collect();
+        let snapshot = MrSnapshot {
+            flagged: mr.flagged,
+            state: mr.state,
+            mergeability: mr.mergeability,
+            user_notes_count: mr.user_notes_count,
+            milestone: mr.milestone.as_deref(),
+            assignee: mr.assignee.as_deref(),
+            linked_ticket: mr.linked_ticket.as_ref(),
+            pipeline_status: mr.pipelines.first().map(|p| p.status),
+            reviewers: &mr.reviewers,
+            gitlab_username: self.config.gitlab_username.as_deref(),
+            diff_difficulty,
+            target_branch: &mr.target_branch,
+            absent_branches: &absent_branches,
+        };
+        (def.apply)(snapshot, &self.active_filter.query)
     }
 
     /// Returns the subset of registered filter definitions visible in the picker,
@@ -817,47 +829,6 @@ impl App {
                 self.config.gitlab_username.is_some()
             }
         }
-    }
-
-    /// Pure predicate — does not borrow `self`, usable inside `iter_mut` closures.
-    ///
-    /// Builds a [`MrSnapshot`] from the tracked MR and delegates to the registered
-    /// `FilterDef::apply` function — no match arm needed when a new filter is added.
-    ///
-    /// `complexity_profile` is used to compute the diff-difficulty score for the
-    /// effort filters. `gitlab_username` is forwarded so "me" filters can match.
-    fn apply_filter(
-        filter_defs: &[&'static FilterDef],
-        active: &ActiveFilter,
-        mr: &TrackedMr,
-        complexity_profile: &crate::models::DifficultyProfile,
-        gitlab_username: &Option<String>,
-    ) -> bool {
-        let Some(def) = filter_defs.get(active.index) else {
-            return true; // Unknown index → show all.
-        };
-        // Pre-compute the difficulty score using the project's complexity profile.
-        // The filter predicates (effort_easy / effort_complex) only need relative
-        // bands (< 0.33 / >= 0.66) — the profile is passed in from the caller.
-        let diff_difficulty = mr
-            .diff_stats
-            .as_ref()
-            .map(|s| s.difficulty(complexity_profile));
-        let snapshot = MrSnapshot {
-            flagged: mr.flagged,
-            state: mr.state,
-            mergeability: mr.mergeability,
-            user_notes_count: mr.user_notes_count,
-            milestone: mr.milestone.as_deref(),
-            assignee: mr.assignee.as_deref(),
-            linked_ticket: mr.linked_ticket.as_ref(),
-            pipeline_status: mr.pipelines.first().map(|p| p.status),
-            reviewers: &mr.reviewers,
-            gitlab_username: gitlab_username.as_deref(),
-            diff_difficulty,
-            target_branch: &mr.target_branch,
-        };
-        (def.apply)(snapshot, &active.query)
     }
 
     /// Updates `milestone_suggestions` based on the current input query after `@`.
@@ -930,14 +901,19 @@ impl App {
         else {
             return;
         };
-        self.copy_to_clipboard(cmd);
+        if self.copy_to_clipboard(cmd) {
+            self.flash("✔ git clone command copied", false);
+        }
     }
 
     /// Copies the visible rows (filter, search and "hide merged" applied) as a
     /// Markdown release checklist: one row per MR, one column per tracked branch.
     pub fn yank_markdown_checklist(&mut self) {
+        let count = self.visible_mrs().count();
         let checklist = self.markdown_checklist();
-        self.copy_to_clipboard(checklist);
+        if self.copy_to_clipboard(checklist) {
+            self.flash(format!("✔ Checklist copied ({count} MRs)"), false);
+        }
     }
 
     /// Markdown table of the visible MRs and their presence on each tracked branch.
@@ -970,17 +946,22 @@ impl App {
         out
     }
 
-    fn copy_to_clipboard(&mut self, text: String) {
+    /// Copies `text`; on failure, logs and flashes the error. Returns whether it worked.
+    fn copy_to_clipboard(&mut self, text: String) -> bool {
         if self.clipboard.is_none() {
             self.clipboard = arboard::Clipboard::new()
                 .map_err(|e| tracing::warn!(error = %e, "Clipboard unavailable"))
                 .ok();
         }
-        if let Some(clipboard) = &mut self.clipboard {
-            if let Err(e) = clipboard.set_text(text) {
-                tracing::warn!(error = %e, "Failed to copy to clipboard");
-            }
+        let result = match &mut self.clipboard {
+            Some(clipboard) => clipboard.set_text(text).map_err(|e| e.to_string()),
+            None => Err("no clipboard available".to_string()),
+        };
+        if let Err(e) = &result {
+            tracing::warn!(error = %e, "Failed to copy to clipboard");
+            self.flash(format!("✘ Copy failed: {e}"), true);
         }
+        result.is_ok()
     }
 
     /// Keeps the selection inside the visible list after it shrinks.
@@ -1198,6 +1179,37 @@ struct RefreshCycle {
     estimated_gitlab_calls: usize,
 }
 
+/// MRs absent from `branch` by SHA whose merge commit is a cherry-pick source in
+/// `after` but was not in `before`: they just reached the branch by cherry-pick.
+fn newly_cherry_picked<'a>(
+    mrs: &'a [TrackedMr],
+    branch: &'a str,
+    before: &'a HashSet<String>,
+    after: &'a HashSet<String>,
+) -> impl Iterator<Item = &'a TrackedMr> {
+    mrs.iter().filter(move |mr| {
+        let absent_by_sha =
+            matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(branch));
+        absent_by_sha
+            && mr
+                .sha
+                .as_ref()
+                .is_some_and(|sha| after.contains(sha) && !before.contains(sha))
+    })
+}
+
+/// Ticks (~seconds) a [`Flash`] message stays in the status bar.
+const FLASH_TICKS: u8 = 4;
+
+/// A transient status-bar message: the result of an action that has no other
+/// visible effect (clipboard copy, failed project switch…).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Flash {
+    pub text: String,
+    pub is_error: bool,
+    ticks_left: u8,
+}
+
 /// What [`App::complete_fetch`] knows about the fetch that just finished.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FetchCompletion {
@@ -1412,6 +1424,25 @@ impl App {
         self.startup_tracker_estimate = Some(self.estimated_tracker_calls);
     }
 
+    /// Shows `text` in the status bar for a few seconds (red when `is_error`).
+    pub fn flash(&mut self, text: impl Into<String>, is_error: bool) {
+        self.flash = Some(Flash {
+            text: text.into(),
+            is_error,
+            ticks_left: FLASH_TICKS,
+        });
+    }
+
+    /// Ages the flash message by one tick, clearing it once expired.
+    pub fn tick_flash(&mut self) {
+        if let Some(flash) = &mut self.flash {
+            flash.ticks_left = flash.ticks_left.saturating_sub(1);
+            if flash.ticks_left == 0 {
+                self.flash = None;
+            }
+        }
+    }
+
     /// One-second tick: countdowns, debounced stats refresh, and — when the refresh
     /// timer elapses — a full refresh cycle (discovery, MR and ticket re-fetches).
     /// Returns whether state must be persisted.
@@ -1420,6 +1451,8 @@ impl App {
         if std::mem::take(&mut self.stats_report_dirty) {
             crate::ui::stats::trigger_background_stats_refresh(self, tx);
         }
+
+        self.tick_flash();
 
         // Decrement the highlight fade countdown and clear flags when expired.
         if self.update_highlight_ticks > 0 {
@@ -1826,6 +1859,13 @@ impl App {
             }
 
             AppEvent::CherryPicksLoaded { branch, sources } => {
+                // The first scan of a branch in a session only records: restarting must
+                // not toast every cherry-pick already there.
+                if let Some(before) = self.cherry_picks.get(&branch) {
+                    for mr in newly_cherry_picked(&self.mrs, &branch, before, &sources) {
+                        notify::mr_cherry_picked(&mr.id, &mr.title, &branch, &mr.web_url);
+                    }
+                }
                 self.cherry_picks.insert(branch, sources);
                 false
             }
@@ -2038,6 +2078,73 @@ mod tests {
         assert!(lines[2].starts_with("| [!1](https://g/mr/1) | fix \\| login |"));
         assert!(lines[2].ends_with(" ✅ | ❌ |"));
         assert!(lines[3].ends_with(" … | … |"));
+    }
+
+    #[tokio::test]
+    async fn absent_from_branch_filter_skips_present_picked_and_loading() {
+        let mut app =
+            app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None"), ("d", "None")]).await;
+        app.branches = vec!["main".into(), "prod".into()];
+        let on_main = || MrStatus::MergedIn(HashSet::from(["main".to_string()]));
+        app.mrs[0].status = on_main(); // absent from prod
+        app.mrs[1].status = MrStatus::MergedIn(HashSet::from(["main".into(), "prod".into()]));
+        app.mrs[2].status = on_main(); // cherry-picked to prod
+        app.mrs[2].data.sha = Some("abc".into());
+        app.cherry_picks
+            .insert("prod".into(), HashSet::from(["abc".to_string()]));
+        app.mrs[3].status = MrStatus::Loading;
+        let index = app
+            .filter_defs
+            .iter()
+            .position(|d| d.id == "absent_from_branch")
+            .unwrap();
+        app.active_filter = ActiveFilter {
+            index,
+            query: "PROD".into(),
+        };
+
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["1"]);
+    }
+
+    #[tokio::test]
+    async fn only_new_cherry_picks_of_absent_mrs_are_reported() {
+        let mut app = app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None")]).await;
+        for (mr, sha) in app.mrs.iter_mut().zip(["s1", "s2", "s3"]) {
+            mr.status = MrStatus::MergedIn(HashSet::new());
+            mr.data.sha = Some(sha.into());
+        }
+        app.mrs[2].status = MrStatus::MergedIn(HashSet::from(["prod".to_string()]));
+        let before = HashSet::from(["s1".to_string()]);
+        let after = HashSet::from(["s1".into(), "s2".into(), "s3".to_string()]);
+
+        let ids: Vec<&str> = newly_cherry_picked(&app.mrs, "prod", &before, &after)
+            .map(|mr| mr.id.as_str())
+            .collect();
+        // s1 was already picked; s3's MR is on prod by SHA anyway.
+        assert_eq!(ids, ["2"]);
+    }
+
+    #[tokio::test]
+    async fn flag_toggles_the_selected_row_while_searching() {
+        let mut app = app_with_mrs(&[("fix login", "None"), ("add stats", "None")]).await;
+        app.input = "stats".into();
+        app.table_state.select(Some(0));
+
+        assert_eq!(app.toggle_flag_selected().as_deref(), Some("2"));
+        assert!(app.mrs[1].flagged && !app.mrs[0].flagged);
+    }
+
+    #[test]
+    fn flash_message_expires_after_a_few_ticks() {
+        let mut app = test_app();
+        app.flash("done", false);
+        for _ in 1..FLASH_TICKS {
+            app.tick_flash();
+        }
+        assert!(app.flash.is_some());
+        app.tick_flash();
+        assert!(app.flash.is_none());
     }
 
     #[tokio::test]

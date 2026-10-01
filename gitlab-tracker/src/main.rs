@@ -644,16 +644,27 @@ async fn main() -> anyhow::Result<()> {
                             match built {
                                 Ok(session) => {
                                     app = session.app;
+                                    let name = app.project_name.clone();
+                                    app.flash(
+                                        format!(
+                                            "✔ Switched to {}",
+                                            name.as_deref().unwrap_or(&app.project_id)
+                                        ),
+                                        false,
+                                    );
                                     tx = session.tx;
                                     rx = session.rx;
                                     api_semaphore = session.api_semaphore;
                                     last_known_branches = session.last_known_branches;
                                     pending_event = None;
                                 }
-                                Err(e) => tracing::warn!(
-                                    error = %e,
-                                    "Project switch failed — staying on the current project"
-                                ),
+                                Err(e) => {
+                                    tracing::warn!(
+                                        error = %e,
+                                        "Project switch failed — staying on the current project"
+                                    );
+                                    app.flash(format!("✘ Project switch failed: {e:#}"), true);
+                                }
                             }
                         }
                     }

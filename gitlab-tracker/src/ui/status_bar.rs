@@ -33,6 +33,7 @@ fn sep(muted_dim: ratatui::style::Color) -> Span<'static> {
 ///   6. Active sort column + order
 ///   7. Active filter label
 ///   8. Loading spinner (only while fetches are pending)
+///   9. Flash message (action feedback, only for a few seconds)
 pub fn render_status_bar(app: &App) -> Paragraph<'static> {
     let palette = app.theme;
     let fg = palette.fg;
@@ -206,6 +207,20 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
             Style::default()
                 .fg(accent_yellow)
                 .add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    // ── 9. Flash message (action feedback, a few seconds) ─────────────────────
+    if let Some(flash) = &app.flash {
+        let colour = if flash.is_error {
+            accent_red
+        } else {
+            accent_green
+        };
+        spans.push(sep(muted_dim));
+        spans.push(Span::styled(
+            flash.text.clone(),
+            Style::default().fg(colour).add_modifier(Modifier::BOLD),
         ));
     }
 

@@ -168,7 +168,9 @@ inventory::submit!(FilterDef {
 Filters are collected at startup via `collect_all_filters()` and sorted by `priority`.
 `apply` receives an `MrSnapshot` — a borrowed, UI-free view of the MR whose `state`,
 `mergeability` and `pipeline_status` are the typed enums of `domain`, so a typo in a
-variant is a compile error rather than a silently empty filter. An entry whose
+variant is a compile error rather than a silently empty filter. `absent_branches`
+lists the tracked branches the MR is known to be missing from (no merge commit and
+no cherry-pick there). An entry whose
 `requires` is not met at runtime is hidden from the picker.
 
 ---

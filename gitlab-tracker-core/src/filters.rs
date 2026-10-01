@@ -82,6 +82,9 @@ pub struct MrSnapshot<'a> {
     pub diff_difficulty: Option<f64>,
     /// The Git branch this MR targets (e.g. "main", "develop", "release/1.x").
     pub target_branch: &'a str,
+    /// Tracked branches this MR is known to be missing from: neither its merge
+    /// commit nor a cherry-pick of it is there. Branches still loading are omitted.
+    pub absent_branches: &'a [&'a str],
 }
 
 // Global registry — every `inventory::submit!(FilterDef { … })` anywhere in the

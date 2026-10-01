@@ -923,6 +923,7 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
         while let Ok(event) = rx.try_recv() {
             match event {
                 AppEvent::Tick => {
+                    app.tick_flash();
                     if app.time_left > 0 {
                         app.time_left -= 1;
                     } else {
