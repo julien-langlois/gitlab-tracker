@@ -117,9 +117,25 @@ fn activity_stale_setting() -> ProjectSettingDef {
     }
 }
 
+fn review_reminder_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "core.review_reminder_hours",
+        section: "Core",
+        label: "Review reminder hours",
+        help: "Notify when an MR has waited this many hours for your review, and when its author \
+               pushes after your review (0 = off). Needs gitlab_username.",
+        priority: 60,
+        kind: ProjectSettingKind::U64 { min: 0, step: 4 },
+        default_value: ProjectSettingValue::U64(24),
+        read: |project| read_u64(project, "review_reminder_hours", 24),
+        write: |project, value| write_u64(project, "review_reminder_hours", value),
+    }
+}
+
 inventory::submit!(ProjectSettingFactory(show_cockpit_setting));
 inventory::submit!(ProjectSettingFactory(hide_merged_setting));
 inventory::submit!(ProjectSettingFactory(discover_new_mrs_setting));
 inventory::submit!(ProjectSettingFactory(refresh_interval_setting));
 inventory::submit!(ProjectSettingFactory(activity_recent_setting));
 inventory::submit!(ProjectSettingFactory(activity_stale_setting));
+inventory::submit!(ProjectSettingFactory(review_reminder_setting));

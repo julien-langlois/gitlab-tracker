@@ -129,6 +129,28 @@ pub fn mr_copied_to_branch(mr_id: &str, title: &str, branch: &str, how: &str, we
     });
 }
 
+/// Remind that an MR has been waiting `hours` for my review.
+pub fn review_waiting(mr_id: &str, title: &str, hours: i64, web_url: &str) {
+    send(Toast {
+        summary: format!("MR !{mr_id} waits for your review"),
+        body: format!("{title}\nRequested {hours}h ago"),
+        icon: "dialog-information",
+        action_label: "Open MR",
+        url: web_url.to_owned(),
+    });
+}
+
+/// Notify that the author pushed to an MR after my last review activity.
+pub fn review_new_push(mr_id: &str, title: &str, web_url: &str) {
+    send(Toast {
+        summary: format!("MR !{mr_id}: new commits since your review"),
+        body: title.to_owned(),
+        icon: "dialog-information",
+        action_label: "Open MR",
+        url: web_url.to_owned(),
+    });
+}
+
 /// Notify that an MR's `updated_at` field has changed (i.e. the MR was modified).
 pub fn mr_updated(mr_id: &str, title: &str, updated_at: Option<&str>, web_url: &str) {
     send(Toast {

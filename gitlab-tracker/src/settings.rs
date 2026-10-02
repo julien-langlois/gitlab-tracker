@@ -148,6 +148,9 @@ impl SettingsEditorState {
                 ("core.activity_stale_days", ProjectSettingValue::U64(value)) => {
                     app.config.activity_stale_days = *value;
                 }
+                ("core.review_reminder_hours", ProjectSettingValue::U64(value)) => {
+                    app.config.review_reminder_hours = *value;
+                }
                 #[cfg(feature = "stats")]
                 ("stats.sprint_weeks", ProjectSettingValue::U64(value)) => {
                     app.stats_view.sprint_weeks = u32::try_from(*value).unwrap_or(u32::MAX);

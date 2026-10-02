@@ -394,6 +394,11 @@ refresh_interval_secs = 900
 activity_recent_days = 2   # 🟢 Active if updated within N days
 activity_stale_days  = 7   # 🔴 Stale if not updated for N days
 
+# Review reminders (needs gitlab_username): notify when an MR has waited this many
+# hours for your review (repeated every N hours), and when its author pushes after
+# your last activity on it. 0 disables both. Default: 24. Editable with [,].
+review_reminder_hours = 24
+
 # Show the operational cockpit pane below the MR table when enough vertical space
 # is available. Set to false to keep the dashboard table-only for this project.
 # Default: true. Editable from the in-app settings dashboard with [,].
@@ -505,7 +510,7 @@ sprint_weeks = 3
 
 #### 🔔 How Desktop Notifications Work
 
-Notifications fire for GitLab MR events (new branch, MR updated, mergeability changed, milestone changed, complexity changed) and tracker-ticket events when a provider such as Redmine is active. Tracker notifications include ticket field changes detected during refreshes and successful automatic status transitions triggered by configured workflow mappings.
+Notifications fire for GitLab MR events (new branch, MR updated, mergeability changed, milestone changed, complexity changed, review reminders) and tracker-ticket events when a provider such as Redmine is active. Tracker notifications include ticket field changes detected during refreshes and successful automatic status transitions triggered by configured workflow mappings.
 
 MR notifications include a clickable **"Open MR"** button; tracker notifications include **"Open ticket"** and open the linked ticket URL instead. Change notifications are suppressed during the initial sync to avoid spurious alerts on restart.
 
@@ -516,6 +521,8 @@ MR notifications include a clickable **"Open MR"** button; tracker notifications
 | 🔀 Mergeability changed | e.g. `MERGEABLE → CONFLICT` |
 | 🏁 Milestone changed | e.g. `v2.4.0 → v2.5.0` |
 | ⚠️ Complexity changed | The effort band changed (e.g. `🟢 EASY → 🔴 COMPLEX`) |
+| 👁 Review waiting | An MR awaiting your review (same rule as *To review: me*) was requested `review_reminder_hours` ago or more; repeated every `review_reminder_hours`, and once again after a restart |
+| 👁 New commits since your review | The author pushed after your last comment, reply or approval on an MR still awaiting your review; once per push |
 | 🎫 Ticket field changed *(tracker)* | Priority, status, assignee, version or progress of the linked ticket |
 | ✅ Status transitioned *(tracker)* | An automatic tracker status transition succeeded |
 

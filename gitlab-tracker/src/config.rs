@@ -57,6 +57,11 @@ fn default_activity_recent_days() -> u64 {
     2
 }
 
+/// Default delay (in hours) before a waiting review is reminded; 0 disables reminders.
+fn default_review_reminder_hours() -> u64 {
+    24
+}
+
 /// Default cockpit visibility for projects that do not override it.
 fn default_show_cockpit() -> bool {
     true
@@ -133,6 +138,9 @@ pub struct AppConfig {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(default = "default_activity_recent_days")]
     pub activity_recent_days: u64,
+    /// Hours an MR may wait for my review before a reminder notification (0 = never).
+    #[serde(default = "default_review_reminder_hours")]
+    pub review_reminder_hours: u64,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
@@ -239,6 +247,7 @@ impl Default for AppConfig {
             label_colors,
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
+            review_reminder_hours: default_review_reminder_hours(),
             show_cockpit: default_show_cockpit(),
             hide_merged: false,
             cockpit_thresholds: CockpitThresholds::default(),

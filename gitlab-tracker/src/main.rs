@@ -132,6 +132,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     if let Some(days) = project.activity_recent_days {
         config.activity_recent_days = days;
     }
+    if let Some(hours) = project.review_reminder_hours {
+        config.review_reminder_hours = hours;
+    }
     if let Some(show_cockpit) = project.show_cockpit {
         config.show_cockpit = show_cockpit;
     }

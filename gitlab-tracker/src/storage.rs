@@ -56,6 +56,9 @@ pub struct ProjectEntry {
     /// Number of days of activity below which an MR badge turns green (recent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_recent_days: Option<u64>,
+    /// Hours an MR may wait for my review before a reminder notification (0 = never).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_reminder_hours: Option<u64>,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     /// Defaults to `true` when omitted.
     ///

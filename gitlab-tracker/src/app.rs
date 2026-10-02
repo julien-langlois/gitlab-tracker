@@ -427,6 +427,8 @@ pub struct App {
     /// an MR already on such a branch did not just "arrive" there, so it is neither
     /// notified nor recorded as a branch arrival.
     pub just_added_branches: HashSet<String>,
+    /// Review reminders already sent this session, by MR id.
+    review_reminders: HashMap<String, mr_changes::ReviewReminded>,
     /// Branch scans spawned and not answered yet.
     pub pending_branch_scans: usize,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
@@ -583,6 +585,7 @@ impl App {
             branch_commits: HashMap::new(),
             pending_branch_scans: 0,
             just_added_branches: HashSet::new(),
+            review_reminders: HashMap::new(),
             theme,
             needs_sort: false,
             visible_cache: None,
@@ -1935,6 +1938,16 @@ impl App {
                 // All GitLab fields at once (title, branches, pipelines, diff stats…).
                 mr.data = data.data;
 
+                if let Some(username) = self.config.gitlab_username.as_deref() {
+                    mr_changes::remind_review(
+                        mr,
+                        username,
+                        self.config.review_reminder_hours,
+                        notify_allowed,
+                        &mut self.review_reminders,
+                    );
+                }
+
                 let target_id = transition_target_for_state(&self.project_settings, &mr.state);
                 spawn_ticket_transition_if_needed(TicketTransitionRequest {
                     tracker: self.tracker.as_ref(),
@@ -2137,6 +2150,7 @@ mod tests {
                 refresh_interval_secs: None,
                 activity_stale_days: None,
                 activity_recent_days: None,
+                review_reminder_hours: None,
                 show_cockpit: None,
                 hide_merged: None,
                 cockpit_thresholds: None,
