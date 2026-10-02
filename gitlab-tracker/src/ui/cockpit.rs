@@ -244,9 +244,18 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
             warning_color(summary.needs_review, app),
             app,
         ),
-        cockpit_metric(
-            "Review by me",
-            summary.review_by_me,
+        cockpit_metric_optional_dynamic(
+            "To review (me)".to_string(),
+            // Count, then the age of the oldest request (short: narrow column).
+            Some(match summary.oldest_review_wait_days {
+                Some(0) if summary.awaiting_my_review > 0 => {
+                    format!("{} (<1d)", summary.awaiting_my_review)
+                }
+                Some(days) if summary.awaiting_my_review > 0 => {
+                    format!("{} ({days}d)", summary.awaiting_my_review)
+                }
+                _ => summary.awaiting_my_review.to_string(),
+            }),
             app.theme.accent_yellow,
             app,
         ),

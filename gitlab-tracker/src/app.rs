@@ -757,9 +757,28 @@ impl App {
         // Sort by descending relevance only when a query is active.
         if query.is_some() {
             scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+        } else if let Some(username) = self.review_queue_user() {
+            // "To review: me": oldest review request first (stable for ties).
+            scored.sort_by_key(|(_, i)| {
+                let mr = &self.mrs[*i];
+                crate::utils::review_waiting_since(
+                    mr.review.as_ref(),
+                    mr.created_at.as_deref(),
+                    username,
+                )
+                .map_or(i64::MAX, |at| at.timestamp())
+            });
         }
 
         scored.into_iter().map(|(_, i)| i).collect()
+    }
+
+    /// The configured username while the "To review: me" filter is active.
+    fn review_queue_user(&self) -> Option<&str> {
+        let filter = self.filter_defs.get(self.active_filter.index)?;
+        (filter.id == "reviewer_me")
+            .then_some(self.config.gitlab_username.as_deref())
+            .flatten()
     }
 
     /// Returns `true` when `mr` passes the currently active filter and is not
@@ -803,6 +822,7 @@ impl App {
             diff_difficulty,
             target_branch: &mr.target_branch,
             absent_branches: &absent_branches,
+            approved_by: &mr.approved_by,
         };
         (def.apply)(snapshot, &self.active_filter.query)
     }
@@ -2353,6 +2373,38 @@ mod tests {
             set(&reached.iter().map(String::as_str).collect::<Vec<_>>()),
             set(&["preprod", "master"])
         );
+    }
+
+    #[tokio::test]
+    async fn review_filter_lists_my_waiting_reviews_oldest_request_first() {
+        let mut app =
+            app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None"), ("d", "None")]).await;
+        app.config.gitlab_username = Some("me".into());
+        for mr in &mut app.mrs {
+            mr.data.reviewers = vec!["Me (@me)".into()];
+            mr.mergeability = MergeabilityStatus::NotApproved;
+        }
+        let requested = |at: &str| {
+            let mut review = crate::models::ReviewActivity::default();
+            review.review_requested_at.insert("me".into(), at.into());
+            Some(review)
+        };
+        app.mrs[0].data.review = requested("2026-09-03T10:00:00Z");
+        app.mrs[1].data.review = requested("2026-09-01T10:00:00Z");
+        app.mrs[2].data.approved_by = vec!["me".into()]; // already approved
+        app.mrs[3].data.review = requested("2026-09-02T10:00:00Z");
+        let index = app
+            .filter_defs
+            .iter()
+            .position(|d| d.id == "reviewer_me")
+            .unwrap();
+        app.active_filter = ActiveFilter {
+            index,
+            query: String::new(),
+        };
+
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["2", "4", "1"]);
     }
 
     #[tokio::test]

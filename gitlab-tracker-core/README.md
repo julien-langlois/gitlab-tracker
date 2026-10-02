@@ -170,7 +170,7 @@ Filters are collected at startup via `collect_all_filters()` and sorted by `prio
 `mergeability` and `pipeline_status` are the typed enums of `domain`, so a typo in a
 variant is a compile error rather than a silently empty filter. `absent_branches`
 lists the tracked branches the MR is known to be missing from (no merge commit and
-no cherry-pick there). An entry whose
+no cherry-pick there); `approved_by` holds the usernames of its current approvers. An entry whose
 `requires` is not met at runtime is hidden from the picker.
 
 ---

@@ -1,5 +1,5 @@
 use crate::models::Effort;
-use crate::utils::matches_gitlab_username;
+use crate::utils::{awaiting_review_by, matches_gitlab_username};
 use gitlab_tracker_core::{
     FilterDef, GitlabMrState, MergeabilityStatus, MrSnapshot, PipelineState, Requirement,
 };
@@ -178,21 +178,28 @@ inventory::submit!(FilterDef {
 });
 
 inventory::submit!(FilterDef {
+    // The id predates the "to review" meaning: kept, it is the persistence key.
     id: "reviewer_me",
-    label: "Reviewer: me 👁️",
+    label: "To review: me 👁️",
     active_label: None,
     priority: 15,
     needs_text_input: false,
     requires: Some(Requirement::GitlabUsername),
+    // Reviews still waiting for me (open, not draft, not approved by me yet); the
+    // table lists them oldest request first (`App::compute_visible_indices`).
     apply: |mr: MrSnapshot<'_>, _| {
         // Visible only when gitlab_username is configured; predicate is a no-op
         // otherwise (the filter is hidden from the picker before it can be selected).
         let Some(username) = mr.gitlab_username else {
             return false;
         };
-        mr.reviewers
-            .iter()
-            .any(|reviewer| matches_gitlab_username(reviewer, username))
+        awaiting_review_by(
+            mr.state,
+            mr.mergeability,
+            mr.reviewers,
+            mr.approved_by,
+            username,
+        )
     },
 });
 

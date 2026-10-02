@@ -85,6 +85,8 @@ pub struct MrSnapshot<'a> {
     /// Tracked branches this MR is known to be missing from: neither its merge
     /// commit nor a cherry-pick of it is there. Branches still loading are omitted.
     pub absent_branches: &'a [&'a str],
+    /// Usernames of the MR's current approvers.
+    pub approved_by: &'a [String],
 }
 
 // Global registry — every `inventory::submit!(FilterDef { … })` anywhere in the

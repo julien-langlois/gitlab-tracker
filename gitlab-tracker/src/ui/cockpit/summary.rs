@@ -1,7 +1,7 @@
 use crate::app::App;
 use crate::config::CockpitThresholds;
 use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState};
-use crate::utils::matches_gitlab_username;
+use crate::utils::{awaiting_review_by, matches_gitlab_username, review_waiting_since};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use std::collections::BTreeMap;
 
@@ -28,7 +28,10 @@ pub(super) struct DashboardSummary {
     pub(super) requested_changes: usize,
     pub(super) needs_review: usize,
     pub(super) assigned_to_me: usize,
-    pub(super) review_by_me: usize,
+    /// Reviews waiting for me (open, not draft, not approved by me yet).
+    pub(super) awaiting_my_review: usize,
+    /// Age in days of the oldest of those review requests.
+    pub(super) oldest_review_wait_days: Option<i64>,
     pub(super) no_reviewer: usize,
     pub(super) no_assignee: usize,
     pub(super) flagged: usize,
@@ -211,12 +214,21 @@ impl DashboardSummary {
                 {
                     summary.assigned_to_me += 1;
                 }
-                if mr
-                    .reviewers
-                    .iter()
-                    .any(|reviewer| matches_gitlab_username(reviewer, username))
-                {
-                    summary.review_by_me += 1;
+                if awaiting_review_by(
+                    mr.state,
+                    mr.mergeability,
+                    &mr.reviewers,
+                    &mr.approved_by,
+                    username,
+                ) {
+                    summary.awaiting_my_review += 1;
+                    let waited = review_waiting_since(
+                        mr.review.as_ref(),
+                        mr.created_at.as_deref(),
+                        username,
+                    )
+                    .map(|since| (chrono::Utc::now() - since).num_days());
+                    summary.oldest_review_wait_days = summary.oldest_review_wait_days.max(waited);
                 }
             }
 

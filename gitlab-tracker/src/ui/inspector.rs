@@ -4,7 +4,9 @@ use crate::models::{
 };
 use crate::ui::table::{badge_label, behind_colors, mergeability_badge, presence_badge, Behind};
 use crate::ui::theme::Palette;
-use crate::utils::{format_relative_date, matches_gitlab_username};
+use crate::utils::{
+    awaiting_review_by, format_relative_date, matches_gitlab_username, review_waiting_since,
+};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 
@@ -542,6 +544,40 @@ pub fn render_safe_inspector_text(
                 person_span(reviewer.clone()),
             ]));
         }
+    }
+
+    // Review status: waiting for me (with since when), then who approved.
+    if let Some(me) = config.gitlab_username.as_deref().filter(|me| {
+        awaiting_review_by(
+            mr.state,
+            mr.mergeability,
+            &mr.reviewers,
+            &mr.approved_by,
+            me,
+        )
+    }) {
+        let since = review_waiting_since(mr.review.as_ref(), mr.created_at.as_deref(), me)
+            .map(|at| format!(" · requested {}", format_relative_date(&at.to_rfc3339())))
+            .unwrap_or_default();
+        lines.push(Line::from(vec![
+            Span::raw("Review   : "),
+            Span::styled(
+                format!("⏳ waiting for you{since}"),
+                Style::default()
+                    .fg(palette.accent_yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
+    if !mr.approved_by.is_empty() {
+        let approvers: Vec<String> = mr.approved_by.iter().map(|u| format!("@{u}")).collect();
+        lines.push(Line::from(vec![
+            Span::raw("Approved : "),
+            Span::styled(
+                format!("✔ {}", approvers.join(", ")),
+                Style::default().fg(palette.accent_green),
+            ),
+        ]));
     }
 
     // Notes / comments indicator — always shown, highlights when non-zero.

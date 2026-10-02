@@ -8,6 +8,38 @@ pub fn matches_gitlab_username(display: &str, username: &str) -> bool {
     display.contains(format!("@{}", username).as_str())
 }
 
+/// Whether an MR waits for `username`'s review: open, not a draft, `username`
+/// among its reviewers (display strings) and not among its current approvers.
+pub fn awaiting_review_by(
+    state: gitlab_tracker_core::GitlabMrState,
+    mergeability: gitlab_tracker_core::MergeabilityStatus,
+    reviewers: &[String],
+    approved_by: &[String],
+    username: &str,
+) -> bool {
+    state == gitlab_tracker_core::GitlabMrState::Opened
+        && mergeability != gitlab_tracker_core::MergeabilityStatus::Draft
+        && reviewers
+            .iter()
+            .any(|r| matches_gitlab_username(r, username))
+        && !approved_by.iter().any(|a| a == username)
+}
+
+/// Since when `username` has been asked to review: their latest review request,
+/// else the MR creation (requests made before the discussions were read).
+pub fn review_waiting_since(
+    review: Option<&crate::models::ReviewActivity>,
+    created_at: Option<&str>,
+    username: &str,
+) -> Option<DateTime<Utc>> {
+    review
+        .and_then(|r| r.review_requested_at.get(username))
+        .map(String::as_str)
+        .or(created_at)
+        .and_then(|at| DateTime::parse_from_rfc3339(at).ok())
+        .map(|at| at.with_timezone(&Utc))
+}
+
 /// Computes a fuzzy match score between a `query` and a `haystack` string.
 ///
 /// The algorithm looks for all query characters in order inside `haystack`
@@ -239,6 +271,65 @@ impl Drop for TerminalGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_queue_keeps_open_unapproved_reviews_requested_from_me() {
+        use gitlab_tracker_core::{GitlabMrState::*, MergeabilityStatus::*};
+        let reviewers = ["Me (@me)".to_string(), "Bob (@bob)".to_string()];
+        let none: [String; 0] = [];
+        assert!(awaiting_review_by(
+            Opened,
+            NotApproved,
+            &reviewers,
+            &none,
+            "me"
+        ));
+        assert!(awaiting_review_by(
+            Opened,
+            NotApproved,
+            &reviewers,
+            &["bob".into()],
+            "me"
+        ));
+        assert!(!awaiting_review_by(
+            Opened,
+            Mergeable,
+            &reviewers,
+            &["me".into()],
+            "me"
+        ));
+        assert!(!awaiting_review_by(Opened, Draft, &reviewers, &none, "me"));
+        assert!(!awaiting_review_by(
+            Merged,
+            NotApproved,
+            &reviewers,
+            &none,
+            "me"
+        ));
+        assert!(!awaiting_review_by(
+            Opened,
+            NotApproved,
+            &reviewers[1..],
+            &none,
+            "me"
+        ));
+
+        let mut review = crate::models::ReviewActivity::default();
+        review
+            .review_requested_at
+            .insert("me".into(), "2026-09-02T10:00:00+02:00".into());
+        let since = |r, created| review_waiting_since(r, created, "me").map(|d| d.to_rfc3339());
+        assert_eq!(
+            since(Some(&review), Some("2026-09-01T00:00:00Z")).as_deref(),
+            Some("2026-09-02T08:00:00+00:00")
+        );
+        // No request recorded for me: the MR creation.
+        assert_eq!(
+            since(None, Some("2026-09-01T00:00:00Z")).as_deref(),
+            Some("2026-09-01T00:00:00+00:00")
+        );
+        assert_eq!(since(None, None), None);
+    }
 
     #[test]
     fn git_clone_command_from_web_url() {

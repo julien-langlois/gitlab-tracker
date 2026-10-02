@@ -97,7 +97,7 @@
   * **Has comments** — MRs with at least one unresolved review thread
   * **CI failing** — MRs whose latest pipeline is in a `Failed` state
   * **Assigned to me 👤** — MRs assigned to your GitLab account *(only visible when `gitlab_username` is configured — see below)*
-  * **Reviewer: me 👁️** — MRs where you are listed as a reviewer *(only visible when `gitlab_username` is configured — see below)*
+  * **To review: me 👁️** — your review queue: open MRs (not drafts) where you are a reviewer and have not approved yet, **oldest review request first** *(only visible when `gitlab_username` is configured — see below)*. The request date comes from the MR's system notes ("requested review from @you"), else its creation; approvals from the GitLab Approvals API. The Inspector shows `Review : ⏳ waiting for you · requested 2 days ago` on those MRs, and `Approved : ✔ @alice, @bob` on any approved MR
   * **Effort: Easy 🟢** — MRs whose review-difficulty score is below 0.33 (calibrated to your `complexity_profile`)
   * **Effort: Complex 🔴** — MRs whose review-difficulty score is at or above 0.66
   * **Milestone** — free-text search on the milestone title (case-insensitive)
@@ -108,7 +108,7 @@
 
   The active filter is shown in the table header. Flagged state is **persisted across restarts** via a tenant-scoped state file (`tracker_<hash>.json`, where the hash is derived from your GitLab URL and project ID).
 
-  #### 👤 "Assigned to me" and "Reviewer: me" filters
+  #### 👤 "Assigned to me" and "To review: me" filters
 
   These two filters are **only shown in the picker** when `gitlab_username` is set for the active project in `projects.toml`. The value must match the GitLab username exactly (the handle shown after `@` in the GitLab UI).
 
@@ -121,7 +121,7 @@
   project_id = "12345678"
   active     = true
 
-  # Your GitLab username on this instance — enables "Assigned to me" and "Reviewer: me" filters.
+  # Your GitLab username on this instance — enables "Assigned to me" and "To review: me" filters.
   gitlab_username = "jdoe"
   ```
 
@@ -144,7 +144,7 @@
   | Column              | Signals                                                                                                                                                                                                                                  |
   | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | **Flow** *(stats)*  | Snapshot-backed open / merged / closed MRs, plus merge cadence: merged today, current calendar week, current calendar month, rolling last 7 days, and rolling last 30 days. Hidden when the `stats` feature or report is unavailable. |
-  | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, MRs assigned for your review, MRs without reviewer, MRs without assignee, and manually flagged MRs                           |
+  | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, reviews waiting for you (`To review (me)`, with the age of the oldest request, e.g. `4 (2d)`), MRs without reviewer, MRs without assignee, and manually flagged MRs                           |
   | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due soon, overdue milestones, MRs behind their target branch, hot threads, and optional tracker coverage / over-estimate                                              |
   | **Quality / Scope** | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                                              |
   | **Releases**        | The closest known milestones by due date, with live merged / WIP / blocked / waiting-review counts from the visible dashboard. When `--features stats` is enabled, merged counts are reconciled from the local stats database. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
