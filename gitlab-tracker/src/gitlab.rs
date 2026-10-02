@@ -866,9 +866,13 @@ pub fn spawn_branch_commits_fetch(
     ctx: FetchContext,
     branch: String,
     since: String,
+    semaphore: Arc<Semaphore>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
+        // Same budget as the MR fetches: `git log` over weeks of history is one of
+        // the heaviest calls for the GitLab server.
+        let _permit = semaphore.acquire().await;
         let url = format!(
             "{}/api/v4/projects/{}/repository/commits?ref_name={}&since={}",
             ctx.base_url,
@@ -1121,8 +1125,10 @@ async fn fetch_single_mr(
 }
 
 const REFS_PER_PAGE: usize = 100;
-/// Upper bound on `/refs` pages fetched per MR (10 000 branches).
-const REFS_MAX_PAGES: usize = 100;
+/// Upper bound on `/refs` pages fetched per MR (500 branches). Each page makes the
+/// server list every branch containing the commit; past the cap the branch scan
+/// still finds the merge SHA on a tracked branch (`BranchPresence`).
+const REFS_MAX_PAGES: usize = 5;
 
 /// Outcome of a `/refs` lookup for one commit.
 enum RefsLookup {
@@ -1177,11 +1183,14 @@ async fn branches_containing(
         let full_page = refs.len() == REFS_PER_PAGE;
         collect_tracked_refs(refs, &ctx.branches, &mut found);
         if !full_page || found.len() == ctx.branches.len() {
-            break;
+            tracing::debug!(commit_sha, found = ?found, "Branch detection via /refs");
+            return RefsLookup::Found(found);
         }
     }
-    tracing::debug!(commit_sha, found = ?found, "Branch detection via /refs");
-    RefsLookup::Found(found)
+    // Cap reached with a tracked branch still unseen: the list is incomplete, so it
+    // says nothing about that branch — keep what was known (like a failed call).
+    tracing::warn!(commit_sha, "Branch detection stopped at the /refs page cap");
+    RefsLookup::Failed(found)
 }
 
 /// Adds every ref from `refs` that is one of the tracked `branches` to `found`.

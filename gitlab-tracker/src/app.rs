@@ -1110,6 +1110,14 @@ impl App {
             && self.pending_refresh_fetches.is_empty()
     }
 
+    /// GitLab fetches or branch scans still in flight: a new refresh would only
+    /// queue the same requests again on a server that is already slow to answer.
+    pub fn refresh_in_flight(&self) -> bool {
+        !self.pending_initial_fetches.is_empty()
+            || !self.pending_refresh_fetches.is_empty()
+            || self.pending_branch_scans > 0
+    }
+
     /// Starts timing the refresh cycle just spawned (`kind`: "auto" or "manual").
     /// `complete_fetch` logs its duration once the last of its MRs is back, so a
     /// real cycle can be measured from the log (`RUST_LOG=info`).
@@ -1474,7 +1482,11 @@ impl App {
     /// by SHA (any state: an open MR's commits can be cherry-picked early), from the
     /// oldest such MR's creation on, at most [`BRANCH_SCAN_LOOKBACK_DAYS`] back.
     /// Branches with no such MR are skipped (no API call) and their index dropped.
-    pub fn spawn_branch_scans(&mut self, tx: &UnboundedSender<AppEvent>) {
+    pub fn spawn_branch_scans(
+        &mut self,
+        semaphore: &Arc<Semaphore>,
+        tx: &UnboundedSender<AppEvent>,
+    ) {
         if self.read_only {
             return;
         }
@@ -1494,6 +1506,7 @@ impl App {
                         self.fetch_context(),
                         branch,
                         oldest.max(floor).to_rfc3339(),
+                        semaphore.clone(),
                         tx.clone(),
                     );
                     self.pending_branch_scans += 1;
@@ -1603,8 +1616,13 @@ impl App {
 
     /// The startup load or a refresh cycle just finished: scan for cherry-picks and,
     /// after the startup load, summarise what changed while the app was closed.
-    fn on_fetches_settled(&mut self, initial_sync: bool, tx: &UnboundedSender<AppEvent>) {
-        self.spawn_branch_scans(tx);
+    fn on_fetches_settled(
+        &mut self,
+        initial_sync: bool,
+        semaphore: &Arc<Semaphore>,
+        tx: &UnboundedSender<AppEvent>,
+    ) {
+        self.spawn_branch_scans(semaphore, tx);
         if initial_sync {
             let baseline = std::mem::take(&mut self.startup_baseline);
             if let Some(digest) = session_digest(&baseline, &self.mrs) {
@@ -1651,6 +1669,11 @@ impl App {
 
         // Timer elapsed — trigger a full refresh of all MRs.
         self.time_left = self.refresh_interval_secs;
+        if self.refresh_in_flight() {
+            // A slow server must not get a second cycle stacked on the first one.
+            tracing::warn!("Previous refresh still running — skipping this cycle");
+            return false;
+        }
         self.time_entries.clear();
         let ctx = self.fetch_context();
 
@@ -1969,7 +1992,7 @@ impl App {
                 }
                 self.sync_linked_ticket(&mr_id, was_updated, completion.from_refresh_cycle, tx);
                 if fetches_settled {
-                    self.on_fetches_settled(completion.initial_sync_just_completed, tx);
+                    self.on_fetches_settled(completion.initial_sync_just_completed, &semaphore, tx);
                 }
                 // Sorting is deferred to the end of the event drain (see
                 // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
@@ -1992,7 +2015,7 @@ impl App {
                 }
                 self.release_added_branches();
                 if self.fetches_just_settled(completion) {
-                    self.on_fetches_settled(completion.initial_sync_just_completed, tx);
+                    self.on_fetches_settled(completion.initial_sync_just_completed, &semaphore, tx);
                 }
                 // Not persisted: errors are not saved to disk (see `persists_state`).
                 needs_persist
@@ -2899,6 +2922,20 @@ mod tests {
         pane.down(3);
         pane.reset();
         assert_eq!(pane.offset, 0);
+    }
+
+    #[test]
+    fn no_refresh_cycle_while_the_previous_one_runs() {
+        let mut app = test_app();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        app.pending_branch_scans = 1;
+        assert!(app.refresh_in_flight());
+        app.time_left = 0;
+        app.on_tick(&Arc::new(Semaphore::new(1)), &tx);
+        assert!(app.refresh_cycle.is_none(), "cycle skipped");
+        assert_eq!(app.time_left, app.refresh_interval_secs, "re-armed");
+        app.pending_branch_scans = 0;
+        assert!(!app.refresh_in_flight());
     }
 
     #[test]

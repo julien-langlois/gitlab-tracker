@@ -615,6 +615,10 @@ pub async fn handle_key_event(
                     if app.read_only {
                         return false; // demo: only the countdown restarts
                     }
+                    if app.refresh_in_flight() {
+                        app.flash("Refresh already running — wait for it to finish", false);
+                        return false;
+                    }
                     app.time_entries.clear();
                     let ctx = app.fetch_context();
 

@@ -501,7 +501,7 @@ async fn run_checklist(
             .iter()
             .any(|mr| mr.status == models::MrStatus::Loading);
         if !loading && !scans_spawned {
-            app.spawn_branch_scans(&tx);
+            app.spawn_branch_scans(&api_semaphore, &tx);
             scans_spawned = true;
         }
         if scans_spawned && app.pending_branch_scans == 0 {

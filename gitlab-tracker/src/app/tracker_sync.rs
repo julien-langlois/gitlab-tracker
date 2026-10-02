@@ -13,6 +13,10 @@ pub enum TimeLogState {
     Failed(String),
 }
 
+/// Tracker requests in flight at once: a refresh cycle fetches every linked ticket,
+/// which must not hit the tracker as one burst.
+static TRACKER_PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(3);
+
 /// Fetches a tracker ticket in the background and emits `TrackerTicketLoaded`.
 ///
 /// On failure nothing is sent: the MR keeps its cached ticket (a network blip or
@@ -25,6 +29,7 @@ pub fn spawn_ticket_fetch(
 ) {
     let tx = tx.clone();
     tokio::spawn(async move {
+        let _permit = TRACKER_PERMITS.acquire().await;
         match provider.fetch_ticket(&ticket_id).await {
             Ok(ticket) => {
                 let _ = tx.send(AppEvent::TrackerTicketLoaded {
