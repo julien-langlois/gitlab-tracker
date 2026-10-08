@@ -72,6 +72,10 @@ pub struct StatusTransitionsConfig {
 pub struct RedmineConfig {
     /// Base URL of the Redmine instance, e.g. <https://redmine.example.com>.
     /// Must not have a trailing slash.
+    ///
+    /// Optional when deserialising: the `[project.tracker]` fields reach this crate
+    /// without `url` (the binary reads it itself and passes it on separately).
+    #[serde(default)]
     pub url: String,
 
     /// Regex patterns used to detect ticket IDs in the MR title and description.
@@ -136,6 +140,26 @@ impl Default for RedmineConfig {
 }
 
 impl RedmineConfig {
+    /// Builds the config from a `[project.tracker]` section: its `url` and the
+    /// provider-specific `extra` fields (everything but `provider` and `url`).
+    ///
+    /// Invalid `extra` fields are logged and replaced by their defaults rather than
+    /// failing: a typo in `status_transitions` must not disable ticket display.
+    pub fn from_tracker_section(url: &str, extra: toml::Table) -> Self {
+        let config: Self = extra.try_into().unwrap_or_else(|e| {
+            tracing::warn!(
+                error = %e,
+                "Invalid [project.tracker] settings — using defaults \
+                 (ticket_patterns and status_transitions are ignored)"
+            );
+            Self::default()
+        });
+        Self {
+            url: url.to_string(),
+            ..config
+        }
+    }
+
     /// Returns `true` when the URL is non-empty after trimming.
     /// Used to gate the integration without unwrapping an `Option<RedmineConfig>`.
     pub fn is_active(&self) -> bool {
@@ -153,5 +177,98 @@ impl RedmineConfig {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn section(toml: &str) -> RedmineConfig {
+        RedmineConfig::from_tracker_section(
+            "https://redmine.example",
+            toml::from_str(toml).unwrap(),
+        )
+    }
+
+    #[test]
+    fn tracker_section_fields_are_read_without_a_url_key() {
+        // `extra` is what is left of `[project.tracker]` once the binary has taken
+        // `provider` and `url`: it used to fail on the missing `url` and silently
+        // fall back to the defaults.
+        let config = section(
+            r##"
+            ticket_patterns = ['RM-(\d+)']
+
+            [tracker_type_colors]
+            "Bug" = { bg = "red", fg = "white" }
+
+            [priority_colors]
+            "*" = { bg = "dark_gray", fg = "white" }
+
+            [status_transitions.gitlab_state]
+            merged = "5"
+            "##,
+        );
+        assert_eq!(config.url, "https://redmine.example");
+        assert_eq!(config.ticket_patterns, [r"RM-(\d+)"]);
+        assert_eq!(config.tracker_type_colors["Bug"].bg, "red");
+        assert_eq!(config.priority_colors["*"].fg, "white");
+        assert_eq!(
+            config.status_transitions.gitlab_state.merged.as_deref(),
+            Some("5")
+        );
+        assert_eq!(config.status_transitions.gitlab_state.closed, None);
+    }
+
+    #[test]
+    fn empty_or_invalid_section_falls_back_to_the_defaults() {
+        let empty = section("");
+        assert_eq!(empty.url, "https://redmine.example");
+        assert_eq!(empty.ticket_patterns, default_patterns());
+        assert!(empty.tracker_type_colors.is_empty() && empty.priority_colors.is_empty());
+        assert!(empty.status_transitions.gitlab_state.merged.is_none());
+
+        // A wrong type invalidates the section, not the integration: the URL is kept.
+        let invalid = section("ticket_patterns = \"#(\\\\d+)\"\n");
+        assert_eq!(invalid.url, "https://redmine.example");
+        assert_eq!(invalid.ticket_patterns, default_patterns());
+        // Unknown keys are ignored (forward compatibility).
+        assert_eq!(
+            section("future_option = true\n").ticket_patterns,
+            default_patterns()
+        );
+    }
+
+    #[test]
+    fn integration_is_active_only_with_a_url() {
+        assert!(!RedmineConfig::default().is_active());
+        let blank = RedmineConfig {
+            url: "   ".into(),
+            ..RedmineConfig::default()
+        };
+        assert!(!blank.is_active());
+        assert!(section("").is_active());
+    }
+
+    #[test]
+    fn default_patterns_capture_the_ticket_number() {
+        let capture = |pattern: &str, text: &str| {
+            regex::Regex::new(pattern)
+                .unwrap()
+                .captures(text)
+                .map(|c| c[1].to_string())
+        };
+        let patterns = default_patterns();
+        assert_eq!(
+            capture(&patterns[0], "Fix login #1234").as_deref(),
+            Some("1234")
+        );
+        assert_eq!(capture(&patterns[1], "FIXES  #77").as_deref(), Some("77"));
+        assert_eq!(
+            capture(&patterns[2], "see https://redmine.example/issues/4271").as_deref(),
+            Some("4271")
+        );
+        assert_eq!(capture(&patterns[0], "no reference"), None);
     }
 }
