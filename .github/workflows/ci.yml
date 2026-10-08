@@ -32,6 +32,77 @@ jobs:
       - name: Tests
         run: cargo test --workspace --all-features
 
+  # `check` only sees --all-features: this job covers what a feature being *off*
+  # can break (the default build is what `cargo install` produces), and `core`
+  # built alone, without the `secrets` feature the other crates turn on.
+  features:
+    name: Feature Sets & Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: features
+
+      - name: Clippy (default features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Clippy (no default features)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+      - name: Clippy (stats only)
+        run: cargo clippy --workspace --all-targets --features stats -- -D warnings
+
+      - name: Clippy (redmine only)
+        run: cargo clippy --workspace --all-targets --features redmine -- -D warnings
+
+      - name: Clippy (core alone, without `secrets`)
+        run: cargo clippy -p gitlab-tracker-core --all-targets -- -D warnings
+
+      # Test counts differ without `stats` / `redmine`: run the default build's too.
+      - name: Tests (default features)
+        run: cargo test -p gitlab-tracker
+
+      - name: Docs
+        run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  # The toolchain is read from `rust-version` in Cargo.toml: one place to bump.
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read rust-version
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+
+      # --locked: the committed lockfile is the one resolved for this toolchain.
+      - name: Check (rust ${{ steps.msrv.outputs.version }})
+        run: cargo check --workspace --all-features --locked
+
   # Informational only: no threshold, the job never gates a merge on a percentage.
   coverage:
     name: Coverage
