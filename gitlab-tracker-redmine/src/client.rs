@@ -499,6 +499,46 @@ mod tests {
     }
 
     #[test]
+    fn etc_prefers_the_plugin_field_and_never_goes_negative() {
+        let issue = |estimated, spent, remaining| RedmineIssue {
+            id: 1,
+            subject: String::new(),
+            status: RedmineStatus {
+                id: 1,
+                name: "New".into(),
+            },
+            tracker: None,
+            priority: None,
+            fixed_version: None,
+            author: None,
+            assigned_to: None,
+            start_date: None,
+            done_ratio: None,
+            estimated_hours: estimated,
+            spent_hours: spent,
+            remaining_hours: remaining,
+        };
+        // Plugin field: used as is, whatever the estimate says.
+        assert_eq!(
+            compute_etc(&issue(Some(8.0), Some(1.0), Some(5.0)), 1.5),
+            Some(3.5)
+        );
+        // Vanilla Redmine: estimate − spent − new entry.
+        assert_eq!(
+            compute_etc(&issue(Some(8.0), Some(5.0), None), 1.0),
+            Some(2.0)
+        );
+        assert_eq!(
+            compute_etc(&issue(Some(8.0), Some(7.5), None), 2.0),
+            Some(0.0)
+        );
+        assert_eq!(compute_etc(&issue(None, None, Some(1.0)), 4.0), Some(0.0));
+        // Not enough to derive it: the field is left out of the payload.
+        assert_eq!(compute_etc(&issue(Some(8.0), None, None), 1.0), None);
+        assert_eq!(compute_etc(&issue(None, Some(3.0), None), 1.0), None);
+    }
+
+    #[test]
     fn ticket_id_must_be_numeric() {
         assert!(is_valid_ticket_id("1234"));
         for bad in ["", "12/../users", "1?key=x", "١٢", "12 ", "-1"] {

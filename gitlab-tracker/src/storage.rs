@@ -1389,6 +1389,40 @@ mod tests {
         );
     }
 
+    #[test]
+    fn tracker_section_keeps_provider_fields_apart_from_provider_and_url() {
+        let cfg: ProjectsConfig = toml::from_str(
+            r##"
+            [[project]]
+            gitlab_url = "https://gitlab.example"
+            project_id = "1"
+
+            [project.tracker]
+            provider = "redmine"
+            url = "https://redmine.example"
+            ticket_patterns = ['RM-(\d+)']
+
+            [project.tracker.status_transitions.gitlab_state]
+            merged = "5"
+            "##,
+        )
+        .unwrap();
+        let tracker = cfg.projects[0].tracker.as_ref().unwrap();
+        assert_eq!(tracker.provider, "redmine");
+        assert_eq!(tracker.url, "https://redmine.example");
+        // What the plugin receives: its own fields only — it must not expect `url`.
+        let mut keys: Vec<&str> = tracker.extra.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["status_transitions", "ticket_patterns"]);
+
+        // Written back flat under [project.tracker], as it was read.
+        let written = toml::to_string_pretty(&cfg).unwrap();
+        let reread: ProjectsConfig = toml::from_str(&written).unwrap();
+        let reread = reread.projects[0].tracker.as_ref().unwrap();
+        assert_eq!(reread.url, tracker.url);
+        assert_eq!(reread.extra, tracker.extra);
+    }
+
     #[tokio::test]
     async fn without_a_config_dir_loads_are_empty_and_saves_are_no_ops() {
         assert!(get_save_dir().is_none());

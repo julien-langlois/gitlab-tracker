@@ -14,8 +14,7 @@ use crate::promotion::{lead_times, PromotionLeadTime};
 /// The final, fully-computed analytics report.
 ///
 /// Serialises to JSON via `serde_json::to_string_pretty` for TUI consumption
-/// or external tooling. The `to_csv_rows` method emits one line per metric
-/// for spreadsheet import.
+/// or external tooling.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatReport {
     /// ISO 8601 timestamp when this report was generated.
@@ -162,4 +161,153 @@ fn describe_window(filter: &QueryFilter) -> String {
         parts.push(format!("branch={b}"));
     }
     parts.join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::promotion::{ArrivalKind, BranchArrival};
+
+    fn filter(window: Option<TimeWindow>) -> QueryFilter {
+        QueryFilter {
+            window,
+            ..QueryFilter::default()
+        }
+    }
+
+    fn range(from: &str, to: &str) -> Option<TimeWindow> {
+        Some(TimeWindow::Range {
+            from: from.into(),
+            to: to.into(),
+        })
+    }
+
+    fn bounds(filter: &QueryFilter) -> (DateTime<Utc>, DateTime<Utc>) {
+        match &filter.window {
+            Some(TimeWindow::Range { from, to }) => (from.parse().unwrap(), to.parse().unwrap()),
+            other => panic!("expected an explicit range, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn window_label_lists_the_window_then_the_active_filters() {
+        assert_eq!(describe_window(&filter(None)), "all time");
+        assert_eq!(
+            describe_window(&filter(Some(TimeWindow::LastDays(30)))),
+            "last 30 days"
+        );
+        let full = QueryFilter {
+            window: range("2026-01-01", "2026-02-01"),
+            project_id: Some("42".into()),
+            author: Some("alice".into()),
+            reviewer: Some("bob".into()),
+            target_branch: Some("main".into()),
+            sprint_weeks: Some(3),
+        };
+        assert_eq!(
+            describe_window(&full),
+            "2026-01-01 → 2026-02-01, project=42, author=alice, reviewer=bob, branch=main"
+        );
+    }
+
+    #[test]
+    fn baseline_is_the_period_of_equal_length_just_before_the_window() {
+        // Explicit range: the same duration, ending where the window starts.
+        let current = QueryFilter {
+            project_id: Some("42".into()),
+            author: Some("alice".into()),
+            sprint_weeks: Some(3),
+            ..filter(range("2026-03-01T00:00:00Z", "2026-03-11T00:00:00Z"))
+        };
+        let baseline = build_baseline_filter(&current).unwrap();
+        let (from, to) = bounds(&baseline);
+        assert_eq!(from.to_rfc3339(), "2026-02-19T00:00:00+00:00");
+        assert_eq!(to.to_rfc3339(), "2026-03-01T00:00:00+00:00");
+        // Compared like for like: every other filter is carried over.
+        assert_eq!(baseline.project_id.as_deref(), Some("42"));
+        assert_eq!(baseline.author.as_deref(), Some("alice"));
+        assert_eq!(baseline.sprint_weeks, Some(3));
+
+        // Rolling window: [now − 2n, now − n].
+        let rolling = build_baseline_filter(&filter(Some(TimeWindow::LastDays(30)))).unwrap();
+        let (from, to) = bounds(&rolling);
+        assert_eq!((to - from).num_days(), 30);
+        let age = Utc::now() - to;
+        assert!((age - Duration::days(30)).num_seconds().abs() < 60, "{age}");
+    }
+
+    #[test]
+    fn no_baseline_without_a_usable_window() {
+        // "All time" has nothing before it.
+        assert!(build_baseline_filter(&filter(None)).is_none());
+        // Empty, reversed or unparseable ranges.
+        let same = "2026-03-01T00:00:00Z";
+        assert!(build_baseline_filter(&filter(range(same, same))).is_none());
+        assert!(build_baseline_filter(&filter(range("2026-03-11T00:00:00Z", same))).is_none());
+        assert!(build_baseline_filter(&filter(range("yesterday", same))).is_none());
+    }
+
+    #[tokio::test]
+    async fn empty_store_yields_an_empty_report_not_an_error() {
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        for window in [None, Some(TimeWindow::LastDays(30))] {
+            let query = QueryFilter {
+                project_id: Some("42".into()),
+                ..filter(window)
+            };
+            let report = StatReport::load(&db, &query).await.unwrap();
+            assert_eq!(report.aggregated.total_mrs, 0);
+            assert!(report.correlations.is_empty() && report.promotions.is_empty());
+            assert!(report.window_label.ends_with("project=42"));
+            assert!(report.generated_at.parse::<DateTime<Utc>>().is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn promotions_are_scoped_to_the_project_and_the_window() {
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        let arrival = |project: &str, mr: &str, days_ago: i64| BranchArrival {
+            project_id: project.into(),
+            mr_id: mr.into(),
+            branch: "production".into(),
+            arrived_at: Utc::now() - Duration::days(days_ago),
+            how: ArrivalKind::CherryPick,
+            merged_at: Some((Utc::now() - Duration::days(days_ago + 2)).to_rfc3339()),
+        };
+        for item in [
+            arrival("42", "1", 5),
+            arrival("42", "2", 60),
+            arrival("7", "3", 5),
+        ] {
+            assert!(db.record_branch_arrival(&item).await.unwrap());
+        }
+        let load = |project: Option<&str>, window| {
+            let query = QueryFilter {
+                project_id: project.map(str::to_string),
+                ..filter(window)
+            };
+            let db = &db;
+            async move { StatReport::load(db, &query).await.unwrap().promotions }
+        };
+
+        let all_time = load(Some("42"), None).await;
+        assert_eq!(all_time.len(), 1);
+        assert_eq!(
+            (all_time[0].branch.as_str(), all_time[0].arrivals),
+            ("production", 2)
+        );
+        assert_eq!(all_time[0].copied_share, 1.0);
+        // Merged two days before reaching production.
+        let median = all_time[0].median_hours.unwrap();
+        assert!((median - 48.0).abs() < 0.1, "{median}");
+
+        // The 60-day-old arrival is outside a 30-day window.
+        assert_eq!(
+            load(Some("42"), Some(TimeWindow::LastDays(30))).await[0].arrivals,
+            1
+        );
+        // Arrivals are per project: none is shown without one.
+        assert!(load(None, None).await.is_empty());
+        assert!(load(Some("404"), None).await.is_empty());
+    }
 }

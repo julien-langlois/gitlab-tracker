@@ -77,3 +77,25 @@ pub fn resolve_secret(source: &SecretSource<'_>) -> Option<Zeroizing<String>> {
     }
     Some(token)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn environment_variable_wins_and_is_trimmed() {
+        // Unique name: tests share the process environment. Only the environment
+        // branch is tested — the next ones need the OS keyring and a terminal.
+        const VAR: &str = "GT_SECRETS_TEST_TOKEN";
+        std::env::set_var(VAR, "  glpat-123\n");
+        let token = resolve_secret(&SecretSource {
+            env_var: VAR,
+            keyring_service: "gitlab-tracker-test",
+            keyring_account: "never-read",
+            label: "Test token",
+            prompt_hint: None,
+        });
+        std::env::remove_var(VAR);
+        assert_eq!(token.as_deref().map(String::as_str), Some("glpat-123"));
+    }
+}
