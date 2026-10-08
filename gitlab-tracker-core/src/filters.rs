@@ -62,6 +62,20 @@ impl FilterDef {
 ///
 /// Avoids importing `TrackedMr` (which lives in `gitlab-tracker` and depends on
 /// `ratatui`) into `core`. The orchestrator constructs this on each filter call.
+///
+/// The struct is `#[non_exhaustive]` so that a new field is not a breaking change:
+/// outside this crate, build it with [`MrSnapshot::new`] and assign the fields you
+/// need (plugin tests typically do this).
+///
+/// ```
+/// use gitlab_tracker_core::{GitlabMrState, MergeabilityStatus, MrSnapshot};
+///
+/// let mut mr = MrSnapshot::new(GitlabMrState::Opened, MergeabilityStatus::Mergeable, "main");
+/// mr.flagged = true;
+/// mr.assignee = Some("alice");
+/// assert!(mr.reviewers.is_empty());
+/// ```
+#[non_exhaustive]
 pub struct MrSnapshot<'a> {
     pub flagged: bool,
     pub state: crate::GitlabMrState,
@@ -87,6 +101,33 @@ pub struct MrSnapshot<'a> {
     pub absent_branches: &'a [&'a str],
     /// Usernames of the MR's current approvers.
     pub approved_by: &'a [String],
+}
+
+impl<'a> MrSnapshot<'a> {
+    /// Builds a snapshot from the fields that have no neutral value; every other
+    /// field starts unset (`false`, `0`, `None` or empty) and is assigned afterwards.
+    pub fn new(
+        state: crate::GitlabMrState,
+        mergeability: crate::MergeabilityStatus,
+        target_branch: &'a str,
+    ) -> Self {
+        Self {
+            flagged: false,
+            state,
+            mergeability,
+            user_notes_count: 0,
+            milestone: None,
+            assignee: None,
+            linked_ticket: None,
+            pipeline_status: None,
+            reviewers: &[],
+            gitlab_username: None,
+            diff_difficulty: None,
+            target_branch,
+            absent_branches: &[],
+            approved_by: &[],
+        }
+    }
 }
 
 // Global registry — every `inventory::submit!(FilterDef { … })` anywhere in the

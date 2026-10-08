@@ -811,22 +811,18 @@ impl App {
             })
             .map(String::as_str)
             .collect();
-        let snapshot = MrSnapshot {
-            flagged: mr.flagged,
-            state: mr.state,
-            mergeability: mr.mergeability,
-            user_notes_count: mr.user_notes_count,
-            milestone: mr.milestone.as_deref(),
-            assignee: mr.assignee.as_deref(),
-            linked_ticket: mr.linked_ticket.as_ref(),
-            pipeline_status: mr.pipelines.first().map(|p| p.status),
-            reviewers: &mr.reviewers,
-            gitlab_username: self.config.gitlab_username.as_deref(),
-            diff_difficulty,
-            target_branch: &mr.target_branch,
-            absent_branches: &absent_branches,
-            approved_by: &mr.approved_by,
-        };
+        let mut snapshot = MrSnapshot::new(mr.state, mr.mergeability, &mr.target_branch);
+        snapshot.flagged = mr.flagged;
+        snapshot.user_notes_count = mr.user_notes_count;
+        snapshot.milestone = mr.milestone.as_deref();
+        snapshot.assignee = mr.assignee.as_deref();
+        snapshot.linked_ticket = mr.linked_ticket.as_ref();
+        snapshot.pipeline_status = mr.pipelines.first().map(|p| p.status);
+        snapshot.reviewers = &mr.reviewers;
+        snapshot.gitlab_username = self.config.gitlab_username.as_deref();
+        snapshot.diff_difficulty = diff_difficulty;
+        snapshot.absent_branches = &absent_branches;
+        snapshot.approved_by = &mr.approved_by;
         (def.apply)(snapshot, &self.active_filter.query)
     }
 

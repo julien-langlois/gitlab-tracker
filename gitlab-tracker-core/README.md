@@ -173,6 +173,10 @@ lists the tracked branches the MR is known to be missing from (no merge commit a
 no cherry-pick there); `approved_by` holds the usernames of its current approvers. An entry whose
 `requires` is not met at runtime is hidden from the picker.
 
+`MrSnapshot` is `#[non_exhaustive]`: new fields are added in minor releases. To build
+one outside this crate (e.g. in a plugin's tests), use
+`MrSnapshot::new(state, mergeability, target_branch)` and assign the other fields.
+
 ---
 
 ### `ColumnDef` — table column extension point
