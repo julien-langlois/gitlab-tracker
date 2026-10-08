@@ -151,3 +151,86 @@ fn size_bucket_line(bucket: &MrSizeBucketStats) -> Line<'static> {
         ),
     ])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{demo_report, line_text};
+    use super::*;
+
+    #[test]
+    fn confidence_levels_and_ratio_scores() {
+        assert_eq!(confidence_level(1.0), ("HIGH", Color::Green));
+        assert_eq!(confidence_level(0.75), ("HIGH", Color::Green));
+        assert_eq!(confidence_level(0.74), ("MED", Color::Yellow));
+        assert_eq!(confidence_level(0.45), ("MED", Color::Yellow));
+        assert_eq!(confidence_level(0.44), ("LOW", Color::Red));
+
+        assert_eq!(ratio_score(5, 10), 0.5);
+        assert_eq!(ratio_score(50, 10), 1.0, "capped");
+        assert_eq!(ratio_score(0, 10), 0.0);
+        assert_eq!(ratio_score(3, 0), 1.0, "no target: always met");
+    }
+
+    #[tokio::test]
+    async fn overall_confidence_weighs_sample_cycle_time_and_metadata() {
+        let mut report = demo_report().await;
+        let set = |report: &mut StatReport, mrs: usize, merged: usize, coverage: f64| {
+            let agg = &mut report.aggregated;
+            agg.total_mrs = mrs;
+            agg.cycle_time_sample_size = merged;
+            agg.pipeline_data_coverage = coverage;
+            agg.reviewer_coverage = coverage;
+            agg.milestone_coverage = coverage;
+        };
+        set(&mut report, 20, 10, 1.0);
+        assert!((confidence_score(&report) - 1.0).abs() < 1e-9);
+        set(&mut report, 0, 0, 0.0);
+        assert_eq!(confidence_score(&report), 0.0);
+        // Half the sample (40 %), full cycle-time sample (35 %), no metadata (25 %).
+        set(&mut report, 10, 10, 0.0);
+        assert!((confidence_score(&report) - 0.55).abs() < 1e-9);
+
+        let rows: Vec<String> = data_confidence_lines(&report)
+            .iter()
+            .map(line_text)
+            .collect();
+        assert_eq!(rows.len(), 5);
+        assert!(
+            rows[0].contains("Overall") && rows[0].contains("MED"),
+            "{}",
+            rows[0]
+        );
+        assert!(rows[0].contains("10 MRs in sample"));
+        assert!(rows[1].contains("HIGH") && rows[1].contains("10 merged MRs"));
+        assert!(rows[2].contains("LOW") && rows[2].contains("0% coverage"));
+    }
+
+    #[test]
+    fn size_bucket_rows_show_range_counts_and_median() {
+        let bucket = |label: &str, max, median| MrSizeBucketStats {
+            label: label.into(),
+            min_changed_lines: 100,
+            max_changed_lines: max,
+            total_mrs: 7,
+            merged_mrs: 5,
+            cycle_time_median_hours: median,
+        };
+        let closed = size_bucket_line(&bucket("Medium", Some(499), Some(48.0)));
+        let text = line_text(&closed);
+        assert!(
+            text.contains("100-499 lines") && text.contains("P50 2.0d"),
+            "{text}"
+        );
+        assert!(text.contains("total=7") && text.contains("merged=5"));
+        assert_eq!(closed.spans[0].style.fg, Some(Color::Cyan));
+
+        // Open-ended last bucket, without any merged MR to time.
+        let open = size_bucket_line(&bucket("Huge", None, None));
+        let text = line_text(&open);
+        assert!(
+            text.contains("100+ lines") && text.contains("P50 n/a"),
+            "{text}"
+        );
+        assert_eq!(open.spans[0].style.fg, Some(Color::Red));
+    }
+}

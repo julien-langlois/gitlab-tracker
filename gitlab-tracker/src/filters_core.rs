@@ -311,3 +311,230 @@ inventory::submit!(FilterDef {
             .any(|b| b.eq_ignore_ascii_case(query))
     },
 });
+
+#[cfg(test)]
+mod tests {
+    use gitlab_tracker_core::{
+        collect_all_filters, FilterDef, GitlabMrState, LinkedTicket, MergeabilityStatus,
+        MrSnapshot, PipelineState, Requirement, LINKED_TICKET_SCHEMA_VERSION,
+    };
+
+    fn filter(id: &str) -> &'static FilterDef {
+        collect_all_filters()
+            .into_iter()
+            .find(|f| f.id == id)
+            .unwrap_or_else(|| panic!("filter `{id}` is not registered"))
+    }
+
+    fn snapshot<'a>(state: GitlabMrState, mergeability: MergeabilityStatus) -> MrSnapshot<'a> {
+        MrSnapshot::new(state, mergeability, "main")
+    }
+
+    fn open<'a>() -> MrSnapshot<'a> {
+        snapshot(GitlabMrState::Opened, MergeabilityStatus::Mergeable)
+    }
+
+    #[test]
+    fn registry_is_sorted_with_unique_ids() {
+        let filters = collect_all_filters();
+        assert_eq!(filters[0].id, "all");
+        assert!(filters.windows(2).all(|w| w[0].priority <= w[1].priority));
+        let mut ids: Vec<&str> = filters.iter().map(|f| f.id).collect();
+        ids.sort_unstable();
+        let count = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), count, "duplicate filter id");
+
+        // Parametric filters show a short prefix next to the typed value.
+        for id in [
+            "milestone",
+            "assignee",
+            "target_branch",
+            "absent_from_branch",
+        ] {
+            let def = filter(id);
+            assert!(def.needs_text_input && def.active_label.is_some(), "{id}");
+        }
+        // The "me" filters are hidden until a GitLab username is configured.
+        for id in ["assigned_to_me", "reviewer_me"] {
+            assert_eq!(
+                filter(id).requires,
+                Some(Requirement::GitlabUsername),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn state_and_mergeability_filters_match_their_variant_only() {
+        use GitlabMrState::{Closed, Merged, Opened};
+        use MergeabilityStatus as M;
+
+        assert!((filter("all").apply)(snapshot(Closed, M::Conflict), ""));
+        for (id, state) in [
+            ("state_opened", Opened),
+            ("state_merged", Merged),
+            ("state_closed", Closed),
+        ] {
+            for candidate in [Opened, Merged, Closed] {
+                let matched = (filter(id).apply)(snapshot(candidate, M::Mergeable), "");
+                assert_eq!(matched, candidate == state, "{id} on {candidate:?}");
+            }
+        }
+        let by_mergeability = [
+            ("mergeability_mergeable", M::Mergeable),
+            ("mergeability_conflict", M::Conflict),
+            ("mergeability_rebase", M::NeedsRebase),
+            ("mergeability_not_approved", M::NotApproved),
+            ("mergeability_requested_changes", M::RequestedChanges),
+            ("mergeability_draft", M::Draft),
+            ("mergeability_discussions", M::DiscussionsNotResolved),
+        ];
+        for (id, wanted) in by_mergeability {
+            for (_, candidate) in by_mergeability {
+                let matched = (filter(id).apply)(snapshot(Opened, candidate), "");
+                assert_eq!(matched, candidate == wanted, "{id} on {candidate:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn flag_threads_and_pipeline_filters() {
+        let mut mr = open();
+        assert!(!(filter("flagged").apply)(open(), ""));
+        mr.flagged = true;
+        assert!((filter("flagged").apply)(mr, ""));
+
+        // `user_notes_count` holds the unresolved review threads.
+        let mut mr = open();
+        assert!(!(filter("has_notes").apply)(open(), ""));
+        mr.user_notes_count = 2;
+        assert!((filter("has_notes").apply)(mr, ""));
+
+        for (status, failing) in [
+            (None, false),
+            (Some(PipelineState::Success), false),
+            (Some(PipelineState::Running), false),
+            (Some(PipelineState::Failed), true),
+        ] {
+            let mut mr = open();
+            mr.pipeline_status = status;
+            assert_eq!((filter("ci_failing").apply)(mr, ""), failing, "{status:?}");
+        }
+    }
+
+    #[test]
+    fn me_filters_need_the_username_and_match_the_at_handle() {
+        let reviewers = ["Alice (@alice)".to_string(), "Bob (@bob)".to_string()];
+        let approved = ["bob".to_string()];
+        let assigned = filter("assigned_to_me");
+        let to_review = filter("reviewer_me");
+
+        let mr = |username: Option<&'static str>| {
+            let mut mr = open();
+            mr.assignee = Some("Alice (@alice)");
+            mr.reviewers = &reviewers;
+            mr.approved_by = &approved;
+            mr.gitlab_username = username;
+            mr
+        };
+        // No username configured: the predicates match nothing.
+        assert!(!(assigned.apply)(mr(None), ""));
+        assert!(!(to_review.apply)(mr(None), ""));
+
+        assert!((assigned.apply)(mr(Some("alice")), ""));
+        assert!(!(assigned.apply)(mr(Some("bob")), ""));
+        // The display name alone is not the handle.
+        assert!(!(assigned.apply)(mr(Some("Alice")), ""));
+
+        // alice still has to review; bob already approved; carol is not a reviewer.
+        assert!((to_review.apply)(mr(Some("alice")), ""));
+        assert!(!(to_review.apply)(mr(Some("bob")), ""));
+        assert!(!(to_review.apply)(mr(Some("carol")), ""));
+        // Drafts and merged MRs are not waiting for a review.
+        for (state, mergeability) in [
+            (GitlabMrState::Opened, MergeabilityStatus::Draft),
+            (GitlabMrState::Merged, MergeabilityStatus::Mergeable),
+        ] {
+            let mut mr = snapshot(state, mergeability);
+            mr.reviewers = &reviewers;
+            mr.gitlab_username = Some("alice");
+            assert!(!(to_review.apply)(mr, ""), "{state:?} / {mergeability:?}");
+        }
+    }
+
+    #[test]
+    fn effort_filters_follow_the_inspector_bands() {
+        let matches = |id: &str, score: Option<f64>| {
+            let mut mr = open();
+            mr.diff_difficulty = score;
+            (filter(id).apply)(mr, "")
+        };
+        assert!(matches("effort_easy", Some(0.0)) && matches("effort_easy", Some(0.32)));
+        assert!(!matches("effort_easy", Some(0.33)));
+        assert!(!matches("effort_complex", Some(0.65)));
+        assert!(matches("effort_complex", Some(0.66)) && matches("effort_complex", Some(1.0)));
+        // Medium is in neither; an MR without diff stats is excluded from both.
+        assert!(!matches("effort_easy", Some(0.5)) && !matches("effort_complex", Some(0.5)));
+        assert!(!matches("effort_easy", None) && !matches("effort_complex", None));
+    }
+
+    #[test]
+    fn text_filters_are_case_insensitive_and_pass_everything_when_empty() {
+        let ticket = LinkedTicket {
+            schema_version: LINKED_TICKET_SCHEMA_VERSION,
+            id: "12".into(),
+            subject: "Subject".into(),
+            status: "New".into(),
+            url: "https://tracker.example/12".into(),
+            author: None,
+            assignee: Some("Thomas Dubosc".into()),
+            time_estimate: None,
+            time_spent: None,
+            time_remaining: None,
+            tracker_type: None,
+            priority: None,
+            version: None,
+            start_date: None,
+            done_ratio: None,
+        };
+        let absent = ["production", "staging"];
+        let mr = || {
+            let mut mr = MrSnapshot::new(
+                GitlabMrState::Opened,
+                MergeabilityStatus::Mergeable,
+                "release/1.x",
+            );
+            mr.milestone = Some("Sprint 12");
+            mr.assignee = Some("Alice (@alice)");
+            mr.linked_ticket = Some(&ticket);
+            mr.absent_branches = &absent;
+            mr
+        };
+
+        for id in ["milestone", "assignee", "target_branch"] {
+            assert!((filter(id).apply)(open(), ""), "{id}: empty query");
+        }
+        assert!((filter("milestone").apply)(mr(), "sprint"));
+        assert!(!(filter("milestone").apply)(mr(), "sprint 13"));
+        assert!(
+            !(filter("milestone").apply)(open(), "sprint"),
+            "no milestone"
+        );
+
+        assert!((filter("target_branch").apply)(mr(), "RELEASE/"));
+        assert!(!(filter("target_branch").apply)(mr(), "main"));
+
+        // The assignee filter also searches the linked ticket's assignee.
+        assert!((filter("assignee").apply)(mr(), "ALICE"));
+        assert!((filter("assignee").apply)(mr(), "dubosc"));
+        assert!(!(filter("assignee").apply)(mr(), "carol"));
+
+        // Exact branch name (trimmed, any case) — and nothing for an empty query.
+        let absent_from = filter("absent_from_branch");
+        assert!((absent_from.apply)(mr(), " Production "));
+        assert!(!(absent_from.apply)(mr(), "prod"));
+        assert!(!(absent_from.apply)(mr(), "main"));
+        assert!(!(absent_from.apply)(mr(), ""));
+    }
+}

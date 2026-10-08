@@ -909,9 +909,24 @@ pub fn get_or_prompt_token(gitlab_url: &str) -> Option<Zeroizing<String>> {
     })
 }
 
+#[cfg(not(test))]
 pub fn get_save_dir() -> Option<PathBuf> {
     let project_dirs = directories::ProjectDirs::from("com", "gitlab-tracker", "gitlab-tracker")?;
     Some(project_dirs.config_dir().to_path_buf())
+}
+
+/// Under test the real config directory is never used: a test gets the directory
+/// it installed with `tests::TempConfigDir` (per thread), and none otherwise — so
+/// every load starts empty and every save is a no-op.
+#[cfg(test)]
+pub fn get_save_dir() -> Option<PathBuf> {
+    TEST_SAVE_DIR.with(|dir| dir.borrow().clone())
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_SAVE_DIR: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// Loads `AppConfig` using Figment with the following priority chain (highest → lowest):
@@ -1309,5 +1324,319 @@ mod tests {
             "{broken"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Points `get_save_dir` at a fresh temporary directory for the current test
+    /// (current thread — `#[tokio::test]` runs on it), removed on drop.
+    struct TempConfigDir(PathBuf);
+
+    impl TempConfigDir {
+        fn new(name: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("gt-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            TEST_SAVE_DIR.with(|d| *d.borrow_mut() = Some(dir.clone()));
+            Self(dir)
+        }
+
+        fn path(&self, file: &str) -> PathBuf {
+            self.0.join(file)
+        }
+    }
+
+    impl Drop for TempConfigDir {
+        fn drop(&mut self) {
+            TEST_SAVE_DIR.with(|d| *d.borrow_mut() = None);
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const URL: &str = "https://gitlab.example";
+
+    fn project(url: &str, id: &str, active: bool) -> ProjectEntry {
+        ProjectEntry {
+            gitlab_url: url.into(),
+            project_id: id.into(),
+            active,
+            ..Default::default()
+        }
+    }
+
+    async fn write_projects(entries: Vec<ProjectEntry>) {
+        save_projects_toml(&ProjectsConfig { projects: entries }).await;
+    }
+
+    #[test]
+    fn state_file_and_keyring_account_are_scoped_per_project() {
+        let name = tracker_state_file_name(URL, "42");
+        assert!(name.starts_with("tracker_") && name.ends_with(".json"));
+        assert_eq!(name.len(), "tracker_.json".len() + 8);
+        // A trailing slash is the same instance; another id or instance is not.
+        assert_eq!(
+            name,
+            tracker_state_file_name("https://gitlab.example/", "42")
+        );
+        assert_ne!(name, tracker_state_file_name(URL, "43"));
+        assert_ne!(name, tracker_state_file_name("https://other.example", "42"));
+        // "<url>|<id>" is hashed: moving a character across the separator changes it.
+        assert_ne!(
+            tracker_state_file_name("https://g/1", "2"),
+            tracker_state_file_name("https://g/", "12")
+        );
+        assert_eq!(
+            account_for("https://gitlab.example/"),
+            "gitlab_token::https://gitlab.example"
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_config_dir_loads_are_empty_and_saves_are_no_ops() {
+        assert!(get_save_dir().is_none());
+        assert!(load_projects_toml().await.projects.is_empty());
+        save_branches_async(&["main".into()], URL, "1").await;
+        let (mrs, branches, known, discovery, dismissed) = load_state_async(URL, "1").await;
+        assert!(mrs.is_empty() && branches.is_empty() && known.is_empty());
+        assert!(discovery.is_none() && dismissed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn project_settings_are_saved_into_the_current_entry_only() {
+        let dir = TempConfigDir::new("project-settings");
+        write_projects(vec![project(URL, "1", true), project(URL, "2", false)]).await;
+
+        save_branches_async(&["main".into(), "prod".into()], URL, "2").await;
+        save_hide_merged_async(true, URL, "2").await;
+        let mut cols = crate::config::VisibleColumns::default();
+        cols.set_visible("milestone", true);
+        save_visible_columns_async(&cols, URL, "2").await;
+        // Not in projects.toml (e.g. selected through env vars): nothing is written.
+        save_hide_merged_async(true, "https://env-only.example", "9").await;
+
+        let cfg = load_projects_toml().await;
+        assert_eq!(cfg.projects.len(), 2);
+        let (first, second) = (&cfg.projects[0], &cfg.projects[1]);
+        assert_eq!(first.tracked_branches, None);
+        assert_eq!(first.hide_merged, None);
+        assert_eq!(
+            second.tracked_branches.as_deref(),
+            Some(&["main".to_string(), "prod".to_string()][..])
+        );
+        assert_eq!(second.hide_merged, Some(true));
+        assert!(second.visible_columns.is_some());
+
+        // An empty branch list removes the key instead of storing `[]`.
+        save_branches_async(&[], URL, "2").await;
+        assert_eq!(
+            load_projects_toml().await.projects[1].tracked_branches,
+            None
+        );
+
+        set_active_project_async(URL, "2").await;
+        let active: Vec<bool> = load_projects_toml()
+            .await
+            .projects
+            .iter()
+            .map(|p| p.active)
+            .collect();
+        assert_eq!(active, [false, true]);
+        assert!(!dir.path("projects.toml.tmp").exists());
+    }
+
+    #[tokio::test]
+    async fn settings_table_is_validated_before_replacing_the_entry() {
+        let _dir = TempConfigDir::new("settings-table");
+        write_projects(vec![project(URL, "1", true)]).await;
+
+        let valid: toml::Table = toml::from_str(
+            "gitlab_url = \"https://gitlab.example\"\nproject_id = \"1\"\n\
+             activity_stale_days = 30\ngitlab_username = \"jdoe\"\n",
+        )
+        .unwrap();
+        let saved = save_project_settings_async(&valid, URL, "1").await.unwrap();
+        assert_eq!(saved.activity_stale_days, Some(30));
+        let entry = load_projects_toml().await.projects.remove(0);
+        assert_eq!(entry.activity_stale_days, Some(30));
+        assert_eq!(entry.gitlab_username.as_deref(), Some("jdoe"));
+
+        // A wrong type is rejected and leaves the file as it was.
+        let invalid: toml::Table = toml::from_str(
+            "gitlab_url = \"u\"\nproject_id = \"1\"\nactivity_stale_days = \"soon\"\n",
+        )
+        .unwrap();
+        assert!(save_project_settings_async(&invalid, URL, "1")
+            .await
+            .is_none());
+        assert_eq!(
+            load_projects_toml().await.projects[0].activity_stale_days,
+            Some(30)
+        );
+        // Valid table, but the project is not listed: not saved.
+        assert!(save_project_settings_async(&valid, URL, "404")
+            .await
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn tracker_state_round_trips() {
+        let dir = TempConfigDir::new("state-round-trip");
+        let mut merged = TrackedMr::placeholder("7".into(), "Fix login".into(), None);
+        merged.status = MrStatus::MergedIn(["main".to_string()].into());
+        merged.flagged = true;
+        let loading = TrackedMr::placeholder("8".into(), "Add stats".into(), Some("v1".into()));
+        let known = HashMap::from([("main".to_string(), HashSet::from(["7".to_string()]))]);
+        let dismissed = HashSet::from(["3".to_string()]);
+
+        save_state_async(
+            &[merged, loading],
+            &known,
+            Some("2026-01-02"),
+            &dismissed,
+            URL,
+            "1",
+        )
+        .await;
+        assert!(dir.path(&tracker_state_file_name(URL, "1")).exists());
+
+        let (mrs, branches, loaded_known, discovery, loaded_dismissed) =
+            load_state_async(URL, "1").await;
+        assert_eq!(mrs.len(), 2);
+        assert_eq!(
+            (mrs[0].id.as_str(), mrs[0].data.title.as_str()),
+            ("7", "Fix login")
+        );
+        assert!(mrs[0].flagged && mrs[0].found_branches.contains("main"));
+        // Only a `MergedIn` status carries branches.
+        assert!(mrs[1].found_branches.is_empty());
+        assert_eq!(mrs[1].data.milestone.as_deref(), Some("v1"));
+        assert!(branches.is_empty(), "branches live in projects.toml");
+        assert_eq!(loaded_known, known);
+        assert_eq!(discovery.as_deref(), Some("2026-01-02"));
+        assert_eq!(loaded_dismissed, dismissed);
+        // Another project has its own (absent) file.
+        assert!(load_state_async(URL, "2").await.0.is_empty());
+    }
+
+    #[tokio::test]
+    async fn legacy_state_file_is_renamed_and_its_branches_backfilled() {
+        let dir = TempConfigDir::new("state-migration");
+        write_projects(vec![project(URL, "1", true), project(URL, "2", false)]).await;
+        let legacy = r#"{"mrs": [], "branches": ["main", "staging"]}"#;
+        std::fs::write(dir.path("tracker_state.json"), legacy).unwrap();
+
+        // Loading project 2 claims the legacy file and backfills *its* entry.
+        let (_, branches, ..) = load_state_async(URL, "2").await;
+        assert_eq!(branches, ["main", "staging"]);
+        assert!(!dir.path("tracker_state.json").exists());
+        assert!(dir.path(&tracker_state_file_name(URL, "2")).exists());
+        let cfg = load_projects_toml().await;
+        assert_eq!(cfg.projects[0].tracked_branches, None);
+        assert_eq!(
+            cfg.projects[1].tracked_branches.as_deref(),
+            Some(&["main".to_string(), "staging".to_string()][..])
+        );
+
+        // Branches already in projects.toml are never overwritten by the state file.
+        save_branches_async(&["prod".into()], URL, "2").await;
+        load_state_async(URL, "2").await;
+        assert_eq!(
+            load_projects_toml().await.projects[1]
+                .tracked_branches
+                .as_deref(),
+            Some(&["prod".to_string()][..])
+        );
+
+        // A project that already has its file leaves a legacy file alone.
+        std::fs::write(dir.path("tracker_state.json"), legacy).unwrap();
+        load_state_async(URL, "2").await;
+        assert!(dir.path("tracker_state.json").exists());
+    }
+
+    #[tokio::test]
+    async fn unparseable_files_are_moved_aside_not_overwritten() {
+        let dir = TempConfigDir::new("corrupt");
+        std::fs::write(dir.path("projects.toml"), "[[project]\nbroken").unwrap();
+        assert!(load_projects_toml().await.projects.is_empty());
+        assert!(!dir.path("projects.toml").exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.path("projects.toml.bak")).unwrap(),
+            "[[project]\nbroken"
+        );
+
+        let state = tracker_state_file_name(URL, "1");
+        std::fs::write(dir.path(&state), "{not json").unwrap();
+        assert!(load_state_async(URL, "1").await.0.is_empty());
+        assert!(!dir.path(&state).exists());
+        assert!(dir.path(&format!("{state}.bak")).exists());
+    }
+
+    #[tokio::test]
+    async fn legacy_config_json_migrates_once_and_backfills_missing_fields() {
+        let dir = TempConfigDir::new("config-json");
+        let config_json = r#"{
+            "gitlab_url": "https://gitlab.example/", "project_id": "1",
+            "default_branches": ["main"], "table_label_prefixes": [],
+            "refresh_interval_secs": 300, "activity_stale_days": 9
+        }"#;
+        std::fs::write(dir.path("config.json"), config_json).unwrap();
+
+        // Backfill: only the fields the entry does not set yet.
+        let mut entry = ProjectEntry {
+            activity_stale_days: Some(3),
+            ..project(URL, "1", true)
+        };
+        assert!(try_enrich_from_config_json(&mut entry).await);
+        assert_eq!(entry.activity_stale_days, Some(3));
+        assert_eq!(entry.refresh_interval_secs, Some(300));
+        assert_eq!(
+            entry.default_branches.as_deref(),
+            Some(&["main".to_string()][..])
+        );
+        assert_eq!(
+            entry.table_label_prefixes, None,
+            "empty lists are not migrated"
+        );
+        assert!(
+            !try_enrich_from_config_json(&mut entry).await,
+            "nothing left to backfill"
+        );
+
+        // Migration: creates projects.toml from config.json, once.
+        let migrated = try_migrate_from_config_json().await.unwrap();
+        assert_eq!(migrated.gitlab_url, URL);
+        assert!(migrated.active);
+        assert_eq!(migrated.activity_stale_days, Some(9));
+        let cfg = load_projects_toml().await;
+        assert_eq!(cfg.projects.len(), 1);
+        assert_eq!(cfg.projects[0].project_id, "1");
+        assert!(try_migrate_from_config_json().await.is_none());
+
+        // Without the project fields there is nothing to migrate.
+        std::fs::remove_file(dir.path("projects.toml")).unwrap();
+        std::fs::write(
+            dir.path("config.json"),
+            r#"{"gitlab_url": " ", "project_id": "1"}"#,
+        )
+        .unwrap();
+        assert!(try_migrate_from_config_json().await.is_none());
+        assert!(!dir.path("projects.toml").exists());
+    }
+
+    #[tokio::test]
+    async fn config_json_is_created_on_first_run_and_survives_bad_content() {
+        let dir = TempConfigDir::new("config-load");
+        // Whatever GITLAB_TRACKER_* the shell exports applies to both sides.
+        let defaults = apply_env_overrides(AppConfig::default());
+
+        let first = load_or_create_config_async().await;
+        assert!(
+            dir.path("config.json").exists(),
+            "template written on first run"
+        );
+        assert_eq!(first.activity_stale_days, defaults.activity_stale_days);
+
+        std::fs::write(dir.path("config.json"), r#"{"show_cockpit": "maybe"}"#).unwrap();
+        let fallback = load_or_create_config_async().await;
+        assert_eq!(fallback.show_cockpit, defaults.show_cockpit);
+        assert_eq!(fallback.default_branches, defaults.default_branches);
     }
 }

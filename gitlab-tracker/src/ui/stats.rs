@@ -243,3 +243,155 @@ fn trigger_stats_report_refresh(
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::test_app;
+    use gitlab_tracker_stats::{QueryFilter, StatReport};
+    use ratatui::{backend::TestBackend, Terminal};
+
+    /// The report computed from the demo dataset (all time): every block has data.
+    pub(super) async fn demo_report() -> StatReport {
+        let db = crate::demo::seed_demo_stats_db("123456")
+            .await
+            .expect("demo stats DB");
+        let filter = QueryFilter {
+            project_id: Some("123456".into()),
+            sprint_weeks: Some(2),
+            ..QueryFilter::default()
+        };
+        StatReport::load(db.as_ref(), &filter).await.unwrap()
+    }
+
+    pub(super) fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    /// Draws the overlay and returns the screen, one line per row.
+    fn screen(app: &mut App, width: u16, height: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal.draw(|f| render_stats_overlay(f, app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..height)
+            .map(|y| {
+                (0..width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn overlay_shows_loading_error_and_empty_states() {
+        let mut app = test_app();
+        assert!(screen(&mut app, 100, 20).contains("No stats available yet."));
+
+        app.stats_view.error = Some("database is locked".into());
+        let text = screen(&mut app, 100, 20);
+        assert!(text.contains("database is locked") && !text.contains("No stats available"));
+
+        // Loading wins: a previous error is not shown while a new report computes.
+        app.stats_view.loading = true;
+        let text = screen(&mut app, 100, 20);
+        assert!(text.contains("Computing statistics") && !text.contains("database is locked"));
+        assert!(text.contains(app.stats_view.window.label()));
+    }
+
+    #[tokio::test]
+    async fn every_tab_renders_its_blocks_from_the_report() {
+        let mut app = test_app();
+        app.stats_view.report = Some(demo_report().await);
+        let expected: [(StatsTab, &[&str]); 5] = [
+            (
+                StatsTab::Overview,
+                &[
+                    "Throughput · Quality",
+                    "Cycle Time (created → merged)",
+                    "Backlog Health",
+                    "Poisson · Queue · Signals",
+                    "Summary insights",
+                ],
+            ),
+            (
+                StatsTab::Flow,
+                &[
+                    "Promotion Lead Time (merge → branch)",
+                    "Cycle Time by Author (median)",
+                    "Cycle Time by Reviewer (median)",
+                    "Cycle Time by Milestone (median)",
+                ],
+            ),
+            (
+                StatsTab::Quality,
+                &["Data confidence", "MR size buckets", "Overall"],
+            ),
+            (StatsTab::Forecasts, &["Forecasts · Signals", "Signals"]),
+            (StatsTab::Correlations, &["Spearman Correlations", "ρ = "]),
+        ];
+        for (tab, markers) in expected {
+            app.stats_view.tab = tab;
+            let text = screen(&mut app, 170, 50);
+            for marker in markers {
+                assert!(
+                    text.contains(marker),
+                    "{tab:?}: `{marker}` missing in\n{text}"
+                );
+            }
+            // Chrome shared by every tab.
+            assert!(text.contains(&format!("Tab: {}", tab.label())), "{tab:?}");
+            assert!(text.contains("MRs in sample") && text.contains("5 Correlations"));
+            for other in expected.iter().filter(|(other, _)| *other != tab) {
+                assert!(
+                    !text.contains(other.1[0]),
+                    "{tab:?} also shows {:?}",
+                    other.0
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn scroll_is_clamped_by_the_tab_being_rendered() {
+        let mut app = test_app();
+        app.stats_view.report = Some(demo_report().await);
+
+        // List tabs keep at most what is left to scroll.
+        app.stats_view.tab = StatsTab::Quality;
+        app.stats_view.scroll = u16::MAX;
+        screen(&mut app, 170, 50);
+        let max = app.stats_view.scroll;
+        assert!(max < 50, "clamped to the content: {max}");
+        app.stats_view.scroll = 0;
+        screen(&mut app, 170, 50);
+        assert_eq!(app.stats_view.scroll, 0);
+
+        // Dashboard tabs do not scroll.
+        app.stats_view.tab = StatsTab::Overview;
+        app.stats_view.scroll = 12;
+        screen(&mut app, 170, 50);
+        assert_eq!(app.stats_view.scroll, 0);
+    }
+
+    #[tokio::test]
+    async fn tiny_terminals_do_not_panic() {
+        let mut app = test_app();
+        app.stats_view.report = Some(demo_report().await);
+        for tab in [
+            StatsTab::Overview,
+            StatsTab::Flow,
+            StatsTab::Quality,
+            StatsTab::Forecasts,
+            StatsTab::Correlations,
+        ] {
+            app.stats_view.tab = tab;
+            for (width, height) in [(1, 1), (10, 4), (30, 9), (60, 12)] {
+                screen(&mut app, width, height);
+            }
+        }
+    }
+}

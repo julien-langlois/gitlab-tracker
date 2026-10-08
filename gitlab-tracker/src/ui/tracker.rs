@@ -490,3 +490,316 @@ pub fn render_time_log(
 
     Text::from(lines)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::TimeLogState;
+    use gitlab_tracker_core::{Activity, LinkedTicket, TimeEntry, LINKED_TICKET_SCHEMA_VERSION};
+
+    fn ticket() -> LinkedTicket {
+        LinkedTicket {
+            schema_version: LINKED_TICKET_SCHEMA_VERSION,
+            id: "4271".into(),
+            subject: "Expose MR metadata".into(),
+            status: "In Progress".into(),
+            url: "https://tracker.example/issues/4271".into(),
+            author: Some("Marina".into()),
+            assignee: Some("Thomas".into()),
+            time_estimate: Some(28_800), // 8 h
+            time_spent: Some(18_000),    // 5 h
+            time_remaining: Some(10_800),
+            tracker_type: Some("Evolution".into()),
+            priority: Some("High".into()),
+            version: Some("v2.4.0".into()),
+            start_date: Some("2024-04-15".into()),
+            done_ratio: Some(65),
+        }
+    }
+
+    fn mr_with(ticket: Option<LinkedTicket>) -> TrackedMr {
+        let mut mr = TrackedMr::placeholder("104".into(), "feat: GraphQL".into(), None);
+        mr.linked_ticket = ticket;
+        mr
+    }
+
+    fn entry(hours: f32, comment: &str) -> TimeEntry {
+        TimeEntry {
+            id: 1,
+            hours,
+            activity: Activity {
+                id: 9,
+                name: "Development".into(),
+            },
+            comment: comment.into(),
+            user: "Thomas".into(),
+            spent_on: "2024-04-16".into(),
+        }
+    }
+
+    fn rows(text: &Text<'_>) -> Vec<String> {
+        text.lines
+            .iter()
+            .map(|line| line.spans.iter().map(|s| s.content.as_ref()).collect())
+            .collect()
+    }
+
+    /// The row starting with `label`, as text.
+    fn row(text: &Text<'_>, label: &str) -> String {
+        rows(text)
+            .into_iter()
+            .find(|row| row.starts_with(label))
+            .unwrap_or_else(|| panic!("no `{label}` row in {:#?}", rows(text)))
+    }
+
+    /// Foreground of the first value span of the row starting with `label`.
+    fn value_colour(text: &Text<'_>, label: &str) -> Option<Color> {
+        let line = text
+            .lines
+            .iter()
+            .find(|line| line.spans[0].content.starts_with(label))
+            .unwrap_or_else(|| panic!("no `{label}` row"));
+        line.spans[1].style.fg
+    }
+
+    #[test]
+    fn durations_are_shown_as_hours_and_minutes() {
+        assert_eq!(format_duration(0), "—");
+        assert_eq!(format_duration(59), "0m", "under a minute");
+        assert_eq!(format_duration(2_700), "45m");
+        assert_eq!(format_duration(7_200), "2h");
+        assert_eq!(format_duration(5_400), "1h 30m");
+        assert_eq!(fmt_hours(0.25), "15m");
+        assert_eq!(fmt_hours(1.5), "1h 30m");
+        // Rounded to the minute, not truncated.
+        assert_eq!(fmt_hours(0.999), "1h");
+    }
+
+    #[test]
+    fn label_colours_resolve_exact_then_wildcard_then_default() {
+        let bug = (Color::Red, Color::White);
+        let other = (Color::Blue, Color::Black);
+        let mut colors = TrackerLabelColors {
+            tracker_type: HashMap::from([("bug".to_string(), bug), ("*".to_string(), other)]),
+            // A key that was not lowercased at load time still matches.
+            priority: HashMap::from([("Haute".to_string(), bug)]),
+        };
+        assert_eq!(colors.get_tracker_type_color("Bug"), bug);
+        assert_eq!(colors.get_tracker_type_color("Evolution"), other);
+        assert_eq!(colors.get_priority_color("haute"), bug);
+        assert_eq!(
+            colors.get_priority_color("Basse"),
+            (theme::muted_dim(), Color::White)
+        );
+        colors.tracker_type.clear();
+        assert_eq!(
+            colors.get_tracker_type_color("Bug"),
+            (theme::muted_dim(), Color::White)
+        );
+    }
+
+    #[test]
+    fn ticket_pane_lists_the_ticket_fields() {
+        let none = render_ticket_info(&mr_with(None), &TrackerLabelColors::default());
+        assert_eq!(rows(&none), ["No linked ticket detected."]);
+
+        let colors = TrackerLabelColors {
+            tracker_type: HashMap::from([("evolution".to_string(), (Color::Blue, Color::Black))]),
+            priority: HashMap::new(),
+        };
+        let text = render_ticket_info(&mr_with(Some(ticket())), &colors);
+        assert_eq!(rows(&text)[0], "#4271  Expose MR metadata");
+        assert_eq!(row(&text, "Type"), "Type     :  Evolution ");
+        assert_eq!(row(&text, "Priority"), "Priority :  High ");
+        assert_eq!(row(&text, "Status"), "Status   : In Progress");
+        assert_eq!(row(&text, "Author"), "Author   : Marina");
+        assert_eq!(row(&text, "Assignee"), "Assignee : Thomas");
+        assert_eq!(row(&text, "Version"), "Version  : v2.4.0");
+        assert!(row(&text, "Start").starts_with("Start    : 2024-04-15  ("));
+        // 65 % of a 20-cell bar.
+        let progress = row(&text, "Progress");
+        assert_eq!(progress.matches('█').count(), 13);
+        assert_eq!(progress.matches('░').count(), 7);
+        assert!(progress.ends_with("65%"));
+        assert_eq!(row(&text, "Estimate"), "Estimate : 8h");
+        assert_eq!(row(&text, "Spent"), "Spent    : 5h");
+        assert_eq!(row(&text, "Remaining"), "Remaining: 3h");
+
+        let type_badge = &text
+            .lines
+            .iter()
+            .find(|l| l.spans[0].content.starts_with("Type"))
+            .unwrap()
+            .spans[1];
+        assert_eq!(
+            (type_badge.style.bg, type_badge.style.fg),
+            (Some(Color::Blue), Some(Color::Black))
+        );
+    }
+
+    #[test]
+    fn ticket_pane_skips_what_the_tracker_did_not_provide() {
+        let bare = LinkedTicket {
+            author: None,
+            assignee: None,
+            time_estimate: None,
+            time_spent: Some(0),
+            time_remaining: None,
+            tracker_type: None,
+            priority: None,
+            version: None,
+            start_date: None,
+            done_ratio: None,
+            ..ticket()
+        };
+        let text = render_ticket_info(&mr_with(Some(bare)), &TrackerLabelColors::default());
+        assert_eq!(row(&text, "Author"), "Author   : Unknown");
+        assert_eq!(row(&text, "Assignee"), "Assignee : Unassigned");
+        let labels = rows(&text).join("\n");
+        for absent in [
+            "Type",
+            "Priority",
+            "Version",
+            "Start",
+            "Progress",
+            "Estimate",
+            "Spent",
+            "Remaining",
+        ] {
+            assert!(
+                !labels.contains(&format!("{absent} ")),
+                "`{absent}` row shown:\n{labels}"
+            );
+        }
+    }
+
+    #[test]
+    fn spent_time_and_progress_colours_follow_the_budget() {
+        let with = |estimate: Option<u32>, spent: u32, done: u32| {
+            let ticket = LinkedTicket {
+                time_estimate: estimate,
+                time_spent: Some(spent),
+                done_ratio: Some(done),
+                ..ticket()
+            };
+            render_ticket_info(&mr_with(Some(ticket)), &TrackerLabelColors::default())
+        };
+        assert_eq!(
+            value_colour(&with(Some(1000), 799, 50), "Spent"),
+            Some(Color::Green)
+        );
+        assert_eq!(
+            value_colour(&with(Some(1000), 800, 50), "Spent"),
+            Some(Color::Yellow)
+        );
+        assert_eq!(
+            value_colour(&with(Some(1000), 1000, 50), "Spent"),
+            Some(Color::Red)
+        );
+        // No estimate to compare with: neutral.
+        assert_eq!(
+            value_colour(&with(None, 5000, 50), "Spent"),
+            Some(Color::Cyan)
+        );
+
+        assert_eq!(
+            value_colour(&with(None, 1, 74), "Progress"),
+            Some(Color::Yellow)
+        );
+        assert_eq!(
+            value_colour(&with(None, 1, 75), "Progress"),
+            Some(Color::Cyan)
+        );
+        assert_eq!(
+            value_colour(&with(None, 1, 100), "Progress"),
+            Some(Color::Green)
+        );
+    }
+
+    #[test]
+    fn time_log_shows_its_fetch_state() {
+        let mr = mr_with(Some(ticket()));
+        for state in [None, Some(TimeLogState::Loading)] {
+            let text = render_time_log(&mr, state.as_ref(), Color::Gray);
+            assert_eq!(rows(&text)[0], "Time Log — MR !104");
+            assert_eq!(rows(&text).last().unwrap(), "Loading time entries…");
+        }
+
+        let failed = TimeLogState::Failed("401 Unauthorized".into());
+        let text = render_time_log(&mr, Some(&failed), Color::Gray);
+        let all = rows(&text);
+        assert_eq!(
+            all[all.len() - 2],
+            "Failed to load time entries: 401 Unauthorized"
+        );
+        assert!(all[all.len() - 1].contains("[R]"));
+
+        let empty = TimeLogState::Loaded(Vec::new());
+        let text = render_time_log(&mr, Some(&empty), Color::Gray);
+        assert_eq!(rows(&text).last().unwrap(), "No time entries recorded yet.");
+    }
+
+    #[test]
+    fn time_log_lists_entries_with_their_total() {
+        let state = TimeLogState::Loaded(vec![entry(1.5, "Schema design"), entry(0.75, "")]);
+        let text = render_time_log(&mr_with(Some(ticket())), Some(&state), Color::Gray);
+        let all = rows(&text);
+        let first = all
+            .iter()
+            .position(|row| row.starts_with("2024-04-16"))
+            .unwrap();
+        assert_eq!(all[first], "2024-04-16  1h 30m  Development  Thomas");
+        assert_eq!(all[first + 1], "  \"Schema design\"");
+        // No comment: no quoted line under the second entry.
+        assert_eq!(all[first + 2], "2024-04-16  45m  Development  Thomas");
+        assert_eq!(all.iter().filter(|row| row.contains('"')).count(), 1);
+        assert_eq!(all.last().unwrap(), "Total: 2 entries — 2h 15m logged");
+        let comment = &text.lines[first + 1].spans[1];
+        assert_eq!(comment.style.fg, Some(Color::Gray));
+    }
+
+    #[test]
+    fn time_log_header_compares_spent_time_with_the_estimate() {
+        let header = |estimate: Option<u32>, spent: u32, state: Option<&TimeLogState>| {
+            let ticket = LinkedTicket {
+                time_estimate: estimate,
+                time_spent: Some(spent),
+                ..ticket()
+            };
+            render_time_log(&mr_with(Some(ticket)), state, Color::Gray)
+        };
+        // 5 h of 8 h: 63 %, 19 of 30 cells.
+        let text = header(Some(28_800), 18_000, None);
+        assert_eq!(row(&text, "Estimate"), "Estimate : 8h");
+        let spent = row(&text, "Spent");
+        assert!(
+            spent.starts_with("Spent    : 5h") && spent.ends_with("63%"),
+            "{spent}"
+        );
+        assert_eq!(spent.matches('█').count(), 19);
+        assert_eq!(value_colour(&text, "Spent"), Some(Color::Green));
+
+        assert_eq!(
+            value_colour(&header(Some(1000), 800, None), "Spent"),
+            Some(Color::Yellow)
+        );
+        // Over budget: the bar is full, the percentage is not capped.
+        let over = header(Some(1000), 1500, None);
+        assert_eq!(value_colour(&over, "Spent"), Some(Color::Red));
+        let spent = row(&over, "Spent");
+        assert!(spent.ends_with("150%") && !spent.contains('░'), "{spent}");
+
+        // No estimate: the total comes from the loaded entries.
+        let state = TimeLogState::Loaded(vec![entry(2.0, ""), entry(0.5, "")]);
+        assert_eq!(
+            row(&header(None, 0, Some(&state)), "Total"),
+            "Total    : 2h 30m"
+        );
+        assert_eq!(row(&header(None, 0, None), "Total"), "Total    : 0m");
+        // No ticket at all: no header, straight to the entries section.
+        let text = render_time_log(&mr_with(None), None, Color::Gray);
+        assert!(!rows(&text)
+            .iter()
+            .any(|row| row.starts_with("Estimate") || row.starts_with("Total")));
+    }
+}

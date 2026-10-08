@@ -100,8 +100,18 @@ fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 
 /// Resolves `refresh_interval_secs` from env var, config file, or default.
 fn resolve_refresh_interval(config: &config::AppConfig) -> u64 {
-    std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
-        .ok()
+    refresh_interval_from(
+        std::env::var("GITLAB_REFRESH_INTERVAL_SECS")
+            .ok()
+            .as_deref(),
+        config,
+    )
+}
+
+/// `env_value` (`GITLAB_REFRESH_INTERVAL_SECS`, ignored when not a number) wins over
+/// the config; 15 minutes when neither is set.
+fn refresh_interval_from(env_value: Option<&str>, config: &config::AppConfig) -> u64 {
+    env_value
         .and_then(|v| v.parse::<u64>().ok())
         .or(config.refresh_interval_secs)
         .unwrap_or(900)
@@ -782,4 +792,74 @@ async fn main() -> anyhow::Result<()> {
 
     // `_terminal_guard` disables mouse capture and restores the terminal on drop.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::AppConfig;
+
+    #[test]
+    fn refresh_interval_env_beats_config_beats_default() {
+        let unset = AppConfig {
+            refresh_interval_secs: None,
+            ..AppConfig::default()
+        };
+        let configured = AppConfig {
+            refresh_interval_secs: Some(300),
+            ..AppConfig::default()
+        };
+        assert_eq!(refresh_interval_from(None, &unset), 900);
+        assert_eq!(refresh_interval_from(None, &configured), 300);
+        assert_eq!(refresh_interval_from(Some("60"), &configured), 60);
+        // Not a number: ignored rather than fatal.
+        assert_eq!(refresh_interval_from(Some("5m"), &configured), 300);
+        assert_eq!(refresh_interval_from(Some(""), &unset), 900);
+    }
+
+    #[test]
+    fn project_overrides_replace_only_the_fields_the_entry_sets() {
+        let base = AppConfig {
+            default_branches: vec!["main".into()],
+            activity_stale_days: 7,
+            activity_recent_days: 2,
+            refresh_interval_secs: Some(900),
+            show_cockpit: true,
+            hide_merged: false,
+            gitlab_username: Some("stale".into()),
+            ..AppConfig::default()
+        };
+
+        // An entry with nothing set keeps config.json / the defaults…
+        let mut config = base.clone();
+        apply_project_overrides(&mut config, &ProjectEntry::default());
+        assert_eq!(config.default_branches, ["main"]);
+        assert_eq!(config.activity_stale_days, 7);
+        assert_eq!(config.refresh_interval_secs, Some(900));
+        assert!(config.show_cockpit && !config.hide_merged);
+        // …except the username, which is per project: never inherited.
+        assert_eq!(config.gitlab_username, None);
+
+        let project = ProjectEntry {
+            default_branches: Some(vec!["develop".into(), "prod".into()]),
+            table_label_prefixes: Some(vec!["deploy::".into()]),
+            refresh_interval_secs: Some(120),
+            activity_stale_days: Some(21),
+            review_reminder_hours: Some(0),
+            show_cockpit: Some(false),
+            hide_merged: Some(true),
+            gitlab_username: Some("jdoe".into()),
+            ..ProjectEntry::default()
+        };
+        let mut config = base.clone();
+        apply_project_overrides(&mut config, &project);
+        assert_eq!(config.default_branches, ["develop", "prod"]);
+        assert_eq!(config.table_label_prefixes, ["deploy::"]);
+        assert_eq!(config.refresh_interval_secs, Some(120));
+        assert_eq!(config.activity_stale_days, 21);
+        assert_eq!(config.activity_recent_days, 2, "not set by the entry");
+        assert_eq!(config.review_reminder_hours, 0);
+        assert!(!config.show_cockpit && config.hide_merged);
+        assert_eq!(config.gitlab_username.as_deref(), Some("jdoe"));
+    }
 }

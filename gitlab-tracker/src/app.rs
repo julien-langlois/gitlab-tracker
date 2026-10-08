@@ -2143,12 +2143,13 @@ impl App {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::models::Pipeline;
     use crossterm::event::KeyCode;
 
-    fn test_app() -> App {
+    /// An empty app on project `1`, shared with the other modules' tests.
+    pub(crate) fn test_app() -> App {
         App::new(AppInit {
             token: std::sync::Arc::new("t".to_string().into()),
             project_id: "1".into(),

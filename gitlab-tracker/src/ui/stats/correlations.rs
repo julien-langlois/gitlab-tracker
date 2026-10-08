@@ -133,3 +133,89 @@ fn strength_label(s: &CorrelationStrength) -> &'static str {
         CorrelationStrength::VeryStrong => "Very strong",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{demo_report, line_text};
+    use super::*;
+
+    fn result(rho: f64, p_value: f64, interpretation: CorrelationStrength) -> CorrelationResult {
+        CorrelationResult {
+            pair: MetricPair::DiffSizeVsCycleTime,
+            rho,
+            p_value,
+            sample_size: 12,
+            interpretation,
+        }
+    }
+
+    #[test]
+    fn only_significant_correlations_are_highlighted() {
+        // Significant = p < 0.05 and |ρ| ≥ 0.30.
+        let strong = correlation_line(&result(0.82, 0.001, CorrelationStrength::VeryStrong));
+        let text = line_text(&strong);
+        assert!(text.contains("●") && text.contains("ρ = +0.820"), "{text}");
+        assert!(text.contains("↑↑") && text.contains("Very strong") && text.contains("(n=12)"));
+        assert_eq!(strong.spans[0].style.fg, Some(Color::Cyan));
+        assert_eq!(strong.spans[2].style.fg, Some(Color::Cyan));
+
+        let moderate = correlation_line(&result(-0.45, 0.03, CorrelationStrength::Moderate));
+        let text = line_text(&moderate);
+        assert!(
+            text.contains("●") && text.contains("ρ = -0.450") && text.contains("↑↓"),
+            "{text}"
+        );
+        assert_eq!(moderate.spans[0].style.fg, Some(Color::Yellow));
+
+        // Same ρ, but it could be chance: hollow bullet, dimmed value.
+        let unsure = correlation_line(&result(-0.45, 0.20, CorrelationStrength::Moderate));
+        assert!(line_text(&unsure).contains("○"));
+        assert_eq!(unsure.spans[2].style.fg, Some(theme::muted_dim()));
+        // Low p-value on a tiny effect is not a finding either.
+        let tiny = correlation_line(&result(0.10, 0.01, CorrelationStrength::Negligible));
+        assert!(line_text(&tiny).contains("·"));
+    }
+
+    #[test]
+    fn rho_colour_follows_the_magnitude_when_significant() {
+        assert_eq!(rho_color(-0.75, true), Color::Cyan);
+        assert_eq!(rho_color(0.55, true), Color::Green);
+        assert_eq!(rho_color(0.30, true), Color::Yellow);
+        assert_eq!(rho_color(0.95, false), theme::muted_dim());
+    }
+
+    #[tokio::test]
+    async fn rows_are_sorted_by_strength_whatever_the_sign() {
+        let mut report = demo_report().await;
+        report.correlations = vec![
+            result(0.20, 0.5, CorrelationStrength::Weak),
+            result(-0.90, 0.001, CorrelationStrength::VeryStrong),
+            result(0.50, 0.01, CorrelationStrength::Moderate),
+        ];
+        let rows: Vec<String> = correlation_lines(&report).iter().map(line_text).collect();
+        let position = |needle: &str| rows.iter().position(|row| row.contains(needle)).unwrap();
+        assert!(position("-0.900") < position("+0.500"));
+        assert!(position("+0.500") < position("+0.200"));
+
+        report.correlations.clear();
+        let rows = correlation_lines(&report);
+        assert_eq!(rows.len(), 1);
+        assert!(line_text(&rows[0]).contains("Not enough data"));
+    }
+
+    #[test]
+    fn every_metric_pair_has_its_own_label() {
+        let pairs = [
+            MetricPair::DiffSizeVsCycleTime,
+            MetricPair::DiffSizeVsComments,
+            MetricPair::CommentsVsCycleTime,
+            MetricPair::PipelineFailuresVsCycleTime,
+            MetricPair::CommitsCountVsCycleTime,
+            MetricPair::DiffDifficultyVsCycleTime,
+        ];
+        let labels: std::collections::HashSet<&str> = pairs.iter().map(pair_label).collect();
+        assert_eq!(labels.len(), pairs.len());
+        // Labels fit the 36-column pair column of `correlation_line`.
+        assert!(labels.iter().all(|label| label.chars().count() <= 36));
+    }
+}

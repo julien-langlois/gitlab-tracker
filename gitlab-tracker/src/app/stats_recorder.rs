@@ -143,3 +143,230 @@ impl App {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::test_app;
+    use super::*;
+    use crate::models::CommitFingerprint;
+    use gitlab_tracker_stats::db::SnapshotQuery;
+    use gitlab_tracker_stats::snapshot::SnapshotTrigger;
+    use gitlab_tracker_stats::SqliteStatsDb;
+
+    const MERGED_AT: &str = "2026-01-05T10:00:00Z";
+
+    async fn app_with_db() -> (App, Arc<SqliteStatsDb>) {
+        let db = Arc::new(SqliteStatsDb::open(":memory:").await.unwrap());
+        let mut app = test_app();
+        app.stats_db = Some(db.clone());
+        (app, db)
+    }
+
+    fn mr(id: &str, state: GitlabMrState) -> TrackedMr {
+        let mut mr = TrackedMr::placeholder(id.into(), format!("MR {id}"), None);
+        mr.data.state = state;
+        mr.data.target_branch = "main".into();
+        if state == GitlabMrState::Merged {
+            mr.status = MrStatus::MergedIn(["main".to_string()].into());
+            mr.data.merged_at = Some(MERGED_AT.into());
+        }
+        mr
+    }
+
+    /// Runs `act`, waits for the background writes it spawned and returns how many
+    /// report refreshes they asked for. (A writer keeps its sender until it is done:
+    /// the channel closes when the last one finishes.)
+    async fn refresh_requests(
+        app: &mut App,
+        act: impl FnOnce(&mut App, &UnboundedSender<AppEvent>),
+    ) -> usize {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        act(app, &tx);
+        drop(tx);
+        let mut requests = 0;
+        while let Some(event) = rx.recv().await {
+            if matches!(event, AppEvent::StatsSnapshotRecorded) {
+                requests += 1;
+            }
+        }
+        requests
+    }
+
+    async fn triggers_of(db: &SqliteStatsDb, mr_id: &str) -> Vec<SnapshotTrigger> {
+        let query = SnapshotQuery {
+            project_id: Some("1".into()),
+            ..SnapshotQuery::default()
+        };
+        db.query(&query)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|stored| stored.snapshot.mr_id == mr_id)
+            .map(|stored| stored.snapshot.trigger)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn open_mrs_are_snapshotted_once_a_day_and_terminal_ones_once() {
+        let (mut app, db) = app_with_db().await;
+        app.mrs = vec![
+            mr("1", GitlabMrState::Opened),
+            mr("2", GitlabMrState::Merged),
+        ];
+
+        let requests = refresh_requests(&mut app, |app, tx| {
+            app.record_stats_snapshot("1", true, tx);
+            // Same day: skipped before reaching the DB.
+            app.record_stats_snapshot("1", true, tx);
+            app.record_stats_snapshot("404", true, tx);
+        })
+        .await;
+        assert_eq!(requests, 1);
+        assert_eq!(triggers_of(&db, "1").await, [SnapshotTrigger::OnRefresh]);
+        assert!(app.stats_last_refresh_date.contains_key("1"));
+
+        // A merged MR is recorded on every load, but dated at its merge: one row.
+        for _ in 0..2 {
+            refresh_requests(&mut app, |app, tx| app.record_stats_snapshot("2", true, tx)).await;
+        }
+        assert_eq!(triggers_of(&db, "2").await, [SnapshotTrigger::OnMerge]);
+        assert!(!app.stats_last_refresh_date.contains_key("2"));
+    }
+
+    #[tokio::test]
+    async fn startup_backfill_records_without_asking_for_a_report() {
+        let (mut app, db) = app_with_db().await;
+        app.mrs = vec![mr("3", GitlabMrState::Closed)];
+
+        let requests = refresh_requests(&mut app, |app, tx| {
+            app.record_stats_snapshot("3", false, tx)
+        })
+        .await;
+        assert_eq!(requests, 0);
+        // The write holds no sender here: poll for it.
+        for _ in 0..200 {
+            if !triggers_of(&db, "3").await.is_empty() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        assert_eq!(triggers_of(&db, "3").await, [SnapshotTrigger::OnClose]);
+    }
+
+    #[tokio::test]
+    async fn sha_arrivals_are_recorded_once_per_branch() {
+        let (mut app, db) = app_with_db().await;
+        app.mrs = vec![mr("10", GitlabMrState::Merged)];
+        let reach = |app: &mut App, tx: &UnboundedSender<AppEvent>| {
+            app.record_sha_arrivals("10", vec!["staging".into(), "prod".into()], tx);
+        };
+
+        assert_eq!(refresh_requests(&mut app, reach).await, 1);
+        // Seen again at the next refresh: nothing changes, no report refresh.
+        assert_eq!(refresh_requests(&mut app, reach).await, 0);
+        let unknown = refresh_requests(&mut app, |app, tx| {
+            app.record_sha_arrivals("404", vec!["staging".into()], tx)
+        })
+        .await;
+        assert_eq!(unknown, 0);
+
+        let mut arrivals = db.query_branch_arrivals("1", None, None).await.unwrap();
+        arrivals.sort_by(|a, b| a.branch.cmp(&b.branch));
+        let summary: Vec<_> = arrivals
+            .iter()
+            .map(|a| (a.mr_id.as_str(), a.branch.as_str(), a.how))
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("10", "prod", ArrivalKind::Merge),
+                ("10", "staging", ArrivalKind::Merge)
+            ]
+        );
+        assert!(arrivals.iter().all(|a| a.merged_at.is_some()));
+    }
+
+    #[tokio::test]
+    async fn copies_are_dated_at_the_copy_commit_and_typed_by_how_they_were_found() {
+        const PICKED_AT: i64 = 1_767_700_000;
+        const COPIED_AT: i64 = 1_767_800_000;
+        let fingerprint = CommitFingerprint {
+            author_email: "alice@example.com".into(),
+            authored_at: 1_767_000_000,
+            title: "Fix login".into(),
+        };
+
+        let (mut app, db) = app_with_db().await;
+        let mut picked = mr("20", GitlabMrState::Merged);
+        picked.data.sha = Some("aaa".into());
+        let mut copied = mr("21", GitlabMrState::Merged);
+        copied.data.sha = Some("bbb".into());
+        copied.data.landed_fingerprint = Some(fingerprint.clone());
+        // Not candidates: already known on prod, targeting prod, or still open.
+        let mut already_there = mr("22", GitlabMrState::Merged);
+        already_there.data.sha = Some("ccc".into());
+        already_there.status = MrStatus::MergedIn(["main".to_string(), "prod".to_string()].into());
+        let mut targets_prod = mr("23", GitlabMrState::Merged);
+        targets_prod.data.sha = Some("ddd".into());
+        targets_prod.data.target_branch = "prod".into();
+        let mut open = mr("24", GitlabMrState::Opened);
+        open.data.sha = Some("eee".into());
+        // Merged, but its commit is nowhere on prod.
+        let mut absent = mr("25", GitlabMrState::Merged);
+        absent.data.sha = Some("fff".into());
+        app.mrs = vec![picked, copied, already_there, targets_prod, open, absent];
+
+        let index = BranchCommits {
+            shas: HashSet::new(),
+            picked_from: ["aaa", "ccc", "ddd", "eee"]
+                .into_iter()
+                .map(|sha| (sha.to_string(), PICKED_AT))
+                .collect(),
+            fingerprints: HashMap::from([(fingerprint, COPIED_AT)]),
+        };
+        let requests = refresh_requests(&mut app, |app, tx| {
+            app.record_copy_arrivals("prod", &index, tx)
+        })
+        .await;
+        assert_eq!(requests, 1);
+
+        let mut arrivals = db.query_branch_arrivals("1", None, None).await.unwrap();
+        arrivals.sort_by(|a, b| a.mr_id.cmp(&b.mr_id));
+        let summary: Vec<_> = arrivals
+            .iter()
+            .map(|a| {
+                (
+                    a.mr_id.as_str(),
+                    a.branch.as_str(),
+                    a.how,
+                    a.arrived_at.timestamp(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("20", "prod", ArrivalKind::CherryPick, PICKED_AT),
+                ("21", "prod", ArrivalKind::Copy, COPIED_AT)
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_stats_db_nothing_is_recorded() {
+        let mut app = test_app();
+        app.mrs = vec![
+            mr("1", GitlabMrState::Opened),
+            mr("2", GitlabMrState::Merged),
+        ];
+        let requests = refresh_requests(&mut app, |app, tx| {
+            app.record_stats_snapshot("1", true, tx);
+            app.record_sha_arrivals("2", vec!["prod".into()], tx);
+            app.record_copy_arrivals("prod", &BranchCommits::default(), tx);
+        })
+        .await;
+        assert_eq!(requests, 0);
+        // The daily guard is not consumed: the snapshot is taken once a DB exists.
+        assert!(app.stats_last_refresh_date.is_empty());
+    }
+}
