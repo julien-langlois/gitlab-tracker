@@ -31,3 +31,52 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace --all-features
+
+  # Informational only: no threshold, the job never gates a merge on a percentage.
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: coverage
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      # Doctests are not instrumented (needs nightly); unit and integration tests are.
+      - name: Tests with coverage
+        run: cargo llvm-cov --workspace --all-features --no-report
+
+      # Per-file table in the run's "Summary" tab (also echoed in the log).
+      - name: Coverage summary
+        run: |
+          cargo llvm-cov report --summary-only | tee coverage.txt
+          {
+            echo '## Coverage'
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: HTML report
+        run: cargo llvm-cov report --html
+
+      # Line-by-line report, downloadable from the run page. Skipped under act
+      # (ACT=true), which has no artifact store.
+      - name: Upload HTML report
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: target/llvm-cov/html
+          retention-days: 14
