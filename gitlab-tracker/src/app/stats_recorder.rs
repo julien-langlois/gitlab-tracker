@@ -3,6 +3,18 @@
 use super::*;
 use gitlab_tracker_stats::{ArrivalKind, BranchArrival};
 
+/// Whether recording a snapshot asks for a (debounced) report refresh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ReportRefresh {
+    /// Startup load in progress: no recompute per restored MR.
+    Never,
+    /// Once the snapshot is stored, even as a duplicate: the load completing the
+    /// startup sync, so the report covers everything recorded during it.
+    Always,
+    /// Only when the snapshot added a row (loads after the startup sync).
+    IfWritten,
+}
+
 impl App {
     /// Records the arrival of `mr_id` on the `reached` branches (same SHA: merge,
     /// fast-forward, reset), dated now — the refresh that first saw it there.
@@ -99,12 +111,12 @@ impl App {
     ///   stored and the others hit the UNIQUE constraint;
     /// - `OnRefresh` at most once per calendar day for open MRs.
     ///
-    /// `refresh_report`: ask for a (debounced) report refresh once written — only
-    /// after the startup sync, to avoid one recompute per restored MR.
+    /// `refresh_report`: when to ask for a (debounced) report refresh, which is
+    /// what the cockpit Flow counters are read from.
     pub(super) fn record_stats_snapshot(
         &mut self,
         mr_id: &str,
-        refresh_report: bool,
+        refresh_report: ReportRefresh,
         tx: &UnboundedSender<AppEvent>,
     ) {
         use gitlab_tracker_stats::snapshot::SnapshotTrigger;
@@ -129,16 +141,21 @@ impl App {
         };
         let snap = mr.stats_snapshot(trigger, &self.project_id, &self.config.complexity_profile);
         let project_id = self.project_id.clone();
-        let tx = refresh_report.then(|| tx.clone());
+        let tx = (refresh_report != ReportRefresh::Never).then(|| tx.clone());
         tokio::spawn(async move {
-            if let Err(e) = db.upsert_snapshot(&snap).await {
-                tracing::warn!(project_id = %project_id, error = %e, "Failed to record stats snapshot");
-                return;
-            }
+            let written = match db.upsert_snapshot(&snap).await {
+                Ok(written) => written,
+                Err(e) => {
+                    tracing::warn!(project_id = %project_id, error = %e, "Failed to record stats snapshot");
+                    return;
+                }
+            };
             // The report itself is recomputed on the next Tick (debounced), not once
             // per recorded snapshot.
             if let Some(tx) = tx {
-                let _ = tx.send(AppEvent::StatsSnapshotRecorded);
+                if written || refresh_report == ReportRefresh::Always {
+                    let _ = tx.send(AppEvent::StatsSnapshotRecorded);
+                }
             }
         });
     }
@@ -215,20 +232,32 @@ mod tests {
         ];
 
         let requests = refresh_requests(&mut app, |app, tx| {
-            app.record_stats_snapshot("1", true, tx);
+            app.record_stats_snapshot("1", ReportRefresh::IfWritten, tx);
             // Same day: skipped before reaching the DB.
-            app.record_stats_snapshot("1", true, tx);
-            app.record_stats_snapshot("404", true, tx);
+            app.record_stats_snapshot("1", ReportRefresh::IfWritten, tx);
+            app.record_stats_snapshot("404", ReportRefresh::IfWritten, tx);
         })
         .await;
         assert_eq!(requests, 1);
         assert_eq!(triggers_of(&db, "1").await, [SnapshotTrigger::OnRefresh]);
         assert!(app.stats_last_refresh_date.contains_key("1"));
 
-        // A merged MR is recorded on every load, but dated at its merge: one row.
-        for _ in 0..2 {
-            refresh_requests(&mut app, |app, tx| app.record_stats_snapshot("2", true, tx)).await;
+        // A merged MR is recorded on every load, but dated at its merge: one row,
+        // and one report refresh — when the merge is first seen (e.g. an MR created
+        // and merged between two polls, discovered already merged).
+        for expected in [1, 0] {
+            let requests = refresh_requests(&mut app, |app, tx| {
+                app.record_stats_snapshot("2", ReportRefresh::IfWritten, tx)
+            })
+            .await;
+            assert_eq!(requests, expected);
         }
+        // The load completing the startup sync refreshes even without a new row.
+        let requests = refresh_requests(&mut app, |app, tx| {
+            app.record_stats_snapshot("2", ReportRefresh::Always, tx)
+        })
+        .await;
+        assert_eq!(requests, 1);
         assert_eq!(triggers_of(&db, "2").await, [SnapshotTrigger::OnMerge]);
         assert!(!app.stats_last_refresh_date.contains_key("2"));
     }
@@ -239,7 +268,7 @@ mod tests {
         app.mrs = vec![mr("3", GitlabMrState::Closed)];
 
         let requests = refresh_requests(&mut app, |app, tx| {
-            app.record_stats_snapshot("3", false, tx)
+            app.record_stats_snapshot("3", ReportRefresh::Never, tx)
         })
         .await;
         assert_eq!(requests, 0);
@@ -360,7 +389,7 @@ mod tests {
             mr("2", GitlabMrState::Merged),
         ];
         let requests = refresh_requests(&mut app, |app, tx| {
-            app.record_stats_snapshot("1", true, tx);
+            app.record_stats_snapshot("1", ReportRefresh::IfWritten, tx);
             app.record_sha_arrivals("2", vec!["prod".into()], tx);
             app.record_copy_arrivals("prod", &BranchCommits::default(), tx);
         })

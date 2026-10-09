@@ -101,7 +101,9 @@ impl SqliteStatsDb {
     ///
     /// Idempotency is enforced at the DB level via `INSERT OR IGNORE` combined with
     /// the `UNIQUE(mr_id, project_id, DATE(recorded_at), trigger)` constraint.
-    pub async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<(), StatsError> {
+    /// Returns whether a row was written, so callers refresh the report only when
+    /// something changed.
+    pub async fn upsert_snapshot(&self, snap: &MrStatsSnapshot) -> Result<bool, StatsError> {
         self.upsert_snapshot_at(snap, &snap.event_recorded_at())
             .await
     }
@@ -115,12 +117,12 @@ impl SqliteStatsDb {
         &self,
         snap: &MrStatsSnapshot,
         recorded_at: &str,
-    ) -> Result<(), StatsError> {
+    ) -> Result<bool, StatsError> {
         // One transaction: the snapshot and its labels/reviewers land atomically.
         let mut tx = self.pool.begin().await?;
-        insert_snapshot(&mut tx, snap, recorded_at).await?;
+        let written = insert_snapshot(&mut tx, snap, recorded_at).await?;
         tx.commit().await?;
-        Ok(())
+        Ok(written)
     }
 
     /// Startup backfill: records each snapshot at its event date
@@ -546,7 +548,7 @@ async fn insert_snapshot(
     conn: &mut sqlx::SqliteConnection,
     snap: &MrStatsSnapshot,
     recorded_at: &str,
-) -> Result<(), StatsError> {
+) -> Result<bool, StatsError> {
     // One storage format for every row (UTC, seconds, `Z`): SQL filters compare
     // `recorded_at` as text, and `recorded_date` must be the UTC calendar day.
     let recorded_at = crate::snapshot::normalize_timestamp(recorded_at);
@@ -601,7 +603,7 @@ async fn insert_snapshot(
 
     // INSERT OR IGNORE returns no row when the UNIQUE constraint fires —
     // that means this snapshot already exists for this day+trigger, which is correct.
-    let Some(row) = row else { return Ok(()) };
+    let Some(row) = row else { return Ok(false) };
     let snapshot_id: i64 = sqlx::Row::get(&row, "id");
 
     for label in &snap.labels {
@@ -618,7 +620,7 @@ async fn insert_snapshot(
             .execute(&mut *conn)
             .await?;
     }
-    Ok(())
+    Ok(true)
 }
 
 /// Decodes a `json_group_array(...)` column into a list of strings.
@@ -762,7 +764,7 @@ mod tests {
         assert!(!std::path::Path::new(backup).exists());
 
         // And the fixed recorder cannot re-create the bug: re-recording is a no-op.
-        db.upsert_snapshot(&merged).await.unwrap();
+        assert!(!db.upsert_snapshot(&merged).await.unwrap());
         assert_eq!(merged_last_30().await, 0);
         std::fs::remove_dir_all(&dir).unwrap();
     }

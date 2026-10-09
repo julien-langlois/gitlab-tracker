@@ -1905,8 +1905,17 @@ impl App {
                 let completion = self.complete_fetch(&data.id);
                 let notify_allowed = completion.notify_allowed;
                 let fetches_settled = self.fetches_just_settled(completion);
+                // Loads after the startup sync refresh the stats report (cockpit Flow
+                // counters) whenever they record something new — a merge seen by a
+                // refresh cycle or an MR discovered already merged.
                 #[cfg(feature = "stats")]
-                let initial_fetches_completed = completion.initial_sync_just_completed;
+                let refresh_report = if completion.initial_sync_just_completed {
+                    stats_recorder::ReportRefresh::Always
+                } else if completion.notify_allowed {
+                    stats_recorder::ReportRefresh::IfWritten
+                } else {
+                    stats_recorder::ReportRefresh::Never
+                };
 
                 let Some(mr) = self.mrs.find_mut(&data.id) else {
                     return false;
@@ -1994,7 +2003,7 @@ impl App {
                 // `flush_pending_sort`) so a burst of N loads costs one sort, not N.
                 self.needs_sort = true;
                 #[cfg(feature = "stats")]
-                self.record_stats_snapshot(&mr_id, initial_fetches_completed, tx);
+                self.record_stats_snapshot(&mr_id, refresh_report, tx);
                 #[cfg(feature = "stats")]
                 self.record_sha_arrivals(&mr_id, reached, tx);
                 self.release_added_branches();
