@@ -62,7 +62,7 @@ pub struct AggregatedStats {
     /// MRs merged within the query window.
     pub merged_count: usize,
 
-    /// MRs closed (abandoned) within the query window.
+    /// MRs closed (abandoned) within the query window and not reopened since.
     pub closed_count: usize,
 
     /// Share of terminal MRs that were closed without being merged.
@@ -256,14 +256,12 @@ pub(crate) fn compute_stats(
     let merged_period_counts =
         compute_merged_period_counts(snapshots.iter(), now.with_timezone(&Local));
 
-    let closed_count = {
-        let mut seen = std::collections::HashSet::new();
-        metrics
-            .iter()
-            .rev()
-            .filter(|m| m.trigger == SnapshotTrigger::OnClose && seen.insert(mr_key(m)))
-            .count()
-    };
+    // Closed = its latest snapshot is a close: an MR closed, then reopened (and
+    // possibly merged) is not an abandoned one.
+    let closed_count = latest_metrics
+        .iter()
+        .filter(|m| m.trigger == SnapshotTrigger::OnClose)
+        .count();
 
     // ── Cycle times ───────────────────────────────────────────────────────────
     let mut cycle_times: Vec<f64> = merged.iter().filter_map(|m| m.cycle_time_hours).collect();
@@ -695,6 +693,28 @@ mod tests {
 
         let utc = compute_merged_period_counts(snapshots.iter(), utc_now);
         assert_eq!((utc.today, utc.this_week, utc.this_month), (2, 2, 3));
+    }
+
+    #[test]
+    fn a_reopened_mr_is_no_longer_counted_as_closed() {
+        use SnapshotTrigger::*;
+        // MR 1: closed, reopened, merged. MR 2: closed, reopened, still open.
+        // MR 3: closed for good (seen closed twice).
+        let snapshots = vec![
+            stored(1, "1", OnClose, "closed", 10),
+            stored(2, "2", OnClose, "closed", 10),
+            stored(3, "3", OnClose, "closed", 10),
+            stored(4, "1", OnRefresh, "opened", 10),
+            stored(5, "2", OnRefresh, "opened", 10),
+            stored(6, "1", OnMerge, "merged", 10),
+            stored(7, "3", OnClose, "closed", 10),
+        ];
+        let metrics: Vec<_> = snapshots.iter().map(PerMrMetrics::from_snapshot).collect();
+        let stats = compute_stats(&snapshots, &metrics, &QueryFilter::default());
+
+        assert_eq!((stats.merged_count, stats.closed_count), (1, 1));
+        assert_eq!(stats.abandon_rate, Some(0.5));
+        assert_eq!(stats.open_mr_ages_days.len(), 1);
     }
 
     #[test]
