@@ -109,7 +109,8 @@ impl App {
     /// - `OnMerge` / `OnClose` on every load of a merged / closed MR — dated at the
     ///   real merge / close time (`event_recorded_at`), so only the first one is
     ///   stored and the others hit the UNIQUE constraint;
-    /// - `OnRefresh` at most once per calendar day for open MRs.
+    /// - `OnRefresh` at most once per calendar day for open MRs (a failed write
+    ///   releases the day, see `AppEvent::StatsSnapshotFailed`).
     ///
     /// `refresh_report`: when to ask for a (debounced) report refresh, which is
     /// what the cockpit Flow counters are read from.
@@ -141,21 +142,28 @@ impl App {
         };
         let snap = mr.stats_snapshot(trigger, &self.project_id, &self.config.complexity_profile);
         let project_id = self.project_id.clone();
-        let tx = (refresh_report != ReportRefresh::Never).then(|| tx.clone());
+        let tx = tx.clone();
         tokio::spawn(async move {
             let written = match db.upsert_snapshot(&snap).await {
                 Ok(written) => written,
                 Err(e) => {
                     tracing::warn!(project_id = %project_id, error = %e, "Failed to record stats snapshot");
+                    // Terminal snapshots are retried on every load anyway.
+                    if snap.trigger == SnapshotTrigger::OnRefresh {
+                        let _ = tx.send(AppEvent::StatsSnapshotFailed { mr_id: snap.mr_id });
+                    }
                     return;
                 }
             };
             // The report itself is recomputed on the next Tick (debounced), not once
             // per recorded snapshot.
-            if let Some(tx) = tx {
-                if written || refresh_report == ReportRefresh::Always {
-                    let _ = tx.send(AppEvent::StatsSnapshotRecorded);
-                }
+            let refresh = match refresh_report {
+                ReportRefresh::Never => false,
+                ReportRefresh::Always => true,
+                ReportRefresh::IfWritten => written,
+            };
+            if refresh {
+                let _ = tx.send(AppEvent::StatsSnapshotRecorded);
             }
         });
     }
@@ -263,6 +271,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_failed_daily_snapshot_releases_the_day() {
+        let (mut app, db) = app_with_db().await;
+        app.mrs = vec![mr("1", GitlabMrState::Opened)];
+        let record = |app: &mut App, tx: &UnboundedSender<AppEvent>| {
+            app.record_stats_snapshot("1", ReportRefresh::IfWritten, tx)
+        };
+        refresh_requests(&mut app, record).await;
+        assert!(app.stats_last_refresh_date.contains_key("1"));
+
+        // What the background write sends when the DB refuses the row.
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        app.apply_event(
+            AppEvent::StatsSnapshotFailed { mr_id: "1".into() },
+            Arc::new(Semaphore::new(1)),
+            &tx,
+            &mut HashMap::new(),
+        );
+        assert!(!app.stats_last_refresh_date.contains_key("1"));
+
+        // The next load reaches the DB again instead of being skipped until tomorrow.
+        refresh_requests(&mut app, record).await;
+        assert!(app.stats_last_refresh_date.contains_key("1"));
+        assert_eq!(triggers_of(&db, "1").await, [SnapshotTrigger::OnRefresh]);
+    }
+
+    #[tokio::test]
     async fn startup_backfill_records_without_asking_for_a_report() {
         let (mut app, db) = app_with_db().await;
         app.mrs = vec![mr("3", GitlabMrState::Closed)];
@@ -272,13 +306,6 @@ mod tests {
         })
         .await;
         assert_eq!(requests, 0);
-        // The write holds no sender here: poll for it.
-        for _ in 0..200 {
-            if !triggers_of(&db, "3").await.is_empty() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
         assert_eq!(triggers_of(&db, "3").await, [SnapshotTrigger::OnClose]);
     }
 

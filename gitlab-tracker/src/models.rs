@@ -770,6 +770,12 @@ pub enum AppEvent {
         result:
             Result<Box<gitlab_tracker_stats::AggregatedStats>, gitlab_tracker_stats::StatsError>,
     },
+    /// Fired when the daily snapshot of an open MR could not be written, so the
+    /// next load of that MR tries again instead of waiting for tomorrow.
+    #[cfg(feature = "stats")]
+    StatsSnapshotFailed {
+        mr_id: String,
+    },
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,

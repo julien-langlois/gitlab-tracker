@@ -2048,6 +2048,12 @@ impl App {
             }
 
             #[cfg(feature = "stats")]
+            AppEvent::StatsSnapshotFailed { mr_id } => {
+                self.stats_last_refresh_date.remove(&mr_id);
+                false
+            }
+
+            #[cfg(feature = "stats")]
             AppEvent::StatsSnapshotRecorded => {
                 self.stats_report_dirty = true;
                 false
