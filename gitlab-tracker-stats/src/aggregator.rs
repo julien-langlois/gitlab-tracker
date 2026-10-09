@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::db::{SnapshotQuery, SqliteStatsDb, StatsError, StoredSnapshot};
@@ -69,13 +69,13 @@ pub struct AggregatedStats {
     /// `None` when no terminal MR exists in the sample.
     pub abandon_rate: Option<f64>,
 
-    /// MRs merged on the current UTC calendar day.
+    /// MRs merged on the current calendar day (local time, like the next two).
     pub merged_today: usize,
 
-    /// MRs merged during the current UTC ISO week.
+    /// MRs merged during the current ISO week.
     pub merged_this_week: usize,
 
-    /// MRs merged during the current UTC calendar month.
+    /// MRs merged during the current calendar month.
     pub merged_this_month: usize,
 
     /// MRs merged during the last 7 rolling days.
@@ -253,7 +253,8 @@ pub(crate) fn compute_stats(
     let merged: Vec<&PerMrMetrics> = merged_pairs.iter().map(|(_, metric)| *metric).collect();
 
     let now = Utc::now();
-    let merged_period_counts = compute_merged_period_counts(snapshots.iter(), now);
+    let merged_period_counts =
+        compute_merged_period_counts(snapshots.iter(), now.with_timezone(&Local));
 
     let closed_count = {
         let mut seen = std::collections::HashSet::new();
@@ -419,10 +420,14 @@ struct MergedPeriodCounts {
     last_30_days: usize,
 }
 
-/// Counts merged MRs across common UTC periods using the actual GitLab merge date.
-fn compute_merged_period_counts<'a, I>(snapshots: I, now: DateTime<Utc>) -> MergedPeriodCounts
+/// Counts merged MRs across common periods using the actual GitLab merge date.
+///
+/// "Today", "this week" and "this month" follow the calendar of `now`'s time zone
+/// (the user's, not UTC: a merge at 23:30 UTC is tomorrow in UTC+2).
+fn compute_merged_period_counts<'a, I, Tz>(snapshots: I, now: DateTime<Tz>) -> MergedPeriodCounts
 where
     I: Iterator<Item = &'a StoredSnapshot> + DoubleEndedIterator,
+    Tz: TimeZone,
 {
     let today = now.date_naive();
     let current_iso_week = now.iso_week();
@@ -446,6 +451,7 @@ where
             .merged_at
             .as_deref()
             .and_then(|date| date.parse::<DateTime<Utc>>().ok())
+            .map(|date| date.with_timezone(&now.timezone()))
         else {
             continue;
         };
@@ -459,10 +465,10 @@ where
         if merged_at.year() == current_year && merged_at.month() == current_month {
             counts.this_month += 1;
         }
-        if merged_at >= now - Duration::days(7) {
+        if merged_at >= now.clone() - Duration::days(7) {
             counts.last_7_days += 1;
         }
-        if merged_at >= now - Duration::days(30) {
+        if merged_at >= now.clone() - Duration::days(30) {
             counts.last_30_days += 1;
         }
     }
@@ -665,6 +671,30 @@ mod tests {
             "MR !1 of project p and MR !1 of project q"
         );
         assert_eq!(stats.merged_last_7_days, 2);
+    }
+
+    #[test]
+    fn calendar_periods_follow_the_time_zone_of_now() {
+        let merged_at = |id: i64, at: &str| {
+            let mut snap = stored(id, &id.to_string(), SnapshotTrigger::OnMerge, "merged", 10);
+            snap.snapshot.merged_at = Some(at.into());
+            snap
+        };
+        // Thursday 1 October 2026, 00:30 in UTC+2 — still 30 September in UTC.
+        let snapshots = [
+            merged_at(1, "2026-09-30T22:10:00Z"), // 00:10 local: today
+            merged_at(2, "2026-09-30T21:50:00Z"), // 23:50 local: yesterday, last month
+            merged_at(3, "2026-09-27T23:00:00Z"), // Monday 01:00 local: this week
+        ];
+        let utc_now: DateTime<Utc> = "2026-09-30T22:30:00Z".parse().unwrap();
+
+        let paris = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let local = compute_merged_period_counts(snapshots.iter(), utc_now.with_timezone(&paris));
+        assert_eq!((local.today, local.this_week, local.this_month), (1, 3, 1));
+        assert_eq!(local.last_7_days, 3);
+
+        let utc = compute_merged_period_counts(snapshots.iter(), utc_now);
+        assert_eq!((utc.today, utc.this_week, utc.this_month), (2, 2, 3));
     }
 
     #[test]
