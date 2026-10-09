@@ -10,6 +10,10 @@
 pub struct StatsViewState {
     /// The last successfully computed report, ready to render.
     pub report: Option<gitlab_tracker_stats::StatReport>,
+    /// Aggregation over the whole retained history, for the cockpit (Flow counters,
+    /// merged MRs per release). Unlike `report` it does not follow `window`: the
+    /// cockpit must not change when `[W]` is pressed in the overlay.
+    pub cockpit: Option<gitlab_tracker_stats::AggregatedStats>,
     /// Vertical scroll offset inside the stats overlay (in lines).
     pub scroll: u16,
     /// Whether an async aggregation is currently in flight.
@@ -64,12 +68,32 @@ impl StatsViewState {
             Err(error) => self.error = Some(error.to_string()),
         }
     }
+
+    /// Applies a finished cockpit aggregation, unless a newer one was started
+    /// since. A failed one keeps the previous figures.
+    pub fn apply_cockpit_result(
+        &mut self,
+        generation: u64,
+        result: Result<
+            Box<gitlab_tracker_stats::AggregatedStats>,
+            gitlab_tracker_stats::StatsError,
+        >,
+    ) {
+        if generation != self.generation {
+            return;
+        }
+        match result {
+            Ok(stats) => self.cockpit = Some(*stats),
+            Err(error) => tracing::warn!(%error, "Failed to aggregate the cockpit stats"),
+        }
+    }
 }
 
 impl Default for StatsViewState {
     fn default() -> Self {
         Self {
             report: None,
+            cockpit: None,
             scroll: 0,
             loading: false,
             error: None,
@@ -181,6 +205,23 @@ impl StatsWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn cockpit_stats_ignore_late_responses_and_survive_errors() {
+        use gitlab_tracker_stats::{aggregator::aggregate, QueryFilter, SqliteStatsDb, StatsError};
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        let stats = || async { Box::new(aggregate(&db, &QueryFilter::default()).await.unwrap()) };
+
+        let mut view = StatsViewState::default();
+        let stale = view.next_generation();
+        let current = view.next_generation();
+        view.apply_cockpit_result(stale, Ok(stats().await));
+        assert!(view.cockpit.is_none());
+        view.apply_cockpit_result(current, Ok(stats().await));
+        assert!(view.cockpit.is_some());
+        view.apply_cockpit_result(current, Err(StatsError::InvalidData("boom".into())));
+        assert!(view.cockpit.is_some());
+    }
 
     #[test]
     fn day_change_is_reported_once() {

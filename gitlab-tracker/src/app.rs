@@ -2042,6 +2042,12 @@ impl App {
             }
 
             #[cfg(feature = "stats")]
+            AppEvent::StatsCockpitLoaded { generation, result } => {
+                self.stats_view.apply_cockpit_result(generation, result);
+                false
+            }
+
+            #[cfg(feature = "stats")]
             AppEvent::StatsSnapshotRecorded => {
                 self.stats_report_dirty = true;
                 false

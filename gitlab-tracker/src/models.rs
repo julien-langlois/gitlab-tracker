@@ -762,6 +762,14 @@ pub enum AppEvent {
         generation: u64,
         result: Result<Box<gitlab_tracker_stats::StatReport>, gitlab_tracker_stats::StatsError>,
     },
+    /// Fired when the aggregation behind the cockpit (whole retained history)
+    /// finishes; see `StatsViewState::apply_cockpit_result`.
+    #[cfg(feature = "stats")]
+    StatsCockpitLoaded {
+        generation: u64,
+        result:
+            Result<Box<gitlab_tracker_stats::AggregatedStats>, gitlab_tracker_stats::StatsError>,
+    },
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,

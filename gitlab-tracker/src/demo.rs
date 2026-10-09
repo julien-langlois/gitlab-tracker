@@ -999,6 +999,10 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
                 AppEvent::StatsReportLoaded { generation, result } => {
                     app.stats_view.apply_result(generation, result);
                 }
+                #[cfg(feature = "stats")]
+                AppEvent::StatsCockpitLoaded { generation, result } => {
+                    app.stats_view.apply_cockpit_result(generation, result);
+                }
                 // Everything else (add / remove MR…) would mutate or fetch: the demo
                 // is read-only, so those events are dropped.
                 _ => {}

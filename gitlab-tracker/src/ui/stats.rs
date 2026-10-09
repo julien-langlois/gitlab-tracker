@@ -240,6 +240,17 @@ fn trigger_stats_report_refresh(
                 .await
                 .map(Box::new);
             let _ = tx2.send(crate::models::AppEvent::StatsReportLoaded { generation, result });
+
+            // The cockpit reads the whole retained history, whatever the window
+            // selected in the overlay.
+            let cockpit_filter = QueryFilter {
+                window: None,
+                ..filter
+            };
+            let result = gitlab_tracker_stats::aggregator::aggregate(db.as_ref(), &cockpit_filter)
+                .await
+                .map(Box::new);
+            let _ = tx2.send(crate::models::AppEvent::StatsCockpitLoaded { generation, result });
         });
     }
 }

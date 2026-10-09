@@ -93,14 +93,16 @@ impl DashboardSummary {
         Self::from_visible_mrs(app)
     }
 
-    /// Flow counters from the stats report. The report knows nothing about
-    /// mergeability, so "Mergeable" and "Draft" come from `live` (the tracked MRs).
+    /// Flow counters. Merges and closes come from the stats snapshots over the
+    /// whole retained history (not the window selected in the overlay), so they
+    /// outlive the tracked list. What is open right now — "Open", "Mergeable",
+    /// "Draft" — comes from `live` (the tracked MRs): snapshots know nothing about
+    /// mergeability, and an MR no longer tracked would stay "open" in them forever.
     #[cfg(feature = "stats")]
     pub(super) fn flow_from_stats_report(app: &App, live: &Self) -> Option<Self> {
-        let report = app.stats_view.report.as_ref()?;
-        let stats = &report.aggregated;
+        let stats = app.stats_view.cockpit.as_ref()?;
         let mut summary = Self {
-            open: stats.open_mr_ages_days.len(),
+            open: live.open,
             merged: stats.merged_count,
             closed: stats.closed_count,
             mergeable: live.mergeable,
@@ -368,14 +370,14 @@ pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
 
 #[cfg(feature = "stats")]
 fn enrich_release_summaries_with_stats(app: &App, releases: &mut BTreeMap<String, ReleaseSummary>) {
-    let Some(report) = app.stats_view.report.as_ref() else {
+    let Some(stats) = app.stats_view.cockpit.as_ref() else {
         return;
     };
 
     // Historical completion data belongs to the stats crate: it is persisted and
     // deduplicated by gitlab_tracker_stats::aggregator::aggregate instead of being
     // inferred from the currently visible MR list.
-    for (milestone, merged) in &report.aggregated.throughput_by_milestone {
+    for (milestone, merged) in &stats.throughput_by_milestone {
         let milestone = milestone.trim();
         // Stats rows recorded before sentinels were stored as NULL may still say "None".
         if milestone.is_empty() || milestone == "None" {
@@ -433,7 +435,7 @@ mod tests {
     #[cfg(feature = "stats")]
     #[tokio::test]
     async fn flow_takes_mergeable_and_draft_from_the_tracked_mrs() {
-        use gitlab_tracker_stats::{QueryFilter, SqliteStatsDb, StatReport};
+        use gitlab_tracker_stats::{aggregator::aggregate, QueryFilter, SqliteStatsDb};
 
         let mut app = crate::app::tests::test_app();
         for (id, mergeability) in [
@@ -449,15 +451,11 @@ mod tests {
         let live = DashboardSummary::from_app(&app);
         assert!(DashboardSummary::flow_from_stats_report(&app, &live).is_none());
 
-        // An empty report: none of its figures can provide the two counters.
+        // Empty stats: none of their figures can provide the live counters.
         let db = SqliteStatsDb::open(":memory:").await.unwrap();
-        app.stats_view.report = Some(
-            StatReport::load(&db, &QueryFilter::default())
-                .await
-                .unwrap(),
-        );
+        app.stats_view.cockpit = Some(aggregate(&db, &QueryFilter::default()).await.unwrap());
         let flow = DashboardSummary::flow_from_stats_report(&app, &live).unwrap();
-        assert_eq!((flow.mergeable, flow.draft), (1, 2));
+        assert_eq!((flow.open, flow.mergeable, flow.draft), (3, 1, 2));
     }
 
     #[test]
