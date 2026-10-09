@@ -86,7 +86,7 @@ pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
     let summary = DashboardSummary::from_app(app);
     let releases = release_summaries(app);
     #[cfg(feature = "stats")]
-    let flow_summary = DashboardSummary::flow_from_stats_report(app);
+    let flow_summary = DashboardSummary::flow_from_stats_report(app, &summary);
 
     #[cfg(feature = "stats")]
     let constraints: Vec<Constraint> = if flow_summary.is_some() {

@@ -93,14 +93,18 @@ impl DashboardSummary {
         Self::from_visible_mrs(app)
     }
 
+    /// Flow counters from the stats report. The report knows nothing about
+    /// mergeability, so "Mergeable" and "Draft" come from `live` (the tracked MRs).
     #[cfg(feature = "stats")]
-    pub(super) fn flow_from_stats_report(app: &App) -> Option<Self> {
+    pub(super) fn flow_from_stats_report(app: &App, live: &Self) -> Option<Self> {
         let report = app.stats_view.report.as_ref()?;
         let stats = &report.aggregated;
         let mut summary = Self {
             open: stats.open_mr_ages_days.len(),
             merged: stats.merged_count,
             closed: stats.closed_count,
+            mergeable: live.mergeable,
+            draft: live.draft,
             merged_today: stats.merged_today,
             merged_this_week: stats.merged_this_week,
             merged_this_month: stats.merged_this_month,
@@ -425,6 +429,36 @@ mod tests {
     }
 
     use super::*;
+
+    #[cfg(feature = "stats")]
+    #[tokio::test]
+    async fn flow_takes_mergeable_and_draft_from_the_tracked_mrs() {
+        use gitlab_tracker_stats::{QueryFilter, SqliteStatsDb, StatReport};
+
+        let mut app = crate::app::tests::test_app();
+        for (id, mergeability) in [
+            ("1", MergeabilityStatus::Mergeable),
+            ("2", MergeabilityStatus::Draft),
+            ("3", MergeabilityStatus::Draft),
+        ] {
+            let mut mr = crate::models::TrackedMr::placeholder(id.into(), id.into(), None);
+            mr.data.state = GitlabMrState::Opened;
+            mr.mergeability = mergeability;
+            app.mrs.push(mr);
+        }
+        let live = DashboardSummary::from_app(&app);
+        assert!(DashboardSummary::flow_from_stats_report(&app, &live).is_none());
+
+        // An empty report: none of its figures can provide the two counters.
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        app.stats_view.report = Some(
+            StatReport::load(&db, &QueryFilter::default())
+                .await
+                .unwrap(),
+        );
+        let flow = DashboardSummary::flow_from_stats_report(&app, &live).unwrap();
+        assert_eq!((flow.mergeable, flow.draft), (1, 2));
+    }
 
     #[test]
     fn release_summary_is_not_at_risk_without_due_date() {
