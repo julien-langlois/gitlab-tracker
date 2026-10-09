@@ -25,6 +25,8 @@ pub struct StatsViewState {
     pub sprint_weeks: u32,
     /// Id of the latest report request; older responses are stale.
     pub generation: u64,
+    /// Local calendar day the report was last known to be current for.
+    pub report_day: chrono::NaiveDate,
 }
 
 impl StatsViewState {
@@ -32,6 +34,14 @@ impl StatsViewState {
     pub fn next_generation(&mut self) -> u64 {
         self.generation += 1;
         self.generation
+    }
+
+    /// Whether the local day changed since the last call (or since startup). The
+    /// report's day-relative figures ("merged today", this week, open MR ages) are
+    /// computed against "now", so it must be recomputed at midnight even when no
+    /// snapshot was recorded.
+    pub fn day_changed(&mut self, today: chrono::NaiveDate) -> bool {
+        std::mem::replace(&mut self.report_day, today) != today
     }
 
     /// Applies a finished report request, unless a newer one was started since
@@ -67,6 +77,7 @@ impl Default for StatsViewState {
             tab: StatsTab::default(),
             sprint_weeks: 2,
             generation: 0,
+            report_day: chrono::Local::now().date_naive(),
         }
     }
 }
@@ -164,5 +175,22 @@ impl StatsWindow {
             Self::Last365Days => "Last 365 days",
             Self::AllTime => "All time",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn day_change_is_reported_once() {
+        let day = |d| chrono::NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
+        let mut view = StatsViewState {
+            report_day: day(9),
+            ..StatsViewState::default()
+        };
+        assert!(!view.day_changed(day(9)));
+        assert!(view.day_changed(day(10)));
+        assert!(!view.day_changed(day(10)));
     }
 }

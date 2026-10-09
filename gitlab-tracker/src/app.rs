@@ -1642,8 +1642,16 @@ impl App {
     /// Returns whether state must be persisted.
     fn on_tick(&mut self, semaphore: &Arc<Semaphore>, tx: &UnboundedSender<AppEvent>) -> bool {
         #[cfg(feature = "stats")]
-        if std::mem::take(&mut self.stats_report_dirty) {
-            crate::ui::stats::trigger_background_stats_refresh(self, tx);
+        {
+            // Midnight (local): "merged today" and the other day-relative figures
+            // are stale even though nothing was recorded.
+            let today = chrono::Local::now().date_naive();
+            if self.stats_view.day_changed(today) {
+                self.stats_report_dirty = true;
+            }
+            if std::mem::take(&mut self.stats_report_dirty) {
+                crate::ui::stats::trigger_background_stats_refresh(self, tx);
+            }
         }
 
         self.tick_flash();
