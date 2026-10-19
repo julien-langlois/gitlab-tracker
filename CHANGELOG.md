@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-10-19
+
+### 🚀 Features
+
+- [**breaking**] MrSnapshot is non-exhaustive, so new filter fields are no longer breaking
+- Remind reviewers of waiting reviews and new pushes
+- [**breaking**] "To review: me" filter lists my pending reviews, oldest request first
+- Fetch review activity (threads, approvals, review requests) with the discussions
+- Promotion lead time per branch in the stats Flow tab
+- List the commits still missing from a partially ported MR in the Inspector
+- Recognise MRs copied to a branch without -x (≈ COPIED, ◐ PARTIAL), commit by commit
+- Checklist CLI command, "since last session" summary and remembered project switch
+- [**breaking**] Flash feedback, "absent from branch" filter and cherry-pick notifications
+- Markdown release checklist, cherry-pick detection and in-TUI project switching
+- Hide merged MRs from the table while keeping them tracked
+
+### 🐛 Bug Fixes
+
+- **stats**: Retry the daily snapshot of an open MR after a failed write
+- **stats**: A reopened MR no longer counts as closed
+- Cockpit Flow and Releases counters no longer follow the stats overlay window
+- Show the real "Mergeable" and "Draft" counts in the cockpit Flow panel
+- **stats**: Refresh the cockpit Flow counters when the day changes
+- **stats**: Count "merged today / this week / this month" in local time, not UTC
+- **stats**: Refresh the cockpit Flow counters when a merge is recorded after startup
+- Update async-trait to 0.1.92 (clippy double_must_use on Rust 1.99)
+- **redmine**: Apply [project.tracker] settings (ticket_patterns, colours, status_transitions were ignored)
+- Update rustls to 0.23.45 (RUSTSEC-2026-0285)
+
+### ⚡ Performance
+
+- Spare GitLab and Redmine (no overlapping refresh, bounded tracker and branch-scan requests, capped /refs paging)
+
+### 🧪 Tests
+
+- Cover the Redmine provider, the stats report and secret resolution from the environment
+- Cover storage, filters, stats recorder, tracker pane and stats overlay
+
+### 👷 CI
+
+- Lint every feature set, test the default build, check docs and the MSRV
+- Report test coverage per file in the run summary (cargo-llvm-cov)
+
+
+**Full Changelog**: https://github.com/julien-langlois/gitlab-tracker/compare/v0.5.0...v0.6.0
+
 ## [0.5.0] - 2026-09-30
 
 ### 🐛 Bug Fixes
