@@ -170,12 +170,14 @@ pub async fn handle_key_event(
                     if app.filter_picker.cursor > 0 {
                         app.filter_picker.cursor -= 1;
                         app.filter_picker.input.clear();
+                        app.filter_picker.suggestion = None;
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') if !needs_text_input => {
                     if app.filter_picker.cursor < last_idx {
                         app.filter_picker.cursor += 1;
                         app.filter_picker.input.clear();
+                        app.filter_picker.suggestion = None;
                     }
                 }
                 // Allow navigating away from a text-input row with arrow keys
@@ -184,21 +186,29 @@ pub async fn handle_key_event(
                     if app.filter_picker.cursor > 0 {
                         app.filter_picker.cursor -= 1;
                         app.filter_picker.input.clear();
+                        app.filter_picker.suggestion = None;
                     }
                 }
                 KeyCode::Down => {
                     if app.filter_picker.cursor < last_idx {
                         app.filter_picker.cursor += 1;
                         app.filter_picker.input.clear();
+                        app.filter_picker.suggestion = None;
                     }
                 }
 
+                // Label autocompletion (a no-op on other rows).
+                KeyCode::Tab => app.cycle_label_suggestion(true),
+                KeyCode::BackTab => app.cycle_label_suggestion(false),
+
                 KeyCode::Backspace if needs_text_input => {
                     app.filter_picker.input.pop();
+                    app.filter_picker.suggestion = None;
                 }
 
                 KeyCode::Char(c) if needs_text_input => {
                     app.filter_picker.input.push(c);
+                    app.filter_picker.suggestion = None;
                 }
 
                 _ => {}

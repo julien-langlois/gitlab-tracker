@@ -101,6 +101,9 @@ pub struct MrSnapshot<'a> {
     pub absent_branches: &'a [&'a str],
     /// Usernames of the MR's current approvers.
     pub approved_by: &'a [String],
+    /// GitLab labels on the MR, as returned by the API (free-form like
+    /// `"Redesign - Sprint 4"` or scoped like `"review::ongoing"`).
+    pub labels: &'a [String],
 }
 
 impl<'a> MrSnapshot<'a> {
@@ -126,6 +129,7 @@ impl<'a> MrSnapshot<'a> {
             target_branch,
             absent_branches: &[],
             approved_by: &[],
+            labels: &[],
         }
     }
 }

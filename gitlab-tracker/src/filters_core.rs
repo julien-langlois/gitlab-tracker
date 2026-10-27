@@ -312,6 +312,48 @@ inventory::submit!(FilterDef {
     },
 });
 
+inventory::submit!(FilterDef {
+    id: "label",
+    label: "Label… (type below)",
+    active_label: Some("Label:"),
+    priority: 54,
+    needs_text_input: true,
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, query: &str| {
+        let query = normalize_label(query);
+        if query.is_empty() {
+            return true;
+        }
+        mr.labels
+            .iter()
+            .any(|label| label_matches(&normalize_label(label), &query))
+    },
+});
+
+/// Lowercases a label and drops the spaces around `::`, so `"Review :: Ongoing"`
+/// and `"review::ongoing"` compare equal.
+pub(crate) fn normalize_label(label: &str) -> String {
+    label
+        .trim()
+        .split("::")
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("::")
+        .to_lowercase()
+}
+
+/// The label starts with the query and the query ends on a word boundary:
+/// `"Project Foo"` picks `"Project Foo - Sprint 4"` and `"Project Foo - Sprint 5"`,
+/// `"review"` or `"review::"` the whole `review::` scope, but `"Sprint 4"` never
+/// `"Sprint 40"` nor `"Project F"` `"Project Foo"`. Both sides normalized.
+fn label_matches(label: &str, query: &str) -> bool {
+    let Some(rest) = label.strip_prefix(query) else {
+        return false;
+    };
+    let ends_word = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
+    ends_word(query.chars().next_back()) || ends_word(rest.chars().next())
+}
+
 #[cfg(test)]
 mod tests {
     use gitlab_tracker_core::{
@@ -351,6 +393,7 @@ mod tests {
             "assignee",
             "target_branch",
             "absent_from_branch",
+            "label",
         ] {
             let def = filter(id);
             assert!(def.needs_text_input && def.active_label.is_some(), "{id}");
@@ -536,5 +579,54 @@ mod tests {
         assert!(!(absent_from.apply)(mr(), "prod"));
         assert!(!(absent_from.apply)(mr(), "main"));
         assert!(!(absent_from.apply)(mr(), ""));
+    }
+
+    #[test]
+    fn label_filter_matches_label_prefixes_ending_on_a_word() {
+        let labels = [
+            "Project Foo - Sprint 4".to_string(),
+            "review::ongoing".to_string(),
+            "priority::high::p1".to_string(),
+        ];
+        let matches = |query: &str| {
+            let mut mr = open();
+            mr.labels = &labels;
+            (filter("label").apply)(mr, query)
+        };
+
+        assert!(matches(""), "empty query");
+        // Whole label, any case, surrounding spaces ignored.
+        assert!(matches(" project foo - sprint 4 "));
+        assert!(matches("REVIEW::ONGOING"));
+        assert!(matches("review :: ongoing"), "spaces around ::");
+        // The start of a label, up to a word boundary.
+        assert!(matches("project foo"));
+        assert!(matches("Project Foo -"));
+        assert!(!matches("Project F"), "cuts a word");
+        assert!(!matches("Sprint 4"), "not the start of the label");
+        assert!(!matches("review::done"));
+        // A scope, with or without its `::`, nested scopes included.
+        assert!(matches("review"));
+        assert!(matches("review::"));
+        assert!(matches("Priority::"));
+        assert!(matches("priority::high"));
+        assert!(!matches("view::"));
+        assert!(!matches("priority::hi"));
+        // An MR without labels never matches a non-empty query.
+        assert!(!(filter("label").apply)(open(), "review::"));
+    }
+
+    #[test]
+    fn label_prefix_stops_at_the_end_of_a_word() {
+        let labels = ["Project Foo - Sprint 40".to_string()];
+        let matches = |query: &str| {
+            let mut mr = open();
+            mr.labels = &labels;
+            (filter("label").apply)(mr, query)
+        };
+        // Picking "Sprint 4" (a suggestion or typed) leaves "Sprint 40" out.
+        assert!(!matches("Project Foo - Sprint 4"));
+        assert!(matches("Project Foo - Sprint 40"));
+        assert!(matches("Project Foo - Sprint"));
     }
 }

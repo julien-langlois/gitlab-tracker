@@ -281,9 +281,14 @@ pub(super) fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
         .map(|(_, def)| def.needs_text_input)
         .unwrap_or(false);
 
+    // Label autocompletion, listed under the text input (empty on other rows).
+    const MAX_SUGGESTIONS: usize = 8;
+    let suggestions = app.label_suggestions();
+    let suggestion_rows = suggestions.len().min(MAX_SUGGESTIONS) as u16;
+
     let list_height = visible_filters.len() as u16;
     let input_extra: u16 = if needs_text_input { 3 } else { 0 };
-    let popup_height = list_height + 2 + input_extra;
+    let popup_height = list_height + 2 + input_extra + suggestion_rows;
     let popup_width: u16 = 48;
 
     let popup_area = centered_popup(area, popup_width, popup_height);
@@ -311,7 +316,11 @@ pub(super) fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
     let zones = if needs_text_input {
         Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1), Constraint::Length(3)])
+            .constraints([
+                Constraint::Min(1),
+                Constraint::Length(3),
+                Constraint::Length(suggestion_rows),
+            ])
             .split(inner)
     } else {
         Layout::default()
@@ -386,6 +395,30 @@ pub(super) fn render_filter_picker(f: &mut Frame, app: &App, area: Rect) {
             .block(input_block)
             .style(Style::default().fg(crate::ui::theme::fg()));
         f.render_widget(input_widget, zones[1]);
+    }
+
+    if suggestion_rows > 0 {
+        // Keep the highlighted suggestion in view.
+        let highlighted = app.filter_picker.suggestion;
+        let offset = highlighted.map_or(0, |i| (i + 1).saturating_sub(MAX_SUGGESTIONS));
+        let items: Vec<ListItem> = suggestions
+            .iter()
+            .enumerate()
+            .skip(offset)
+            .take(MAX_SUGGESTIONS)
+            .map(|(i, label)| {
+                let style = if highlighted == Some(i) {
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(crate::ui::theme::muted())
+                };
+                ListItem::new(Line::from(Span::styled(format!("  {label}"), style)))
+            })
+            .collect();
+        f.render_widget(List::new(items), zones[2]);
     }
 }
 

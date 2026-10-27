@@ -244,6 +244,9 @@ pub struct FilterPickerState {
     pub cursor: usize,
     /// Free-text input used for parametric filters (Milestone, Assignee, …).
     pub input: String,
+    /// Highlighted entry of [`App::label_suggestions`], picked with Tab; `None`
+    /// until then, so Enter applies the typed text (e.g. a `review::` scope).
+    pub suggestion: Option<usize>,
 }
 
 /// Shown in place of a missing assignee or milestone.
@@ -633,8 +636,63 @@ impl App {
         self.filter_picker = FilterPickerState {
             cursor,
             input: self.active_filter.query.clone(),
+            suggestion: None,
         };
         self.input_mode = InputMode::FilterPicker;
+    }
+
+    /// Label autocompletion for the filter picker, empty unless its cursor is on
+    /// the "Label" filter: every label of the tracked MRs, plus each scope they
+    /// use (`review::` for `review::ongoing`), sorted, whose normalized form
+    /// contains the typed text.
+    pub fn label_suggestions(&self) -> Vec<String> {
+        use crate::filters_core::normalize_label;
+
+        let on_label_filter = self
+            .visible_filter_defs()
+            .get(self.filter_picker.cursor)
+            .is_some_and(|(_, def)| def.id == "label");
+        if !on_label_filter {
+            return Vec::new();
+        }
+        // Keyed by normalized form: one entry per label whatever its casing,
+        // shown as first seen.
+        let mut entries: std::collections::BTreeMap<String, String> = Default::default();
+        for label in self.mrs.iter().flat_map(|mr| &mr.labels) {
+            let label = label.trim();
+            if label.is_empty() {
+                continue;
+            }
+            let scopes = label
+                .match_indices("::")
+                .map(|(at, sep)| &label[..at + sep.len()]);
+            for entry in scopes.chain([label]) {
+                entries
+                    .entry(normalize_label(entry))
+                    .or_insert_with(|| entry.to_string());
+            }
+        }
+        let query = normalize_label(&self.filter_picker.input);
+        entries
+            .into_iter()
+            .filter(|(key, _)| key.contains(&query))
+            .map(|(_, label)| label)
+            .collect()
+    }
+
+    /// Moves the highlighted label suggestion forward (or back), wrapping around;
+    /// the first press highlights the first (or last) one.
+    pub fn cycle_label_suggestion(&mut self, forward: bool) {
+        let len = self.label_suggestions().len();
+        if len == 0 {
+            return;
+        }
+        self.filter_picker.suggestion = Some(match (self.filter_picker.suggestion, forward) {
+            (None, true) => 0,
+            (None, false) => len - 1,
+            (Some(i), true) => (i + 1) % len,
+            (Some(i), false) => (i + len - 1) % len,
+        });
     }
 
     /// Applies the filter picker selection and closes the popup.
@@ -643,6 +701,14 @@ impl App {
     /// We resolve it back to the full `filter_defs` index before storing it in
     /// `active_filter`, so `apply_filter` always finds the correct predicate.
     pub fn apply_filter_picker(&mut self) {
+        // A suggestion picked with Tab replaces the typed text.
+        let picked = self
+            .filter_picker
+            .suggestion
+            .and_then(|i| self.label_suggestions().get(i).cloned());
+        if let Some(label) = picked {
+            self.filter_picker.input = label;
+        }
         let input = self.filter_picker.input.trim().to_string();
         let cursor = self.filter_picker.cursor;
         let visible = self.visible_filter_defs();
@@ -823,6 +889,7 @@ impl App {
         snapshot.diff_difficulty = diff_difficulty;
         snapshot.absent_branches = &absent_branches;
         snapshot.approved_by = &mr.approved_by;
+        snapshot.labels = &mr.labels;
         (def.apply)(snapshot, &self.active_filter.query)
     }
 
@@ -2937,6 +3004,57 @@ pub(crate) mod tests {
         // Quitting needs a confirmation, as in the app.
         assert!(!press(&mut app, &tx, KeyCode::Esc).await);
         assert!(press(&mut app, &tx, KeyCode::Char('y')).await);
+    }
+
+    #[tokio::test]
+    async fn label_filter_autocompletes_the_tracked_labels() {
+        let mut app = app_with_mrs(&[("a", "None"), ("b", "None")]).await;
+        app.mrs[0].labels = vec!["review::ongoing".into(), "Project Foo - Sprint 4".into()];
+        app.mrs[1].labels = vec!["Review::Done".into(), "project foo - sprint 4".into()];
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+
+        app.open_filter_picker();
+        assert!(app.label_suggestions().is_empty(), "not on the Label row");
+        app.filter_picker.cursor = app
+            .visible_filter_defs()
+            .iter()
+            .position(|(_, def)| def.id == "label")
+            .unwrap();
+        // Every label once (first casing seen), plus their scope, sorted.
+        assert_eq!(
+            app.label_suggestions(),
+            [
+                "Project Foo - Sprint 4",
+                "review::",
+                "Review::Done",
+                "review::ongoing"
+            ]
+        );
+
+        for c in "REVIEW".chars() {
+            press(&mut app, &tx, KeyCode::Char(c)).await;
+        }
+        assert_eq!(
+            app.label_suggestions(),
+            ["review::", "Review::Done", "review::ongoing"]
+        );
+        // Shift+Tab from nothing highlights the last one; Tab wraps to the first.
+        press(&mut app, &tx, KeyCode::BackTab).await;
+        assert_eq!(app.filter_picker.suggestion, Some(2));
+        press(&mut app, &tx, KeyCode::Tab).await;
+        assert_eq!(app.filter_picker.suggestion, Some(0));
+        // Typing drops the highlight: Enter would apply the text as typed.
+        press(&mut app, &tx, KeyCode::Char(':')).await;
+        assert_eq!(app.filter_picker.suggestion, None);
+        press(&mut app, &tx, KeyCode::Backspace).await;
+
+        press(&mut app, &tx, KeyCode::Tab).await;
+        press(&mut app, &tx, KeyCode::Tab).await;
+        press(&mut app, &tx, KeyCode::Enter).await;
+        assert_eq!(app.input_mode, InputMode::Normal);
+        assert_eq!(app.active_filter.query, "Review::Done");
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["2"]);
     }
 
     #[test]

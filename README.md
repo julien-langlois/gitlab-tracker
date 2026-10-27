@@ -103,6 +103,7 @@
   * **Milestone** — free-text search on the milestone title (case-insensitive)
   * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
   * **Absent from branch** — type a tracked branch name (e.g. `production`, case-insensitive) to list the MRs known to be missing from it: `🔴 ABSENT` or `◐ PARTIAL` (anything present, picked or copied is excluded). MRs still loading are left out. With `m` and `e`, this gives the Markdown checklist of what is left to deploy
+  * **Label** — type a GitLab label or its start, case-insensitive: `review::ongoing`, or `Project Foo` for both `Project Foo - Sprint 4` and `Project Foo - Sprint 5`. The text must stop at the end of a word, so `Project Foo - Sprint 4` does not pick `Sprint 40`, nor `Project F` `Project Foo`. A scope matches all its labels: `review` (or `review::`) lists `review::ongoing`, `review::done`, … Suggestions list the labels of the tracked MRs and their scopes, narrowed as you type: `Tab` / `Shift+Tab` highlight one and `Enter` applies it (with nothing highlighted, `Enter` applies the text as typed)
 
   Merged MRs can also be hidden with `m`, on top of any filter. They stay tracked and refreshed, so this only declutters the remaining work; the status bar shows `merged hidden` while the toggle is on.
 

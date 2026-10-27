@@ -346,6 +346,11 @@ fn render_frame(f: &mut Frame, app: &mut App) {
             let title = fit_hints(&parts, &["[?]: Help", "[Esc]: Quit"], width);
             (title, Style::default())
         }
+        InputMode::FilterPicker if !app.label_suggestions().is_empty() => (
+            " FILTER │ [↑/↓]: Navigate │ [Tab]: Pick label │ [Enter]: Apply │ [Esc]: Cancel "
+                .to_string(),
+            Style::default().fg(Color::Green),
+        ),
         InputMode::FilterPicker => (
             " FILTER │ [↑/↓]: Navigate │ [Enter]: Apply │ [Esc]: Cancel ".to_string(),
             Style::default().fg(Color::Green),
