@@ -1,3 +1,4 @@
+mod actions;
 mod app;
 mod cli;
 mod columns_core;

@@ -612,6 +612,14 @@ impl App {
     /// Toggles the flagged state of the currently selected MR.
     ///
     /// Returns the MR id if a MR was toggled, `None` if no MR is selected.
+    /// The MR at the table selection. The selection indexes the visible list
+    /// (filter + search ranking), not `self.mrs`.
+    pub fn selected_mr(&self) -> Option<&TrackedMr> {
+        self.table_state
+            .selected()
+            .and_then(|i| self.visible_mrs().nth(i))
+    }
+
     pub fn toggle_flag_selected(&mut self) -> Option<String> {
         let selected = self.table_state.selected()?;
         // The selection indexes the visible list (filter + search ranking), not `self.mrs`.

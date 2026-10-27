@@ -4,14 +4,9 @@ use std::sync::Arc;
 use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
+use crate::actions::{dispatch, Action, ActionContext};
 use crate::app::{ActivePane, App, FilterPickerState, InputMode, LogTimeField, LogTimeForm};
-use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData};
-use crate::models::{AppEvent, MrStatus};
-use crate::storage::{
-    save_branches_async, save_hide_merged_async, save_project_settings_async, save_state_async,
-    save_visible_columns_async,
-};
-use crate::utils::parse_duration_to_hours;
+use crate::models::AppEvent;
 
 /// Handles a mouse event and updates the application state accordingly.
 /// Time entries for a newly selected row are fetched by `App::ensure_time_entries`.
@@ -69,6 +64,11 @@ pub async fn handle_key_event(
     tx: &UnboundedSender<AppEvent>,
     last_known_branches: &mut HashMap<String, HashSet<String>>,
 ) -> bool {
+    let mut ctx = ActionContext {
+        api_semaphore,
+        tx,
+        last_known_branches,
+    };
     match app.input_mode {
         // ------------------------------------------------------------------
         // Editing mode: the input field has exclusive focus.
@@ -90,16 +90,13 @@ pub async fn handle_key_event(
                 // immediately dispatch a bulk-add fetch for that milestone's MRs.
                 if !app.milestone_suggestions.is_empty() {
                     if let Some(title) = app.confirm_milestone_suggestion() {
-                        // Filter by milestone title — the GitLab MRs API uses the title,
-                        // not the numeric milestone ID, for the `milestone` query parameter.
-                        if !app.read_only {
-                            spawn_milestone_mrs_fetch(app.fetch_context(), title, tx.clone());
-                        }
+                        dispatch(Action::TrackMilestone(title), app, &mut ctx).await;
                         app.input.clear();
                         app.input_mode = InputMode::Normal;
                     }
                 } else {
-                    handle_enter(app, api_semaphore, tx).await;
+                    let value = std::mem::take(&mut app.input);
+                    dispatch(Action::SubmitInput(value), app, &mut ctx).await;
                     // Return to Normal after submitting so shortcuts are available again.
                     app.input_mode = InputMode::Normal;
                 }
@@ -243,14 +240,7 @@ pub async fn handle_key_event(
                 KeyCode::Esc | KeyCode::Enter => {
                     // Close the popup and persist the new column visibility to projects.toml.
                     app.input_mode = InputMode::Normal;
-                    if !app.read_only {
-                        save_visible_columns_async(
-                            &app.config.visible_columns,
-                            &app.base_url,
-                            &app.project_id,
-                        )
-                        .await;
-                    }
+                    dispatch(Action::SaveVisibleColumns, app, &mut ctx).await;
                 }
                 _ => {}
             }
@@ -269,11 +259,8 @@ pub async fn handle_key_event(
             }
             KeyCode::Enter => {
                 app.input_mode = InputMode::Normal;
-                let chosen = app.project_picker.get(app.project_picker_cursor);
-                if let Some(entry) = chosen
-                    .filter(|p| !crate::storage::is_same_project(p, &app.base_url, &app.project_id))
-                {
-                    app.switch_to = Some(entry.clone());
+                if let Some(entry) = app.project_picker.get(app.project_picker_cursor).cloned() {
+                    dispatch(Action::SwitchProject(Box::new(entry)), app, &mut ctx).await;
                 }
             }
             KeyCode::Esc => app.input_mode = InputMode::Normal,
@@ -291,20 +278,7 @@ pub async fn handle_key_event(
                 app.input_mode = InputMode::Normal;
             }
             KeyCode::Enter => {
-                let project_table = app.settings_editor.to_project_table();
-                if app.read_only {
-                    app.settings_editor.cancel();
-                } else if let Some(project) =
-                    save_project_settings_async(&project_table, &app.base_url, &app.project_id)
-                        .await
-                {
-                    app.project_settings = project;
-                    let editor = std::mem::take(&mut app.settings_editor);
-                    editor.apply_to_app(app);
-                    app.settings_editor = crate::settings::SettingsEditorState::from_project_entry(
-                        &app.project_settings,
-                    );
-                }
+                dispatch(Action::SaveSettings, app, &mut ctx).await;
                 app.input_mode = InputMode::Normal;
             }
             KeyCode::Up | KeyCode::Char('k') => app.settings_editor.move_up(),
@@ -372,97 +346,18 @@ pub async fn handle_key_event(
                 }
 
                 // Enter: validate and submit when on Comment field, else advance field.
-                KeyCode::Enter => {
-                    match app.log_time_form.focused_field {
-                        LogTimeField::Duration | LogTimeField::Activity => {
-                            app.log_time_form.focused_field = match app.log_time_form.focused_field
-                            {
-                                LogTimeField::Duration => LogTimeField::Activity,
-                                _ => LogTimeField::Comment,
-                            };
-                            app.log_time_form.error = None;
-                        }
-                        LogTimeField::Comment => {
-                            // Validate duration before submitting.
-                            let hours = parse_duration_to_hours(&app.log_time_form.duration_input);
-                            match hours {
-                                Err(e) => {
-                                    app.log_time_form.error = Some(e.to_string());
-                                    app.log_time_form.focused_field = LogTimeField::Duration;
-                                }
-                                Ok(h) => {
-                                    if app.activities.is_empty() {
-                                        app.log_time_form.error =
-                                            Some("No activities loaded".into());
-                                    } else if app.log_time_form.submitting {
-                                        // Already in flight — ignore double-Enter.
-                                    } else {
-                                        // Resolve the selected activity, the Redmine ticket id,
-                                        // and the parent MR id (needed to route the refresh).
-                                        let activity = app
-                                            .activities
-                                            .get(app.log_time_form.selected_activity_idx)
-                                            .cloned();
-                                        let selected_mr = app
-                                            .table_state
-                                            .selected()
-                                            .and_then(|i| app.visible_mrs().nth(i));
-                                        let mr_id = selected_mr.map(|mr| mr.id.clone());
-                                        let ticket_id = selected_mr
-                                            .and_then(|mr| mr.linked_ticket.as_ref())
-                                            .map(|t| t.id.clone());
-
-                                        if let (Some(activity), Some(mr_id), Some(ticket_id)) =
-                                            (activity, mr_id, ticket_id)
-                                        {
-                                            app.log_time_form.submitting = true;
-                                            app.log_time_form.error = None;
-
-                                            let provider = app.tracker.as_ref().map(Arc::clone);
-                                            let comment = app.log_time_form.comment_input.clone();
-                                            let spent_on =
-                                                chrono::Utc::now().format("%Y-%m-%d").to_string();
-                                            let tx2 = tx.clone();
-                                            let tid = ticket_id.clone();
-
-                                            if let Some(provider) = provider {
-                                                tokio::spawn(async move {
-                                                    let entry =
-                                                        gitlab_tracker_core::TimeEntryRequest {
-                                                            hours: h,
-                                                            activity_id: activity.id,
-                                                            comment,
-                                                            spent_on,
-                                                        };
-                                                    match provider.log_time(&tid, entry).await {
-                                                        Ok(()) => {
-                                                            let _ = tx2.send(
-                                                                crate::models::AppEvent::TimeLogSubmitted {
-                                                                    mr_id,
-                                                                    ticket_id: tid,
-                                                                },
-                                                            );
-                                                        }
-                                                        Err(e) => {
-                                                            let _ = tx2.send(
-                                                                crate::models::AppEvent::TimeLogFailed {
-                                                                    error: e,
-                                                                },
-                                                            );
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            app.log_time_form.error =
-                                                Some("No linked ticket selected".into());
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                KeyCode::Enter => match app.log_time_form.focused_field {
+                    LogTimeField::Duration | LogTimeField::Activity => {
+                        app.log_time_form.focused_field = match app.log_time_form.focused_field {
+                            LogTimeField::Duration => LogTimeField::Activity,
+                            _ => LogTimeField::Comment,
+                        };
+                        app.log_time_form.error = None;
                     }
-                }
+                    LogTimeField::Comment => {
+                        dispatch(Action::SubmitLogTime, app, &mut ctx).await;
+                    }
+                },
 
                 // Backspace edits the focused text field.
                 KeyCode::Backspace => match app.log_time_form.focused_field {
@@ -530,12 +425,11 @@ pub async fn handle_key_event(
                 }
                 // [W] cycles the time window and triggers a fresh aggregation.
                 KeyCode::Char('w') | KeyCode::Char('W') => {
-                    app.stats_view.window = app.stats_view.window.next();
-                    crate::ui::stats::trigger_stats_refresh(app, tx);
+                    dispatch(Action::CycleStatsWindow, app, &mut ctx).await;
                 }
                 // [R] forces a manual stats refresh without changing the window.
                 KeyCode::Char('r') | KeyCode::Char('R') => {
-                    crate::ui::stats::trigger_stats_refresh(app, tx);
+                    dispatch(Action::RefreshStats, app, &mut ctx).await;
                 }
                 KeyCode::Char(c) => {
                     if let Some(tab) = crate::app::StatsTab::from_digit(c) {
@@ -595,234 +489,51 @@ pub async fn handle_key_event(
                     }
                 },
 
-                // Open the MR URL in the default browser.
-                KeyCode::Char('o') | KeyCode::Char('O') => {
-                    if let Some(selected) = app.table_state.selected() {
-                        // Use visible_mrs() so the index is relative to the filtered list.
-                        if let Some(mr) = app.visible_mrs().nth(selected) {
-                            let target_url = if !mr.web_url.is_empty() {
-                                mr.web_url.clone()
-                            } else {
-                                format!(
-                                    "{}/projects/{}/merge_requests/{}",
-                                    app.base_url, app.project_id, mr.id
-                                )
-                            };
-                            let _ = open::that(target_url);
-                        }
-                    }
-                }
+                // Keys that map to an action; the rest are handled below.
+                code => {
+                    if let Some(action) = normal_mode_action(code, app) {
+                        dispatch(action, app, &mut ctx).await;
+                    } else {
+                        match code {
+                            // [P] cycles the current pane's view:
+                            //   - Inspector pane: MrInfo ↔ Pipelines
+                            //   - Tracker pane:   TicketInfo ↔ TimeLog (fetches entries on enter)
+                            //   - Dashboard: no-op
+                            KeyCode::Char('p') | KeyCode::Char('P') => match app.active_pane {
+                                ActivePane::Tracker => {
+                                    app.tracker_view = app.tracker_view.next();
+                                    app.layout.tracker.reset();
+                                }
+                                _ => {
+                                    // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
+                                    app.inspector_view = app.inspector_view.next();
+                                    app.layout.inspector.reset();
+                                }
+                            },
 
-                // [Y]ank — copy the git clone command for the MR source branch to clipboard.
-                KeyCode::Char('y') | KeyCode::Char('Y') => app.yank_clone_command(),
+                            // [F] opens the filter picker popup.
+                            KeyCode::Char('f') | KeyCode::Char('F') => app.open_filter_picker(),
 
-                // [E]xport — copy the visible MRs as a Markdown release checklist.
-                KeyCode::Char('e') | KeyCode::Char('E') => app.yank_markdown_checklist(),
-
-                // Force a full refresh of all MRs (GitLab + Redmine tickets).
-                KeyCode::Char('r') | KeyCode::Char('R') => {
-                    app.time_left = app.refresh_interval_secs;
-                    if app.read_only {
-                        return false; // demo: only the countdown restarts
-                    }
-                    if app.refresh_in_flight() {
-                        app.flash("Refresh already running — wait for it to finish", false);
-                        return false;
-                    }
-                    app.time_entries.clear();
-                    let ctx = app.fetch_context();
-
-                    // Run the discovery poller on manual refresh as well, so [R]
-                    // behaves like the automatic refresh cycle when auto-polling is enabled.
-                    if app.discovery_enabled {
-                        app.spawn_discovery(ctx.clone(), tx);
-                    }
-
-                    for mr in &mut app.mrs {
-                        mr.status = MrStatus::Loading;
-                        let mut cached = CachedMrData::from(&*mr);
-                        // Force a full re-sync on manual refresh: bypass all cache guards
-                        // so the user always gets an up-to-date snapshot, even for
-                        // already-merged MRs whose caches would otherwise be permanent.
-                        cached.cache_policy = CachePolicy::ForceAll;
-                        spawn_mr_fetch(
-                            ctx.clone(),
-                            mr.id.clone(),
-                            cached,
-                            api_semaphore.clone(),
-                            tx.clone(),
-                        );
-                        // Track pending fetches to drive the spinner in the table title.
-                        app.pending_refresh_fetches.insert(mr.id.clone());
-
-                        // Re-fetch the tracker ticket so that spent_hours and time entries
-                        // reflect any change logged since the last refresh, regardless of
-                        // whether the GitLab MR itself was updated.
-                        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                            if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone())
-                            {
-                                crate::app::spawn_ticket_fetch(
-                                    provider,
-                                    ticket_id,
-                                    mr.id.clone(),
-                                    tx,
-                                );
+                            // [C] opens the column-picker popup.
+                            KeyCode::Char('c') | KeyCode::Char('C') => {
+                                app.column_picker_cursor = 0;
+                                app.input_mode = InputMode::ColumnPicker;
                             }
-                        }
-                    }
-                    app.start_refresh_cycle("manual");
-                }
 
-                // [P] cycles the current pane's view:
-                //   - Inspector pane: MrInfo ↔ Pipelines
-                //   - Tracker pane:   TicketInfo ↔ TimeLog (fetches entries on enter)
-                //   - Dashboard: no-op
-                KeyCode::Char('p') | KeyCode::Char('P') => {
-                    match app.active_pane {
-                        ActivePane::Tracker => {
-                            app.tracker_view = app.tracker_view.next();
-                            app.layout.tracker.reset();
-                        }
-                        _ => {
-                            // Inspector pane (or Dashboard): cycle MrInfo ↔ Pipelines.
-                            app.inspector_view = app.inspector_view.next();
-                            app.layout.inspector.reset();
-                        }
-                    }
-                }
-
-                // [L] opens the Log Time popup for the selected MR's linked tracker ticket.
-                // Only active when a tracker provider is configured and a ticket is linked.
-                KeyCode::Char('l') | KeyCode::Char('L') => {
-                    let has_ticket = app
-                        .table_state
-                        .selected()
-                        .and_then(|i| app.visible_mrs().nth(i))
-                        .and_then(|mr| mr.linked_ticket.as_ref())
-                        .is_some();
-
-                    if has_ticket {
-                        app.log_time_form = LogTimeForm::default();
-                        app.input_mode = InputMode::LogTime;
-
-                        // Fetch activities lazily if not yet loaded.
-                        if app.activities.is_empty() {
-                            if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-                                app.activities_error = None;
-                                let tx2 = tx.clone();
-                                tokio::spawn(async move {
-                                    let activities = provider.fetch_activities().await;
-                                    let _ = tx2.send(crate::models::AppEvent::ActivitiesLoaded(
-                                        activities,
-                                    ));
-                                });
-                            }
-                        }
-                    }
-                }
-
-                // [G] opens the Stats fullscreen overlay (only when the `stats` feature is on).
-                #[cfg(feature = "stats")]
-                KeyCode::Char('g') | KeyCode::Char('G') => {
-                    app.input_mode = crate::app::InputMode::Stats;
-                    crate::ui::stats::trigger_stats_refresh(app, tx);
-                }
-
-                KeyCode::Char('s') => app.cycle_sort_column(),
-                KeyCode::Char('S') => app.toggle_sort_order(),
-
-                // [F] opens the filter picker popup.
-                KeyCode::Char('f') | KeyCode::Char('F') => {
-                    app.open_filter_picker();
-                }
-
-                // Space toggles the flagged state of the selected MR and persists immediately.
-                KeyCode::Char(' ') => {
-                    if app.toggle_flag_selected().is_some() && !app.read_only {
-                        save_state_async(
-                            &app.mrs,
-                            last_known_branches,
-                            app.discovery_started_at.as_deref(),
-                            &app.dismissed_mr_ids,
-                            &app.base_url.clone(),
-                            &app.project_id.clone(),
-                        )
-                        .await;
-                    }
-                }
-
-                // [M] hides / shows merged MRs (they stay tracked); saved per project.
-                KeyCode::Char('m') | KeyCode::Char('M') => {
-                    let hide = !app.config.hide_merged;
-                    app.config.hide_merged = hide;
-                    app.project_settings.hide_merged = Some(hide);
-                    app.clamp_selection();
-                    if !app.read_only {
-                        save_hide_merged_async(hide, &app.base_url, &app.project_id).await;
-                    }
-                }
-
-                // [W] opens the project picker (switching needs the network: not in demo).
-                KeyCode::Char('w') | KeyCode::Char('W') if !app.read_only => {
-                    app.project_picker = crate::storage::load_projects_toml().await.projects;
-                    app.project_picker_cursor = app
-                        .project_picker
-                        .iter()
-                        .position(|p| {
-                            crate::storage::is_same_project(p, &app.base_url, &app.project_id)
-                        })
-                        .unwrap_or(0);
-                    app.input_mode = InputMode::ProjectPicker;
-                }
-
-                // [C] opens the column-picker popup.
-                KeyCode::Char('c') | KeyCode::Char('C') => {
-                    app.column_picker_cursor = 0;
-                    app.input_mode = InputMode::ColumnPicker;
-                }
-
-                // [,] opens the project settings popup.
-                KeyCode::Char(',') => {
-                    app.settings_editor = crate::settings::SettingsEditorState::from_project_entry(
-                        &app.project_settings,
-                    );
-                    app.settings_editor.reset_cursor();
-                    app.input_mode = InputMode::Settings;
-                }
-
-                // [T] cycles focus to the Tracker pane (or opens the URL when already focused).
-                // When focused on Tracker: [T] opens the ticket URL in the browser.
-                // Otherwise: [T] moves focus to the Tracker pane (if a ticket is linked).
-                KeyCode::Char('t') | KeyCode::Char('T') => {
-                    if app.active_pane == ActivePane::Tracker {
-                        // Already on Tracker pane — open URL in browser.
-                        if let Some(selected) = app.table_state.selected() {
-                            if let Some(mr) = app.visible_mrs().nth(selected) {
-                                if let Some(ticket) = &mr.linked_ticket {
-                                    let _ = open::that(&ticket.url);
+                            // [T] moves focus to the Tracker pane (if a ticket is linked),
+                            // or opens the ticket URL when the pane already has focus.
+                            KeyCode::Char('t') | KeyCode::Char('T') => {
+                                if app.active_pane == ActivePane::Tracker {
+                                    dispatch(Action::OpenSelectedTicket, app, &mut ctx).await;
+                                } else if app.has_tracker_ticket() {
+                                    app.active_pane = ActivePane::Tracker;
                                 }
                             }
+
+                            _ => {}
                         }
-                    } else if app.has_tracker_ticket() {
-                        // Move focus to the Tracker pane.
-                        app.active_pane = ActivePane::Tracker;
                     }
                 }
-
-                // Delete: remove the selected MR from the list.
-                KeyCode::Delete => {
-                    // The selection indexes the visible (filtered) list: resolve the id.
-                    if let Some(id) = app
-                        .table_state
-                        .selected()
-                        .and_then(|i| app.visible_mrs().nth(i))
-                        .map(|mr| mr.id.clone())
-                    {
-                        let _ = tx.send(AppEvent::MrRemovedById(id));
-                    }
-                }
-
-                _ => {}
             }
         }
     }
@@ -830,66 +541,34 @@ pub async fn handle_key_event(
     false
 }
 
-/// Handles the Enter key: parses the input field and dispatches the appropriate action
-/// (add/remove MR, add/remove branch).
-async fn handle_enter(
-    app: &mut App,
-    api_semaphore: &Arc<Semaphore>,
-    tx: &UnboundedSender<AppEvent>,
-) {
-    let value = app.input.trim().to_string();
-    if value.is_empty() {
-        return;
-    }
-    if app.read_only {
-        // Demo: adding / removing MRs and branches is a mutation — ignore it.
-        app.input.clear();
-        return;
-    }
-
-    if value.starts_with('-') {
-        // Remove an MR (numeric) or a branch (text).
-        let to_remove = value.trim_start_matches('-').to_string();
-        if to_remove.chars().all(|c| c.is_ascii_digit()) {
-            // Route through the event bus — apply_event handles the mutation,
-            // recomputes the API call estimate, and persists state.
-            let _ = tx.send(AppEvent::MrRemovedById(to_remove));
-        } else {
-            app.branches.retain(|b| b != &to_remove);
-            // Branches live in projects.toml — persist there, not in tracker_state.json.
-            save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
-        }
-    } else if value.chars().all(|c| c.is_ascii_digit()) {
-        // Add a new MR to track — route through the event bus so apply_event
-        // handles the push, the fetch spawn, and the estimate recompute atomically.
-        if !app.mrs.iter().any(|m| m.id == value) {
-            let _ = tx.send(AppEvent::MrAdded(value.clone()));
-        }
-    } else {
-        // Add a new branch to track.
-        if !app.branches.contains(&value) {
-            app.branches.push(value.clone());
-            // MRs already on it did not just arrive there (no toast, no arrival).
-            app.just_added_branches.insert(value.clone());
-            // Branches live in projects.toml — persist there, not in tracker_state.json.
-            save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
-
-            let ctx = app.fetch_context();
-            for mr in &mut app.mrs {
-                if mr.status != MrStatus::Loading {
-                    mr.status = MrStatus::Loading;
-                    let cached = CachedMrData::from(&*mr);
-                    spawn_mr_fetch(
-                        ctx.clone(),
-                        mr.id.clone(),
-                        cached,
-                        api_semaphore.clone(),
-                        tx.clone(),
-                    );
-                }
-            }
-        }
-    }
-
-    app.input.clear();
+/// The action bound to `code` in Normal mode, if any.
+fn normal_mode_action(code: KeyCode, app: &App) -> Option<Action> {
+    let action = match code {
+        KeyCode::Char('o') | KeyCode::Char('O') => Action::OpenSelectedMr,
+        // [Y]ank — copy the git clone command for the MR source branch to clipboard.
+        KeyCode::Char('y') | KeyCode::Char('Y') => Action::YankCloneCommand,
+        // [E]xport — copy the visible MRs as a Markdown release checklist.
+        KeyCode::Char('e') | KeyCode::Char('E') => Action::CopyChecklist,
+        // Force a full refresh of all MRs (GitLab + tracker tickets).
+        KeyCode::Char('r') | KeyCode::Char('R') => Action::Refresh,
+        // [L] opens the Log Time popup for the selected MR's linked tracker ticket.
+        KeyCode::Char('l') | KeyCode::Char('L') => Action::OpenLogTime,
+        // [G] opens the Stats fullscreen overlay (only when the `stats` feature is on).
+        #[cfg(feature = "stats")]
+        KeyCode::Char('g') | KeyCode::Char('G') => Action::OpenStats,
+        KeyCode::Char('s') => Action::CycleSortColumn,
+        KeyCode::Char('S') => Action::ToggleSortOrder,
+        // Space toggles the flagged state of the selected MR and persists immediately.
+        KeyCode::Char(' ') => Action::ToggleFlagSelected,
+        // [M] hides / shows merged MRs (they stay tracked); saved per project.
+        KeyCode::Char('m') | KeyCode::Char('M') => Action::ToggleHideMerged,
+        // [W] opens the project picker (switching needs the network: not in demo).
+        KeyCode::Char('w') | KeyCode::Char('W') if !app.read_only => Action::OpenProjectPicker,
+        // [,] opens the project settings popup.
+        KeyCode::Char(',') => Action::OpenSettings,
+        // Delete: remove the selected MR from the list.
+        KeyCode::Delete => Action::RemoveSelected,
+        _ => return None,
+    };
+    Some(action)
 }
