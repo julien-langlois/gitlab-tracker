@@ -2672,6 +2672,56 @@ pub(crate) mod tests {
         theme::set_light(false);
     }
 
+    /// Regression: an auto-refresh that briefly shrinks the visible list left the
+    /// table offset near its end, so once the MRs came back the first rows stayed
+    /// hidden above the viewport until the user scrolled up with the mouse.
+    #[tokio::test]
+    async fn table_rows_stay_visible_after_the_list_shrinks_and_grows() {
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let titles: Vec<String> = (1..=40).map(|i| format!("mr {i}")).collect();
+        let pairs: Vec<(&str, &str)> = titles.iter().map(|t| (t.as_str(), "None")).collect();
+        let mut app = app_with_mrs(&pairs).await;
+        let mut terminal = Terminal::new(TestBackend::new(140, 30)).unwrap();
+        let mut draw = |app: &mut App| {
+            terminal.draw(|f| crate::ui::render_ui(f, app)).unwrap();
+            let buffer = terminal.backend().buffer().clone();
+            (0..buffer.area.height)
+                .map(|y| {
+                    (0..buffer.area.width)
+                        .map(|x| buffer[(x, y)].symbol())
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+        };
+        let shows = |lines: &[String], id: &str| {
+            let needle = format!("!{id} ");
+            lines.iter().any(|l| l.contains(&needle))
+        };
+
+        // Scroll to the bottom of the long list.
+        app.table_state.select(Some(39));
+        draw(&mut app);
+        assert!(app.table_state.offset() > 0);
+
+        // A refresh drops most MRs for a moment, then reloads them.
+        let all = std::mem::take(&mut app.mrs);
+        app.mrs = all[..3].to_vec();
+        app.clamp_selection();
+        draw(&mut app);
+        app.mrs = all[..10].to_vec();
+        let lines = draw(&mut app);
+
+        for id in 1..=10 {
+            assert!(
+                shows(&lines, &id.to_string()),
+                "MR !{id} hidden:\n{}",
+                lines.join("\n")
+            );
+        }
+        assert_eq!(app.table_state.offset(), 0);
+    }
+
     /// Tracker double: time-entry responses are queued per test; calls are counted.
     #[derive(Default)]
     struct FakeTracker {

@@ -7,7 +7,7 @@ use ratatui::{
     layout::Constraint,
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Row, Table},
+    widgets::{Block, Borders, Cell, Row, Table, TableState},
 };
 
 /// Fixed width (in chars) for all state badges, padding included.
@@ -163,6 +163,24 @@ fn state_badge(
         badge_label(text),
         Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
     )))
+}
+
+/// Lines of the table area not available to rows: the two borders, the header
+/// row and its bottom margin (see `render_table`).
+const TABLE_CHROME_HEIGHT: u16 = 4;
+
+/// Pulls the scroll offset back so rows fill the viewport whenever they can.
+///
+/// ratatui only ever scrolls *down* to reach the selection and writes the offset
+/// back into the state: when the visible list shrinks for a moment (auto-refresh,
+/// filter) the offset gets clamped near its end, and once the list grows again the
+/// first rows stay hidden above the viewport, with empty space below.
+pub fn fill_viewport(state: &mut TableState, row_count: usize, area_height: u16) {
+    let viewport_rows = area_height.saturating_sub(TABLE_CHROME_HEIGHT) as usize;
+    let max_offset = row_count.saturating_sub(viewport_rows);
+    if state.offset() > max_offset {
+        *state.offset_mut() = max_offset;
+    }
 }
 
 /// Builds the MR table. Cells borrow their text from `app` instead of cloning
@@ -524,5 +542,42 @@ mod tests {
         assert_eq!(Behind::of(None, &Mergeable), Behind::UpToDate);
         assert_eq!(Behind::of(None, &Conflict), Behind::Pending);
         assert_eq!(mergeability_badge(&MergeabilityStatus::Unknown).0, "OPEN");
+    }
+
+    fn state_at(offset: usize, selected: Option<usize>) -> TableState {
+        TableState::default()
+            .with_offset(offset)
+            .with_selected(selected)
+    }
+
+    #[test]
+    fn fill_viewport_scrolls_back_up_when_rows_fit() {
+        // 30-line area → 26 row lines: 10 rows fit, nothing may stay hidden above.
+        let mut state = state_at(7, Some(9));
+        fill_viewport(&mut state, 10, 30);
+        assert_eq!(state.offset(), 0);
+        assert_eq!(state.selected(), Some(9));
+    }
+
+    #[test]
+    fn fill_viewport_only_pulls_back_to_fill_the_last_screen() {
+        // 26 row lines, 40 rows: the deepest useful offset is 14.
+        let mut state = state_at(30, Some(39));
+        fill_viewport(&mut state, 40, 30);
+        assert_eq!(state.offset(), 14);
+    }
+
+    #[test]
+    fn fill_viewport_keeps_a_valid_scroll_position() {
+        let mut state = state_at(5, Some(20));
+        fill_viewport(&mut state, 40, 30);
+        assert_eq!(state.offset(), 5);
+
+        // Degenerate areas (smaller than the borders + header) never panic.
+        let mut state = state_at(3, None);
+        fill_viewport(&mut state, 5, 2);
+        assert_eq!(state.offset(), 3);
+        fill_viewport(&mut state, 0, 30);
+        assert_eq!(state.offset(), 0);
     }
 }

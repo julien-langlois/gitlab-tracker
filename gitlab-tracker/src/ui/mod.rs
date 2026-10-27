@@ -116,6 +116,11 @@ fn render_frame(f: &mut Frame, app: &mut App) {
     // The table borrows `app`, so render against a copy of the (tiny) table state
     // and write it back once the table widget has been consumed.
     let mut table_state = app.table_state;
+    table::fill_viewport(
+        &mut table_state,
+        app.visible_mrs().count(),
+        left_chunks[1].height,
+    );
     f.render_stateful_widget(table::render_table(app), left_chunks[1], &mut table_state);
     app.table_state = table_state;
 
