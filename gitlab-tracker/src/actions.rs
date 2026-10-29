@@ -14,8 +14,8 @@ use crate::app::{App, InputMode, LogTimeField, LogTimeForm};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData};
 use crate::models::{AppEvent, MrStatus};
 use crate::storage::{
-    save_branches_async, save_hide_merged_async, save_project_settings_async, save_state_async,
-    save_visible_columns_async, ProjectEntry,
+    save_branches_async, save_hide_merged_async, save_project_settings_async,
+    save_visible_columns_async, ProjectEntry, StateFile, StateWriter,
 };
 use crate::utils::parse_duration_to_hours;
 
@@ -41,7 +41,18 @@ pub enum Action {
     ToggleFlagSelected,
     /// Hides or shows merged MRs, and saves the choice for the project.
     ToggleHideMerged,
+    /// Shows only the MRs of the filter at this index in `App::filter_defs`
+    /// (`query`: the text of the filters that take one).
+    // The TUI applies its filter picker through `App::apply_filter_picker`.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    SetFilter {
+        index: usize,
+        query: String,
+    },
     CycleSortColumn,
+    /// Sorts by this column, or reverses the order when it is the current one.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    SortBy(crate::app::SortColumn),
     ToggleSortOrder,
     /// Stops tracking the selected MR.
     RemoveSelected,
@@ -77,6 +88,9 @@ pub struct ActionContext<'a> {
     pub api_semaphore: &'a Arc<Semaphore>,
     pub tx: &'a UnboundedSender<AppEvent>,
     pub last_known_branches: &'a mut HashMap<String, HashSet<String>>,
+    /// Saves the state in the background (the window, which must not wait on the
+    /// disk); `None` writes it before returning (the TUI).
+    pub state_writer: Option<&'a StateWriter>,
 }
 
 /// Performs `action` on `app`.
@@ -105,13 +119,13 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
                         app.base_url, app.project_id, mr.id
                     )
                 };
-                let _ = open::that(target_url);
+                let _ = open::that_detached(target_url);
             }
         }
 
         Action::OpenSelectedTicket => {
             if let Some(ticket) = app.selected_mr().and_then(|mr| mr.linked_ticket.as_ref()) {
-                let _ = open::that(&ticket.url);
+                let _ = open::that_detached(&ticket.url);
             }
         }
 
@@ -120,15 +134,19 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
 
         Action::ToggleFlagSelected => {
             if app.toggle_flag_selected().is_some() && !app.read_only {
-                save_state_async(
+                let file = StateFile::new(
                     &app.mrs,
                     ctx.last_known_branches,
                     app.discovery_started_at.as_deref(),
                     &app.dismissed_mr_ids,
-                    &app.base_url.clone(),
-                    &app.project_id.clone(),
-                )
-                .await;
+                    &app.base_url,
+                    &app.project_id,
+                );
+                match (file, ctx.state_writer) {
+                    (Some(file), Some(writer)) => writer.save(file),
+                    (Some(file), None) => file.write().await,
+                    (None, _) => {}
+                }
             }
         }
 
@@ -142,7 +160,9 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
             }
         }
 
+        Action::SetFilter { index, query } => app.set_filter(index, query),
         Action::CycleSortColumn => app.cycle_sort_column(),
+        Action::SortBy(column) => app.sort_by(column),
         Action::ToggleSortOrder => app.toggle_sort_order(),
 
         Action::RemoveSelected => {
