@@ -68,6 +68,7 @@ pub async fn handle_key_event(
         api_semaphore,
         tx,
         last_known_branches,
+        state_writer: None,
     };
     match app.input_mode {
         // ------------------------------------------------------------------

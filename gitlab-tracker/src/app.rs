@@ -24,6 +24,8 @@ mod stats_view;
 mod tracker_sync;
 
 use mr_changes::branches_to_notify;
+#[cfg(all(feature = "stats", feature = "gui"))]
+pub use stats_view::StatsWindow;
 #[cfg(feature = "stats")]
 pub use stats_view::{StatsTab, StatsViewState};
 pub use tracker_sync::{spawn_ticket_fetch, TimeLogState};
@@ -732,12 +734,14 @@ impl App {
             (0, String::new())
         };
 
-        self.active_filter = ActiveFilter {
-            index: final_idx,
-            query: final_query,
-        };
-
         self.input_mode = InputMode::Normal;
+        self.set_filter(final_idx, final_query);
+    }
+
+    /// Activates the filter at `index` in `filter_defs` (with `query` for the
+    /// filters that take one) and selects the first MR it shows.
+    pub fn set_filter(&mut self, index: usize, query: String) {
+        self.active_filter = ActiveFilter { index, query };
         // Reset selection so we never point past the end of the filtered list.
         if self.visible_mrs().next().is_some() {
             self.table_state.select(Some(0));
@@ -864,10 +868,26 @@ impl App {
     /// Builds a [`MrSnapshot`] and delegates to the registered `FilterDef::apply`
     /// function — no match arm needed when a new filter is added.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
+        self.passes(mr, self.active_filter.index, &self.active_filter.query)
+    }
+
+    /// How many tracked MRs the filter at `index` (in `filter_defs`) shows without a
+    /// query, "hide merged" included: the counts next to the views in the window.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub fn filter_count(&self, index: usize) -> usize {
+        self.mrs
+            .iter()
+            .filter(|mr| self.passes(mr, index, ""))
+            .count()
+    }
+
+    /// Whether `mr` passes the filter at `index` with `query`, and is not hidden
+    /// by the "hide merged" toggle.
+    fn passes(&self, mr: &TrackedMr, index: usize, query: &str) -> bool {
         if self.config.hide_merged && mr.state == GitlabMrState::Merged {
             return false;
         }
-        let Some(def) = self.filter_defs.get(self.active_filter.index) else {
+        let Some(def) = self.filter_defs.get(index) else {
             return true; // Unknown index → show all.
         };
         // The effort filters only need relative bands (< 0.33 / >= 0.66) of the
@@ -898,7 +918,7 @@ impl App {
         snapshot.absent_branches = &absent_branches;
         snapshot.approved_by = &mr.approved_by;
         snapshot.labels = &mr.labels;
-        (def.apply)(snapshot, &self.active_filter.query)
+        (def.apply)(snapshot, query)
     }
 
     /// Returns the subset of registered filter definitions visible in the picker,
@@ -1124,6 +1144,20 @@ impl App {
         self.table_state.select(Some(i));
         // Reset inspector scroll when the selected MR changes.
         self.layout.inspector.reset();
+    }
+
+    /// Sorts by `column`; on the current column, reverses the order instead.
+    pub fn sort_by(&mut self, column: SortColumn) {
+        if self.sort_column == column {
+            self.toggle_sort_order();
+            return;
+        }
+        self.sort_column = column;
+        self.sort_order = match column {
+            SortColumn::UpdatedAt => SortOrder::Descending,
+            _ => SortOrder::Ascending,
+        };
+        self.sort_mrs();
     }
 
     pub fn cycle_sort_column(&mut self) {

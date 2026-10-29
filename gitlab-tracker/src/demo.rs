@@ -507,8 +507,9 @@ fn demo_updated_at(days_ago: i64) -> String {
 
 /// Runs the application in demo mode with pre-populated mock data.
 /// This mode is intended for screenshots, testing, and demonstrations.
-pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
-    use anyhow::Context;
+/// The demo project: mock MRs, branches and tickets, read-only (no disk writes,
+/// no network). Shared by the terminal demo and the window demo.
+pub async fn demo_app(config: AppConfig) -> App {
     // In demo mode optional columns start hidden — the demo.tape scenario uses [C]
     // to open the column picker and enable them live, showcasing the feature.
     let demo_config = AppConfig {
@@ -961,6 +962,38 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
     // The demo runs the real key handler; this flag turns off its disk writes and
     // network requests.
     app.read_only = true;
+    app
+}
+
+/// Applies `event` to the demo app: only the clock and the stats results, since
+/// every other event (add / remove MR…) would mutate or fetch.
+pub fn apply_demo_event(app: &mut App, event: AppEvent) {
+    match event {
+        AppEvent::Tick => {
+            app.tick_flash();
+            if app.time_left > 0 {
+                app.time_left -= 1;
+            } else {
+                app.time_left = app.refresh_interval_secs;
+            }
+        }
+        // Route stats results into app state so the overlay re-renders.
+        #[cfg(feature = "stats")]
+        AppEvent::StatsReportLoaded { generation, result } => {
+            app.stats_view.apply_result(generation, result);
+        }
+        #[cfg(feature = "stats")]
+        AppEvent::StatsCockpitLoaded { generation, result } => {
+            app.stats_view.apply_cockpit_result(generation, result);
+        }
+        _ => {}
+    }
+}
+
+pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let mut app = demo_app(config).await;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
     // Required by the key handler's signature; unused in read-only mode.
@@ -985,28 +1018,7 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
     loop {
         // Drain the event queue before rendering
         while let Ok(event) = rx.try_recv() {
-            match event {
-                AppEvent::Tick => {
-                    app.tick_flash();
-                    if app.time_left > 0 {
-                        app.time_left -= 1;
-                    } else {
-                        app.time_left = app.refresh_interval_secs;
-                    }
-                }
-                // Route stats results into app state so the overlay re-renders.
-                #[cfg(feature = "stats")]
-                AppEvent::StatsReportLoaded { generation, result } => {
-                    app.stats_view.apply_result(generation, result);
-                }
-                #[cfg(feature = "stats")]
-                AppEvent::StatsCockpitLoaded { generation, result } => {
-                    app.stats_view.apply_cockpit_result(generation, result);
-                }
-                // Everything else (add / remove MR…) would mutate or fetch: the demo
-                // is read-only, so those events are dropped.
-                _ => {}
-            }
+            apply_demo_event(&mut app, event);
         }
 
         terminal

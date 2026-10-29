@@ -237,7 +237,7 @@ async fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
 
 /// Moves an unparseable file to `*.bak` so the next save cannot overwrite the
 /// user's data with an empty default.
-async fn backup_corrupt_file(path: &Path, error: &dyn std::fmt::Display) {
+async fn backup_corrupt_file(path: &Path, error: &(dyn std::fmt::Display + Sync)) {
     let mut bak = path.as_os_str().to_owned();
     bak.push(".bak");
     match tokio::fs::rename(path, &bak).await {
@@ -1152,35 +1152,111 @@ pub async fn save_state_async(
     gitlab_url: &str,
     project_id: &str,
 ) {
-    let state = SavedState {
-        mrs: mrs
-            .iter()
-            .map(|m| SavedMr {
-                id: m.id.clone(),
-                found_branches: match &m.status {
-                    MrStatus::MergedIn(set) => set.clone(),
-                    _ => HashSet::new(),
-                },
-                flagged: m.flagged,
-                linked_ticket: m.linked_ticket.clone(),
-                data: m.data.clone(),
-            })
-            .collect(),
-        // branches is no longer persisted here — it lives in projects.toml.
-        branches: vec![],
-        last_known_branches: last_known_branches.clone(),
-        discovery_started_at: discovery_started_at.map(|s| s.to_string()),
-        dismissed_mr_ids: dismissed_mr_ids.clone(),
-    };
+    if let Some(file) = StateFile::new(
+        mrs,
+        last_known_branches,
+        discovery_started_at,
+        dismissed_mr_ids,
+        gitlab_url,
+        project_id,
+    ) {
+        file.write().await;
+    }
+}
 
-    if let Ok(json) = serde_json::to_string_pretty(&state) {
-        if let Some(config_dir) = get_save_dir() {
-            let file_name = tracker_state_file_name(gitlab_url, project_id);
-            let path = config_dir.join(file_name);
-            let _ = tokio::fs::create_dir_all(&config_dir).await;
-            if let Err(e) = write_atomic(&path, &json).await {
-                tracing::error!(error = %e, path = ?path, "Failed to write tracker state");
-            }
+/// The tracker state of a project, copied out of the app and ready to write:
+/// [`save_state_async`] writes it at once, a [`StateWriter`] in the background.
+pub struct StateFile {
+    dir: PathBuf,
+    path: PathBuf,
+    state: SavedState,
+}
+
+impl StateFile {
+    /// `None` when there is no config directory to save to.
+    pub fn new(
+        mrs: &[TrackedMr],
+        last_known_branches: &HashMap<String, HashSet<String>>,
+        discovery_started_at: Option<&str>,
+        dismissed_mr_ids: &HashSet<String>,
+        gitlab_url: &str,
+        project_id: &str,
+    ) -> Option<Self> {
+        let dir = get_save_dir()?;
+        let path = dir.join(tracker_state_file_name(gitlab_url, project_id));
+        let state = SavedState {
+            mrs: mrs
+                .iter()
+                .map(|m| SavedMr {
+                    id: m.id.clone(),
+                    found_branches: match &m.status {
+                        MrStatus::MergedIn(set) => set.clone(),
+                        _ => HashSet::new(),
+                    },
+                    flagged: m.flagged,
+                    linked_ticket: m.linked_ticket.clone(),
+                    data: m.data.clone(),
+                })
+                .collect(),
+            // branches is no longer persisted here — it lives in projects.toml.
+            branches: vec![],
+            last_known_branches: last_known_branches.clone(),
+            discovery_started_at: discovery_started_at.map(|s| s.to_string()),
+            dismissed_mr_ids: dismissed_mr_ids.clone(),
+        };
+        Some(Self { dir, path, state })
+    }
+
+    pub async fn write(self) {
+        let Ok(json) = serde_json::to_string_pretty(&self.state) else {
+            return;
+        };
+        let _ = tokio::fs::create_dir_all(&self.dir).await;
+        if let Err(e) = write_atomic(&self.path, &json).await {
+            tracing::error!(error = %e, path = ?self.path, "Failed to write tracker state");
+        }
+    }
+}
+
+/// Writes [`StateFile`]s in the background, one at a time and newest last: a save
+/// returns at once, and the saves made while a write runs collapse into the newest.
+#[derive(Clone, Default)]
+pub struct StateWriter(std::sync::Arc<StateWriterInner>);
+
+#[derive(Default)]
+struct StateWriterInner {
+    /// The newest state not written yet.
+    latest: std::sync::Mutex<Option<StateFile>>,
+    /// Held while writing: two writes would race on the same temporary file, and
+    /// an older state could land last.
+    writing: tokio::sync::Mutex<()>,
+}
+
+// The TUI saves with `save_state_async`.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+impl StateWriter {
+    /// Queues `file` and returns: a background task writes it (needs a tokio runtime).
+    pub fn save(&self, file: StateFile) {
+        *self
+            .0
+            .latest
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(file);
+        let writer = self.clone();
+        tokio::spawn(async move { writer.flush().await });
+    }
+
+    /// Writes the newest queued state, after the write in progress if any.
+    pub async fn flush(&self) {
+        let _writing = self.0.writing.lock().await;
+        let file = self
+            .0
+            .latest
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(file) = file {
+            file.write().await;
         }
     }
 }
@@ -1672,5 +1748,19 @@ mod tests {
         let fallback = load_or_create_config_async().await;
         assert_eq!(fallback.show_cockpit, defaults.show_cockpit);
         assert_eq!(fallback.default_branches, defaults.default_branches);
+    }
+
+    #[tokio::test]
+    async fn state_writer_lands_the_newest_state_last() {
+        let _dir = TempConfigDir::new("state-writer");
+        let writer = StateWriter::default();
+        for id in ["1", "2", "3"] {
+            let dismissed = HashSet::from([id.to_string()]);
+            let file = StateFile::new(&[], &HashMap::new(), None, &dismissed, URL, "1").unwrap();
+            writer.save(file);
+        }
+        writer.flush().await;
+        let (.., dismissed) = load_state_async(URL, "1").await;
+        assert_eq!(dismissed, HashSet::from(["3".to_string()]));
     }
 }

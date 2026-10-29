@@ -11,7 +11,7 @@ use summary::{release_summaries, DashboardSummary, ReleaseSummary};
 
 mod summary;
 
-fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
+fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<CockpitRow> {
     let today = Utc::now().date_naive();
     let mut lines = Vec::new();
 
@@ -33,40 +33,30 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
                 }
             })
             .unwrap_or_else(|| "no due date".to_string());
-        let prefix = if at_risk { "⚠ " } else { "  " };
-
-        lines.push(Line::from(vec![
-            Span::styled(prefix.to_string(), Style::default().fg(title_color)),
-            Span::styled(
-                format!("{} ({})", release.title, due_label),
-                Style::default()
-                    .fg(title_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]));
+        lines.push(CockpitRow::Heading {
+            text: format!("{} ({})", release.title, due_label),
+            color: title_color,
+            alert: at_risk,
+        });
         lines.push(release_metric_line(
             "Merged",
             release.merged,
             app.theme.accent_green,
-            app,
         ));
         lines.push(release_metric_line(
             "WIP",
             release.in_progress,
             app.theme.fg,
-            app,
         ));
         lines.push(release_metric_line(
             "Blocked",
             release.blocked,
             alert_color(release.blocked, app),
-            app,
         ));
         lines.push(release_metric_line(
             "Review",
             release.waiting_review,
             warning_color(release.waiting_review, app),
-            app,
         ));
     }
 
@@ -75,174 +65,168 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<Line<'static>> {
             "Releases",
             Some("n/a".to_string()),
             app.theme.muted_inactive,
-            app,
         ));
     }
 
     lines
 }
 
-pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
-    let summary = DashboardSummary::from_app(app);
-    let releases = release_summaries(app);
-    #[cfg(feature = "stats")]
-    let flow_summary = DashboardSummary::flow_from_stats_report(app, &summary);
-
-    #[cfg(feature = "stats")]
-    let constraints: Vec<Constraint> = if flow_summary.is_some() {
-        vec![
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-        ]
-    } else {
-        vec![
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-        ]
-    };
-    #[cfg(not(feature = "stats"))]
-    let constraints: Vec<Constraint> = vec![
-        Constraint::Percentage(25),
-        Constraint::Percentage(25),
-        Constraint::Percentage(25),
-        Constraint::Percentage(25),
-    ];
-
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(constraints)
-        .split(area);
-
-    let mut column_index = 0;
-
-    #[cfg(feature = "stats")]
-    if let Some(flow_summary) = flow_summary {
-        f.render_widget(
-            cockpit_block(" Flow ", flow_lines(flow_summary, app)),
-            columns[column_index],
-        );
-        column_index += 1;
-    }
-
-    f.render_widget(
-        cockpit_block(" Attention ", attention_lines(summary, app)),
-        columns[column_index],
-    );
-    column_index += 1;
-    f.render_widget(
-        cockpit_block(" Delivery Health ", delivery_health_lines(summary, app)),
-        columns[column_index],
-    );
-    column_index += 1;
-    f.render_widget(
-        cockpit_block(" Quality / Scope ", quality_scope_lines(summary, app)),
-        columns[column_index],
-    );
-    column_index += 1;
-
-    f.render_widget(
-        cockpit_block(" Releases ", release_lines(app, &releases)),
-        columns[column_index],
-    );
+/// One line of a cockpit card.
+#[derive(Debug, Clone)]
+pub enum CockpitRow {
+    /// A release title; `alert` marks one at risk.
+    Heading {
+        text: String,
+        color: Color,
+        alert: bool,
+    },
+    /// A counter: `nested` ones belong to the heading above them.
+    Metric {
+        label: String,
+        value: String,
+        color: Color,
+        nested: bool,
+    },
 }
 
-fn cockpit_block(title: &'static str, lines: Vec<Line<'static>>) -> Paragraph<'static> {
+impl CockpitRow {
+    pub fn to_line(&self, app: &App) -> Line<'static> {
+        match self {
+            CockpitRow::Heading { text, color, alert } => {
+                let prefix = if *alert { "⚠ " } else { "  " };
+                Line::from(vec![
+                    Span::styled(prefix.to_string(), Style::default().fg(*color)),
+                    Span::styled(
+                        text.clone(),
+                        Style::default().fg(*color).add_modifier(Modifier::BOLD),
+                    ),
+                ])
+            }
+            CockpitRow::Metric {
+                label,
+                value,
+                color,
+                nested,
+            } => {
+                let label = if *nested {
+                    format!("    {label:<8}")
+                } else {
+                    format!("  {label:<18}")
+                };
+                Line::from(vec![
+                    Span::styled(label, Style::default().fg(app.theme.fg)),
+                    Span::styled(
+                        value.clone(),
+                        Style::default().fg(*color).add_modifier(Modifier::BOLD),
+                    ),
+                ])
+            }
+        }
+    }
+}
+
+/// The cockpit's cards in display order, as (title, rows). Shared by the terminal
+/// layout below and the desktop window.
+pub fn cockpit_cards(app: &App) -> Vec<(&'static str, Vec<CockpitRow>)> {
+    let summary = DashboardSummary::from_app(app);
+    let releases = release_summaries(app);
+    let mut cards = Vec::with_capacity(5);
+    #[cfg(feature = "stats")]
+    if let Some(flow_summary) = DashboardSummary::flow_from_stats_report(app, &summary) {
+        cards.push(("Flow", flow_lines(flow_summary, app)));
+    }
+    cards.push(("Attention", attention_lines(summary, app)));
+    cards.push(("Delivery Health", delivery_health_lines(summary, app)));
+    cards.push(("Quality / Scope", quality_scope_lines(summary, app)));
+    cards.push(("Releases", release_lines(app, &releases)));
+    cards
+}
+
+pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
+    let cards = cockpit_cards(app);
+    let share = 100 / cards.len().max(1) as u16;
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(vec![Constraint::Percentage(share); cards.len()])
+        .split(area);
+    for ((title, rows), column) in cards.into_iter().zip(columns.iter()) {
+        let lines = rows.iter().map(|row| row.to_line(app)).collect();
+        f.render_widget(cockpit_block(format!(" {title} "), lines), *column);
+    }
+}
+
+fn cockpit_block(title: String, lines: Vec<Line<'static>>) -> Paragraph<'static> {
     Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL).title(title))
         .wrap(Wrap { trim: false })
 }
 
 #[cfg(feature = "stats")]
-fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
     vec![
-        cockpit_metric("Open", summary.open, app.theme.fg, app),
-        cockpit_metric("Mergeable", summary.mergeable, app.theme.accent_green, app),
-        cockpit_metric("Draft", summary.draft, app.theme.muted_dim, app),
-        cockpit_metric("Merged", summary.merged, app.theme.accent_cyan, app),
-        cockpit_metric("Closed", summary.closed, app.theme.muted_dim, app),
-        cockpit_metric(
-            "Merged today",
-            summary.merged_today,
-            app.theme.accent_green,
-            app,
-        ),
+        cockpit_metric("Open", summary.open, app.theme.fg),
+        cockpit_metric("Mergeable", summary.mergeable, app.theme.accent_green),
+        cockpit_metric("Draft", summary.draft, app.theme.muted_dim),
+        cockpit_metric("Merged", summary.merged, app.theme.accent_cyan),
+        cockpit_metric("Closed", summary.closed, app.theme.muted_dim),
+        cockpit_metric("Merged today", summary.merged_today, app.theme.accent_green),
         cockpit_metric(
             "Merged this week",
             summary.merged_this_week,
             app.theme.accent_green,
-            app,
         ),
         cockpit_metric(
             "Merged this month",
             summary.merged_this_month,
             app.theme.accent_green,
-            app,
         ),
         cockpit_metric(
             "Merged last 7d",
             summary.merged_last_7_days,
             app.theme.accent_green,
-            app,
         ),
         cockpit_metric(
             "Merged last 30d",
             summary.merged_last_30_days,
             app.theme.accent_green,
-            app,
         ),
     ]
 }
 
-fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
     let total_blocked = summary.total_blocked();
 
     vec![
-        cockpit_metric(
-            "Blocked",
-            total_blocked,
-            alert_color(total_blocked, app),
-            app,
-        ),
+        cockpit_metric("Blocked", total_blocked, alert_color(total_blocked, app)),
         cockpit_metric(
             "Conflicts",
             summary.conflicts,
             alert_color(summary.conflicts, app),
-            app,
         ),
         cockpit_metric(
             "Needs rebase",
             summary.needs_rebase,
             warning_color(summary.needs_rebase, app),
-            app,
         ),
         cockpit_metric(
             "CI failing",
             summary.ci_failing,
             alert_color(summary.ci_failing, app),
-            app,
         ),
         cockpit_metric(
             "Discussions",
             summary.discussions,
             warning_color(summary.discussions, app),
-            app,
         ),
         cockpit_metric(
             "Changes req.",
             summary.requested_changes,
             alert_color(summary.requested_changes, app),
-            app,
         ),
         cockpit_metric(
             "Needs review",
             summary.needs_review,
             warning_color(summary.needs_review, app),
-            app,
         ),
         cockpit_metric_optional_dynamic(
             "To review (me)".to_string(),
@@ -257,32 +241,28 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
                 _ => summary.awaiting_my_review.to_string(),
             }),
             app.theme.accent_yellow,
-            app,
         ),
         cockpit_metric(
             "No reviewer",
             summary.no_reviewer,
             warning_color(summary.no_reviewer, app),
-            app,
         ),
         cockpit_metric(
             "No assignee",
             summary.no_assignee,
             warning_color(summary.no_assignee, app),
-            app,
         ),
-        cockpit_metric("Flagged", summary.flagged, app.theme.accent_yellow, app),
+        cockpit_metric("Flagged", summary.flagged, app.theme.accent_yellow),
     ]
 }
 
-fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
     let thresholds = &app.config.cockpit_thresholds;
     let mut lines = vec![
         cockpit_metric_dynamic(
             format!("Stale > {}d", thresholds.stale_days),
             summary.stale_7_days,
             warning_color(summary.stale_7_days, app),
-            app,
         ),
         cockpit_metric_optional(
             "Oldest open",
@@ -298,37 +278,31 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'stat
                         app.theme.accent_green
                     }
                 }),
-            app,
         ),
         cockpit_metric(
             "No milestone",
             summary.no_milestone,
             warning_color(summary.no_milestone, app),
-            app,
         ),
         cockpit_metric_dynamic(
             format!("Due next {}d", thresholds.due_soon_days),
             summary.due_this_week,
             warning_color(summary.due_this_week, app),
-            app,
         ),
         cockpit_metric(
             "Overdue",
             summary.overdue,
             alert_color(summary.overdue, app),
-            app,
         ),
         cockpit_metric(
             "Behind target",
             summary.behind_target,
             warning_color(summary.behind_target, app),
-            app,
         ),
         cockpit_metric(
             "Hot threads",
             summary.hot_threads,
             warning_color(summary.hot_threads, app),
-            app,
         ),
     ];
 
@@ -337,142 +311,110 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'stat
             "With ticket",
             summary.with_ticket,
             app.theme.accent_cyan,
-            app,
         ));
         lines.push(cockpit_metric(
             "No ticket",
             summary.no_ticket,
             warning_color(summary.no_ticket, app),
-            app,
         ));
         lines.push(cockpit_metric(
             "Over estimate",
             summary.over_estimate,
             alert_color(summary.over_estimate, app),
-            app,
         ));
     } else {
         lines.push(cockpit_metric_optional(
             "Tracker",
             Some("n/a".to_string()),
             app.theme.muted_inactive,
-            app,
         ));
     }
 
     lines
 }
 
-fn quality_scope_lines(summary: DashboardSummary, app: &App) -> Vec<Line<'static>> {
+fn quality_scope_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
     vec![
         cockpit_metric(
             "Complex",
             summary.complex,
             warning_color(summary.complex, app),
-            app,
         ),
         cockpit_metric_optional(
             "Avg diff lines",
             summary.avg_diff_lines().map(|lines| lines.to_string()),
             app.theme.accent_cyan,
-            app,
         ),
         cockpit_metric(
             "Large diff",
             summary.large_diff,
             warning_color(summary.large_diff, app),
-            app,
         ),
         cockpit_metric(
             "Many commits",
             summary.many_commits,
             warning_color(summary.many_commits, app),
-            app,
         ),
         cockpit_metric(
             "Many files",
             summary.many_files,
             warning_color(summary.many_files, app),
-            app,
         ),
         cockpit_metric(
             "No diff stats",
             summary.no_diff_stats,
             warning_color(summary.no_diff_stats, app),
-            app,
         ),
         cockpit_metric(
             "Pipeline unknown",
             summary.pipeline_unknown,
             warning_color(summary.pipeline_unknown, app),
-            app,
         ),
         cockpit_metric(
             "CI skipped",
             summary.ci_skipped,
             warning_color(summary.ci_skipped, app),
-            app,
         ),
         cockpit_metric(
             "Recently updated",
             summary.recently_updated,
             app.theme.accent_green,
-            app,
         ),
     ]
 }
 
-fn cockpit_metric(label: &'static str, value: usize, color: Color, app: &App) -> Line<'static> {
-    cockpit_metric_optional(label, Some(value.to_string()), color, app)
+fn cockpit_metric(label: &'static str, value: usize, color: Color) -> CockpitRow {
+    cockpit_metric_optional(label, Some(value.to_string()), color)
 }
 
-fn cockpit_metric_dynamic(label: String, value: usize, color: Color, app: &App) -> Line<'static> {
-    cockpit_metric_optional_dynamic(label, Some(value.to_string()), color, app)
+fn cockpit_metric_dynamic(label: String, value: usize, color: Color) -> CockpitRow {
+    cockpit_metric_optional_dynamic(label, Some(value.to_string()), color)
 }
 
-fn release_metric_line(
-    label: &'static str,
-    value: usize,
-    color: Color,
-    app: &App,
-) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            format!("    {:<8}", label),
-            Style::default().fg(app.theme.fg),
-        ),
-        Span::styled(
-            value.to_string(),
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ),
-    ])
+fn release_metric_line(label: &'static str, value: usize, color: Color) -> CockpitRow {
+    CockpitRow::Metric {
+        label: label.to_string(),
+        value: value.to_string(),
+        color,
+        nested: true,
+    }
 }
 
-fn cockpit_metric_optional(
-    label: &'static str,
-    value: Option<String>,
-    color: Color,
-    app: &App,
-) -> Line<'static> {
-    cockpit_metric_optional_dynamic(label.to_string(), value, color, app)
+fn cockpit_metric_optional(label: &'static str, value: Option<String>, color: Color) -> CockpitRow {
+    cockpit_metric_optional_dynamic(label.to_string(), value, color)
 }
 
 fn cockpit_metric_optional_dynamic(
     label: String,
     value: Option<String>,
     color: Color,
-    app: &App,
-) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(
-            format!("  {:<18}", label),
-            Style::default().fg(app.theme.fg),
-        ),
-        Span::styled(
-            value.unwrap_or_else(|| "—".to_string()),
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ),
-    ])
+) -> CockpitRow {
+    CockpitRow::Metric {
+        label,
+        value: value.unwrap_or_else(|| "—".to_string()),
+        color,
+        nested: false,
+    }
 }
 
 fn alert_color(value: usize, app: &App) -> Color {

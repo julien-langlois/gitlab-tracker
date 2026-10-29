@@ -94,20 +94,8 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     let active_tab = app.stats_view.tab;
     render_stats_tab_bar(f, tabs_area, active_tab);
 
-    let current_scroll = app.stats_view.scroll;
-    let clamped_scroll = match active_tab {
-        StatsTab::Overview => {
-            render_overview_tab(f, report, content_area);
-            0
-        }
-        StatsTab::Flow => {
-            render_flow_tab(f, report, content_area);
-            0
-        }
-        StatsTab::Quality => render_quality_tab(f, report, content_area, current_scroll),
-        StatsTab::Forecasts => render_forecasts_tab(f, report, content_area, current_scroll),
-        StatsTab::Correlations => render_correlations_tab(f, report, content_area, current_scroll),
-    };
+    let clamped_scroll =
+        render_stats_tab(f, report, active_tab, content_area, app.stats_view.scroll);
 
     let generated_at = report.generated_at.clone();
     let total_mrs = report.aggregated.total_mrs;
@@ -131,6 +119,31 @@ pub fn render_stats_overlay(f: &mut Frame, app: &mut App) {
     )
     .style(Style::default().fg(theme::muted_dim()));
     f.render_widget(status_bar, status_area);
+}
+
+/// Renders the content of one stats tab into `area`, scrolled by `scroll` lines
+/// where the tab scrolls; returns the scroll clamped to the content.
+/// Shared by the overlay above and the desktop window.
+pub fn render_stats_tab(
+    f: &mut Frame,
+    report: &gitlab_tracker_stats::StatReport,
+    tab: StatsTab,
+    area: Rect,
+    scroll: u16,
+) -> u16 {
+    match tab {
+        StatsTab::Overview => {
+            render_overview_tab(f, report, area);
+            0
+        }
+        StatsTab::Flow => {
+            render_flow_tab(f, report, area);
+            0
+        }
+        StatsTab::Quality => render_quality_tab(f, report, area, scroll),
+        StatsTab::Forecasts => render_forecasts_tab(f, report, area, scroll),
+        StatsTab::Correlations => render_correlations_tab(f, report, area, scroll),
+    }
 }
 
 // ── Tab renderers ─────────────────────────────────────────────────────────────

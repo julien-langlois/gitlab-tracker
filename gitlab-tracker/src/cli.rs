@@ -37,6 +37,9 @@ pub enum Command {
         #[arg(long)]
         absent_from: Option<String>,
     },
+    /// Open the desktop window instead of the terminal UI.
+    #[cfg(feature = "gui")]
+    Gui,
 }
 
 /// Resolves the project requested by CLI flags or falls back to the active project.
@@ -83,6 +86,8 @@ pub async fn run_command(
         }
         // Needs a full project session: run by `main`.
         Some(Command::Checklist { .. }) | None => Ok(false),
+        #[cfg(feature = "gui")]
+        Some(Command::Gui) => Ok(false),
     }
 }
 

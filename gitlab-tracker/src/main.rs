@@ -7,6 +7,8 @@ mod demo;
 mod events;
 mod filters_core;
 mod gitlab;
+#[cfg(feature = "gui")]
+mod gui;
 mod models;
 mod notify;
 mod settings;
@@ -167,6 +169,7 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
 }
 
 /// Long-lived values shared by every project session.
+#[derive(Clone)]
 struct Shared {
     palette: crate::ui::theme::Palette,
     #[cfg(feature = "stats")]
@@ -529,6 +532,24 @@ async fn run_checklist(
     Ok(())
 }
 
+/// Opens the stats database shared by every project (rows are keyed by project id);
+/// `None` disables stats when it cannot be opened.
+#[cfg(feature = "stats")]
+async fn open_stats_db() -> Option<Arc<gitlab_tracker_stats::SqliteStatsDb>> {
+    // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
+    // We pass the plain absolute path — `create_if_missing(true)` handles file creation.
+    let path = storage::get_save_dir()
+        .map(|d| d.join("stats.db"))
+        .and_then(|p| p.to_str().map(|s| s.to_string()))?;
+    match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
+        Ok(db) => Some(Arc::new(db)),
+        Err(e) => {
+            tracing::warn!(error = %e, path, "Failed to open stats DB — stats disabled");
+            None
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
@@ -556,6 +577,10 @@ async fn main() -> anyhow::Result<()> {
     let global_config = load_or_create_config_async().await;
 
     if args.demo {
+        #[cfg(feature = "gui")]
+        if matches!(args.command, Some(cli::Command::Gui)) {
+            return gui::run_demo(global_config).await;
+        }
         return demo::run_demo_mode(global_config).await;
     }
 
@@ -573,6 +598,10 @@ async fn main() -> anyhow::Result<()> {
             absent_from.as_deref(),
         )
         .await;
+    }
+    #[cfg(feature = "gui")]
+    if matches!(args.command, Some(cli::Command::Gui)) {
+        return gui::run(global_config, project).await;
     }
     if cli::run_command(args.command.as_ref(), &project).await? {
         return Ok(());
@@ -593,27 +622,10 @@ async fn main() -> anyhow::Result<()> {
     crate::ui::theme::set_light(matches!(theme_mode, crate::ui::theme::ThemeMode::Light));
     tracing::info!(mode = ?theme_mode, "Terminal theme detected");
 
-    // ── Stats DB initialisation ───────────────────────────────────────────────
-    // One file for every project (rows are keyed by project id), opened once and
-    // before the first session so its very first MrLoaded events can record snapshots.
+    // One stats file for every project, opened before the first session so its
+    // very first MrLoaded events can record snapshots.
     #[cfg(feature = "stats")]
-    let stats_db = {
-        // sqlx SqliteConnectOptions accepts either a plain path or a `sqlite:<path>` URI.
-        // We pass the plain absolute path — `create_if_missing(true)` handles file creation.
-        let db_path = storage::get_save_dir()
-            .map(|d| d.join("stats.db"))
-            .and_then(|p| p.to_str().map(|s| s.to_string()));
-        match db_path {
-            Some(path) => match gitlab_tracker_stats::SqliteStatsDb::open(&path).await {
-                Ok(db) => Some(Arc::new(db)),
-                Err(e) => {
-                    tracing::warn!(error = %e, path, "Failed to open stats DB — stats disabled");
-                    None
-                }
-            },
-            None => None,
-        }
-    };
+    let stats_db = open_stats_db().await;
     let shared = Shared {
         palette,
         #[cfg(feature = "stats")]

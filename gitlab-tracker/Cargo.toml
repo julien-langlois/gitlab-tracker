@@ -21,6 +21,17 @@ default = ["notifications"]
 notifications = ["dep:notify-rust"]
 redmine = ["dep:gitlab-tracker-redmine"]
 stats = ["dep:gitlab-tracker-stats"]
+# Desktop window (`gitlab-tracker gui`) over the same app state as the TUI.
+# Needs Rust 1.95 (bevel); bevel is a local path dependency for now, so this
+# feature is not publishable yet.
+gui = [
+    "dep:eframe",
+    "dep:egui",
+    "dep:egui_extras",
+    "dep:bevel-theme",
+    "dep:bevel-widgets",
+    "dep:bevel-window",
+]
 
 [dependencies]
 gitlab-tracker-core = { workspace = true, features = ["secrets"] }
@@ -53,6 +64,13 @@ tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zeroize.workspace = true
+# GUI (feature `gui`).
+eframe = { version = "0.37", optional = true, default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "system_fonts", "wayland", "x11"] }
+egui = { version = "0.37", optional = true }
+egui_extras = { version = "0.37", optional = true, default-features = false }
+bevel-theme = { path = "../../bevel/bevel-theme", optional = true, features = ["fonts"] }
+bevel-widgets = { path = "../../bevel/bevel-widgets", optional = true }
+bevel-window = { path = "../../bevel/bevel-window", optional = true, features = ["egui"] }
 
 [dev-dependencies]
 # Test doubles implementing the `TrackerProvider` trait.

@@ -130,15 +130,15 @@
 
   #### 🎯 Effort filters
 
-  **Effort: Easy 🟢** and **Effort: Complex 🔴** match against the pre-computed review-difficulty score (the same score shown in the Effort column and the Inspector panel). The score is computed using your project's `complexity_profile`:
+  **Effort: Easy 🟢**, **Effort: Medium 🟡** and **Effort: Complex 🔴** match against the pre-computed review-difficulty score (the same score shown in the Effort column and the Inspector panel). The score is computed using your project's `complexity_profile`:
 
   | Filter                 | Score band            | Colour     |
   | :--------------------- | :-------------------- | :--------- |
   | **Effort: Easy**       | `score < 0.33`        | 🟢 Green  |
-  | *(medium — no filter)* | `0.33 ≤ score < 0.66` | 🟡 Yellow |
+  | **Effort: Medium**     | `0.33 ≤ score < 0.66` | 🟡 Yellow |
   | **Effort: Complex**    | `score ≥ 0.66`        | 🔴 Red    |
 
-  MRs whose diff stats have not yet been fetched are excluded from both effort filters (they appear in "All" but not in either effort band).
+  MRs whose diff stats have not yet been fetched are excluded from every effort filter (they appear in "All" but in no effort band).
 
 * 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a cockpit is displayed below the MR table (enabled by default; disable it per project with `show_cockpit = false` in `projects.toml` or from the settings dashboard `,`). Runtime columns are computed from the currently visible rows, so they respect the active filter and search query. When built with `--features stats` and the stats are loaded, the optional **Flow** column is added: its merged / closed counters read from deduplicated SQLite snapshots over the whole retained history (`retention_days`), whatever the window selected in the stats overlay. The **Releases** column is always shown from live milestone data; when built with `--features stats`, its historical merged counts are enriched from the same snapshots. Operational thresholds are configurable per project with `[project.cockpit_thresholds]`.
 

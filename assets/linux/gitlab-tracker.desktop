@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=GitLab Tracker
+Comment=Track merge requests across branches
+Exec=gitlab-tracker gui
+Icon=gitlab-tracker
+Terminal=false
+Categories=Development;
+# The window's app id (GNOME on Wayland matches the file name, X11 this class).
+StartupWMClass=gitlab-tracker
