@@ -203,7 +203,7 @@ inventory::submit!(FilterDef {
     },
 });
 
-// ── Effort filters (priority 16–17) ──────────────────────────────────────────
+// ── Effort filters (priority 16–18) ──────────────────────────────────────────
 //
 // Match on the pre-computed `diff_difficulty` score in [0.0, 1.0].
 // Thresholds mirror the colour bands rendered in the Inspector panel:
@@ -226,10 +226,23 @@ inventory::submit!(FilterDef {
 });
 
 inventory::submit!(FilterDef {
+    id: "effort_medium",
+    label: "Effort: Medium 🟡",
+    active_label: None,
+    priority: 17,
+    needs_text_input: false,
+    requires: None,
+    apply: |mr: MrSnapshot<'_>, _| {
+        mr.diff_difficulty
+            .is_some_and(|d| Effort::from_score(d) == Effort::Medium)
+    },
+});
+
+inventory::submit!(FilterDef {
     id: "effort_complex",
     label: "Effort: Complex 🔴",
     active_label: None,
-    priority: 17,
+    priority: 18,
     needs_text_input: false,
     requires: None,
     apply: |mr: MrSnapshot<'_>, _| {
@@ -517,9 +530,13 @@ mod tests {
         assert!(!matches("effort_easy", Some(0.33)));
         assert!(!matches("effort_complex", Some(0.65)));
         assert!(matches("effort_complex", Some(0.66)) && matches("effort_complex", Some(1.0)));
-        // Medium is in neither; an MR without diff stats is excluded from both.
+        assert!(matches("effort_medium", Some(0.33)) && matches("effort_medium", Some(0.65)));
+        assert!(!matches("effort_medium", Some(0.32)) && !matches("effort_medium", Some(0.66)));
+        // Medium is in neither of the others; an MR without diff stats is in none.
         assert!(!matches("effort_easy", Some(0.5)) && !matches("effort_complex", Some(0.5)));
-        assert!(!matches("effort_easy", None) && !matches("effort_complex", None));
+        for id in ["effort_easy", "effort_medium", "effort_complex"] {
+            assert!(!matches(id, None), "{id}");
+        }
     }
 
     #[test]
