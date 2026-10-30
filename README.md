@@ -10,7 +10,7 @@
 
 An experimental **desktop window** (`gitlab-tracker gui`, feature `gui`) shows the same dashboard with the mouse: see [Desktop window](#️-desktop-window-experimental).
 
-![gitlab-tracker demo](assets/demo.gif)
+![gitlab-tracker demo](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/demo.gif)
 
 ## ✨ Key Features
 
@@ -639,7 +639,7 @@ RUST_LOG=info gitlab-tracker
 
 ### 🖥️ Desktop window (experimental)
 
-![gitlab-tracker desktop window](assets/gui.gif)
+![gitlab-tracker desktop window](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/gui.gif)
 
 The window is behind the `gui` feature and is **not published on crates.io yet**: it depends on the `bevel` UI crates, which are not released. To build it from source:
 
