@@ -639,6 +639,8 @@ RUST_LOG=info gitlab-tracker
 
 ### 🖥️ Desktop window (experimental)
 
+![gitlab-tracker desktop window](assets/gui.gif)
+
 The window is behind the `gui` feature and is **not published on crates.io yet**: it depends on the `bevel` UI crates, which are not released. To build it from source:
 
 * Rust **1.95+** (required by `bevel`);

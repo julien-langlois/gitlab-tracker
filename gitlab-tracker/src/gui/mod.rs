@@ -18,6 +18,8 @@ mod sidebar;
 mod stats;
 mod table;
 mod tones;
+#[cfg(debug_assertions)]
+mod tour;
 mod tracker;
 mod widgets;
 
@@ -204,6 +206,8 @@ struct GuiApp {
     language_draft: Option<String>,
     /// The project being loaded in the background (see [`GuiApp::switch_project`]).
     switching: Option<std::sync::mpsc::Receiver<anyhow::Result<Loaded>>>,
+    #[cfg(debug_assertions)]
+    tour: Option<tour::Tour>,
     #[cfg(target_os = "macos")]
     movable: Option<bool>,
 }
@@ -259,6 +263,8 @@ impl GuiApp {
             language_draft: language.clone(),
             language,
             switching: None,
+            #[cfg(debug_assertions)]
+            tour: tour::Tour::from_env(),
             #[cfg(target_os = "macos")]
             movable: None,
         };
@@ -513,6 +519,8 @@ impl eframe::App for GuiApp {
                 self.set_theme(bevel_theme::Mode::Light);
             }
         }
+        #[cfg(debug_assertions)]
+        tour::drive(self, ui.ctx());
         self.dispatch_pending();
 
         // Snapshot the visible list for this frame (see `App::begin_render_cache`):
@@ -561,16 +569,22 @@ fn screenshot_for_development(ctx: &egui::Context) {
     }
     let close = ctx.clone();
     ctx.request_screenshot(move |image| {
-        let [w, h] = image.size;
-        let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
-        for pixel in &image.pixels {
-            ppm.extend_from_slice(&[pixel.r(), pixel.g(), pixel.b()]);
-        }
-        if let Err(e) = std::fs::write(&path, ppm) {
-            tracing::warn!(error = %e, path, "Could not save the screenshot");
-        }
+        save_ppm(&image, std::path::Path::new(&path));
         close.send_viewport_cmd(egui::ViewportCommand::Close);
         close.request_repaint();
     });
     ctx.request_repaint();
+}
+
+/// Saves a screenshot as a binary PPM.
+#[cfg(debug_assertions)]
+fn save_ppm(image: &egui::ColorImage, path: &std::path::Path) {
+    let [w, h] = image.size;
+    let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
+    for pixel in &image.pixels {
+        ppm.extend_from_slice(&[pixel.r(), pixel.g(), pixel.b()]);
+    }
+    if let Err(e) = std::fs::write(path, ppm) {
+        tracing::warn!(error = %e, path = %path.display(), "Could not save the screenshot");
+    }
 }
