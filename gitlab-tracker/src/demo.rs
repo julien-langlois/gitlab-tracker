@@ -1,5 +1,5 @@
-use crate::app::App;
 use crate::app::AppInit;
+use crate::app::{App, TimeLogState};
 use crate::config::{AppConfig, VisibleColumns};
 use crate::events::{handle_key_event, handle_mouse_event};
 use crate::models::{
@@ -8,8 +8,90 @@ use crate::models::{
 };
 use crate::ui;
 use crossterm::event::{self, Event, KeyEventKind};
-use gitlab_tracker_core::{LinkedTicket, LINKED_TICKET_SCHEMA_VERSION};
+use gitlab_tracker_core::{
+    Activity, LinkedTicket, TimeEntry, TrackerError, TrackerProvider, LINKED_TICKET_SCHEMA_VERSION,
+};
+use std::collections::HashMap;
 use std::time::Duration;
+
+// ── Demo tracker ──────────────────────────────────────────────────────────────
+
+/// A Redmine stand-in for the demo: it names the tracker and builds ticket URLs,
+/// so the tracker pane, the ticket filter and the log-time dialog show up. It
+/// never fetches anything: the demo's tickets, activities and time entries are
+/// already in the app (see [`demo_app`]), and the demo ignores fetch results.
+struct DemoTracker;
+
+#[async_trait::async_trait]
+impl TrackerProvider for DemoTracker {
+    fn name(&self) -> &'static str {
+        "Redmine"
+    }
+
+    fn detect_ticket_id(&self, _title: &str, _description: &str) -> Option<String> {
+        None
+    }
+
+    async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError> {
+        Err(TrackerError::NotFound(ticket_id.to_string()))
+    }
+
+    fn ticket_url(&self, ticket_id: &str) -> String {
+        format!("https://redmine.example.com/issues/{ticket_id}")
+    }
+}
+
+/// The demo tracker's time-tracking activities.
+fn demo_activities() -> Vec<Activity> {
+    [(9, "Development"), (10, "Review"), (11, "Testing")]
+        .into_iter()
+        .map(|(id, name)| Activity {
+            id,
+            name: name.into(),
+        })
+        .collect()
+}
+
+/// Time entries of the demo's linked tickets, adding up to their `time_spent`.
+fn demo_time_entries() -> HashMap<String, TimeLogState> {
+    let activity = |i: usize| demo_activities().swap_remove(i);
+    let entry = |id, hours, a, comment: &str, user: &str, spent_on: &str| TimeEntry {
+        id,
+        hours,
+        activity: activity(a),
+        comment: comment.into(),
+        user: user.into(),
+        spent_on: spent_on.into(),
+    };
+    HashMap::from([
+        (
+            "4271".to_string(),
+            TimeLogState::Loaded(vec![
+                entry(
+                    501,
+                    3.0,
+                    0,
+                    "GraphQL schema and resolvers",
+                    "Marina Graphetti",
+                    "2024-04-16",
+                ),
+                entry(502, 1.5, 0, "Pagination", "Marina Graphetti", "2024-04-18"),
+                entry(503, 0.5, 1, "", "Thomas Dubosc", "2024-04-19"),
+            ]),
+        ),
+        (
+            "3987".to_string(),
+            TimeLogState::Loaded(vec![entry(
+                504,
+                1.5,
+                2,
+                "Reproduced under load",
+                "Alex Devries",
+                "2024-04-29",
+            )]),
+        ),
+    ])
+}
 
 // ── Demo stats seeding ────────────────────────────────────────────────────────
 
@@ -959,6 +1041,10 @@ pub async fn demo_app(config: AppConfig) -> App {
     // so it lands at row 0 after sorting.
     app.sort_mrs();
     app.table_state.select(Some(0));
+    // The tracker's data is loaded up front: the demo drops fetch results.
+    app.tracker = Some(std::sync::Arc::new(DemoTracker));
+    app.activities = demo_activities();
+    app.time_entries = demo_time_entries();
     // The demo runs the real key handler; this flag turns off its disk writes and
     // network requests.
     app.read_only = true;
@@ -1053,4 +1139,56 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
 
     // `_terminal_guard` disables mouse capture and restores the terminal on drop.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actions::{dispatch, Action, ActionContext};
+
+    #[tokio::test]
+    async fn demo_tickets_come_with_their_tracker_and_time_log() {
+        let app = demo_app(AppConfig::default()).await;
+        assert_eq!(app.tracker.as_ref().map(|t| t.name()), Some("Redmine"));
+        assert!(!app.activities.is_empty());
+        let tickets: Vec<_> = app
+            .mrs
+            .iter()
+            .filter_map(|mr| mr.linked_ticket.as_ref())
+            .collect();
+        assert!(!tickets.is_empty());
+        for ticket in tickets {
+            let Some(TimeLogState::Loaded(entries)) = app.time_entries.get(&ticket.id) else {
+                panic!("no time log for ticket #{}", ticket.id);
+            };
+            let logged: f32 = entries.iter().map(|e| e.hours).sum();
+            let spent = ticket.time_spent.unwrap_or(0) as f32 / 3600.0;
+            assert_eq!(logged, spent, "ticket #{}", ticket.id);
+        }
+    }
+
+    #[tokio::test]
+    async fn the_demo_never_logs_time() {
+        let mut app = demo_app(AppConfig::default()).await;
+        let row = app
+            .visible_mrs()
+            .position(|mr| mr.linked_ticket.is_some())
+            .expect("a demo MR with a ticket");
+        app.table_state.select(Some(row));
+        app.log_time_form.duration_input = "1h".into();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut ctx = ActionContext {
+            api_semaphore: &std::sync::Arc::new(tokio::sync::Semaphore::new(1)),
+            tx: &tx,
+            last_known_branches: &mut HashMap::new(),
+            state_writer: None,
+        };
+        dispatch(Action::SubmitLogTime, &mut app, &mut ctx).await;
+        assert!(!app.log_time_form.submitting);
+        assert_eq!(
+            app.log_time_form.error.as_deref(),
+            Some("Demo: no time is logged")
+        );
+        assert!(rx.try_recv().is_err(), "nothing was sent to the tracker");
+    }
 }
