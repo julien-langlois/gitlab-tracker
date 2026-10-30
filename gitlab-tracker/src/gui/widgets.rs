@@ -263,6 +263,32 @@ pub fn card(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut Ui))
 }
 
 /// A status dot followed by a caption.
+/// A figure in a card: its name, the value in large, and a caption below.
+pub fn kpi(
+    ui: &mut Ui,
+    theme: &Theme,
+    label: &str,
+    value: &str,
+    value_color: Color32,
+    caption: &str,
+    caption_color: Color32,
+) {
+    theme
+        .card_frame()
+        .inner_margin(Margin::symmetric(16, 14))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.label(muted(theme, label));
+            ui.label(semibold(value, 24.0).color(value_color));
+            ui.label(
+                RichText::new(caption)
+                    .size(theme.text_size - 1.5)
+                    .color(caption_color),
+            );
+        });
+}
+
 pub fn dot_label(ui: &mut Ui, theme: &Theme, color: Color32, text: impl Into<String>) {
     ui.horizontal(|ui| {
         dot(ui, color, 7.0);

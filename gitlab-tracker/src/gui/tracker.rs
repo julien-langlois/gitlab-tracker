@@ -8,7 +8,7 @@ use gitlab_tracker_core::LinkedTicket;
 
 use super::icons::{self, Icon};
 use super::inspector::duration;
-use super::widgets::{avatar, bar, dot, mono, muted, page_title, semibold, split_person};
+use super::widgets::{avatar, bar, dot, kpi, mono, muted, page_title, semibold, split_person};
 use super::{tones, GuiApp};
 use crate::i18n::{tf, tl, tn};
 
@@ -157,7 +157,11 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
         ),
     ];
     let gap = 12.0;
-    let per_line = if ui.available_width() < 640.0 { 2 } else { 4 };
+    let per_line = if ui.available_width() < WIDE_ROW {
+        2
+    } else {
+        4
+    };
     let width = (ui.available_width() - gap * (per_line - 1) as f32) / per_line as f32;
     let mut rects = Vec::new();
     for line in tiles.chunks(per_line) {
@@ -166,34 +170,26 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
             for (caption, value, detail, tone) in line {
-                let response = ui.allocate_ui(Vec2::new(width, 0.0), |ui| {
-                    tile(ui, theme, caption, value, detail, *tone);
-                });
+                let size = Vec2::new(width, 0.0);
+                let response =
+                    ui.allocate_ui_with_layout(size, Layout::top_down(Align::Min), |ui| {
+                        let color = tone.map_or(theme.palette.text, |t| t.fg);
+                        kpi(
+                            ui,
+                            theme,
+                            caption,
+                            value,
+                            color,
+                            detail,
+                            theme.palette.text_muted,
+                        );
+                    });
                 rects.push(response.response.rect);
             }
         });
         ui.add_space(gap);
     }
     rects
-}
-
-fn tile(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, detail: &str, tone: Option<Tone>) {
-    theme
-        .card_frame()
-        .inner_margin(Margin::symmetric(14, 12))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = 4.0;
-            ui.label(muted(theme, caption).size(theme.text_size - 1.5));
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 6.0;
-                let color = tone.map_or(theme.palette.text, |t| t.fg);
-                ui.label(semibold(value, theme.text_size + 6.0).color(color));
-                ui.add(
-                    egui::Label::new(muted(theme, detail).size(theme.text_size - 1.5)).truncate(),
-                );
-            });
-        });
 }
 
 fn group_heading(ui: &mut Ui, theme: &Theme, status: &str, tone: Tone, count: usize) {
@@ -491,6 +487,9 @@ mod tests {
                 for rect in line {
                     assert_eq!(rect.top(), line[0].top(), "{width}: {rects:?}");
                     assert_eq!(rect.height(), line[0].height(), "{width}: {rects:?}");
+                    assert!(rect.right() <= width, "{width}: {rects:?}");
+                    // Name, value and caption stacked, not side by side.
+                    assert!(rect.height() > 80.0, "{width}: {rects:?}");
                 }
             }
         }

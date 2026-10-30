@@ -8,7 +8,7 @@ use gitlab_tracker_stats::{CorrelationStrength, MetricPair, StatReport};
 
 use super::shell::Sizes;
 use super::widgets::{
-    badge, card, dot, mono, muted, page_title, rule, section_title, semibold, spinner,
+    badge, card, dot, kpi, mono, muted, page_title, rule, section_title, semibold, spinner,
 };
 use super::GuiApp;
 use crate::actions::Action;
@@ -343,30 +343,6 @@ fn percent(value: Option<f64>) -> String {
     value.map_or("—".into(), |v| format!("{:.1}%", v * 100.0))
 }
 
-fn kpi(
-    ui: &mut Ui,
-    theme: &Theme,
-    label: &str,
-    value: &str,
-    caption: &str,
-    caption_color: Color32,
-) {
-    theme
-        .card_frame()
-        .inner_margin(Margin::symmetric(16, 14))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.y = 6.0;
-            ui.label(muted(theme, label));
-            ui.label(semibold(value, 24.0));
-            ui.label(
-                RichText::new(caption)
-                    .size(theme.text_size - 1.5)
-                    .color(caption_color),
-            );
-        });
-}
-
 /// A labelled horizontal bar: caption and value above, the bar below.
 fn meter(ui: &mut Ui, theme: &Theme, label: &str, value: &str, fraction: f32, color: Color32) {
     ui.spacing_mut().item_spacing.y = 5.0;
@@ -510,7 +486,7 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     for chunk in kpis.chunks(per_row) {
         columns(ui, per_row, |ui, i| {
             if let Some((label, value, caption, color)) = chunk.get(i) {
-                kpi(ui, theme, label, value, caption, *color);
+                kpi(ui, theme, label, value, theme.palette.text, caption, *color);
             }
         });
     }
