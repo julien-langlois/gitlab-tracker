@@ -579,41 +579,78 @@ fn effort_blocks(ui: &mut Ui, theme: &Theme, score: f64, tone: Tone) {
     }
 }
 
+/// Between a branch's name and its presence chip.
+const BRANCH_CHIP_GAP: f32 = 16.0;
+/// Kept for the presence chip when a branch's name is long.
+const BRANCH_CHIP_ROOM: f32 = 90.0;
+
 fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let rows = g.app.branch_rows(mr);
     let failed = matches!(mr.status, MrStatus::Error(_));
     let commits = mr.commits.len();
     section(ui, &theme, tl("Branches"), |ui| {
-        for row in &rows {
-            let (glyph, label, tone) = tones::presence(row.presence, failed, &theme.tones);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                let (name_rect, _) = ui.allocate_exact_size(Vec2::new(82.0, 18.0), Sense::hover());
-                ui.painter().with_clip_rect(name_rect).text(
-                    name_rect.left_center(),
-                    egui::Align2::LEFT_CENTER,
-                    &row.branch,
+        // One column for the names, as wide as the longest one, so the chips line up.
+        // A name too long for it is shortened with an ellipsis, in full on hover.
+        let max_name = (ui.available_width() - BRANCH_CHIP_ROOM - BRANCH_CHIP_GAP).max(0.0);
+        let names: Vec<_> = rows
+            .iter()
+            .map(|row| {
+                let mut job = egui::text::LayoutJob::simple_singleline(
+                    row.branch.clone(),
                     egui::FontId::monospace(theme.text_size - 1.0),
                     theme.palette.text,
                 );
+                job.wrap = egui::text::TextWrapping::truncate_at_width(max_name);
+                ui.painter().layout_job(job)
+            })
+            .collect();
+        let name_width = names.iter().map(|name| name.size().x).fold(0.0, f32::max);
+        for (row, name) in rows.iter().zip(names) {
+            let (glyph, label, tone) = tones::presence(row.presence, failed, &theme.tones);
+            let detail = match row.presence {
+                Some(BranchPresence::Partial) if commits > 0 => tf(
+                    "{n} of {total} commits missing",
+                    &[
+                        ("n", &row.missing.len().to_string()),
+                        ("total", &commits.to_string()),
+                    ],
+                ),
+                Some(BranchPresence::CherryPicked) => "cherry-pick -x".into(),
+                Some(BranchPresence::Copied) => tl("same author, date and title").into(),
+                _ => String::new(),
+            };
+            let detail_width = egui::WidgetText::from(muted(&theme, detail.as_str()))
+                .into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Extend),
+                    f32::INFINITY,
+                    egui::TextStyle::Body,
+                )
+                .size()
+                .x;
+            let mut detail_fits = false;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                let (name_rect, response) =
+                    ui.allocate_exact_size(Vec2::new(name_width, 18.0), Sense::hover());
+                let elided = name.elided;
+                let pos = name_rect.left_center() - Vec2::new(0.0, name.size().y / 2.0);
+                ui.painter().galley(pos, name, theme.palette.text);
+                if elided {
+                    response.on_hover_text(&row.branch);
+                }
+                ui.add_space(BRANCH_CHIP_GAP - 8.0);
                 ui.add(Chip::new(label, tone).glyph(glyph));
-                let detail = match row.presence {
-                    Some(BranchPresence::Partial) if commits > 0 => tf(
-                        "{n} of {total} commits missing",
-                        &[
-                            ("n", &row.missing.len().to_string()),
-                            ("total", &commits.to_string()),
-                        ],
-                    ),
-                    Some(BranchPresence::CherryPicked) => "cherry-pick -x".into(),
-                    Some(BranchPresence::Copied) => tl("same author, date and title").into(),
-                    _ => String::new(),
-                };
-                if !detail.is_empty() {
-                    ui.add(egui::Label::new(muted(&theme, detail)).truncate());
+                detail_fits = detail_width <= ui.available_width();
+                if detail_fits && !detail.is_empty() {
+                    ui.label(muted(&theme, detail.as_str()));
                 }
             });
+            // Next to a long name, the detail goes on its own line.
+            if !detail_fits && !detail.is_empty() {
+                ui.label(muted(&theme, detail.as_str()));
+            }
             if row.presence == Some(BranchPresence::Partial) && !row.missing.is_empty() {
                 egui::CollapsingHeader::new(muted(&theme, tl("Missing commits")))
                     .id_salt(("missing", &row.branch))
