@@ -191,6 +191,9 @@ struct GuiApp {
     page: Page,
     /// Set by a shortcut: the inspector scrolls to this section on the next frame.
     scroll_to: Option<InspectorSection>,
+    /// The MR whose ticket the inspector was last brought to on the tracker page;
+    /// `None` away from that page.
+    ticket_anchor: Option<String>,
     /// The text filter being edited in the views panel: its index in
     /// `App::filter_defs` and the text typed so far.
     text_filter: (Option<usize>, String),
@@ -256,6 +259,7 @@ impl GuiApp {
             show_inspector: None,
             page: Page::MergeRequests,
             scroll_to: None,
+            ticket_anchor: None,
             text_filter: (None, String::new()),
             focus_search: false,
             pending: Vec::new(),

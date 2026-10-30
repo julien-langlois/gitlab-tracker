@@ -10,7 +10,7 @@ use super::widgets::{
     activity, avatar, badge, bar, button, dot, icon_button, key_values, label_chip, mono, muted,
     section, semibold, spinner, split_person,
 };
-use super::{tones, GuiApp, InspectorSection};
+use super::{tones, GuiApp, InspectorSection, Page};
 use crate::actions::Action;
 use crate::app::{TimeLogState, TrackerView};
 use crate::i18n::{tc, tf, tl, tn};
@@ -41,7 +41,15 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                 return;
             };
             header(g, ui, &mr);
+            // The tracker page brings each MR it opens to its ticket, then leaves the
+            // scrolling to the user. It scrolls on its own, away from the other pages.
+            let on_tracker = g.page() == Page::Tracker;
+            if on_tracker && g.ticket_anchor.as_deref() != Some(mr.id.as_str()) {
+                g.ticket_anchor = Some(mr.id.clone());
+                g.scroll_to = Some(InspectorSection::Ticket);
+            }
             egui::ScrollArea::vertical()
+                .id_salt(on_tracker)
                 .auto_shrink(false)
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;

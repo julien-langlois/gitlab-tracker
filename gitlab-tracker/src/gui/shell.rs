@@ -17,6 +17,8 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     let mut sizes = Sizes::for_width(width, g.show_views, g.show_inspector);
     if page == Page::Tracker {
         sizes.widen_inspector(width);
+    } else {
+        g.ticket_anchor = None;
     }
     title_bar(g, ui, &sizes, page);
     status_bar(g, ui);
