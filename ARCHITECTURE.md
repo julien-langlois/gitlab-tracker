@@ -99,10 +99,37 @@ session are ignored until every MR has been re-fetched (`just_added_branches`).
 
 ---
 
+## Desktop window (`gui` feature)
+
+The window (`gitlab-tracker/src/gui/`) is a second frontend over the same `App`:
+no state of its own beyond what the views need (page, panels, text being edited).
+
+* **Same behaviour as the TUI.** Clicks and shortcuts become `Action`s handled by
+  `actions::dispatch`, exactly like the TUI's keys; popups follow
+  `App::input_mode`. Behaviour belongs in `App` or `dispatch`, never in a view.
+* **Frames.** egui redraws on input and on events only: `forward_events` relays
+  the session channel and wakes the window per event (the 1 s `Tick` included,
+  for the countdown). Each frame applies the pending events, snapshots the
+  visible list (`App::begin_render_cache`), draws, then dispatches the actions
+  recorded while drawing — views never mutate `App` directly.
+* **Per-frame cost.** A frame must not grow with the number of MRs where it can
+  avoid it: the table builds only the rows in view (`show_rows`), and
+  animations repaint at a bounded rate (`widgets::spinner`, 10 fps) rather than
+  at the display rate.
+* **Never wait on the UI thread.** The state file is written by a
+  `storage::StateWriter` (background, one write at a time, newest last, flushed
+  on exit); a project switch runs `build_session` in a task and swaps the session
+  in when it is ready. `block_on` is kept for short local steps (small TOML
+  saves in `dispatch`).
+* **Theme.** Colours come from `bevel-theme`; `gui/tones.rs` and `gui/colors.rs`
+  map the app's states and the TUI palette onto it.
+
+---
+
 ## Crate boundaries
 
 ```text
-gitlab-tracker          (binary — TUI, UI, event loop, desktop notifications)
+gitlab-tracker          (binary — TUI, desktop window (feature `gui`), event loop, notifications)
     │  uses
     ▼
 gitlab-tracker-core     (library — domain contracts, zero UI dependency)

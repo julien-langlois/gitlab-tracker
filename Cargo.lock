@@ -1974,6 +1974,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "async-trait",
+ "bevel-i18n",
  "bevel-theme",
  "bevel-widgets",
  "bevel-window",

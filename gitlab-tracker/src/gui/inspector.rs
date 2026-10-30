@@ -13,6 +13,7 @@ use super::widgets::{
 use super::{tones, GuiApp, InspectorSection};
 use crate::actions::Action;
 use crate::app::{TimeLogState, TrackerView};
+use crate::i18n::{tc, tf, tl, tn};
 use crate::models::{BranchPresence, Effort, GitlabMrState, MrStatus, PipelineState, TrackedMr};
 use crate::utils::{
     awaiting_review_by, format_relative_date, matches_gitlab_username, review_waiting_since,
@@ -36,7 +37,7 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
             ui.set_max_width(ui.available_width());
             let Some(mr) = g.app.selected_mr().cloned() else {
                 ui.add_space(48.0);
-                ui.vertical_centered(|ui| ui.label(muted(&theme, "Select a merge request")));
+                ui.vertical_centered(|ui| ui.label(muted(&theme, tl("Select a merge request"))));
                 return;
             };
             header(g, ui, &mr);
@@ -76,9 +77,9 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     let style = theme.icon_button();
                     let (icon, hint) = if mr.flagged {
-                        (Icon::Star, "Unflag (Space)")
+                        (Icon::Star, tl("Unflag (Space)"))
                     } else {
-                        (Icon::StarOutline, "Flag (Space)")
+                        (Icon::StarOutline, tl("Flag (Space)"))
                     };
                     let response =
                         bevel_widgets::buttons::IconButton::new(hint, Vec2::splat(24.0), &style)
@@ -97,7 +98,8 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             branch_route(ui, &theme, &mr.source_branch, &mr.target_branch);
             if let MrStatus::Error(message) = &mr.status {
                 ui.label(
-                    RichText::new(format!("Last fetch failed — {message}")).color(tones.red.fg),
+                    RichText::new(format!("{} — {message}", tl("Last fetch failed")))
+                        .color(tones.red.fg),
                 );
             }
             ui.horizontal(|ui| {
@@ -108,7 +110,7 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     if icon_button(
                         ui,
-                        "Copy the git clone command (Y)",
+                        tl("Copy the git clone command (Y)"),
                         Icon::Copy,
                         &outlined,
                         height,
@@ -119,8 +121,11 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                         g.pending.push(Action::YankCloneCommand);
                     }
                     ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
-                        let response = full_width_button(ui, &theme, "Open in GitLab");
-                        if response.on_hover_text("Open in the browser (O)").clicked() {
+                        let response = full_width_button(ui, &theme, tl("Open in GitLab"));
+                        if response
+                            .on_hover_text(tl("Open in the browser (O)"))
+                            .clicked()
+                        {
                             g.pending.push(Action::OpenSelectedMr);
                         }
                     });
@@ -155,9 +160,12 @@ fn byline(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
         let (rect, _) = ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
         icons::paint(ui.painter(), rect, Icon::Clock, theme.palette.text_muted);
         ui.label(
-            RichText::new(format!("updated {}", format_relative_date(updated)))
-                .size(size)
-                .color(theme.palette.text_muted),
+            RichText::new(tf(
+                "updated {when}",
+                &[("when", &format_relative_date(updated))],
+            ))
+            .size(size)
+            .color(theme.palette.text_muted),
         );
     });
 }
@@ -278,9 +286,9 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         let score = stats.difficulty(&g.app.config.complexity_profile);
         let (label, tone) = tones::effort(Effort::from_score(score), &theme.tones);
         let profile = g.app.config.complexity_profile.name.clone();
-        section(ui, &theme, "Review effort", |ui| {
+        section(ui, &theme, tl("Review effort"), |ui| {
             ui.horizontal(|ui| {
-                ui.label(muted(&theme, format!("Profile: {profile}")));
+                ui.label(muted(&theme, tf("Profile: {name}", &[("name", &profile)])));
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     ui.add(Chip::new(label, tone).glyph("●").pill());
                 });
@@ -289,15 +297,18 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ui.label(muted(
                 &theme,
                 format!(
-                    "{} files · +{} −{} · {} commits",
-                    stats.files_changed, stats.additions, stats.deletions, stats.commits_count
+                    "{} · +{} −{} · {}",
+                    tn(stats.files_changed as u64, "{n} file", "{n} files"),
+                    stats.additions,
+                    stats.deletions,
+                    tn(stats.commits_count as u64, "{n} commit", "{n} commits"),
                 ),
             ));
         });
     }
     branches(g, ui, mr);
     if !mr.labels.is_empty() {
-        section(ui, &theme, "Labels", |ui| {
+        section(ui, &theme, tl("Labels"), |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::splat(6.0);
                 for label in &mr.labels {
@@ -320,7 +331,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     }
     pipelines(ui, &theme, mr);
     if !mr.description.trim().is_empty() {
-        section(ui, &theme, "Description", |ui| {
+        section(ui, &theme, tl("Description"), |ui| {
             ui.label(RichText::new(mr.description.trim()).color(theme.palette.text_secondary));
         });
     }
@@ -331,9 +342,9 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let tones = &theme.tones;
     let me = g.app.config.gitlab_username.clone();
-    section(ui, &theme, "Review", |ui| {
+    section(ui, &theme, tl("Review"), |ui| {
         key_values(ui, &theme, |rows| {
-            rows.row("Status", |ui| {
+            rows.row(tl("Status"), |ui| {
                 let waiting = me.as_deref().filter(|me| {
                     awaiting_review_by(
                         mr.state,
@@ -349,26 +360,33 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                         mr.created_at.as_deref(),
                         username,
                     )
-                    .map(|at| format!(" · requested {}", format_relative_date(&at.to_rfc3339())))
+                    .map(|at| {
+                        let when = format_relative_date(&at.to_rfc3339());
+                        format!(" · {}", tf("requested {when}", &[("when", &when)]))
+                    })
                     .unwrap_or_default();
                     ui.label(
-                        RichText::new(format!("Waiting for you{since}")).color(tones.amber.fg),
+                        RichText::new(format!("{}{since}", tl("Waiting for you")))
+                            .color(tones.amber.fg),
                     );
                 } else if !mr.approved_by.is_empty() {
                     let names: Vec<String> =
                         mr.approved_by.iter().map(|u| format!("@{u}")).collect();
                     ui.label(
-                        RichText::new(format!("Approved by {}", names.join(", ")))
+                        RichText::new(tf("Approved by {names}", &[("names", &names.join(", "))]))
                             .color(tones.green.fg),
                     );
                 } else if mr.reviewers.is_empty() {
-                    ui.label(muted(&theme, "No reviewer"));
+                    ui.label(muted(&theme, tl("No reviewer")));
                 } else {
                     let names: Vec<String> = mr.reviewers.iter().map(|u| format!("@{u}")).collect();
-                    ui.label(format!("Requested from {}", names.join(", ")));
+                    ui.label(tf(
+                        "Requested from {names}",
+                        &[("names", &names.join(", "))],
+                    ));
                 }
             });
-            rows.row("Pipeline", |ui| match mr.pipelines.first() {
+            rows.row(tl("Pipeline"), |ui| match mr.pipelines.first() {
                 Some(pipeline) => {
                     let (label, tone) = tones::pipeline(pipeline.status, tones);
                     let detail = pipeline_detail(pipeline);
@@ -381,37 +399,39 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     );
                 }
                 None => {
-                    ui.label(muted(&theme, "None"));
+                    ui.label(muted(&theme, tl("None")));
                 }
             });
-            rows.row("Behind", |ui| {
+            rows.row(tl("Behind"), |ui| {
                 match mr.diff_stats.as_ref().and_then(|s| s.commits_behind) {
                     Some(0) => {
-                        ui.label("Up to date");
+                        ui.label(tl("Up to date"));
                     }
                     Some(n) => {
                         let tone = if n >= 10 { tones.red } else { tones.amber };
-                        let plural = if n == 1 { "" } else { "s" };
-                        ui.label(
-                            RichText::new(format!(
-                                "{n} commit{plural} behind {}",
-                                mr.target_branch
-                            ))
-                            .color(tone.fg),
+                        let behind = tn(
+                            n as u64,
+                            "{n} commit behind {branch}",
+                            "{n} commits behind {branch}",
                         );
+                        let behind = behind.replace("{branch}", &mr.target_branch);
+                        ui.label(RichText::new(behind).color(tone.fg));
                     }
                     None => {
                         ui.label(muted(&theme, "—"));
                     }
                 }
             });
-            rows.row("Threads", |ui| {
+            rows.row(tl("Threads"), |ui| {
                 if mr.user_notes_count == 0 {
-                    ui.label(muted(&theme, "None"));
+                    ui.label(muted(&theme, tl("None")));
                 } else {
                     ui.label(
-                        RichText::new(format!("{} unresolved", mr.user_notes_count))
-                            .color(tones.amber.fg),
+                        RichText::new(tf(
+                            "{n} unresolved",
+                            &[("n", &mr.user_notes_count.to_string())],
+                        ))
+                        .color(tones.amber.fg),
                     );
                 }
             });
@@ -443,7 +463,14 @@ fn pipeline_detail(pipeline: &crate::models::Pipeline) -> String {
                 .iter()
                 .filter(|j| matches!(j.status.as_str(), "success" | "failed" | "skipped"))
                 .count();
-            format!(" · {done} of {} jobs", pipeline.jobs.len())
+            let jobs = tf(
+                "{done} of {total} jobs",
+                &[
+                    ("done", &done.to_string()),
+                    ("total", &pipeline.jobs.len().to_string()),
+                ],
+            );
+            format!(" · {jobs}")
         }
         _ => String::new(),
     }
@@ -475,7 +502,7 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let rows = g.app.branch_rows(mr);
     let failed = matches!(mr.status, MrStatus::Error(_));
     let commits = mr.commits.len();
-    section(ui, &theme, "Branches", |ui| {
+    section(ui, &theme, tl("Branches"), |ui| {
         for row in &rows {
             let (glyph, label, tone) = tones::presence(row.presence, failed, &theme.tones);
             ui.horizontal(|ui| {
@@ -490,11 +517,15 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 );
                 ui.add(Chip::new(label, tone).glyph(glyph));
                 let detail = match row.presence {
-                    Some(BranchPresence::Partial) if commits > 0 => {
-                        format!("{} of {commits} commits missing", row.missing.len())
-                    }
+                    Some(BranchPresence::Partial) if commits > 0 => tf(
+                        "{n} of {total} commits missing",
+                        &[
+                            ("n", &row.missing.len().to_string()),
+                            ("total", &commits.to_string()),
+                        ],
+                    ),
                     Some(BranchPresence::CherryPicked) => "cherry-pick -x".into(),
-                    Some(BranchPresence::Copied) => "same author, date and title".into(),
+                    Some(BranchPresence::Copied) => tl("same author, date and title").into(),
                     _ => String::new(),
                 };
                 if !detail.is_empty() {
@@ -502,7 +533,7 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 }
             });
             if row.presence == Some(BranchPresence::Partial) && !row.missing.is_empty() {
-                egui::CollapsingHeader::new(muted(&theme, "Missing commits"))
+                egui::CollapsingHeader::new(muted(&theme, tl("Missing commits")))
                     .id_salt(("missing", &row.branch))
                     .show(ui, |ui| {
                         for commit in &row.missing {
@@ -524,7 +555,7 @@ fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 10.0;
             ui.horizontal(|ui| {
-                super::widgets::section_title(ui, &theme, "Tracker");
+                super::widgets::section_title(ui, &theme, tl("Tracker"));
                 if let Some(provider) = provider {
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                         ui.label(muted(&theme, provider));
@@ -534,7 +565,7 @@ fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             let Some(ticket) = &mr.linked_ticket else {
                 ui.label(muted(
                     &theme,
-                    "No ticket found in the MR's title, branch or description.",
+                    tl("No ticket found in the MR's title, branch or description."),
                 ));
                 return;
             };
@@ -542,21 +573,27 @@ fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if g.app.tracker.is_some()
-                    && button(ui, &theme, Some(Icon::Plus), "Log time…", true)
-                        .on_hover_text("Log time on this ticket (L)")
+                    && button(ui, &theme, Some(Icon::Plus), tl("Log time…"), true)
+                        .on_hover_text(tl("Log time on this ticket (L)"))
                         .clicked()
                 {
                     g.pending.push(Action::OpenLogTime);
                 }
-                if button(ui, &theme, Some(Icon::ExternalLink), "Open ticket", false)
-                    .on_hover_text("Open the ticket in the browser (T)")
-                    .clicked()
+                if button(
+                    ui,
+                    &theme,
+                    Some(Icon::ExternalLink),
+                    tl("Open ticket"),
+                    false,
+                )
+                .on_hover_text(tl("Open the ticket in the browser (T)"))
+                .clicked()
                 {
                     g.pending.push(Action::OpenSelectedTicket);
                 }
             });
             if g.app.tracker.is_some() {
-                let open = egui::CollapsingHeader::new(muted(&theme, "Time log"))
+                let open = egui::CollapsingHeader::new(muted(&theme, tl("Time log")))
                     .id_salt("time_log")
                     .show(ui, |ui| time_log(g, ui, &ticket.id))
                     .fully_open();
@@ -627,7 +664,7 @@ pub fn ticket_card(ui: &mut Ui, theme: &Theme, ticket: &gitlab_tracker_core::Lin
                 ui.horizontal(|ui| {
                     let size = theme.text_size - 1.5;
                     if let Some(time) = &time {
-                        ui.label(muted(theme, "Spent / estimated").size(size));
+                        ui.label(muted(theme, tl("Spent / estimated")).size(size));
                         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                             ui.label(
                                 RichText::new(time)
@@ -636,7 +673,7 @@ pub fn ticket_card(ui: &mut Ui, theme: &Theme, ticket: &gitlab_tracker_core::Lin
                             );
                         });
                     } else if let Some(fraction) = fraction {
-                        ui.label(muted(theme, "Done").size(size));
+                        ui.label(muted(theme, tl("Done")).size(size));
                         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                             ui.label(
                                 RichText::new(format!("{:.0}%", fraction * 100.0))
@@ -664,7 +701,7 @@ pub fn ticket_card(ui: &mut Ui, theme: &Theme, ticket: &gitlab_tracker_core::Lin
                 ui.add_space(10.0);
                 key_values(ui, theme, |rows| {
                     for (caption, value) in details {
-                        rows.row(caption, |ui| {
+                        rows.row(tl(caption), |ui| {
                             if caption == "Assignee" {
                                 ui.spacing_mut().interact_size.y = 18.0;
                                 ui.horizontal(|ui| {
@@ -702,20 +739,23 @@ fn time_log(g: &GuiApp, ui: &mut Ui, ticket_id: &str) {
                     ui.spacing().interact_size.y,
                     ui.visuals().strong_text_color(),
                 );
-                ui.label(muted(&theme, "Loading the time entries…"));
+                ui.label(muted(&theme, tl("Loading the time entries…")));
             });
         }
         Some(TimeLogState::Failed(error)) => {
             ui.label(RichText::new(error).color(theme.tones.red.fg));
         }
         Some(TimeLogState::Loaded(entries)) if entries.is_empty() => {
-            ui.label(muted(&theme, "No time logged yet."));
+            ui.label(muted(&theme, tl("No time logged yet.")));
         }
         Some(TimeLogState::Loaded(entries)) => {
             let total: f32 = entries.iter().map(|e| e.hours).sum();
             ui.label(muted(
                 &theme,
-                format!("{total:.2} h in {} entries", entries.len()),
+                format!(
+                    "{total:.2} h · {}",
+                    tn(entries.len() as u64, "{n} entry", "{n} entries")
+                ),
             ));
             for entry in entries {
                 ui.horizontal(|ui| {
@@ -749,7 +789,7 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
     if open.is_empty() {
         return;
     }
-    section(ui, theme, "Unresolved threads", |ui| {
+    section(ui, theme, tl("Unresolved threads"), |ui| {
         for thread in open {
             let response = egui::Frame::new()
                 .fill(theme.palette.content)
@@ -770,8 +810,8 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                         ui.label(muted(
                             theme,
                             format!(
-                                "{} notes · {}",
-                                thread.notes,
+                                "{} · {}",
+                                tn(thread.notes as u64, "{n} note", "{n} notes"),
                                 format_relative_date(&thread.last_note_at)
                             ),
                         ));
@@ -786,7 +826,7 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                 .response
                 .interact(Sense::click())
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text("Open the thread in GitLab");
+                .on_hover_text(tl("Open the thread in GitLab"));
             if response.clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
                     "{}#note_{}",
@@ -799,9 +839,9 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
 
 /// The latest pipelines; the jobs of the newest one by stage.
 fn pipelines(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
-    section(ui, theme, "Pipelines", |ui| {
+    section(ui, theme, tl("Pipelines"), |ui| {
         if mr.pipelines.is_empty() {
-            ui.label(muted(theme, "No pipeline yet."));
+            ui.label(muted(theme, tl("No pipeline yet.")));
             return;
         }
         for pipeline in mr.pipelines.iter().take(5) {
@@ -887,25 +927,25 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             }
             let response = response | ui.label(text);
             if is_me {
-                ui.add(Chip::new("you", theme.tones.blue).pill());
+                ui.add(Chip::new(tl("you"), theme.tones.blue).pill());
             }
             if let Some(handle) = handle {
                 response.on_hover_text(format!("@{handle}"));
             }
         });
     };
-    section(ui, &theme, "People", |ui| {
+    section(ui, &theme, tl("People"), |ui| {
         key_values(ui, &theme, |rows| {
-            rows.row("Author", |ui| person(ui, &mr.author));
-            rows.row("Assignee", |ui| match &mr.assignee {
+            rows.row(tl("Author"), |ui| person(ui, &mr.author));
+            rows.row(tl("Assignee"), |ui| match &mr.assignee {
                 Some(assignee) => person(ui, assignee),
                 None => {
                     ui.label(muted(&theme, "—"));
                 }
             });
-            rows.row("Reviewers", |ui| {
+            rows.row(tl("Reviewers"), |ui| {
                 if mr.reviewers.is_empty() {
-                    ui.label(muted(&theme, "None"));
+                    ui.label(muted(&theme, tl("None")));
                     return;
                 }
                 ui.vertical(|ui| {
@@ -921,9 +961,9 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 
 fn planning(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
     let tones = &theme.tones;
-    section(ui, theme, "Planning", |ui| {
+    section(ui, theme, tl("Planning"), |ui| {
         key_values(ui, theme, |rows| {
-            rows.row("Milestone", |ui| match &mr.milestone {
+            rows.row(tl("Milestone"), |ui| match &mr.milestone {
                 Some(milestone) => {
                     ui.label(RichText::new(milestone).color(theme.palette.accent));
                 }
@@ -931,9 +971,9 @@ fn planning(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                     ui.label(muted(theme, "—"));
                 }
             });
-            rows.row("Due", |ui| match mr.milestone_due_date.as_deref() {
+            rows.row(tl("Due"), |ui| match mr.milestone_due_date.as_deref() {
                 None | Some("") => {
-                    ui.label(muted(theme, "Not set"));
+                    ui.label(muted(theme, tl("Not set")));
                 }
                 Some(date) => {
                     // Red when past, amber within a week (YYYY-MM-DD compares as text).
@@ -971,26 +1011,27 @@ fn when(iso: Option<&str>) -> String {
             s.get(..16).unwrap_or(s).replace('T', " "),
             format_relative_date(s)
         ),
-        None => "Unknown".into(),
+        None => tl("Unknown").into(),
     }
 }
 
 fn history(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
-    section(ui, theme, "History", |ui| {
+    section(ui, theme, tl("History"), |ui| {
         key_values(ui, theme, |rows| {
-            rows.row("Created", |ui| {
+            rows.row(tl("Created"), |ui| {
                 ui.label(when(mr.created_at.as_deref()));
             });
-            rows.row("Updated", |ui| {
+            rows.row(tl("Updated"), |ui| {
                 ui.label(when(mr.updated_at.as_deref()));
             });
             if mr.state == GitlabMrState::Merged {
-                rows.row("Merged", |ui| {
-                    let by = mr.merged_by.as_deref().unwrap_or("Unknown");
-                    ui.label(format!("{} by {by}", when(mr.merged_at.as_deref())));
+                rows.row(tc("date", "Merged"), |ui| {
+                    let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
+                    let at = when(mr.merged_at.as_deref());
+                    ui.label(tf("{when} by {name}", &[("when", &at), ("name", by)]));
                 });
             }
-            rows.row("Commit", |ui| {
+            rows.row(tl("Commit"), |ui| {
                 let sha = mr
                     .sha
                     .as_deref()
@@ -998,7 +1039,7 @@ fn history(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                     .unwrap_or("—");
                 ui.label(mono(sha, theme.text_size - 1.0));
             });
-            rows.row("Branch", |ui| {
+            rows.row(tl("Branch"), |ui| {
                 ui.label(mono(&mr.source_branch, theme.text_size - 1.5));
             });
         });

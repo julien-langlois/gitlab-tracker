@@ -2,6 +2,7 @@
 
 use bevel_theme::{Tone, Tones};
 
+use crate::i18n::tl;
 use crate::models::{BranchPresence, Effort, GitlabMrState, MergeabilityStatus, PipelineState};
 
 /// Label and tone of the status badge. Open MRs show their mergeability, as the
@@ -12,8 +13,8 @@ pub fn status(
     tones: &Tones,
 ) -> (&'static str, Tone) {
     match state {
-        GitlabMrState::Merged => ("MERGED", tones.purple),
-        GitlabMrState::Closed => ("CLOSED", tones.gray),
+        GitlabMrState::Merged => (tl("MERGED"), tones.purple),
+        GitlabMrState::Closed => (tl("CLOSED"), tones.gray),
         GitlabMrState::Opened => {
             let label = match mergeability {
                 // Shorter than the TUI badges, to fit the column.
@@ -35,7 +36,7 @@ pub fn status(
                 MergeabilityStatus::Retrying => tones.teal,
                 MergeabilityStatus::Draft => tones.gray,
             };
-            (label, tone)
+            (tl(label), tone)
         }
     }
 }
@@ -48,26 +49,26 @@ pub fn presence(
     tones: &Tones,
 ) -> (&'static str, &'static str, Tone) {
     match presence {
-        Some(BranchPresence::Present) => ("●", "Present", tones.green),
-        Some(BranchPresence::CherryPicked) => ("◆", "Picked", tones.amber),
-        Some(BranchPresence::Copied) => ("≈", "Copied", tones.teal),
-        Some(BranchPresence::Partial) => ("◐", "Partial", tones.purple),
-        Some(BranchPresence::Absent) => ("○", "Absent", tones.red),
-        None if failed => ("✕", "Failed", tones.red),
-        None => ("…", "Loading", tones.gray),
+        Some(BranchPresence::Present) => ("●", tl("Present"), tones.green),
+        Some(BranchPresence::CherryPicked) => ("◆", tl("Picked"), tones.amber),
+        Some(BranchPresence::Copied) => ("≈", tl("Copied"), tones.teal),
+        Some(BranchPresence::Partial) => ("◐", tl("Partial"), tones.purple),
+        Some(BranchPresence::Absent) => ("○", tl("Absent"), tones.red),
+        None if failed => ("✕", tl("Failed"), tones.red),
+        None => ("…", tl("Loading"), tones.gray),
     }
 }
 
 pub fn effort(effort: Effort, tones: &Tones) -> (&'static str, Tone) {
     match effort {
-        Effort::Easy => ("Easy", tones.green),
-        Effort::Medium => ("Medium", tones.amber),
-        Effort::Complex => ("Complex", tones.red),
+        Effort::Easy => (tl("Easy"), tones.green),
+        Effort::Medium => (tl("Medium"), tones.amber),
+        Effort::Complex => (tl("Complex"), tones.red),
     }
 }
 
 pub fn pipeline(state: PipelineState, tones: &Tones) -> (&'static str, Tone) {
-    match state {
+    let (label, tone) = match state {
         PipelineState::Success => ("Passed", tones.green),
         PipelineState::Failed => ("Failed", tones.red),
         PipelineState::Running => ("Running", tones.orange),
@@ -75,7 +76,8 @@ pub fn pipeline(state: PipelineState, tones: &Tones) -> (&'static str, Tone) {
         PipelineState::Canceled => ("Canceled", tones.gray),
         PipelineState::Skipped => ("Skipped", tones.gray),
         PipelineState::Unknown => ("Unknown", tones.gray),
-    }
+    };
+    (tl(label), tone)
 }
 
 /// Tone of a label chip: scoped labels by scope, the rest neutral.

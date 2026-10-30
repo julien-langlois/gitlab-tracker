@@ -20,6 +20,7 @@ use super::widgets::{
 use super::{tones, GuiApp};
 use crate::actions::Action;
 use crate::app::{App, InputMode, SortColumn, SortOrder};
+use crate::i18n::{tf, tl, tn};
 use crate::models::{Effort, MrStatus};
 
 pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
@@ -29,11 +30,11 @@ pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     if shown == 0 {
         ui.add_space(48.0);
         ui.vertical_centered(|ui| {
-            let text = if g.app.mrs.is_empty() {
+            let text = tl(if g.app.mrs.is_empty() {
                 "No tracked merge request yet: type its number in the search field and press Enter."
             } else {
                 "No merge request matches this view."
-            };
+            });
             ui.label(muted(&g.theme, text));
         });
         return;
@@ -47,12 +48,12 @@ pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 
 fn sort_label(column: SortColumn) -> &'static str {
-    match column {
+    tl(match column {
         SortColumn::UpdatedAt => "Updated",
         SortColumn::Id => "MR",
         SortColumn::Milestone => "Milestone",
         SortColumn::Title => "Title",
-    }
+    })
 }
 
 const TOOLBAR_HEIGHT: f32 = 52.0;
@@ -79,31 +80,48 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
 
     let style = theme.icon_button();
     let views_shown = sizes.views.is_some();
-    let label = if views_shown {
+    let label = tl(if views_shown {
         "Hide the views panel (F)"
     } else {
         "Show the views panel (F)"
-    };
+    });
     if icon_toggle(ui, label, Icon::PanelLeft, &style, 28.0, views_shown).clicked() {
         g.show_views = Some(!views_shown);
     }
-    ui.label(semibold("Merge requests", theme.text_size + 2.0));
-    ui.label(muted(&theme, format!("{shown} of {}", g.app.mrs.len())));
+    ui.label(semibold(tl("Merge requests"), theme.text_size + 2.0));
+    ui.label(muted(
+        &theme,
+        tf(
+            "{n} of {total}",
+            &[
+                ("n", &shown.to_string()),
+                ("total", &g.app.mrs.len().to_string()),
+            ],
+        ),
+    ));
     ui.add_space(6.0);
 
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if button(ui, &theme, Some(Icon::Clipboard), "Copy checklist", true)
-            .on_hover_text("Copy the visible MRs as a Markdown release checklist (E)")
-            .clicked()
+        if button(
+            ui,
+            &theme,
+            Some(Icon::Clipboard),
+            tl("Copy checklist"),
+            true,
+        )
+        .on_hover_text(tl(
+            "Copy the visible MRs as a Markdown release checklist (E)",
+        ))
+        .clicked()
         {
             g.pending.push(Action::CopyChecklist);
         }
         let outlined = theme.outlined_icon_button();
         let height = theme.spacing.control_height + 2.0;
-        if icon_button(ui, "Refresh now (R)", Icon::Refresh, &outlined, height).clicked() {
+        if icon_button(ui, tl("Refresh now (R)"), Icon::Refresh, &outlined, height).clicked() {
             g.pending.push(Action::Refresh);
         }
-        if icon_button(ui, "Columns (C)", Icon::Columns, &outlined, height).clicked() {
+        if icon_button(ui, tl("Columns (C)"), Icon::Columns, &outlined, height).clicked() {
             g.app.input_mode = InputMode::ColumnPicker;
         }
         sort_button(g, ui);
@@ -120,7 +138,7 @@ fn sort_button(g: &mut GuiApp, ui: &mut Ui) {
         SortOrder::Descending => Icon::ArrowDown,
     };
     let response = button(ui, &theme, Some(icon), sort_label(g.app.sort_column), false)
-        .on_hover_text("Sort (S: next column, Shift+S: reverse)");
+        .on_hover_text(tl("Sort (S: next column, Shift+S: reverse)"));
     egui::Popup::menu(&response).show(|ui| {
         ui.set_min_width(170.0);
         for column in [
@@ -135,10 +153,10 @@ fn sort_button(g: &mut GuiApp, ui: &mut Ui) {
             }
         }
         ui.separator();
-        let reverse = match g.app.sort_order {
+        let reverse = tl(match g.app.sort_order {
             SortOrder::Ascending => "Descending order",
             SortOrder::Descending => "Ascending order",
-        };
+        });
         if ui.button(reverse).clicked() {
             g.pending.push(Action::ToggleSortOrder);
         }
@@ -179,7 +197,7 @@ fn search(g: &mut GuiApp, ui: &mut Ui) {
                 &mut g.app.input,
                 "search",
                 FieldLook {
-                    hint: "Search title, author, !iid · 123 + Enter tracks an MR · @milestone",
+                    hint: tl("Search title, author, !iid · 123 + Enter tracks an MR · @milestone"),
                     icon: Some(Icon::Search),
                     width,
                     active: false,
@@ -230,7 +248,7 @@ fn milestone_suggestions(g: &mut GuiApp, ui: &mut Ui, bar: Rect) {
         .show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_min_width(320.0);
-                ui.label(muted(&theme, "Track every MR of a milestone:"));
+                ui.label(muted(&theme, tl("Track every MR of a milestone:")));
                 for (i, title) in g.app.milestone_suggestions.iter().enumerate() {
                     let selected = i == g.app.milestone_suggestion_cursor;
                     if ui.selectable_label(selected, title).clicked() {
@@ -312,7 +330,7 @@ impl Col {
     }
 
     fn title(self) -> &'static str {
-        match self {
+        tl(match self {
             Col::Effort => "Effort",
             Col::Notes => "Threads",
             Col::Activity => "Activity",
@@ -321,7 +339,7 @@ impl Col {
             Col::Target => "Target",
             Col::Behind => "Behind",
             Col::Ticket => "Ticket",
-        }
+        })
     }
 }
 
@@ -482,7 +500,7 @@ fn row_views(g: &GuiApp, range: std::ops::Range<usize>) -> Vec<RowView> {
                 index,
                 id: mr.id.clone(),
                 title: if mr.title.is_empty() {
-                    "Loading…".into()
+                    tl("Loading…").into()
                 } else {
                     mr.title.clone()
                 },
@@ -593,7 +611,11 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
                 ui.add_space(6.0);
                 ui.label(muted(
                     &theme,
-                    format!("{dropped} column(s) hidden to fit the window — widen it, or pick fewer in Columns."),
+                    tn(
+                        dropped as u64,
+                        "{n} column hidden to fit the window — widen it, or pick fewer in Columns.",
+                        "{n} columns hidden to fit the window — widen it, or pick fewer in Columns.",
+                    ),
                 ));
             }
         });
@@ -638,9 +660,9 @@ fn header(
                 .color(theme.palette.text_muted)
         };
         let sortable = match cell {
-            Cell::Id => Some(("MR", SortColumn::Id)),
-            Cell::Title => Some(("Title", SortColumn::Title)),
-            Cell::Optional(Col::Milestone) => Some(("Milestone", SortColumn::Milestone)),
+            Cell::Id => Some((tl("MR"), SortColumn::Id)),
+            Cell::Title => Some((tl("Title"), SortColumn::Title)),
+            Cell::Optional(Col::Milestone) => Some((tl("Milestone"), SortColumn::Milestone)),
             _ => None,
         };
         match (cell, sortable) {
@@ -656,20 +678,20 @@ fn header(
                 };
                 if ui
                     .add(egui::Label::new(text).sense(Sense::click()))
-                    .on_hover_text("Sort by this column")
+                    .on_hover_text(tl("Sort by this column"))
                     .clicked()
                 {
                     *sort_by = Some(column);
                 }
             }
             (Cell::Status, _) => {
-                ui.label(caption("Status"));
+                ui.label(caption(tl("Status")));
             }
             (Cell::Optional(Col::Notes), _) => {
                 // The column is narrower than its name: an icon, named on hover.
                 let (rect, response) = ui.allocate_exact_size(Vec2::splat(13.0), Sense::hover());
                 icons::paint(ui.painter(), rect, Icon::Comment, theme.palette.text_muted);
-                response.on_hover_text("Unresolved threads");
+                response.on_hover_text(tl("Unresolved threads"));
             }
             (Cell::Optional(col), _) => {
                 ui.label(caption(col.title()));
@@ -766,9 +788,9 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
 fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
     let style = theme.icon_button();
     let (icon, label) = if flagged {
-        (Icon::Star, "Unflag (Space)")
+        (Icon::Star, tl("Unflag (Space)"))
     } else {
-        (Icon::StarOutline, "Flag (Space)")
+        (Icon::StarOutline, tl("Flag (Space)"))
     };
     IconButton::new(label, Vec2::splat(18.0), &style)
         .show(ui, |ui, rect, tint| {
@@ -917,31 +939,31 @@ fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) {
 /// The right-click menu of a row; returns the action picked.
 fn context_menu(ui: &mut Ui, r: &RowView) -> Option<Action> {
     let mut picked = None;
-    if ui.button("Open in GitLab (O)").clicked() {
+    if ui.button(tl("Open in GitLab (O)")).clicked() {
         picked = Some(Action::OpenSelectedMr);
     }
-    if ui.button("Copy the git clone command (Y)").clicked() {
+    if ui.button(tl("Copy the git clone command (Y)")).clicked() {
         picked = Some(Action::YankCloneCommand);
     }
-    let flag = if r.flagged {
+    let flag = tl(if r.flagged {
         "Unflag (Space)"
     } else {
         "Flag (Space)"
-    };
+    });
     if ui.button(flag).clicked() {
         picked = Some(Action::ToggleFlagSelected);
     }
     if r.has_ticket {
         ui.separator();
-        if ui.button("Open the ticket").clicked() {
+        if ui.button(tl("Open the ticket")).clicked() {
             picked = Some(Action::OpenSelectedTicket);
         }
-        if ui.button("Log time… (L)").clicked() {
+        if ui.button(tl("Log time… (L)")).clicked() {
             picked = Some(Action::OpenLogTime);
         }
     }
     ui.separator();
-    if ui.button("Stop tracking (Del)").clicked() {
+    if ui.button(tl("Stop tracking (Del)")).clicked() {
         picked = Some(Action::RemoveSelected);
     }
     picked

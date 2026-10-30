@@ -10,6 +10,7 @@ use super::icons::{self, Icon};
 use super::inspector::duration;
 use super::widgets::{avatar, bar, dot, mono, muted, page_title, semibold, split_person};
 use super::{tones, GuiApp};
+use crate::i18n::{tf, tl, tn};
 
 /// Below this list width the progress column goes under the subject.
 const WIDE_ROW: f32 = 720.0;
@@ -50,8 +51,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             page_title(
                 ui,
                 &theme,
-                "Linked tickets",
-                format!("{provider} · live from the list"),
+                tl("Linked tickets"),
+                tf("{provider} · live from the list", &[("provider", provider)]),
             );
             ui.add_space(16.0);
             summary(ui, &theme, &rows, listed);
@@ -61,7 +62,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 ui.vertical_centered(|ui| {
                     ui.label(muted(
                         &theme,
-                        "No listed merge request references a ticket.",
+                        tl("No listed merge request references a ticket."),
                     ));
                 });
                 return;
@@ -121,31 +122,37 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
     let tones = &theme.tones;
     let tiles = [
         (
-            "Linked tickets",
+            tl("Linked tickets"),
             tickets.len().to_string(),
-            format!("from {} of {listed} MRs", rows.len()),
+            tf(
+                "from {n} of {total} MRs",
+                &[
+                    ("n", &rows.len().to_string()),
+                    ("total", &listed.to_string()),
+                ],
+            ),
             None,
         ),
         (
-            "Without a ticket",
+            tl("Without a ticket"),
             (listed - rows.len()).to_string(),
-            "merge requests".to_owned(),
+            tl("merge requests").to_owned(),
             (listed > rows.len()).then_some(tones.amber),
         ),
         (
-            "Time spent",
+            tl("Time spent"),
             duration(spent),
             if estimated > 0 {
-                format!("of {} estimated", duration(estimated))
+                tf("of {time} estimated", &[("time", &duration(estimated))])
             } else {
-                "no estimate".to_owned()
+                tl("no estimate").to_owned()
             },
             (estimated > 0 && spent > estimated).then_some(tones.red),
         ),
         (
-            "Over estimate",
+            tl("Over estimate"),
             over.to_string(),
-            if over == 1 { "ticket" } else { "tickets" }.to_owned(),
+            tn(over as u64, "ticket", "tickets"),
             (over > 0).then_some(tones.red),
         ),
     ];
@@ -302,7 +309,7 @@ fn ticket_row(
                             let (name, _) = split_person(assignee);
                             let response = avatar(ui, theme, name, 24.0);
                             avatar_rect = Some(response.rect);
-                            response.on_hover_text(format!("Assigned to {assignee}"));
+                            response.on_hover_text(tf("Assigned to {name}", &[("name", assignee)]));
                         },
                     );
                 }
@@ -381,7 +388,7 @@ fn progress(ui: &mut Ui, theme: &Theme, ticket: &LinkedTicket) {
                 );
             }
             None => {
-                ui.label(muted(theme, "No time logged").size(size));
+                ui.label(muted(theme, tl("No time logged")).size(size));
             }
         }
         if let Some(fraction) = fraction {

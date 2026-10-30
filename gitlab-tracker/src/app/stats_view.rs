@@ -139,13 +139,13 @@ impl StatsTab {
     }
 
     pub fn label(self) -> &'static str {
-        match self {
+        crate::i18n::tl(match self {
             Self::Overview => "Overview",
             Self::Flow => "Flow",
             Self::Quality => "Quality",
             Self::Forecasts => "Forecasts",
             Self::Correlations => "Correlations",
-        }
+        })
     }
 
     pub fn from_digit(c: char) -> Option<Self> {
@@ -193,12 +193,12 @@ impl StatsWindow {
 
     /// Short label shown in the overlay title bar.
     pub fn label(self) -> &'static str {
-        match self {
+        crate::i18n::tl(match self {
             Self::Last30Days => "Last 30 days",
             Self::Last90Days => "Last 90 days",
             Self::Last365Days => "Last 365 days",
             Self::AllTime => "All time",
-        }
+        })
     }
 }
 

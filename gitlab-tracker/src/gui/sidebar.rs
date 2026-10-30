@@ -11,6 +11,7 @@ use super::widgets::{
 };
 use super::{tones, GuiApp};
 use crate::actions::Action;
+use crate::i18n::{tf, tl};
 use crate::models::Effort;
 
 /// Views listed first, with their glyph; the other one-click filters are under
@@ -166,7 +167,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
                     top: 0,
                     bottom: 6,
                 })
-                .show(ui, |ui| section_title(ui, &theme, "Views"));
+                .show(ui, |ui| section_title(ui, &theme, tl("Views")));
             for &((index, def), glyph) in &groups.views {
                 view_item(g, ui, index, def, glyph);
             }
@@ -174,7 +175,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
             if !more.is_empty() {
                 ui.add_space(4.0);
                 let active_inside = more.iter().any(|(i, _)| *i == g.app.active_filter.index);
-                egui::CollapsingHeader::new(muted(&theme, "More views"))
+                egui::CollapsingHeader::new(muted(&theme, tl("More views")))
                     .id_salt("more_views")
                     .default_open(active_inside)
                     .show_unindented(ui, |ui| {
@@ -191,7 +192,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 6.0;
-            section_title(ui, &theme, "Filters");
+            section_title(ui, &theme, tl("Filters"));
             ui.add_space(6.0);
             for &(index, def) in &groups.filters {
                 text_filter(g, ui, index, def);
@@ -206,7 +207,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
             if !more.is_empty() {
                 ui.add_space(2.0);
                 let active_inside = more.iter().any(|(i, _)| *i == g.app.active_filter.index);
-                egui::CollapsingHeader::new(muted(&theme, "More filters"))
+                egui::CollapsingHeader::new(muted(&theme, tl("More filters")))
                     .id_salt("more_filters")
                     .default_open(active_inside)
                     .show_unindented(ui, |ui| {
@@ -216,8 +217,8 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
                     });
             }
             ui.add_space(4.0);
-            if switch(ui, &theme, g.app.config.hide_merged, "Hide merged MRs")
-                .on_hover_text("They stay tracked and refreshed (M)")
+            if switch(ui, &theme, g.app.config.hide_merged, tl("Hide merged MRs"))
+                .on_hover_text(tl("They stay tracked and refreshed (M)"))
                 .clicked()
             {
                 g.pending.push(Action::ToggleHideMerged);
@@ -237,14 +238,20 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
 fn footer(g: &GuiApp, ui: &mut Ui) {
     let theme = &g.theme;
     let name = g.app.tracker.as_ref().map_or("Tracker", |t| t.name());
-    dot_label(ui, theme, theme.tones.green.fg, format!("{name} connected"));
+    dot_label(
+        ui,
+        theme,
+        theme.tones.green.fg,
+        tf("{name} connected", &[("name", name)]),
+    );
 }
 
-/// The name of a filter without the TUI's emoji and "… (type below)" hint.
+/// The name of a filter without the TUI's emoji and "… (type below)" hint, in
+/// the window's language.
 fn clean_label(def: &FilterDef) -> String {
     let label = def.label.split(" (").next().unwrap_or(def.label);
     let label: String = label.chars().filter(|c| (*c as u32) < 0x2000).collect();
-    label.trim().trim_end_matches('…').trim().to_string()
+    tl(label.trim().trim_end_matches('…').trim()).to_string()
 }
 
 /// One view: glyph, name and how many MRs it shows.
@@ -313,7 +320,7 @@ fn effort_pills(g: &mut GuiApp, ui: &mut Ui, pills: &[(usize, Effort)]) {
         return;
     }
     ui.add_space(6.0);
-    ui.label(muted(&theme, "Review effort"));
+    ui.label(muted(&theme, tl("Review effort")));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
         for &(index, effort) in pills {
@@ -404,8 +411,11 @@ fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
             Vec2::new(22.0, response.rect.height()),
         );
         let style = theme.icon_button();
-        let button =
-            bevel_widgets::buttons::IconButton::new("Clear the filter", Vec2::splat(22.0), &style);
+        let button = bevel_widgets::buttons::IconButton::new(
+            tl("Clear the filter"),
+            Vec2::splat(22.0),
+            &style,
+        );
         let clicked = ui
             .put(clear_rect, |ui: &mut Ui| {
                 button.show(ui, |ui, rect, tint| {
@@ -417,7 +427,7 @@ fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
                     )
                 })
             })
-            .on_hover_text("Clear the filter")
+            .on_hover_text(tl("Clear the filter"))
             .clicked();
         clear |= clicked;
     }
@@ -541,9 +551,9 @@ fn hint(id: &str, branches: &[String]) -> String {
         _ => "",
     };
     if example.is_empty() {
-        "Type, then Enter".into()
+        tl("Type, then Enter").into()
     } else {
-        format!("e.g. {example}")
+        tf("e.g. {example}", &[("example", example)])
     }
 }
 
@@ -654,7 +664,7 @@ fn suggestion_list(
 /// The tracked branches (one column each in the table): remove one, or add one.
 fn branches(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
-    section_title(ui, &theme, "Tracked branches");
+    section_title(ui, &theme, tl("Tracked branches"));
     ui.add_space(4.0);
     let mut removed = None;
     for branch in &g.app.branches {
@@ -666,7 +676,7 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui
                         .add(egui::Button::new(muted(&theme, "✕")).frame(false))
-                        .on_hover_text("Stop tracking this branch")
+                        .on_hover_text(tl("Stop tracking this branch"))
                         .clicked()
                     {
                         removed = Some(branch.clone());
@@ -686,7 +696,7 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
     let mut draft: String = ui.data_mut(|d| d.get_temp(id).unwrap_or_default());
     let response = ui.add(
         egui::TextEdit::singleline(&mut draft)
-            .hint_text(RichText::new("Add a branch, then Enter"))
+            .hint_text(RichText::new(tl("Add a branch, then Enter")))
             .margin(Margin::symmetric(8, 5))
             .desired_width(f32::INFINITY),
     );

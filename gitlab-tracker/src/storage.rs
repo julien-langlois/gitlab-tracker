@@ -217,6 +217,10 @@ pub struct TrackerConfig {
 /// Root structure of `projects.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectsConfig {
+    /// Language of the desktop window: a code such as `fr`, or absent to follow
+    /// the system. Read by the GUI only; kept here so every save preserves it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     #[serde(rename = "project")]
     pub projects: Vec<ProjectEntry>,
 }
@@ -376,6 +380,7 @@ async fn try_migrate_from_config_json() -> Option<ProjectEntry> {
     // Write projects.toml with the migrated values.
     let cfg = ProjectsConfig {
         projects: vec![entry.clone()],
+        ..Default::default()
     };
     save_projects_toml(&cfg).await;
     tracing::info!(
@@ -651,6 +656,14 @@ pub async fn set_active_project_async(gitlab_url: &str, project_id: &str) {
     if !mark_active(&mut cfg, gitlab_url, project_id) {
         return;
     }
+    save_projects_toml(&cfg).await;
+}
+
+/// Saves the window's language (`None`: follow the system) in `projects.toml`.
+#[cfg(feature = "gui")]
+pub async fn set_language_async(language: Option<String>) {
+    let mut cfg = load_projects_toml().await;
+    cfg.language = language;
     save_projects_toml(&cfg).await;
 }
 
@@ -1275,6 +1288,7 @@ mod tests {
         };
         let mut cfg = ProjectsConfig {
             projects: vec![entry("1", true), entry("2", false)],
+            ..Default::default()
         };
         assert!(mark_active(&mut cfg, "https://g/", "2"));
         let active: Vec<bool> = cfg.projects.iter().map(|p| p.active).collect();
@@ -1321,6 +1335,7 @@ mod tests {
                 project("https://gitlab.a.com", "1", true),
                 project("https://gitlab.b.com", "2", false),
             ],
+            ..Default::default()
         };
         // Started with `--project 2`: the second entry is edited, the active one untouched.
         let entry = find_project_mut(&mut cfg, "https://gitlab.b.com/", "2").unwrap();
@@ -1439,7 +1454,11 @@ mod tests {
     }
 
     async fn write_projects(entries: Vec<ProjectEntry>) {
-        save_projects_toml(&ProjectsConfig { projects: entries }).await;
+        save_projects_toml(&ProjectsConfig {
+            projects: entries,
+            ..Default::default()
+        })
+        .await;
     }
 
     #[test]

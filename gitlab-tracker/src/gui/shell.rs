@@ -9,6 +9,7 @@ use super::widgets::{dot, icon_toggle, muted, spinner};
 use super::{cockpit, dialogs, inspector, sidebar, table, tracker, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::InputMode;
+use crate::i18n::{tf, tl};
 
 pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     let width = ui.max_rect().width();
@@ -118,7 +119,7 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                 if let Some(layout) = g.frame.layout() {
                     window_buttons(ui, &theme, &layout.left);
                 }
-                if bar_button(ui, &theme, 52.0, "Merge requests", Icon::Home).clicked() {
+                if bar_button(ui, &theme, 52.0, tl("Merge requests"), Icon::Home).clicked() {
                     g.open_page(Page::MergeRequests);
                 }
                 project_tabs(g, ui, sizes);
@@ -130,10 +131,10 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                     }
                     let (icon, label, next) = match theme.mode {
                         bevel_theme::Mode::Dark => {
-                            (Icon::Sun, "Light theme", bevel_theme::Mode::Light)
+                            (Icon::Sun, tl("Light theme"), bevel_theme::Mode::Light)
                         }
                         bevel_theme::Mode::Light => {
-                            (Icon::Moon, "Dark theme", bevel_theme::Mode::Dark)
+                            (Icon::Moon, tl("Dark theme"), bevel_theme::Mode::Dark)
                         }
                     };
                     if bar_button(ui, &theme, 44.0, label, icon).clicked() {
@@ -141,11 +142,11 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                     }
                     if matches!(page, Page::MergeRequests | Page::Tracker) {
                         let shown = sizes.inspector.is_some();
-                        let label = if shown {
+                        let label = tl(if shown {
                             "Hide the inspector"
                         } else {
                             "Show the inspector"
-                        };
+                        });
                         let style = theme.icon_button();
                         if icon_toggle(ui, label, Icon::PanelRight, &style, 30.0, shown).clicked() {
                             g.show_inspector = Some(!shown);
@@ -220,7 +221,10 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     );
     if !g.app.read_only
         && response
-            .on_hover_text(format!("{} · project {}", g.app.base_url, g.app.project_id))
+            .on_hover_text(tf(
+                "{url} · project {id}",
+                &[("url", &g.app.base_url), ("id", &g.app.project_id)],
+            ))
             .clicked()
     {
         g.pending.push(Action::OpenProjectPicker);
@@ -242,12 +246,16 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                 theme.palette.text_secondary
             };
             tab_label(ui, rect, galley, Icon::MergeRequests, color, color);
-            if response.on_hover_text("Switch to this project").clicked() {
+            if response
+                .on_hover_text(tl("Switch to this project"))
+                .clicked()
+            {
                 g.pending.push(Action::SwitchProject(Box::new(entry)));
             }
         }
     }
-    if !g.app.read_only && bar_button(ui, &theme, 36.0, "Projects… (W)", Icon::Plus).clicked() {
+    if !g.app.read_only && bar_button(ui, &theme, 36.0, tl("Projects… (W)"), Icon::Plus).clicked()
+    {
         g.pending.push(Action::OpenProjectPicker);
     }
 }
@@ -280,9 +288,9 @@ pub fn project_name(g: &GuiApp) -> String {
 fn window_buttons(ui: &mut Ui, theme: &Theme, buttons: &[bevel_window::Button]) {
     for button in buttons {
         let (label, icon) = match button {
-            bevel_window::Button::Minimize => ("Minimize", Icon::Minimize),
-            bevel_window::Button::Maximize => ("Maximize", Icon::Maximize),
-            bevel_window::Button::Close => ("Close", Icon::Close),
+            bevel_window::Button::Minimize => (tl("Minimize"), Icon::Minimize),
+            bevel_window::Button::Maximize => (tl("Maximize"), Icon::Maximize),
+            bevel_window::Button::Close => (tl("Close"), Icon::Close),
         };
         if bar_button(ui, theme, 46.0, label, icon).clicked() {
             let command = match button {
@@ -305,7 +313,10 @@ fn sync_state(g: &GuiApp, ui: &mut Ui) {
     ui.spacing_mut().item_spacing.x = 6.0;
     let pending = g.app.pending_initial_fetches.len() + g.app.pending_refresh_fetches.len();
     if pending > 0 {
-        ui.label(muted(theme, format!("Syncing · {pending} left")));
+        ui.label(muted(
+            theme,
+            tf("Syncing · {n} left", &[("n", &pending.to_string())]),
+        ));
         spinner(ui, 12.0, theme.palette.accent);
     } else {
         let secs = g.app.time_left;
@@ -323,7 +334,7 @@ fn sync_state(g: &GuiApp, ui: &mut Ui) {
                 .font(fonts::semibold(theme.text_size - 1.0))
                 .color(color),
         );
-        ui.label(muted(theme, "Next refresh in"));
+        ui.label(muted(theme, tl("Next refresh in")));
         ui.add_space(2.0);
         dot(ui, color, 7.0);
     }
@@ -361,17 +372,18 @@ fn status_bar(g: &mut GuiApp, ui: &mut Ui) {
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
-                    ui.label(muted(&theme, "? shortcuts"));
+                    ui.label(muted(&theme, tl("? shortcuts")));
                     let filter = g.app.active_filter.label(&g.app.filter_defs);
-                    let hidden = if g.app.config.hide_merged {
-                        " · merged hidden"
+                    let tracked = tf(
+                        "{n} tracked · View: {view}",
+                        &[("n", &g.app.mrs.len().to_string()), ("view", &filter)],
+                    );
+                    let text = if g.app.config.hide_merged {
+                        format!("{tracked} · {}", tl("merged hidden"))
                     } else {
-                        ""
+                        tracked
                     };
-                    ui.label(muted(
-                        &theme,
-                        format!("{} tracked · View: {filter}{hidden}", g.app.mrs.len()),
-                    ));
+                    ui.label(muted(&theme, text));
                     status_separator(ui, &theme);
                     auto_polling(ui, &theme, g.app.discovery_enabled);
                     if let Some(tracker) = &g.app.tracker {
@@ -404,25 +416,25 @@ fn status_separator(ui: &mut Ui, theme: &Theme) {
 /// "Auto-polling ON" in green, or "OFF" dimmed, as in the TUI's status bar.
 /// Laid out right to left.
 fn auto_polling(ui: &mut Ui, theme: &Theme, on: bool) {
-    let hint = if on {
+    let hint = tl(if on {
         "Each refresh also looks for the team's new MRs (discover_new_mrs)"
     } else {
         "Only the tracked MRs are refreshed; set discover_new_mrs to find the team's new ones"
-    };
+    });
     let response = ui
         .scope(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
             let (text, tone) = if on {
-                ("ON", theme.tones.green)
+                (tl("ON"), theme.tones.green)
             } else {
-                ("OFF", theme.tones.gray)
+                (tl("OFF"), theme.tones.gray)
             };
             ui.add(
                 bevel_theme::Chip::new(text, tone)
                     .strong()
                     .font(fonts::semibold(theme.text_size - 2.5)),
             );
-            ui.label(muted(theme, "Auto-polling").size(theme.text_size - 1.0));
+            ui.label(muted(theme, tl("Auto-polling")).size(theme.text_size - 1.0));
         })
         .response;
     response.on_hover_text(hint);
@@ -437,7 +449,8 @@ fn request_estimate(ui: &mut Ui, theme: &Theme, name: &str, next: usize, startup
         .scope(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             if let Some(startup) = startup.filter(|s| *s != next) {
-                ui.label(muted(theme, format!("({startup} at startup)")).size(size - 0.5));
+                let text = tf("({n} at startup)", &[("n", &startup.to_string())]);
+                ui.label(muted(theme, text).size(size - 0.5));
             }
             ui.label(
                 RichText::new(next.to_string())
@@ -447,12 +460,18 @@ fn request_estimate(ui: &mut Ui, theme: &Theme, name: &str, next: usize, startup
             ui.label(muted(theme, format!("{name} ~")).size(size));
         })
         .response;
-    let startup = startup.map_or(String::new(), |s| {
-        format!("\n{s} at startup, from the saved state")
-    });
-    response.on_hover_text(format!(
-        "{name}: about {next} API requests at the next refresh{startup}"
-    ));
+    let mut hint = tf(
+        "{name}: about {n} API requests at the next refresh",
+        &[("name", name), ("n", &next.to_string())],
+    );
+    if let Some(s) = startup {
+        hint.push('\n');
+        hint.push_str(&tf(
+            "{n} at startup, from the saved state",
+            &[("n", &s.to_string())],
+        ));
+    }
+    response.on_hover_text(hint);
 }
 
 // ── Icon rail ────────────────────────────────────────────────────────────────
@@ -480,16 +499,21 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     (
                         Page::MergeRequests,
                         Icon::MergeRequests,
-                        "MRs",
-                        "Merge requests",
+                        tl("MRs"),
+                        tl("Merge requests"),
                     ),
-                    (Page::Cockpit, Icon::Cockpit, "Cockpit", "Cockpit"),
+                    (Page::Cockpit, Icon::Cockpit, tl("Cockpit"), tl("Cockpit")),
                 ];
                 if g.app.tracker.is_some() {
-                    items.push((Page::Tracker, Icon::Ticket, "Tracker", "Linked tickets"));
+                    items.push((
+                        Page::Tracker,
+                        Icon::Ticket,
+                        tl("Tracker"),
+                        tl("Linked tickets"),
+                    ));
                 }
                 #[cfg(feature = "stats")]
-                items.push((Page::Stats, Icon::Stats, "Stats", "Statistics (G)"));
+                items.push((Page::Stats, Icon::Stats, tl("Stats"), tl("Statistics (G)")));
                 for (target, icon, label, hint) in items {
                     if rail_item(ui, &theme, icon, Some(label), page == target)
                         .on_hover_text(hint)
@@ -500,13 +524,13 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                 }
                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
                     if rail_item(ui, &theme, Icon::Settings, None, false)
-                        .on_hover_text("Project settings (,)")
+                        .on_hover_text(tl("Settings (,)"))
                         .clicked()
                     {
                         g.pending.push(Action::OpenSettings);
                     }
                     if rail_item(ui, &theme, Icon::Help, None, false)
-                        .on_hover_text("Keyboard shortcuts (?)")
+                        .on_hover_text(tl("Keyboard shortcuts (?)"))
                         .clicked()
                     {
                         g.app.input_mode = InputMode::Help;

@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use crate::gitlab::{spawn_mr_fetch, CachedMrData, CountApiCalls, FetchContext};
+use crate::i18n::{tf, tl, tn};
 use crate::models::{
     AppEvent, BranchCommits, BranchPresence, BranchRow, GitLabMilestone, GitlabMrState,
     MergeabilityStatus, MrStatus, PipelineState, SavedMr, TrackedMr,
@@ -229,12 +230,13 @@ impl ActiveFilter {
     /// Returns the display label shown in the table header for the active filter.
     pub fn label(&self, filter_defs: &[&'static FilterDef]) -> String {
         let Some(def) = filter_defs.get(self.index) else {
-            return "All".to_string();
+            return tl("All").to_string();
         };
+        let label = tl(def.active_label());
         if def.needs_text_input && !self.query.is_empty() {
-            format!("{} {}", def.active_label(), self.query)
+            format!("{label} {}", self.query)
         } else {
-            def.active_label().to_string()
+            label.to_string()
         }
     }
 }
@@ -1031,7 +1033,7 @@ impl App {
             return;
         };
         if self.copy_to_clipboard(cmd) {
-            self.flash("✔ git clone command copied", false);
+            self.flash(format!("✔ {}", tl("git clone command copied")), false);
         }
     }
 
@@ -1041,7 +1043,12 @@ impl App {
         let count = self.visible_mrs().count();
         let checklist = self.markdown_checklist();
         if self.copy_to_clipboard(checklist) {
-            self.flash(format!("✔ Checklist copied ({count} MRs)"), false);
+            let copied = tn(
+                count as u64,
+                "Checklist copied ({n} MR)",
+                "Checklist copied ({n} MRs)",
+            );
+            self.flash(format!("✔ {copied}"), false);
         }
     }
 
@@ -1086,11 +1093,11 @@ impl App {
         }
         let result = match &mut self.clipboard {
             Some(clipboard) => clipboard.set_text(text).map_err(|e| e.to_string()),
-            None => Err("no clipboard available".to_string()),
+            None => Err(tl("no clipboard available").to_string()),
         };
         if let Err(e) = &result {
             tracing::warn!(error = %e, "Failed to copy to clipboard");
-            self.flash(format!("✘ Copy failed: {e}"), true);
+            self.flash(format!("✘ {}: {e}", tl("Copy failed")), true);
         }
         result.is_ok()
     }
@@ -1425,16 +1432,21 @@ fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> 
         }
     }
     let parts: Vec<String> = [
-        (merged, "merged"),
-        (closed, "closed"),
-        (arrivals, "new on a branch"),
-        (ci_failing, "CI failing"),
+        (merged, "{n} merged"),
+        (closed, "{n} closed"),
+        (arrivals, "{n} new on a branch"),
+        (ci_failing, "{n} CI failing"),
     ]
     .into_iter()
     .filter(|(n, _)| *n > 0)
-    .map(|(n, label)| format!("{n} {label}"))
+    .map(|(n, label)| tf(label, &[("n", &n.to_string())]))
     .collect();
-    (!parts.is_empty()).then(|| format!("Since last session: {}", parts.join(" · ")))
+    (!parts.is_empty()).then(|| {
+        tf(
+            "Since last session: {changes}",
+            &[("changes", &parts.join(" · "))],
+        )
+    })
 }
 
 /// A transient status-bar message: the result of an action that has no other

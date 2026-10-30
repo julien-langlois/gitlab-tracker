@@ -1,0 +1,539 @@
+# gitlab-tracker window, Español. Generated from one table with the other
+# languages: context<TAB>English<TAB>translation (see src/gui/i18n.rs).
+@id	language.name	Español
+
+# Window, title bar and icon rail
+	Merge requests	Merge requests
+	MRs	MR
+	Cockpit	Cockpit
+	Tracker	Tracker
+	Stats	Estadíst.
+	Linked tickets	Tickets vinculados
+	Statistics (G)	Estadísticas (G)
+	Settings (,)	Ajustes (,)
+	Keyboard shortcuts (?)	Atajos de teclado (?)
+	Light theme	Tema claro
+	Dark theme	Tema oscuro
+	Hide the inspector	Ocultar el inspector
+	Show the inspector	Mostrar el inspector
+	{url} · project {id}	{url} · proyecto {id}
+	Switch to this project	Cambiar a este proyecto
+	Projects… (W)	Proyectos… (W)
+	Minimize	Minimizar
+	Maximize	Maximizar
+	Close	Cerrar
+	Syncing · {n} left	Sincronizando · quedan {n}
+	Next refresh in	Próxima actualización en
+	? shortcuts	? atajos
+	{n} tracked · View: {view}	{n} seguidas · Vista: {view}
+	merged hidden	fusionadas ocultas
+	Each refresh also looks for the team's new MRs (discover_new_mrs)	Cada actualización también busca las nuevas MR del equipo (discover_new_mrs)
+	Only the tracked MRs are refreshed; set discover_new_mrs to find the team's new ones	Solo se actualizan las MR seguidas; activa discover_new_mrs para encontrar las nuevas del equipo
+	ON	SÍ
+	OFF	NO
+	Auto-polling	Sondeo automático
+	({n} at startup)	({n} al iniciar)
+	{name}: about {n} API requests at the next refresh	{name}: unas {n} peticiones a la API en la próxima actualización
+	{n} at startup, from the saved state	{n} al iniciar, desde el estado guardado
+	Another project is still loading	Otro proyecto todavía se está cargando
+	Loading {project}…	Cargando {project}…
+	Switched to {project}	Cambiado a {project}
+	Project switch failed	Error al cambiar de proyecto
+
+# Views panel
+	Views	Vistas
+	More views	Más vistas
+	Filters	Filtros
+	More filters	Más filtros
+	Hide merged MRs	Ocultar MR fusionadas
+	They stay tracked and refreshed (M)	Siguen seguidas y actualizadas (M)
+	{name} connected	{name} conectado
+	Review effort	Esfuerzo de revisión
+	Clear the filter	Borrar el filtro
+	Type, then Enter	Escribe y pulsa Intro
+	e.g. {example}	p. ej. {example}
+	Tracked branches	Ramas seguidas
+	Stop tracking this branch	Dejar de seguir esta rama
+	Add a branch, then Enter	Añade una rama y pulsa Intro
+
+# Merge request table
+	No tracked merge request yet: type its number in the search field and press Enter.	Aún no hay merge requests seguidas: escribe su número en la búsqueda y pulsa Intro.
+	No merge request matches this view.	Ninguna merge request coincide con esta vista.
+	Updated	Actualizada
+	MR	MR
+	Title	Título
+	Hide the views panel (F)	Ocultar el panel de vistas (F)
+	Show the views panel (F)	Mostrar el panel de vistas (F)
+	{n} of {total}	{n} de {total}
+	Copy checklist	Copiar checklist
+	Copy the visible MRs as a Markdown release checklist (E)	Copiar las MR visibles como checklist de release en Markdown (E)
+	Refresh now (R)	Actualizar ahora (R)
+	Columns (C)	Columnas (C)
+	Sort (S: next column, Shift+S: reverse)	Ordenar (S: siguiente columna, Mayús+S: invertir)
+	Descending order	Orden descendente
+	Ascending order	Orden ascendente
+	Search title, author, !iid · 123 + Enter tracks an MR · @milestone	Buscar título, autor, !iid · 123 + Intro sigue una MR · @hito
+	Track every MR of a milestone:	Seguir todas las MR de un hito:
+	Effort	Esfuerzo
+	Threads	Hilos
+	Activity	Actividad
+	Labels	Etiquetas
+	Target	Destino
+	Behind	Atrasada
+	Ticket	Ticket
+	Status	Estado
+	Loading…	Cargando…
+	Sort by this column	Ordenar por esta columna
+	Unresolved threads	Hilos sin resolver
+	Unflag (Space)	Desmarcar (Espacio)
+	Flag (Space)	Marcar (Espacio)
+	Open in GitLab (O)	Abrir en GitLab (O)
+	Copy the git clone command (Y)	Copiar el comando git clone (Y)
+	Open the ticket	Abrir el ticket
+	Log time… (L)	Registrar tiempo… (L)
+	Stop tracking (Del)	Dejar de seguir (Supr)
+
+# Badges
+	MERGED	FUSIONADA
+	CLOSED	CERRADA
+	CHANGES REQ.	CAMBIOS
+	CI RUNNING	CI EN CURSO
+	MERGEABLE	FUSIONABLE
+	CONFLICT	CONFLICTO
+	REBASE	REBASE
+	DRAFT	BORRADOR
+	DISCUSSIONS	DISCUSIONES
+	CI MUST PASS	REQUIERE CI
+	CI STILL RUNNING	CI AÚN EN CURSO
+	NOT APPROVED	NO APROBADA
+	REQUESTED CHANGES	CAMBIOS SOLICITADOS
+	RETRYING	REINTENTANDO
+	SYNC FAILED	ERROR SYNC
+	OPEN	ABIERTA
+	Present	Presente
+	Picked	Cherry-pick
+	Copied	Copiada
+	Partial	Parcial
+	Absent	Ausente
+	Failed	Fallido
+	Loading	Espera
+	Easy	Fácil
+	Medium	Medio
+	Complex	Complejo
+	Passed	Superado
+	Running	En curso
+	Pending	Pendiente
+	Canceled	Cancelado
+	Skipped	Omitido
+	Unknown	Desconocido
+	Active	Activa
+	Slowing	Ralentizada
+	Stale	Estancada
+	🟢 EASY	🟢 FÁCIL
+	🟡 MEDIUM	🟡 MEDIO
+	🔴 COMPLEX	🔴 COMPLEJO
+
+# Inspector
+	Select a merge request	Selecciona una merge request
+	Last fetch failed	Falló la última descarga
+	Open in GitLab	Abrir en GitLab
+	Open in the browser (O)	Abrir en el navegador (O)
+	updated {when}	actualizada {when}
+	Profile: {name}	Perfil: {name}
+	Description	Descripción
+	Review	Revisión
+	requested {when}	solicitada {when}
+	Waiting for you	Te espera
+	Approved by {names}	Aprobada por {names}
+	No reviewer	Sin revisor
+	Requested from {names}	Solicitada a {names}
+	Pipeline	Pipeline
+	None	Ninguno
+	Up to date	Al día
+	{n} unresolved	{n} sin resolver
+	{done} of {total} jobs	{done} de {total} jobs
+	Branches	Ramas
+	{n} of {total} commits missing	faltan {n} de {total} commits
+	same author, date and title	mismo autor, fecha y título
+	Missing commits	Commits que faltan
+	No ticket found in the MR's title, branch or description.	No se encontró ningún ticket en el título, la rama o la descripción de la MR.
+	Log time…	Registrar tiempo…
+	Log time on this ticket (L)	Registrar tiempo en este ticket (L)
+	Open ticket	Abrir ticket
+	Open the ticket in the browser (T)	Abrir el ticket en el navegador (T)
+	Time log	Registro de tiempo
+	Spent / estimated	Invertido / estimado
+	Done	Hecho
+	Priority	Prioridad
+	Version	Versión
+	Loading the time entries…	Cargando los registros de tiempo…
+	No time logged yet.	Aún no hay tiempo registrado.
+	Open the thread in GitLab	Abrir el hilo en GitLab
+	Pipelines	Pipelines
+	No pipeline yet.	Aún no hay pipeline.
+	you	tú
+	People	Personas
+	Author	Autor
+	Reviewers	Revisores
+	Planning	Planificación
+	Due	Vence
+	Not set	Sin definir
+	History	Historial
+	Created	Creada
+	{when} by {name}	{when} por {name}
+	Commit	Commit
+	Branch	Rama
+
+# Linked tickets and cockpit pages
+	{n} tracked merge requests · live from the list	{n} merge requests seguidas · en directo desde la lista
+	{provider} · live from the list	{provider} · en directo desde la lista
+	No listed merge request references a ticket.	Ninguna merge request de la lista hace referencia a un ticket.
+	from {n} of {total} MRs	de {n} de {total} MR
+	Without a ticket	Sin ticket
+	merge requests	merge requests
+	Time spent	Tiempo invertido
+	of {time} estimated	de {time} estimadas
+	no estimate	sin estimación
+	Over estimate	Sobre lo estimado
+	Assigned to {name}	Asignado a {name}
+	No time logged	Sin tiempo registrado
+	Attention	Atención
+	Delivery Health	Salud de la entrega
+	Quality / Scope	Calidad / alcance
+	Releases	Releases
+	Flow	Flujo
+	no due date	sin fecha límite
+	n/a	n/d
+	WIP	En curso
+	Blocked	Bloqueadas
+	Open	Abiertas
+	Mergeable	Fusionables
+	Draft	Borradores
+	Closed	Cerradas
+	Merged today	Fusionadas hoy
+	Merged this week	Fusionadas esta semana
+	Merged this month	Fusionadas este mes
+	Merged last 7d	Fusionadas últimos 7 d
+	Merged last 30d	Fusionadas últimos 30 d
+	Conflicts	Conflictos
+	Needs rebase	Requiere rebase
+	Discussions	Discusiones
+	Changes req.	Cambios solic.
+	Needs review	Requiere revisión
+	To review (me)	Revisar (yo)
+	No assignee	Sin asignar
+	Flagged	Marcadas
+	{n}d	{n} d
+	Stale > {n}d	Estancadas > {n} d
+	Oldest open	Más antigua
+	No milestone	Sin hito
+	Due next {n}d	Vence en {n} d
+	Overdue	Vencidas
+	Behind target	Atrasadas respecto al destino
+	Hot threads	Hilos activos
+	With ticket	Con ticket
+	No ticket	Sin ticket
+	Avg diff lines	Líneas de diff prom.
+	Large diff	Diff grande
+	Many commits	Muchos commits
+	Many files	Muchos archivos
+	No diff stats	Sin estadísticas de diff
+	Pipeline unknown	Pipeline desconocido
+	CI skipped	CI omitida
+	Recently updated	Actualizadas recientemente
+
+# Statistics
+	Statistics	Estadísticas
+	Local SQLite snapshots	Instantáneas SQLite locales
+	Period (W)	Periodo (W)
+	Recompute	Recalcular
+	Recompute the report (R)	Recalcular el informe (R)
+	30 d	30 d
+	90 d	90 d
+	1 y	1 a
+	Overview	Resumen
+	Quality	Calidad
+	Forecasts	Previsiones
+	Correlations	Correlaciones
+	Last 30 days	Últimos 30 días
+	Last 90 days	Últimos 90 días
+	Last 365 days	Últimos 365 días
+	All time	Todo el tiempo
+	Computing statistics…	Calculando estadísticas…
+	No stats available yet. They are recorded as MRs are merged or refreshed: come back after a few MR events.	Aún no hay estadísticas. Se registran a medida que las MR se fusionan o actualizan: vuelve tras algunos eventos de MR.
+	Generated {date} · {window}	Generado {date} · {window}
+	{n} h	{n} h
+	{n} d	{n} d
+	{n} / week	{n} / semana
+	Not enough data yet.	Aún no hay suficientes datos.
+	Merged	Fusionadas
+	{week} this week · {today} today	{week} esta semana · {today} hoy
+	Throughput	Rendimiento
+	{n} in the last 30 days	{n} en los últimos 30 días
+	Median time to merge	Tiempo mediano hasta fusión
+	Pipeline fail rate	Tasa de fallo de pipelines
+	{percent} of MRs with pipeline data	{percent} de las MR con datos de pipeline
+	Time to merge by MR size	Tiempo hasta fusión por tamaño de MR
+	Merged MRs	MR fusionadas
+	Not enough merged MRs yet.	Aún no hay suficientes MR fusionadas.
+	Backlog health	Salud del backlog
+	Open MRs	MR abiertas
+	Median age	Antigüedad mediana
+	Oldest	La más antigua
+	Stale ≥ 7 · 14 · 30 days	Estancadas ≥ 7 · 14 · 30 días
+	Over capacity	Sobre capacidad
+	Expected wait (queue model)	Espera prevista (modelo de cola)
+	Lead time from merge to branch	Tiempo desde la fusión hasta la rama
+	No promotion to the other tracked branches recorded yet.	Aún no se ha registrado ninguna promoción a las demás ramas seguidas.
+	median {median} · P90 {p90}	mediana {median} · P90 {p90}
+	Median	Mediana
+	Max	Máx.
+	Via copy	Por copia
+	Time to merge by author	Tiempo hasta fusión por autor
+	Time to merge by reviewer	Tiempo hasta fusión por revisor
+	Time to merge by milestone	Tiempo hasta fusión por hito
+	Merged MRs by milestone	MR fusionadas por hito
+	Data confidence	Confianza de los datos
+	Pipeline data coverage	Cobertura de datos de pipeline
+	Reviewer coverage	Cobertura de revisores
+	Milestone coverage	Cobertura de hitos
+	Merged MRs with timing	MR fusionadas con tiempos
+	MRs with pipelines	MR con pipelines
+	Review signals	Señales de revisión
+	Average diff	Diff promedio
+	{n} lines	{n} líneas
+	Comments	Comentarios
+	{n} per MR	{n} por MR
+	Density	Densidad
+	{n} per 100 lines	{n} por 100 líneas
+	{percent} failing	{percent} fallando
+	Abandoned	Abandonadas
+	{percent} ({n} closed)	{percent} ({n} cerradas)
+	MR size buckets	MR por tamaño
+	Small	Pequeña
+	Large	Grande
+	Huge	Enorme
+	Share of the sample · median time to merge	Proporción de la muestra · tiempo mediano hasta fusión
+	CRITICAL	CRÍTICO
+	WARNING	AVISO
+	ELEVATED	ELEVADO
+	OK	OK
+	Pipeline failure rate	Tasa de fallo de pipelines
+	Comment density	Densidad de comentarios
+	Abandon rate	Tasa de abandono
+	Cycle time p90	Tiempo de ciclo P90
+	Signals	Señales
+	No signal: every tracked metric is within its usual range.	Sin señales: todas las métricas seguidas están en su rango habitual.
+	Observed {observed}, expected {expected} (p = {p})	Observado {observed}, esperado {expected} (p = {p})
+	Observed {observed}, baseline {baseline} (×{ratio})	Observado {observed}, referencia {baseline} (×{ratio})
+	Value {observed}: pressure signal	Valor {observed}: señal de presión
+	Throughput forecasts	Previsiones de rendimiento
+	Not enough merged MRs to forecast.	No hay suficientes MR fusionadas para prever.
+	≥ {n} merges in {weeks} weeks	≥ {n} fusiones en {weeks} semanas
+	λ = {n} merges per week	λ = {n} fusiones por semana
+	Review queue	Cola de revisión
+	OVER CAPACITY	SOBRE CAPACIDAD
+	STABLE	ESTABLE
+	NOT ENOUGH DATA	DATOS INSUFICIENTES
+	Arrivals	Llegadas
+	Service	Servicio
+	Load	Carga
+	In the queue	En la cola
+	{n} MRs	{n} MR
+	Expected wait	Espera prevista
+	Diff size ↔ time to merge	Tamaño del diff ↔ tiempo hasta fusión
+	Diff size ↔ comments	Tamaño del diff ↔ comentarios
+	Comments ↔ time to merge	Comentarios ↔ tiempo hasta fusión
+	Pipeline failures ↔ time to merge	Fallos de pipeline ↔ tiempo hasta fusión
+	Commits ↔ time to merge	Commits ↔ tiempo hasta fusión
+	Review effort ↔ time to merge	Esfuerzo de revisión ↔ tiempo hasta fusión
+	negligible	insignificante
+	weak	débil
+	moderate	moderada
+	strong	fuerte
+	very strong	muy fuerte
+	Spearman correlations	Correlaciones de Spearman
+	Not enough MRs to correlate yet.	Aún no hay suficientes MR para correlacionar.
+	not significant	no significativo
+	Large MRs ({large}) take {ratio}× longer to merge than small ones ({small}).	Las MR grandes ({large}) tardan {ratio}× más en fusionarse que las pequeñas ({small}).
+	{percent} of the MRs reaching {branch} arrive as copies (cherry-pick or rebase), not merges.	El {percent} de las MR que llegan a {branch} lo hacen como copias (cherry-pick o rebase), no como fusiones.
+	Strongest link: {pair} (ρ = {rho}, {strength}).	Relación más fuerte: {pair} (ρ = {rho}, {strength}).
+	{metric} is out of its usual range.	{metric} está fuera de su rango habitual.
+	MRs arrive faster than they are merged: the backlog grows.	Las MR llegan más rápido de lo que se fusionan: el backlog crece.
+	A new MR waits about {time} before it is merged.	Una MR nueva espera unos {time} antes de fusionarse.
+	Summary insights	Conclusiones
+	Nothing stands out in this window.	Nada destaca en este periodo.
+
+# Dialogs
+	Settings	Ajustes
+	{project} · saved to projects.toml	{project} · guardado en projects.toml
+	Interface	Interfaz
+	Language	Idioma
+	Language of this window. The terminal UI stays in English.	Idioma de esta ventana. La interfaz de terminal sigue en inglés.
+	System ({language})	Sistema ({language})
+	General	General
+	Save	Guardar
+	Cancel	Cancelar
+	Esc to cancel	Esc para cancelar
+	days	días
+	weeks	semanas
+	Show cockpit	Mostrar cockpit
+	Display the operational cockpit pane when enough vertical space is available.	Mostrar el panel del cockpit cuando haya suficiente espacio vertical.
+	Discover new MRs	Descubrir nuevas MR
+	Automatically add newly created MRs during refresh cycles.	Añadir automáticamente las MR recién creadas en cada actualización.
+	Hide merged MRs from the table; they stay tracked. Also toggled with [m].	Ocultar las MR fusionadas de la tabla; siguen seguidas. También con [m].
+	Refresh interval	Intervalo de actualización
+	Seconds between automatic GitLab refresh cycles.	Segundos entre actualizaciones automáticas de GitLab.
+	Recent activity days	Actividad reciente (días)
+	MRs updated within this many days are shown as recently active.	Las MR actualizadas en este número de días se muestran como activas.
+	Stale activity days	Inactividad (días)
+	MRs inactive for at least this many days are marked stale.	Las MR inactivas al menos este número de días se marcan como estancadas.
+	Review reminder hours	Recordatorio de revisión (horas)
+	Notify when an MR has waited this many hours for your review, and when its author pushes after your review (0 = off). Needs gitlab_username.	Avisar cuando una MR lleve este número de horas esperando tu revisión, y cuando su autor haga push después de tu revisión (0 = desactivado). Requiere gitlab_username.
+	Retention days	Retención (días)
+	Local stats snapshots older than this many days are purged on startup.	Las instantáneas de estadísticas más antiguas se eliminan al iniciar.
+	Sprint weeks	Duración del sprint (semanas)
+	Sprint duration used by throughput forecasts.	Duración de sprint usada por las previsiones de rendimiento.
+	Columns	Columnas
+	Shared with the terminal UI. Columns that do not fit the window are hidden until it is wider.	Compartidas con la interfaz de terminal. Las columnas que no caben se ocultan hasta que la ventana sea más ancha.
+	Notes	Notas
+	Switch project	Cambiar de proyecto
+	No project in projects.toml.	No hay proyectos en projects.toml.
+	Log time	Registrar tiempo
+	Duration	Duración
+	Comment	Comentario
+	Sending…	Enviando…
+	Keyboard shortcuts	Atajos de teclado
+	Select the previous / next MR	Seleccionar la MR anterior / siguiente
+	Open the selected MR in the browser	Abrir la MR seleccionada en el navegador
+	Flag / unflag the selected MR	Marcar / desmarcar la MR seleccionada
+	Copy the git clone command	Copiar el comando git clone
+	Copy the visible MRs as a Markdown checklist	Copiar las MR visibles como checklist en Markdown
+	Stop tracking the selected MR	Dejar de seguir la MR seleccionada
+	Refresh now	Actualizar ahora
+	Search (Enter on a number tracks the MR)	Buscar (Intro sobre un número sigue la MR)
+	Show the views panel	Mostrar el panel de vistas
+	Hide / show merged MRs	Ocultar / mostrar las MR fusionadas
+	Next sort column / reverse the order	Siguiente columna de orden / invertir el orden
+	Inspector: details / pipelines	Inspector: detalles / pipelines
+	Inspector: linked ticket	Inspector: ticket vinculado
+	Elsewhere	Otros
+	Log time on the linked ticket	Registrar tiempo en el ticket vinculado
+	Statistics (Tab: next tab, W: time window)	Estadísticas (Tab: siguiente pestaña, W: periodo)
+	This list	Esta lista
+	Close a dialog / leave the statistics	Cerrar un diálogo / salir de las estadísticas
+
+# Messages and notifications
+	All	Todas
+	git clone command copied	Comando git clone copiado
+	no clipboard available	no hay portapapeles disponible
+	Copy failed	Error al copiar
+	{n} merged	{n} fusionadas
+	{n} closed	{n} cerradas
+	{n} new on a branch	{n} nuevas en una rama
+	{n} CI failing	{n} con CI fallando
+	Since last session: {changes}	Desde la última sesión: {changes}
+	Refresh already running — wait for it to finish	Ya hay una actualización en curso — espera a que termine
+	No activities loaded	No hay actividades cargadas
+	Demo: no time is logged	Demo: no se registra tiempo
+	No linked ticket selected	No hay ningún ticket vinculado seleccionado
+	Invalid hours in "{value}"	Horas no válidas en "{value}"
+	Invalid minutes in "{value}"	Minutos no válidos en "{value}"
+	Duration must be greater than zero	La duración debe ser mayor que cero
+	Unrecognised format "{value}". Try: 1h30, 90m, 1.5h	Formato no reconocido "{value}". Prueba: 1h30, 90m, 1.5h
+	just now	ahora mismo
+	yesterday	ayer
+	tomorrow	mañana
+	last week	la semana pasada
+	next week	la próxima semana
+	about a month ago	hace aproximadamente un mes
+	in about a month	en aproximadamente un mes
+	Open MR	Abrir la MR
+	MR !{id} ({title}) is now present on branch '{branch}'!	¡La MR !{id} ({title}) ya está en la rama '{branch}'!
+	MR !{id} ({title}) was {how} to branch '{branch}' 🍒	La MR !{id} ({title}) se ha {how} a la rama '{branch}' 🍒
+	merged	fusionado
+	cherry-picked	hecho cherry-pick
+	copied	copiado
+	MR !{id} waits for your review	La MR !{id} espera tu revisión
+	Requested {n}h ago	Solicitada hace {n} h
+	MR !{id}: new commits since your review	MR !{id}: nuevos commits desde tu revisión
+	MR !{id} updated	MR !{id} actualizada
+	unknown date	fecha desconocida
+	MR !{id} — mergeability changed	MR !{id} — cambió la posibilidad de fusión
+	MR !{id} — complexity changed	MR !{id} — cambió la complejidad
+	MR !{id} — milestone changed	MR !{id} — cambió el hito
+	Ticket #{id} — {field} changed	Ticket #{id} — cambió {field}
+	Ticket #{id} — status transitioned	Ticket #{id} — estado actualizado
+	priority	prioridad
+	status	estado
+	assignee	asignado
+	version	versión
+	progress	progreso
+
+# Filters
+	State: Opened	Estado: abierta
+	State: Merged	Estado: fusionada
+	State: Closed	Estado: cerrada
+	Mergeability: Mergeable	Fusión: posible
+	Mergeability: Conflict	Fusión: conflicto
+	Mergeability: Needs Rebase	Fusión: requiere rebase
+	Mergeability: Not Approved	Fusión: no aprobada
+	Mergeability: Requested Changes	Fusión: cambios solicitados
+	Mergeability: Draft	Fusión: borrador
+	Mergeability: Discussions	Fusión: discusiones
+	Has comments	Con comentarios
+	CI failing	CI fallando
+	Assigned to me	Asignadas a mí
+	To review: me	Revisar: yo
+	Effort: Easy	Esfuerzo: fácil
+	Effort: Medium	Esfuerzo: medio
+	Effort: Complex	Esfuerzo: complejo
+	Milestone	Hito
+	Target branch	Rama destino
+	Assignee	Asignado
+	Absent from branch	Ausente de la rama
+	Label	Etiqueta
+	Has linked ticket	Con ticket vinculado
+
+# Filters in the status bar
+	Milestone:	Hito:
+	Branch:	Rama:
+	Assignee:	Asignado:
+	Absent from:	Ausente de:
+	Label:	Etiqueta:
+	Flagged ★	Marcadas ★
+	Has comments 💬	Con comentarios 💬
+	CI failing ❌	CI fallando ❌
+	Assigned to me 👤	Asignadas a mí 👤
+	To review: me 👁️	Revisar: yo 👁️
+	Effort: Easy 🟢	Esfuerzo: fácil 🟢
+	Effort: Medium 🟡	Esfuerzo: medio 🟡
+	Effort: Complex 🔴	Esfuerzo: complejo 🔴
+	Has linked ticket 🎫	Con ticket vinculado 🎫
+
+# In a context (tc)
+date	Merged	Fusionada
+
+# Counts
+@plural	{n} column hidden to fit the window — widen it, or pick fewer in Columns.|{n} columns hidden to fit the window — widen it, or pick fewer in Columns.	{n} columna oculta para caber en la ventana — amplíala o elige menos en Columnas.|{n} columnas ocultas para caber en la ventana — amplíala o elige menos en Columnas.
+@plural	ticket|tickets	ticket|tickets
+@plural	{n} file|{n} files	{n} archivo|{n} archivos
+@plural	{n} commit|{n} commits	{n} commit|{n} commits
+@plural	{n} commit behind {branch}|{n} commits behind {branch}	{n} commit por detrás de {branch}|{n} commits por detrás de {branch}
+@plural	{n} entry|{n} entries	{n} registro|{n} registros
+@plural	{n} note|{n} notes	{n} nota|{n} notas
+@plural	{n} MR in sample|{n} MRs in sample	{n} MR en la muestra|{n} MR en la muestra
+@plural	{n} open MR has had no merge for 14 days or more; the oldest is {days} days old.|{n} open MRs have had no merge for 14 days or more; the oldest is {days} days old.	{n} MR abierta lleva 14 días o más sin fusionarse; la más antigua tiene {days} días.|{n} MR abiertas llevan 14 días o más sin fusionarse; la más antigua tiene {days} días.
+@plural	Checklist copied ({n} MR)|Checklist copied ({n} MRs)	Checklist copiada ({n} MR)|Checklist copiada ({n} MR)
+@plural	{n} min ago|{n} min ago	hace {n} min|hace {n} min
+@plural	{n}h ago|{n}h ago	hace {n} h|hace {n} h
+@plural	{n} day ago|{n} days ago	hace {n} día|hace {n} días
+@plural	{n} week ago|{n} weeks ago	hace {n} semana|hace {n} semanas
+@plural	{n} month ago|{n} months ago	hace {n} mes|hace {n} meses
+@plural	{n} year ago|{n} years ago	hace {n} año|hace {n} años
+@plural	in {n} min|in {n} min	en {n} min|en {n} min
+@plural	in {n}h|in {n}h	en {n} h|en {n} h
+@plural	in {n} day|in {n} days	en {n} día|en {n} días
+@plural	in {n} week|in {n} weeks	en {n} semana|en {n} semanas
+@plural	in {n} month|in {n} months	en {n} mes|en {n} meses
+@plural	in {n} year|in {n} years	en {n} año|en {n} años

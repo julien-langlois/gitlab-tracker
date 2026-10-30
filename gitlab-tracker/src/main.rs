@@ -9,6 +9,7 @@ mod filters_core;
 mod gitlab;
 #[cfg(feature = "gui")]
 mod gui;
+mod i18n;
 mod models;
 mod notify;
 mod settings;

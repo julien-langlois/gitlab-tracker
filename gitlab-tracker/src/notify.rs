@@ -10,6 +10,8 @@
 //! background worker thread performs the (synchronous) D-Bus calls, so a slow or
 //! hung notification daemon can no longer freeze the UI loop.
 
+use crate::i18n::{tf, tl};
+
 // ── Internal helper ───────────────────────────────────────────────────────────
 
 /// A notification queued for the worker thread.
@@ -99,7 +101,7 @@ fn changed(summary: String, title: &str, old: &str, new: &str, icon: &'static st
         summary,
         body: format!("{title}\n{old} → {new}"),
         icon,
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: url.to_owned(),
     });
 }
@@ -110,9 +112,12 @@ fn changed(summary: String, title: &str, old: &str, new: &str, icon: &'static st
 pub fn mr_on_new_branch(mr_id: &str, title: &str, branch: &str, web_url: &str) {
     send(Toast {
         summary: "GitLab MR Tracker".to_string(),
-        body: format!("MR !{mr_id} ({title}) is now present on branch '{branch}'!"),
+        body: tf(
+            "MR !{id} ({title}) is now present on branch '{branch}'!",
+            &[("id", mr_id), ("title", title), ("branch", branch)],
+        ),
         icon: "dialog-information",
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: web_url.to_owned(),
     });
 }
@@ -122,9 +127,17 @@ pub fn mr_on_new_branch(mr_id: &str, title: &str, branch: &str, web_url: &str) {
 pub fn mr_copied_to_branch(mr_id: &str, title: &str, branch: &str, how: &str, web_url: &str) {
     send(Toast {
         summary: "GitLab MR Tracker".to_string(),
-        body: format!("MR !{mr_id} ({title}) was {how} to branch '{branch}' 🍒"),
+        body: tf(
+            "MR !{id} ({title}) was {how} to branch '{branch}' 🍒",
+            &[
+                ("id", mr_id),
+                ("title", title),
+                ("how", tl(how)),
+                ("branch", branch),
+            ],
+        ),
         icon: "dialog-information",
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: web_url.to_owned(),
     });
 }
@@ -132,10 +145,13 @@ pub fn mr_copied_to_branch(mr_id: &str, title: &str, branch: &str, how: &str, we
 /// Remind that an MR has been waiting `hours` for my review.
 pub fn review_waiting(mr_id: &str, title: &str, hours: i64, web_url: &str) {
     send(Toast {
-        summary: format!("MR !{mr_id} waits for your review"),
-        body: format!("{title}\nRequested {hours}h ago"),
+        summary: tf("MR !{id} waits for your review", &[("id", mr_id)]),
+        body: format!(
+            "{title}\n{}",
+            tf("Requested {n}h ago", &[("n", &hours.to_string())])
+        ),
         icon: "dialog-information",
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: web_url.to_owned(),
     });
 }
@@ -143,10 +159,10 @@ pub fn review_waiting(mr_id: &str, title: &str, hours: i64, web_url: &str) {
 /// Notify that the author pushed to an MR after my last review activity.
 pub fn review_new_push(mr_id: &str, title: &str, web_url: &str) {
     send(Toast {
-        summary: format!("MR !{mr_id}: new commits since your review"),
+        summary: tf("MR !{id}: new commits since your review", &[("id", mr_id)]),
         body: title.to_owned(),
         icon: "dialog-information",
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: web_url.to_owned(),
     });
 }
@@ -154,18 +170,18 @@ pub fn review_new_push(mr_id: &str, title: &str, web_url: &str) {
 /// Notify that an MR's `updated_at` field has changed (i.e. the MR was modified).
 pub fn mr_updated(mr_id: &str, title: &str, updated_at: Option<&str>, web_url: &str) {
     send(Toast {
-        summary: format!("MR !{mr_id} updated"),
-        body: format!("{title}\n{}", updated_at.unwrap_or("unknown date")),
+        summary: tf("MR !{id} updated", &[("id", mr_id)]),
+        body: format!("{title}\n{}", updated_at.unwrap_or(tl("unknown date"))),
         icon: "dialog-information",
-        action_label: "Open MR",
+        action_label: tl("Open MR"),
         url: web_url.to_owned(),
     });
 }
 
 /// Notify that an MR's mergeability status has changed.
 pub fn mr_mergeability_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
-    let summary = format!("MR !{mr_id} — mergeability changed");
-    changed(summary, title, old, new, "dialog-warning", web_url);
+    let summary = tf("MR !{id} — mergeability changed", &[("id", mr_id)]);
+    changed(summary, title, tl(old), tl(new), "dialog-warning", web_url);
 }
 
 /// Notify that an MR's review complexity category has changed (e.g. EASY → COMPLEX).
@@ -174,13 +190,13 @@ pub fn mr_mergeability_changed(mr_id: &str, title: &str, old: &str, new: &str, w
 /// `old` and `new` are human-readable labels matching the UI badges (e.g. `"🟢 EASY"`,
 /// `"🟡 MEDIUM"`, `"🔴 COMPLEX"`).
 pub fn mr_complexity_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
-    let summary = format!("MR !{mr_id} — complexity changed");
-    changed(summary, title, old, new, "dialog-warning", web_url);
+    let summary = tf("MR !{id} — complexity changed", &[("id", mr_id)]);
+    changed(summary, title, tl(old), tl(new), "dialog-warning", web_url);
 }
 
 /// Notify that an MR's milestone has changed.
 pub fn mr_milestone_changed(mr_id: &str, title: &str, old: &str, new: &str, web_url: &str) {
-    let summary = format!("MR !{mr_id} — milestone changed");
+    let summary = tf("MR !{id} — milestone changed", &[("id", mr_id)]);
     changed(summary, title, old, new, "dialog-information", web_url);
 }
 
@@ -211,10 +227,13 @@ pub fn ticket_field_changed(
         "dialog-information"
     };
     send(Toast {
-        summary: format!("Ticket #{ticket_id} — {field} changed"),
+        summary: tf(
+            "Ticket #{id} — {field} changed",
+            &[("id", ticket_id), ("field", tl(field))],
+        ),
         body: format!("{mr_title}\n{old} → {new}"),
         icon,
-        action_label: "Open ticket",
+        action_label: tl("Open ticket"),
         url: ticket_url.to_owned(),
     });
 }
@@ -228,10 +247,10 @@ pub fn ticket_status_transitioned(
     ticket_url: &str,
 ) {
     send(Toast {
-        summary: format!("Ticket #{ticket_id} — status transitioned"),
+        summary: tf("Ticket #{id} — status transitioned", &[("id", ticket_id)]),
         body: format!("{mr_title}\n{old_status} → {new_status}"),
         icon: "dialog-information",
-        action_label: "Open ticket",
+        action_label: tl("Open ticket"),
         url: ticket_url.to_owned(),
     });
 }

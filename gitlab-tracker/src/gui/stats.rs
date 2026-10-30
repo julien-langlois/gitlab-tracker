@@ -13,6 +13,7 @@ use super::widgets::{
 use super::GuiApp;
 use crate::actions::Action;
 use crate::app::{StatsTab, StatsWindow};
+use crate::i18n::{tf, tl, tn};
 
 const TABS: [StatsTab; 5] = [
     StatsTab::Overview,
@@ -22,6 +23,7 @@ const TABS: [StatsTab; 5] = [
     StatsTab::Correlations,
 ];
 
+/// The time windows' short names (English: translated where drawn).
 const WINDOWS: [(StatsWindow, &str); 4] = [
     (StatsWindow::Last30Days, "30 d"),
     (StatsWindow::Last90Days, "90 d"),
@@ -89,8 +91,8 @@ fn nav(g: &mut GuiApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 3.0;
-            ui.label(semibold("Statistics", theme.text_size + 1.0));
-            ui.label(muted(&theme, "Local SQLite snapshots"));
+            ui.label(semibold(tl("Statistics"), theme.text_size + 1.0));
+            ui.label(muted(&theme, tl("Local SQLite snapshots")));
         });
     rule(ui, &theme);
     egui::Frame::new()
@@ -149,17 +151,17 @@ fn nav(g: &mut GuiApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 6.0;
-            ui.label(muted(&theme, "Period (W)"));
+            ui.label(muted(&theme, tl("Period (W)")));
             period_selector(g, ui);
             ui.add_space(8.0);
             if super::widgets::button(
                 ui,
                 &theme,
                 Some(super::icons::Icon::Refresh),
-                "Recompute",
+                tl("Recompute"),
                 false,
             )
-            .on_hover_text("Recompute the report (R)")
+            .on_hover_text(tl("Recompute the report (R)"))
             .clicked()
             {
                 g.pending.push(Action::RefreshStats);
@@ -200,7 +202,7 @@ fn period_selector(g: &mut GuiApp, ui: &mut Ui) {
         ui.painter().text(
             segment.center(),
             egui::Align2::CENTER_CENTER,
-            label,
+            tl(label),
             egui::FontId::proportional(theme.text_size - 1.0),
             color,
         );
@@ -219,9 +221,13 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
     let tab = view.tab;
     let detail = match view.report.as_ref() {
         Some(report) => format!(
-            "{} · {} MRs in sample",
+            "{} · {}",
             view.window.label(),
-            report.aggregated.total_mrs
+            tn(
+                report.aggregated.total_mrs as u64,
+                "{n} MR in sample",
+                "{n} MRs in sample"
+            ),
         ),
         None => view.window.label().to_string(),
     };
@@ -250,7 +256,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
                 ui.spacing().interact_size.y,
                 ui.visuals().strong_text_color(),
             );
-            ui.label(muted(&theme, "Computing statistics…"));
+            ui.label(muted(&theme, tl("Computing statistics…")));
         });
         return;
     }
@@ -261,11 +267,14 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
     let Some(report) = view.report.clone() else {
         ui.label(muted(
             &theme,
-            "No stats available yet. They are recorded as MRs are merged or refreshed: \
+            tl(
+                "No stats available yet. They are recorded as MRs are merged or refreshed: \
              come back after a few MR events.",
+            ),
         ));
         return;
     };
+    let window = view.window.label();
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
@@ -285,7 +294,10 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
                 .replace('T', " ");
             ui.label(muted(
                 &theme,
-                format!("Generated {generated} · {}", report.window_label),
+                tf(
+                    "Generated {date} · {window}",
+                    &[("date", &generated), ("window", window)],
+                ),
             ));
         });
 }
@@ -311,10 +323,20 @@ fn fit(ui: &Ui, min: f32, most: usize) -> usize {
 
 fn hours(value: Option<f64>) -> String {
     match value {
-        Some(h) if h >= 24.0 => format!("{:.1} d", h / 24.0),
-        Some(h) => format!("{h:.1} h"),
+        Some(h) if h >= 24.0 => days(h / 24.0, 1),
+        Some(h) => tf("{n} h", &[("n", &format!("{h:.1}"))]),
         None => "—".into(),
     }
+}
+
+/// "3.5 d": `value` days with `decimals` decimals.
+fn days(value: f64, decimals: usize) -> String {
+    tf("{n} d", &[("n", &format!("{value:.decimals$}"))])
+}
+
+/// "2.5 / week".
+fn per_week(value: f64) -> String {
+    tf("{n} / week", &[("n", &format!("{value:.1}"))])
 }
 
 fn percent(value: Option<f64>) -> String {
@@ -408,7 +430,7 @@ fn bar_list(
 ) {
     card(ui, theme, title, |ui| {
         if entries.is_empty() {
-            ui.label(muted(theme, "Not enough data yet."));
+            ui.label(muted(theme, tl("Not enough data yet.")));
             return;
         }
         let max = entries
@@ -436,23 +458,28 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let t = &theme.tones;
     let kpis: [(&str, String, String, Color32); 4] = [
         (
-            "Merged",
+            tl("Merged"),
             a.merged_count.to_string(),
-            format!(
-                "{} this week · {} today",
-                a.merged_this_week, a.merged_today
+            tf(
+                "{week} this week · {today} today",
+                &[
+                    ("week", &a.merged_this_week.to_string()),
+                    ("today", &a.merged_today.to_string()),
+                ],
             ),
             theme.palette.text_muted,
         ),
         (
-            "Throughput",
-            a.throughput_per_week
-                .map_or("—".into(), |v| format!("{v:.1} / week")),
-            format!("{} in the last 30 days", a.merged_last_30_days),
+            tl("Throughput"),
+            a.throughput_per_week.map_or("—".into(), per_week),
+            tf(
+                "{n} in the last 30 days",
+                &[("n", &a.merged_last_30_days.to_string())],
+            ),
             theme.palette.text_muted,
         ),
         (
-            "Median time to merge",
+            tl("Median time to merge"),
             hours(a.cycle_time_median_hours),
             format!(
                 "P75 {} · P90 {}",
@@ -462,11 +489,14 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             theme.palette.text_muted,
         ),
         (
-            "Pipeline fail rate",
+            tl("Pipeline fail rate"),
             percent(a.avg_pipeline_failure_rate),
-            format!(
-                "{:.0}% of MRs with pipeline data",
-                a.pipeline_data_coverage * 100.0
+            tf(
+                "{percent} of MRs with pipeline data",
+                &[(
+                    "percent",
+                    &format!("{:.0}%", a.pipeline_data_coverage * 100.0),
+                )],
             ),
             match a.avg_pipeline_failure_rate {
                 Some(rate) if rate > 0.15 => t.red.fg,
@@ -515,17 +545,17 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
 /// Median time to merge per MR size, as vertical bars.
 fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let buckets = &report.aggregated.size_buckets;
-    card(ui, theme, "Time to merge by MR size", |ui| {
+    card(ui, theme, tl("Time to merge by MR size"), |ui| {
         ui.horizontal(|ui| {
             dot(ui, theme.palette.accent, 8.0);
-            ui.label(muted(theme, "Median time to merge"));
+            ui.label(muted(theme, tl("Median time to merge")));
             ui.add_space(8.0);
             dot(ui, theme.tones.purple.fg, 8.0);
-            ui.label(muted(theme, "Merged MRs"));
+            ui.label(muted(theme, tl("Merged MRs")));
         });
         ui.add_space(4.0);
         if buckets.is_empty() {
-            ui.label(muted(theme, "Not enough merged MRs yet."));
+            ui.label(muted(theme, tl("Not enough merged MRs yet.")));
             return;
         }
         let height = 180.0;
@@ -592,7 +622,7 @@ fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             ui.painter().text(
                 egui::pos2(center, chart.bottom() + 8.0),
                 egui::Align2::CENTER_TOP,
-                &bucket.label,
+                tl(&bucket.label),
                 egui::FontId::proportional(theme.text_size - 2.0),
                 theme.palette.text_muted,
             );
@@ -608,12 +638,12 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let median = (!ages.is_empty()).then(|| ages[ages.len() / 2]);
     let oldest = ages.last().copied();
     let queue = &report.poisson.queue_insight;
-    card(ui, theme, "Backlog health", |ui| {
+    card(ui, theme, tl("Backlog health"), |ui| {
         let scale = oldest.unwrap_or(1.0).max(30.0) as f32;
         meter(
             ui,
             theme,
-            "Open MRs",
+            tl("Open MRs"),
             &open.to_string(),
             (open as f32 / 25.0).min(1.0),
             theme.palette.accent,
@@ -621,16 +651,16 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         meter(
             ui,
             theme,
-            "Median age",
-            &median.map_or("—".into(), |d| format!("{d:.1} d")),
+            tl("Median age"),
+            &median.map_or("—".into(), |d| days(d, 1)),
             median.unwrap_or(0.0) as f32 / scale,
             t.green.fg,
         );
         meter(
             ui,
             theme,
-            "Oldest",
-            &oldest.map_or("—".into(), |d| format!("{d:.0} d")),
+            tl("Oldest"),
+            &oldest.map_or("—".into(), |d| days(d, 0)),
             oldest.unwrap_or(0.0) as f32 / scale,
             t.red.fg,
         );
@@ -641,13 +671,13 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         meter(
             ui,
             theme,
-            "Stale ≥ 7 · 14 · 30 days",
+            tl("Stale ≥ 7 · 14 · 30 days"),
             &stale,
             a.stale_open_mrs_7d as f32 / open.max(1) as f32,
             t.amber.fg,
         );
         let wait = match queue.status {
-            QueueStatus::OverCapacity => "Over capacity".to_string(),
+            QueueStatus::OverCapacity => tl("Over capacity").to_string(),
             QueueStatus::Stable => hours(queue.expected_wait_hours),
             QueueStatus::InsufficientData => "—".to_string(),
         };
@@ -655,7 +685,7 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         meter(
             ui,
             theme,
-            "Expected wait (queue model)",
+            tl("Expected wait (queue model)"),
             &wait,
             fraction,
             t.amber.fg,
@@ -666,11 +696,11 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
 // ── Flow ─────────────────────────────────────────────────────────────────────
 
 fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
-    card(ui, theme, "Lead time from merge to branch", |ui| {
+    card(ui, theme, tl("Lead time from merge to branch"), |ui| {
         if report.promotions.is_empty() {
             ui.label(muted(
                 theme,
-                "No promotion to the other tracked branches recorded yet.",
+                tl("No promotion to the other tracked branches recorded yet."),
             ));
             return;
         }
@@ -705,10 +735,12 @@ fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                 ui.painter()
                     .rect_filled(median, radius, theme.palette.accent);
                 ui.label(
-                    RichText::new(format!(
-                        "median {} · P90 {}",
-                        hours(p.median_hours),
-                        hours(p.p90_hours)
+                    RichText::new(tf(
+                        "median {median} · P90 {p90}",
+                        &[
+                            ("median", &hours(p.median_hours)),
+                            ("p90", &hours(p.p90_hours)),
+                        ],
                     ))
                     .color(theme.palette.text_secondary),
                 );
@@ -721,6 +753,7 @@ fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             .spacing(Vec2::new(24.0, 8.0))
             .show(ui, |ui| {
                 for title in ["Branch", "MRs", "Median", "P90", "Max", "Via copy"] {
+                    let title = tl(title);
                     ui.label(muted(theme, title));
                 }
                 ui.end_row();
@@ -739,17 +772,17 @@ fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let per_row = fit(ui, 300.0, 3);
     let lists = [
         (
-            "Time to merge by author",
+            tl("Time to merge by author"),
             top(&a.cycle_time_by_author, 8),
             theme.palette.accent,
         ),
         (
-            "Time to merge by reviewer",
+            tl("Time to merge by reviewer"),
             top(&a.cycle_time_by_reviewer, 8),
             theme.tones.teal.fg,
         ),
         (
-            "Time to merge by milestone",
+            tl("Time to merge by milestone"),
             top(&a.cycle_time_by_milestone, 8),
             theme.tones.purple.fg,
         ),
@@ -771,7 +804,7 @@ fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     bar_list(
         ui,
         theme,
-        "Merged MRs by milestone",
+        tl("Merged MRs by milestone"),
         &milestones,
         theme.tones.green.fg,
         |v| format!("{v:.0}"),
@@ -785,12 +818,12 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let t = &theme.tones;
     let side_by_side = ui.available_width() > 760.0;
     let confidence = |ui: &mut Ui| {
-        card(ui, theme, "Data confidence", |ui| {
+        card(ui, theme, tl("Data confidence"), |ui| {
             let ratio = |n: usize, target: usize| (n as f32 / target as f32).min(1.0);
             meter(
                 ui,
                 theme,
-                "Pipeline data coverage",
+                tl("Pipeline data coverage"),
                 &format!("{:.0}%", a.pipeline_data_coverage * 100.0),
                 a.pipeline_data_coverage as f32,
                 t.green.fg,
@@ -798,7 +831,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             meter(
                 ui,
                 theme,
-                "Reviewer coverage",
+                tl("Reviewer coverage"),
                 &format!("{:.0}%", a.reviewer_coverage * 100.0),
                 a.reviewer_coverage as f32,
                 t.green.fg,
@@ -806,7 +839,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             meter(
                 ui,
                 theme,
-                "Milestone coverage",
+                tl("Milestone coverage"),
                 &format!("{:.0}%", a.milestone_coverage * 100.0),
                 a.milestone_coverage as f32,
                 t.green.fg,
@@ -814,7 +847,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             meter(
                 ui,
                 theme,
-                "Merged MRs with timing",
+                tl("Merged MRs with timing"),
                 &a.cycle_time_sample_size.to_string(),
                 ratio(a.cycle_time_sample_size, 30),
                 theme.palette.accent,
@@ -822,7 +855,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             meter(
                 ui,
                 theme,
-                "MRs with pipelines",
+                tl("MRs with pipelines"),
                 &a.pipeline_sample_size.to_string(),
                 ratio(a.pipeline_sample_size, 30),
                 theme.palette.accent,
@@ -830,28 +863,38 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         });
     };
     let review = |ui: &mut Ui| {
-        card(ui, theme, "Review signals", |ui| {
+        card(ui, theme, tl("Review signals"), |ui| {
             super::widgets::key_values(ui, theme, |rows| {
-                rows.row("Average diff", |ui| {
-                    ui.label(format!("{:.0} lines", a.avg_diff_size));
+                rows.row(tl("Average diff"), |ui| {
+                    ui.label(tf(
+                        "{n} lines",
+                        &[("n", &format!("{:.0}", a.avg_diff_size))],
+                    ));
                 });
-                rows.row("Comments", |ui| {
-                    ui.label(format!("{:.1} per MR", a.avg_comments));
+                rows.row(tl("Comments"), |ui| {
+                    ui.label(tf(
+                        "{n} per MR",
+                        &[("n", &format!("{:.1}", a.avg_comments))],
+                    ));
                 });
-                rows.row("Density", |ui| {
-                    ui.label(
-                        a.avg_comment_density
-                            .map_or("—".into(), |d| format!("{d:.1} per 100 lines")),
-                    );
+                rows.row(tl("Density"), |ui| {
+                    ui.label(a.avg_comment_density.map_or("—".into(), |d| {
+                        tf("{n} per 100 lines", &[("n", &format!("{d:.1}"))])
+                    }));
                 });
-                rows.row("Pipelines", |ui| {
-                    ui.label(format!("{} failing", percent(a.avg_pipeline_failure_rate)));
+                rows.row(tl("Pipelines"), |ui| {
+                    ui.label(tf(
+                        "{percent} failing",
+                        &[("percent", &percent(a.avg_pipeline_failure_rate))],
+                    ));
                 });
-                rows.row("Abandoned", |ui| {
-                    ui.label(format!(
-                        "{} ({} closed)",
-                        percent(a.abandon_rate),
-                        a.closed_count
+                rows.row(tl("Abandoned"), |ui| {
+                    ui.label(tf(
+                        "{percent} ({n} closed)",
+                        &[
+                            ("percent", &percent(a.abandon_rate)),
+                            ("n", &a.closed_count.to_string()),
+                        ],
                     ));
                 });
             });
@@ -867,9 +910,9 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         confidence(ui);
         review(ui);
     }
-    card(ui, theme, "MR size buckets", |ui| {
+    card(ui, theme, tl("MR size buckets"), |ui| {
         if a.size_buckets.is_empty() {
-            ui.label(muted(theme, "Not enough data yet."));
+            ui.label(muted(theme, tl("Not enough data yet.")));
             return;
         }
         let total = a
@@ -888,13 +931,16 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             bar_row(
                 ui,
                 theme,
-                &bucket.label,
+                tl(&bucket.label),
                 share,
                 theme.palette.accent,
                 &value,
             );
         }
-        ui.label(muted(theme, "Share of the sample · median time to merge"));
+        ui.label(muted(
+            theme,
+            tl("Share of the sample · median time to merge"),
+        ));
     });
 }
 
@@ -903,21 +949,22 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
 fn severity(severity: &AnomalySeverity, theme: &Theme) -> (&'static str, Tone) {
     let t = &theme.tones;
     match severity {
-        AnomalySeverity::Critical => ("CRITICAL", t.red),
-        AnomalySeverity::Warning => ("WARNING", t.amber),
-        AnomalySeverity::Elevated => ("ELEVATED", t.blue),
-        AnomalySeverity::Normal => ("OK", t.green),
+        AnomalySeverity::Critical => (tl("CRITICAL"), t.red),
+        AnomalySeverity::Warning => (tl("WARNING"), t.amber),
+        AnomalySeverity::Elevated => (tl("ELEVATED"), t.blue),
+        AnomalySeverity::Normal => (tl("OK"), t.green),
     }
 }
 
-/// `pipeline_failure_rate_spike` → "Pipeline failure rate".
+/// `pipeline_failure_rate_spike` → "Pipeline failure rate", translated.
 fn metric_name(metric: &str) -> String {
     let name = metric.trim_end_matches("_spike").replace('_', " ");
     let mut chars = name.chars();
-    match chars.next() {
+    let name: String = match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
         None => name,
-    }
+    };
+    tl(&name).to_string()
 }
 
 fn number(v: f64) -> String {
@@ -930,11 +977,11 @@ fn number(v: f64) -> String {
 
 fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     let poisson = &report.poisson;
-    card(ui, theme, "Signals", |ui| {
+    card(ui, theme, tl("Signals"), |ui| {
         if poisson.anomalies.is_empty() {
             ui.label(muted(
                 theme,
-                "No signal: every tracked metric is within its usual range.",
+                tl("No signal: every tracked metric is within its usual range."),
             ));
         }
         for signal in &poisson.anomalies {
@@ -965,16 +1012,26 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                             },
                         );
                         let detail = match (signal.baseline, signal.p_value, signal.ratio) {
-                            (Some(expected), Some(p), _) => format!(
-                                "Observed {}, expected {expected:.1} (p = {p:.3})",
-                                number(signal.observed)
+                            (Some(expected), Some(p), _) => tf(
+                                "Observed {observed}, expected {expected} (p = {p})",
+                                &[
+                                    ("observed", &number(signal.observed)),
+                                    ("expected", &format!("{expected:.1}")),
+                                    ("p", &format!("{p:.3}")),
+                                ],
                             ),
-                            (Some(baseline), None, Some(ratio)) => format!(
-                                "Observed {}, baseline {} (×{ratio:.1})",
-                                number(signal.observed),
-                                number(baseline)
+                            (Some(baseline), None, Some(ratio)) => tf(
+                                "Observed {observed}, baseline {baseline} (×{ratio})",
+                                &[
+                                    ("observed", &number(signal.observed)),
+                                    ("baseline", &number(baseline)),
+                                    ("ratio", &format!("{ratio:.1}")),
+                                ],
                             ),
-                            _ => format!("Value {}: pressure signal", number(signal.observed)),
+                            _ => tf(
+                                "Value {observed}: pressure signal",
+                                &[("observed", &number(signal.observed))],
+                            ),
                         };
                         ui.label(RichText::new(detail).color(theme.palette.text_secondary));
                     });
@@ -983,12 +1040,18 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     });
     let side_by_side = ui.available_width() > 760.0;
     let throughput = |ui: &mut Ui| {
-        card(ui, theme, "Throughput forecasts", |ui| {
+        card(ui, theme, tl("Throughput forecasts"), |ui| {
             if poisson.throughput_forecasts.is_empty() {
-                ui.label(muted(theme, "Not enough merged MRs to forecast."));
+                ui.label(muted(theme, tl("Not enough merged MRs to forecast.")));
             }
             for f in &poisson.throughput_forecasts {
-                let label = format!("≥ {} merges in {} weeks", f.target_merges, f.forecast_weeks);
+                let label = tf(
+                    "≥ {n} merges in {weeks} weeks",
+                    &[
+                        ("n", &f.target_merges.to_string()),
+                        ("weeks", &f.forecast_weeks.to_string()),
+                    ],
+                );
                 let color = if f.probability >= 0.8 {
                     theme.tones.green.fg
                 } else if f.probability >= 0.5 {
@@ -1008,42 +1071,44 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             if let Some(f) = poisson.throughput_forecasts.first() {
                 ui.label(muted(
                     theme,
-                    format!("λ = {:.1} merges per week", f.lambda_per_week),
+                    tf(
+                        "λ = {n} merges per week",
+                        &[("n", &format!("{:.1}", f.lambda_per_week))],
+                    ),
                 ));
             }
         });
     };
     let queue = |ui: &mut Ui| {
         let q = &poisson.queue_insight;
-        card(ui, theme, "Review queue", |ui| {
+        card(ui, theme, tl("Review queue"), |ui| {
             let (label, tone) = match q.status {
-                QueueStatus::OverCapacity => ("OVER CAPACITY", theme.tones.red),
-                QueueStatus::Stable => ("STABLE", theme.tones.green),
-                QueueStatus::InsufficientData => ("NOT ENOUGH DATA", theme.tones.gray),
+                QueueStatus::OverCapacity => (tl("OVER CAPACITY"), theme.tones.red),
+                QueueStatus::Stable => (tl("STABLE"), theme.tones.green),
+                QueueStatus::InsufficientData => (tl("NOT ENOUGH DATA"), theme.tones.gray),
             };
             badge(ui, theme, label, tone);
             ui.add_space(6.0);
             super::widgets::key_values(ui, theme, |rows| {
-                let rate = |v: Option<f64>| v.map_or("—".into(), |v| format!("{v:.1} / week"));
-                rows.row("Arrivals", |ui| {
+                let rate = |v: Option<f64>| v.map_or("—".into(), per_week);
+                rows.row(tl("Arrivals"), |ui| {
                     ui.label(rate(q.arrival_rate_per_week));
                 });
-                rows.row("Service", |ui| {
+                rows.row(tl("Service"), |ui| {
                     ui.label(rate(q.service_rate_per_week));
                 });
-                rows.row("Load", |ui| {
+                rows.row(tl("Load"), |ui| {
                     ui.label(
                         q.traffic_intensity
                             .map_or("—".into(), |r| format!("{:.0}%", r * 100.0)),
                     );
                 });
-                rows.row("In the queue", |ui| {
-                    ui.label(
-                        q.expected_mrs_in_system
-                            .map_or("—".into(), |l| format!("{l:.1} MRs")),
-                    );
+                rows.row(tl("In the queue"), |ui| {
+                    ui.label(q.expected_mrs_in_system.map_or("—".into(), |l| {
+                        tf("{n} MRs", &[("n", &format!("{l:.1}"))])
+                    }));
                 });
-                rows.row("Expected wait", |ui| {
+                rows.row(tl("Expected wait"), |ui| {
                     ui.label(hours(q.expected_wait_hours));
                 });
             });
@@ -1064,30 +1129,30 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
 // ── Correlations ─────────────────────────────────────────────────────────────
 
 fn pair_label(pair: &MetricPair) -> &'static str {
-    match pair {
+    tl(match pair {
         MetricPair::DiffSizeVsCycleTime => "Diff size ↔ time to merge",
         MetricPair::DiffSizeVsComments => "Diff size ↔ comments",
         MetricPair::CommentsVsCycleTime => "Comments ↔ time to merge",
         MetricPair::PipelineFailuresVsCycleTime => "Pipeline failures ↔ time to merge",
         MetricPair::CommitsCountVsCycleTime => "Commits ↔ time to merge",
         MetricPair::DiffDifficultyVsCycleTime => "Review effort ↔ time to merge",
-    }
+    })
 }
 
 fn strength(s: &CorrelationStrength) -> &'static str {
-    match s {
+    tl(match s {
         CorrelationStrength::Negligible => "negligible",
         CorrelationStrength::Weak => "weak",
         CorrelationStrength::Moderate => "moderate",
         CorrelationStrength::Strong => "strong",
         CorrelationStrength::VeryStrong => "very strong",
-    }
+    })
 }
 
 fn correlations(ui: &mut Ui, theme: &Theme, report: &StatReport) {
-    card(ui, theme, "Spearman correlations", |ui| {
+    card(ui, theme, tl("Spearman correlations"), |ui| {
         if report.correlations.is_empty() {
-            ui.label(muted(theme, "Not enough MRs to correlate yet."));
+            ui.label(muted(theme, tl("Not enough MRs to correlate yet.")));
             return;
         }
         ui.spacing_mut().item_spacing.y = 10.0;
@@ -1144,9 +1209,9 @@ fn correlations(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                     c.p_value,
                     c.sample_size,
                     if significant {
-                        ""
+                        String::new()
                     } else {
-                        " · not significant"
+                        format!(" · {}", tl("not significant"))
                     }
                 ),
             ));
@@ -1174,11 +1239,13 @@ fn insights(report: &StatReport, theme: &Theme) -> Vec<(String, Color32)> {
             return out;
         }
         out.push((
-            format!(
-                "Large MRs ({}) take {:.1}× longer to merge than small ones ({}).",
-                a.size_buckets.last().map_or("", |b| b.label.as_str()),
-                large / small,
-                a.size_buckets.first().map_or("", |b| b.label.as_str()),
+            tf(
+                "Large MRs ({large}) take {ratio}× longer to merge than small ones ({small}).",
+                &[
+                    ("large", a.size_buckets.last().map_or("", |b| tl(&b.label))),
+                    ("ratio", &format!("{:.1}", large / small)),
+                    ("small", a.size_buckets.first().map_or("", |b| tl(&b.label))),
+                ],
             ),
             t.amber.fg,
         ));
@@ -1189,10 +1256,12 @@ fn insights(report: &StatReport, theme: &Theme) -> Vec<(String, Color32)> {
         .filter(|p| p.arrivals > 0 && p.copied_share > 0.0)
     {
         out.push((
-            format!(
-                "{:.0}% of the MRs reaching {} arrive as copies (cherry-pick or rebase), not merges.",
-                last.copied_share * 100.0,
-                last.branch
+            tf(
+                "{percent} of the MRs reaching {branch} arrive as copies (cherry-pick or rebase), not merges.",
+                &[
+                    ("percent", &format!("{:.0}%", last.copied_share * 100.0)),
+                    ("branch", &last.branch),
+                ],
             ),
             theme.palette.accent,
         ));
@@ -1204,32 +1273,37 @@ fn insights(report: &StatReport, theme: &Theme) -> Vec<(String, Color32)> {
         .max_by(|x, y| x.rho.abs().total_cmp(&y.rho.abs()))
     {
         out.push((
-            format!(
-                "Strongest link: {} (ρ = {:+.2}, {}).",
-                pair_label(&c.pair),
-                c.rho,
-                strength(&c.interpretation)
+            tf(
+                "Strongest link: {pair} (ρ = {rho}, {strength}).",
+                &[
+                    ("pair", pair_label(&c.pair)),
+                    ("rho", &format!("{:+.2}", c.rho)),
+                    ("strength", strength(&c.interpretation)),
+                ],
             ),
             t.purple.fg,
         ));
     }
     if let Some(signal) = report.poisson.anomalies.iter().find(|s| s.is_anomalous()) {
         out.push((
-            format!("{} is out of its usual range.", metric_name(&signal.metric)),
+            tf(
+                "{metric} is out of its usual range.",
+                &[("metric", &metric_name(&signal.metric))],
+            ),
             t.red.fg,
         ));
     }
     match report.poisson.queue_insight.status {
         QueueStatus::OverCapacity => out.push((
-            "MRs arrive faster than they are merged: the backlog grows.".into(),
+            tl("MRs arrive faster than they are merged: the backlog grows.").into(),
             t.red.fg,
         )),
         QueueStatus::Stable => {
             if let Some(wait) = report.poisson.queue_insight.expected_wait_hours {
                 out.push((
-                    format!(
-                        "A new MR waits about {} before it is merged.",
-                        hours(Some(wait))
+                    tf(
+                        "A new MR waits about {time} before it is merged.",
+                        &[("time", &hours(Some(wait)))],
                     ),
                     t.green.fg,
                 ));
@@ -1239,10 +1313,14 @@ fn insights(report: &StatReport, theme: &Theme) -> Vec<(String, Color32)> {
     }
     if a.stale_open_mrs_14d > 0 {
         out.push((
-            format!(
-                "{} open MR(s) have had no merge for 14 days or more; the oldest is {:.0} days old.",
-                a.stale_open_mrs_14d,
-                a.open_mr_ages_days.last().copied().unwrap_or(0.0)
+            tn(
+                a.stale_open_mrs_14d as u64,
+                "{n} open MR has had no merge for 14 days or more; the oldest is {days} days old.",
+                "{n} open MRs have had no merge for 14 days or more; the oldest is {days} days old.",
+            )
+            .replace(
+                "{days}",
+                &format!("{:.0}", a.open_mr_ages_days.last().copied().unwrap_or(0.0)),
             ),
             t.amber.fg,
         ));
@@ -1255,7 +1333,7 @@ fn insights_panel(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         .inner_margin(Margin::symmetric(16, 14))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            section_title(ui, theme, "Summary insights");
+            section_title(ui, theme, tl("Summary insights"));
         });
     rule(ui, theme);
     egui::ScrollArea::vertical()
@@ -1268,7 +1346,7 @@ fn insights_panel(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                     ui.spacing_mut().item_spacing.y = 10.0;
                     let found = insights(report, theme);
                     if found.is_empty() {
-                        ui.label(muted(theme, "Nothing stands out in this window."));
+                        ui.label(muted(theme, tl("Nothing stands out in this window.")));
                     }
                     for (text, color) in found {
                         egui::Frame::new()

@@ -419,7 +419,7 @@ pub fn label_chip(ui: &mut Ui, app: &App, label: &str, theme: &Theme) -> egui::R
 pub fn activity(app: &App, updated_at: Option<&str>, theme: &Theme) -> (&'static str, Tone) {
     let (label, _) = app.config.activity_badge(updated_at);
     let t = &theme.tones;
-    if label.contains("Active") {
+    let (label, tone) = if label.contains("Active") {
         ("Active", t.green)
     } else if label.contains("Stale") {
         ("Stale", t.red)
@@ -427,7 +427,8 @@ pub fn activity(app: &App, updated_at: Option<&str>, theme: &Theme) -> (&'static
         ("Unknown", t.gray)
     } else {
         ("Slowing", t.amber)
-    }
+    };
+    (crate::i18n::tl(label), tone)
 }
 
 /// "Display Name" and "handle" out of GitLab's "Display Name (@handle)".

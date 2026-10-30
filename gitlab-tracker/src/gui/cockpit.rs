@@ -6,6 +6,7 @@ use egui::{Align, Layout, RichText, Ui, Vec2};
 
 use super::widgets::{card, page_title, semibold};
 use super::{colors, GuiApp};
+use crate::i18n::{tf, tl};
 use crate::ui::cockpit::CockpitRow;
 
 /// Cards narrower than this wrap onto another row.
@@ -17,10 +18,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     page_title(
         ui,
         &theme,
-        "Cockpit",
-        format!(
-            "{} tracked merge requests · live from the list",
-            g.app.mrs.len()
+        tl("Cockpit"),
+        tf(
+            "{n} tracked merge requests · live from the list",
+            &[("n", &g.app.mrs.len().to_string())],
         ),
     );
     ui.add_space(16.0);

@@ -1,0 +1,539 @@
+# gitlab-tracker window, 简体中文. Generated from one table with the other
+# languages: context<TAB>English<TAB>translation (see src/gui/i18n.rs).
+@id	language.name	简体中文
+
+# Window, title bar and icon rail
+	Merge requests	合并请求
+	MRs	MR
+	Cockpit	驾驶舱
+	Tracker	工单
+	Stats	统计
+	Linked tickets	关联工单
+	Statistics (G)	统计 (G)
+	Settings (,)	设置 (,)
+	Keyboard shortcuts (?)	键盘快捷键 (?)
+	Light theme	浅色主题
+	Dark theme	深色主题
+	Hide the inspector	隐藏检查器
+	Show the inspector	显示检查器
+	{url} · project {id}	{url} · 项目 {id}
+	Switch to this project	切换到此项目
+	Projects… (W)	项目… (W)
+	Minimize	最小化
+	Maximize	最大化
+	Close	关闭
+	Syncing · {n} left	同步中 · 剩余 {n}
+	Next refresh in	下次刷新于
+	? shortcuts	? 快捷键
+	{n} tracked · View: {view}	已跟踪 {n} 个 · 视图：{view}
+	merged hidden	已隐藏已合并
+	Each refresh also looks for the team's new MRs (discover_new_mrs)	每次刷新也会查找团队的新 MR（discover_new_mrs）
+	Only the tracked MRs are refreshed; set discover_new_mrs to find the team's new ones	只刷新已跟踪的 MR；设置 discover_new_mrs 以发现团队的新 MR
+	ON	开
+	OFF	关
+	Auto-polling	自动轮询
+	({n} at startup)	（启动时 {n}）
+	{name}: about {n} API requests at the next refresh	{name}：下次刷新约 {n} 个 API 请求
+	{n} at startup, from the saved state	启动时 {n} 个，来自已保存的状态
+	Another project is still loading	另一个项目仍在加载
+	Loading {project}…	正在加载 {project}…
+	Switched to {project}	已切换到 {project}
+	Project switch failed	切换项目失败
+
+# Views panel
+	Views	视图
+	More views	更多视图
+	Filters	筛选
+	More filters	更多筛选
+	Hide merged MRs	隐藏已合并的 MR
+	They stay tracked and refreshed (M)	仍会跟踪并刷新 (M)
+	{name} connected	{name} 已连接
+	Review effort	评审工作量
+	Clear the filter	清除筛选
+	Type, then Enter	输入后按回车
+	e.g. {example}	例如 {example}
+	Tracked branches	跟踪的分支
+	Stop tracking this branch	停止跟踪此分支
+	Add a branch, then Enter	添加分支后按回车
+
+# Merge request table
+	No tracked merge request yet: type its number in the search field and press Enter.	尚未跟踪任何合并请求：在搜索框中输入编号并按回车。
+	No merge request matches this view.	没有符合此视图的合并请求。
+	Updated	更新时间
+	MR	MR
+	Title	标题
+	Hide the views panel (F)	隐藏视图面板 (F)
+	Show the views panel (F)	显示视图面板 (F)
+	{n} of {total}	{n} / {total}
+	Copy checklist	复制清单
+	Copy the visible MRs as a Markdown release checklist (E)	将可见 MR 复制为 Markdown 发布清单 (E)
+	Refresh now (R)	立即刷新 (R)
+	Columns (C)	列 (C)
+	Sort (S: next column, Shift+S: reverse)	排序（S：下一列，Shift+S：反转）
+	Descending order	降序
+	Ascending order	升序
+	Search title, author, !iid · 123 + Enter tracks an MR · @milestone	搜索标题、作者、!iid · 输入 123 并回车跟踪 MR · @里程碑
+	Track every MR of a milestone:	跟踪某个里程碑的所有 MR：
+	Effort	工作量
+	Threads	讨论
+	Activity	活动
+	Labels	标签
+	Target	目标
+	Behind	落后
+	Ticket	工单
+	Status	状态
+	Loading…	加载中…
+	Sort by this column	按此列排序
+	Unresolved threads	未解决的讨论
+	Unflag (Space)	取消标记（空格）
+	Flag (Space)	标记（空格）
+	Open in GitLab (O)	在 GitLab 中打开 (O)
+	Copy the git clone command (Y)	复制 git clone 命令 (Y)
+	Open the ticket	打开工单
+	Log time… (L)	记录工时… (L)
+	Stop tracking (Del)	停止跟踪 (Del)
+
+# Badges
+	MERGED	已合并
+	CLOSED	已关闭
+	CHANGES REQ.	需修改
+	CI RUNNING	CI 运行中
+	MERGEABLE	可合并
+	CONFLICT	冲突
+	REBASE	需变基
+	DRAFT	草稿
+	DISCUSSIONS	讨论未决
+	CI MUST PASS	CI 须通过
+	CI STILL RUNNING	CI 仍在运行
+	NOT APPROVED	未批准
+	REQUESTED CHANGES	要求修改
+	RETRYING	重试中
+	SYNC FAILED	同步失败
+	OPEN	打开
+	Present	已存在
+	Picked	已拣选
+	Copied	已复制
+	Partial	部分
+	Absent	不存在
+	Failed	失败
+	Loading	加载中
+	Easy	简单
+	Medium	中等
+	Complex	复杂
+	Passed	通过
+	Running	运行中
+	Pending	等待中
+	Canceled	已取消
+	Skipped	已跳过
+	Unknown	未知
+	Active	活跃
+	Slowing	放缓
+	Stale	停滞
+	🟢 EASY	🟢 简单
+	🟡 MEDIUM	🟡 中等
+	🔴 COMPLEX	🔴 复杂
+
+# Inspector
+	Select a merge request	选择一个合并请求
+	Last fetch failed	上次获取失败
+	Open in GitLab	在 GitLab 中打开
+	Open in the browser (O)	在浏览器中打开 (O)
+	updated {when}	更新于{when}
+	Profile: {name}	配置：{name}
+	Description	描述
+	Review	评审
+	requested {when}	请求于{when}
+	Waiting for you	等待你
+	Approved by {names}	已由 {names} 批准
+	No reviewer	无评审人
+	Requested from {names}	已请求 {names}
+	Pipeline	流水线
+	None	无
+	Up to date	已是最新
+	{n} unresolved	{n} 个未解决
+	{done} of {total} jobs	{done}/{total} 个作业
+	Branches	分支
+	{n} of {total} commits missing	缺少 {n}/{total} 个提交
+	same author, date and title	作者、日期和标题相同
+	Missing commits	缺少的提交
+	No ticket found in the MR's title, branch or description.	未在 MR 的标题、分支或描述中找到工单。
+	Log time…	记录工时…
+	Log time on this ticket (L)	在此工单上记录工时 (L)
+	Open ticket	打开工单
+	Open the ticket in the browser (T)	在浏览器中打开工单 (T)
+	Time log	工时记录
+	Spent / estimated	已用 / 预估
+	Done	完成
+	Priority	优先级
+	Version	版本
+	Loading the time entries…	正在加载工时记录…
+	No time logged yet.	尚未记录工时。
+	Open the thread in GitLab	在 GitLab 中打开讨论
+	Pipelines	流水线
+	No pipeline yet.	暂无流水线。
+	you	你
+	People	人员
+	Author	作者
+	Reviewers	评审人
+	Planning	计划
+	Due	截止
+	Not set	未设置
+	History	历史
+	Created	创建时间
+	{when} by {name}	{when}，由 {name}
+	Commit	提交
+	Branch	分支
+
+# Linked tickets and cockpit pages
+	{n} tracked merge requests · live from the list	已跟踪 {n} 个合并请求 · 实时来自列表
+	{provider} · live from the list	{provider} · 实时来自列表
+	No listed merge request references a ticket.	列表中没有引用工单的合并请求。
+	from {n} of {total} MRs	来自 {n}/{total} 个 MR
+	Without a ticket	无工单
+	merge requests	个合并请求
+	Time spent	已用工时
+	of {time} estimated	预估 {time}
+	no estimate	无预估
+	Over estimate	超出预估
+	Assigned to {name}	分配给 {name}
+	No time logged	未记录工时
+	Attention	关注
+	Delivery Health	交付健康度
+	Quality / Scope	质量 / 范围
+	Releases	发布
+	Flow	流程
+	no due date	无截止日期
+	n/a	无
+	WIP	进行中
+	Blocked	受阻
+	Open	打开
+	Mergeable	可合并
+	Draft	草稿
+	Closed	已关闭
+	Merged today	今日合并
+	Merged this week	本周合并
+	Merged this month	本月合并
+	Merged last 7d	近 7 天合并
+	Merged last 30d	近 30 天合并
+	Conflicts	冲突
+	Needs rebase	需要变基
+	Discussions	讨论
+	Changes req.	要求修改
+	Needs review	待评审
+	To review (me)	待我评审
+	No assignee	无负责人
+	Flagged	已标记
+	{n}d	{n} 天
+	Stale > {n}d	停滞 > {n} 天
+	Oldest open	最久未合并
+	No milestone	无里程碑
+	Due next {n}d	{n} 天内到期
+	Overdue	已逾期
+	Behind target	落后于目标
+	Hot threads	热门讨论
+	With ticket	有工单
+	No ticket	无工单
+	Avg diff lines	平均差异行数
+	Large diff	大型差异
+	Many commits	提交较多
+	Many files	文件较多
+	No diff stats	无差异统计
+	Pipeline unknown	流水线未知
+	CI skipped	CI 已跳过
+	Recently updated	最近更新
+
+# Statistics
+	Statistics	统计
+	Local SQLite snapshots	本地 SQLite 快照
+	Period (W)	时间段 (W)
+	Recompute	重新计算
+	Recompute the report (R)	重新计算报告 (R)
+	30 d	30 天
+	90 d	90 天
+	1 y	1 年
+	Overview	概览
+	Quality	质量
+	Forecasts	预测
+	Correlations	相关性
+	Last 30 days	最近 30 天
+	Last 90 days	最近 90 天
+	Last 365 days	最近 365 天
+	All time	全部时间
+	Computing statistics…	正在计算统计…
+	No stats available yet. They are recorded as MRs are merged or refreshed: come back after a few MR events.	暂无统计数据。统计会在 MR 合并或刷新时记录：请在发生一些 MR 事件后再来查看。
+	Generated {date} · {window}	生成于 {date} · {window}
+	{n} h	{n} 小时
+	{n} d	{n} 天
+	{n} / week	{n} / 周
+	Not enough data yet.	数据尚不足。
+	Merged	已合并
+	{week} this week · {today} today	本周 {week} · 今日 {today}
+	Throughput	吞吐量
+	{n} in the last 30 days	最近 30 天 {n} 个
+	Median time to merge	合并时间中位数
+	Pipeline fail rate	流水线失败率
+	{percent} of MRs with pipeline data	{percent} 的 MR 有流水线数据
+	Time to merge by MR size	按 MR 大小的合并时间
+	Merged MRs	已合并的 MR
+	Not enough merged MRs yet.	已合并的 MR 尚不足。
+	Backlog health	积压健康度
+	Open MRs	打开的 MR
+	Median age	年龄中位数
+	Oldest	最久
+	Stale ≥ 7 · 14 · 30 days	停滞 ≥ 7 · 14 · 30 天
+	Over capacity	超出容量
+	Expected wait (queue model)	预计等待（排队模型）
+	Lead time from merge to branch	从合并到分支的前置时间
+	No promotion to the other tracked branches recorded yet.	尚未记录到其他跟踪分支的晋升。
+	median {median} · P90 {p90}	中位数 {median} · P90 {p90}
+	Median	中位数
+	Max	最大
+	Via copy	通过复制
+	Time to merge by author	按作者的合并时间
+	Time to merge by reviewer	按评审人的合并时间
+	Time to merge by milestone	按里程碑的合并时间
+	Merged MRs by milestone	按里程碑的已合并 MR
+	Data confidence	数据可信度
+	Pipeline data coverage	流水线数据覆盖率
+	Reviewer coverage	评审人覆盖率
+	Milestone coverage	里程碑覆盖率
+	Merged MRs with timing	有时长数据的已合并 MR
+	MRs with pipelines	有流水线的 MR
+	Review signals	评审信号
+	Average diff	平均差异
+	{n} lines	{n} 行
+	Comments	评论
+	{n} per MR	每个 MR {n} 条
+	Density	密度
+	{n} per 100 lines	每 100 行 {n} 条
+	{percent} failing	{percent} 失败
+	Abandoned	已放弃
+	{percent} ({n} closed)	{percent}（{n} 个已关闭）
+	MR size buckets	MR 大小分布
+	Small	小
+	Large	大
+	Huge	巨大
+	Share of the sample · median time to merge	样本占比 · 合并时间中位数
+	CRITICAL	严重
+	WARNING	警告
+	ELEVATED	偏高
+	OK	正常
+	Pipeline failure rate	流水线失败率
+	Comment density	评论密度
+	Abandon rate	放弃率
+	Cycle time p90	周期时间 P90
+	Signals	信号
+	No signal: every tracked metric is within its usual range.	无信号：所有跟踪指标都在正常范围内。
+	Observed {observed}, expected {expected} (p = {p})	观测 {observed}，预期 {expected}（p = {p}）
+	Observed {observed}, baseline {baseline} (×{ratio})	观测 {observed}，基线 {baseline}（×{ratio}）
+	Value {observed}: pressure signal	数值 {observed}：压力信号
+	Throughput forecasts	吞吐量预测
+	Not enough merged MRs to forecast.	已合并的 MR 不足，无法预测。
+	≥ {n} merges in {weeks} weeks	{weeks} 周内 ≥ {n} 次合并
+	λ = {n} merges per week	λ = 每周 {n} 次合并
+	Review queue	评审队列
+	OVER CAPACITY	超出容量
+	STABLE	稳定
+	NOT ENOUGH DATA	数据不足
+	Arrivals	到达
+	Service	处理
+	Load	负载
+	In the queue	队列中
+	{n} MRs	{n} 个 MR
+	Expected wait	预计等待
+	Diff size ↔ time to merge	差异大小 ↔ 合并时间
+	Diff size ↔ comments	差异大小 ↔ 评论
+	Comments ↔ time to merge	评论 ↔ 合并时间
+	Pipeline failures ↔ time to merge	流水线失败 ↔ 合并时间
+	Commits ↔ time to merge	提交数 ↔ 合并时间
+	Review effort ↔ time to merge	评审工作量 ↔ 合并时间
+	negligible	可忽略
+	weak	弱
+	moderate	中等
+	strong	强
+	very strong	很强
+	Spearman correlations	Spearman 相关性
+	Not enough MRs to correlate yet.	MR 数量尚不足以计算相关性。
+	not significant	不显著
+	Large MRs ({large}) take {ratio}× longer to merge than small ones ({small}).	大型 MR（{large}）的合并时间是小型 MR（{small}）的 {ratio} 倍。
+	{percent} of the MRs reaching {branch} arrive as copies (cherry-pick or rebase), not merges.	到达 {branch} 的 MR 中有 {percent} 是以复制（拣选或变基）而非合并的方式到达。
+	Strongest link: {pair} (ρ = {rho}, {strength}).	最强关联：{pair}（ρ = {rho}，{strength}）。
+	{metric} is out of its usual range.	{metric} 超出正常范围。
+	MRs arrive faster than they are merged: the backlog grows.	MR 到达速度快于合并速度：积压在增长。
+	A new MR waits about {time} before it is merged.	新 MR 合并前大约需要等待 {time}。
+	Summary insights	要点
+	Nothing stands out in this window.	此时间段内没有值得注意的情况。
+
+# Dialogs
+	Settings	设置
+	{project} · saved to projects.toml	{project} · 保存到 projects.toml
+	Interface	界面
+	Language	语言
+	Language of this window. The terminal UI stays in English.	此窗口的语言。终端界面仍为英文。
+	System ({language})	系统（{language}）
+	General	常规
+	Save	保存
+	Cancel	取消
+	Esc to cancel	按 Esc 取消
+	days	天
+	weeks	周
+	Show cockpit	显示驾驶舱
+	Display the operational cockpit pane when enough vertical space is available.	垂直空间足够时显示驾驶舱面板。
+	Discover new MRs	发现新 MR
+	Automatically add newly created MRs during refresh cycles.	刷新时自动添加新创建的 MR。
+	Hide merged MRs from the table; they stay tracked. Also toggled with [m].	在表格中隐藏已合并的 MR；它们仍会被跟踪。也可按 [m] 切换。
+	Refresh interval	刷新间隔
+	Seconds between automatic GitLab refresh cycles.	两次自动刷新 GitLab 之间的秒数。
+	Recent activity days	近期活动天数
+	MRs updated within this many days are shown as recently active.	在此天数内更新的 MR 显示为近期活跃。
+	Stale activity days	停滞天数
+	MRs inactive for at least this many days are marked stale.	至少这么多天无活动的 MR 标记为停滞。
+	Review reminder hours	评审提醒小时数
+	Notify when an MR has waited this many hours for your review, and when its author pushes after your review (0 = off). Needs gitlab_username.	当 MR 等待你评审达到此小时数，以及作者在你评审后推送时通知（0 = 关闭）。需要 gitlab_username。
+	Retention days	保留天数
+	Local stats snapshots older than this many days are purged on startup.	启动时清除早于此天数的本地统计快照。
+	Sprint weeks	冲刺周数
+	Sprint duration used by throughput forecasts.	吞吐量预测使用的冲刺时长。
+	Columns	列
+	Shared with the terminal UI. Columns that do not fit the window are hidden until it is wider.	与终端界面共享。放不下的列会隐藏，直到窗口变宽。
+	Notes	备注
+	Switch project	切换项目
+	No project in projects.toml.	projects.toml 中没有项目。
+	Log time	记录工时
+	Duration	时长
+	Comment	备注
+	Sending…	发送中…
+	Keyboard shortcuts	键盘快捷键
+	Select the previous / next MR	选择上一个 / 下一个 MR
+	Open the selected MR in the browser	在浏览器中打开所选 MR
+	Flag / unflag the selected MR	标记 / 取消标记所选 MR
+	Copy the git clone command	复制 git clone 命令
+	Copy the visible MRs as a Markdown checklist	将可见 MR 复制为 Markdown 清单
+	Stop tracking the selected MR	停止跟踪所选 MR
+	Refresh now	立即刷新
+	Search (Enter on a number tracks the MR)	搜索（对编号按回车可跟踪该 MR）
+	Show the views panel	显示视图面板
+	Hide / show merged MRs	隐藏 / 显示已合并的 MR
+	Next sort column / reverse the order	下一个排序列 / 反转顺序
+	Inspector: details / pipelines	检查器：详情 / 流水线
+	Inspector: linked ticket	检查器：关联工单
+	Elsewhere	其他
+	Log time on the linked ticket	在关联工单上记录工时
+	Statistics (Tab: next tab, W: time window)	统计（Tab：下一个标签页，W：时间段）
+	This list	此列表
+	Close a dialog / leave the statistics	关闭对话框 / 退出统计
+
+# Messages and notifications
+	All	全部
+	git clone command copied	已复制 git clone 命令
+	no clipboard available	剪贴板不可用
+	Copy failed	复制失败
+	{n} merged	{n} 个已合并
+	{n} closed	{n} 个已关闭
+	{n} new on a branch	{n} 个新进入分支
+	{n} CI failing	{n} 个 CI 失败
+	Since last session: {changes}	自上次会话以来：{changes}
+	Refresh already running — wait for it to finish	刷新已在进行中 — 请等待完成
+	No activities loaded	未加载任何活动
+	Demo: no time is logged	演示：不会记录工时
+	No linked ticket selected	未选择关联工单
+	Invalid hours in "{value}"	"{value}" 中的小时数无效
+	Invalid minutes in "{value}"	"{value}" 中的分钟数无效
+	Duration must be greater than zero	时长必须大于零
+	Unrecognised format "{value}". Try: 1h30, 90m, 1.5h	无法识别的格式 "{value}"。请尝试：1h30、90m、1.5h
+	just now	刚刚
+	yesterday	昨天
+	tomorrow	明天
+	last week	上周
+	next week	下周
+	about a month ago	大约一个月前
+	in about a month	大约一个月后
+	Open MR	打开 MR
+	MR !{id} ({title}) is now present on branch '{branch}'!	MR !{id}（{title}）现已进入分支 '{branch}'！
+	MR !{id} ({title}) was {how} to branch '{branch}' 🍒	MR !{id}（{title}）已{how}到分支 '{branch}' 🍒
+	merged	合并
+	cherry-picked	拣选
+	copied	复制
+	MR !{id} waits for your review	MR !{id} 等待你评审
+	Requested {n}h ago	{n} 小时前请求
+	MR !{id}: new commits since your review	MR !{id}：你评审后有新提交
+	MR !{id} updated	MR !{id} 已更新
+	unknown date	未知日期
+	MR !{id} — mergeability changed	MR !{id} — 可合并性已变化
+	MR !{id} — complexity changed	MR !{id} — 复杂度已变化
+	MR !{id} — milestone changed	MR !{id} — 里程碑已变化
+	Ticket #{id} — {field} changed	工单 #{id} — {field} 已变化
+	Ticket #{id} — status transitioned	工单 #{id} — 状态已流转
+	priority	优先级
+	status	状态
+	assignee	负责人
+	version	版本
+	progress	进度
+
+# Filters
+	State: Opened	状态：打开
+	State: Merged	状态：已合并
+	State: Closed	状态：已关闭
+	Mergeability: Mergeable	可合并性：可合并
+	Mergeability: Conflict	可合并性：冲突
+	Mergeability: Needs Rebase	可合并性：需要变基
+	Mergeability: Not Approved	可合并性：未批准
+	Mergeability: Requested Changes	可合并性：要求修改
+	Mergeability: Draft	可合并性：草稿
+	Mergeability: Discussions	可合并性：讨论
+	Has comments	有评论
+	CI failing	CI 失败
+	Assigned to me	分配给我
+	To review: me	待我评审
+	Effort: Easy	工作量：简单
+	Effort: Medium	工作量：中等
+	Effort: Complex	工作量：复杂
+	Milestone	里程碑
+	Target branch	目标分支
+	Assignee	负责人
+	Absent from branch	不在分支中
+	Label	标签
+	Has linked ticket	有关联工单
+
+# Filters in the status bar
+	Milestone:	里程碑：
+	Branch:	分支：
+	Assignee:	负责人：
+	Absent from:	不在：
+	Label:	标签：
+	Flagged ★	已标记 ★
+	Has comments 💬	有评论 💬
+	CI failing ❌	CI 失败 ❌
+	Assigned to me 👤	分配给我 👤
+	To review: me 👁️	待我评审 👁️
+	Effort: Easy 🟢	工作量：简单 🟢
+	Effort: Medium 🟡	工作量：中等 🟡
+	Effort: Complex 🔴	工作量：复杂 🔴
+	Has linked ticket 🎫	有关联工单 🎫
+
+# In a context (tc)
+date	Merged	合并时间
+
+# Counts
+@plural	{n} column hidden to fit the window — widen it, or pick fewer in Columns.|{n} columns hidden to fit the window — widen it, or pick fewer in Columns.	为适应窗口隐藏了 {n} 列 — 请加宽窗口，或在“列”中少选几列。
+@plural	ticket|tickets	个工单
+@plural	{n} file|{n} files	{n} 个文件
+@plural	{n} commit|{n} commits	{n} 个提交
+@plural	{n} commit behind {branch}|{n} commits behind {branch}	落后 {branch} {n} 个提交
+@plural	{n} entry|{n} entries	{n} 条记录
+@plural	{n} note|{n} notes	{n} 条评论
+@plural	{n} MR in sample|{n} MRs in sample	样本中 {n} 个 MR
+@plural	{n} open MR has had no merge for 14 days or more; the oldest is {days} days old.|{n} open MRs have had no merge for 14 days or more; the oldest is {days} days old.	{n} 个打开的 MR 已 14 天或更久未合并；最久的已有 {days} 天。
+@plural	Checklist copied ({n} MR)|Checklist copied ({n} MRs)	已复制清单（{n} 个 MR）
+@plural	{n} min ago|{n} min ago	{n} 分钟前
+@plural	{n}h ago|{n}h ago	{n} 小时前
+@plural	{n} day ago|{n} days ago	{n} 天前
+@plural	{n} week ago|{n} weeks ago	{n} 周前
+@plural	{n} month ago|{n} months ago	{n} 个月前
+@plural	{n} year ago|{n} years ago	{n} 年前
+@plural	in {n} min|in {n} min	{n} 分钟后
+@plural	in {n}h|in {n}h	{n} 小时后
+@plural	in {n} day|in {n} days	{n} 天后
+@plural	in {n} week|in {n} weeks	{n} 周后
+@plural	in {n} month|in {n} months	{n} 个月后
+@plural	in {n} year|in {n} years	{n} 年后

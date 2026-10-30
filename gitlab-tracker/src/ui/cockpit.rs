@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::i18n::{tf, tl};
 use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -32,7 +33,7 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<CockpitRow> {
                     format!("D-{}", days_left)
                 }
             })
-            .unwrap_or_else(|| "no due date".to_string());
+            .unwrap_or_else(|| tl("no due date").to_string());
         lines.push(CockpitRow::Heading {
             text: format!("{} ({})", release.title, due_label),
             color: title_color,
@@ -63,7 +64,7 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<CockpitRow> {
     if lines.is_empty() {
         lines.push(cockpit_metric_optional(
             "Releases",
-            Some("n/a".to_string()),
+            Some(tl("n/a").to_string()),
             app.theme.muted_inactive,
         ));
     }
@@ -133,12 +134,12 @@ pub fn cockpit_cards(app: &App) -> Vec<(&'static str, Vec<CockpitRow>)> {
     let mut cards = Vec::with_capacity(5);
     #[cfg(feature = "stats")]
     if let Some(flow_summary) = DashboardSummary::flow_from_stats_report(app, &summary) {
-        cards.push(("Flow", flow_lines(flow_summary, app)));
+        cards.push((tl("Flow"), flow_lines(flow_summary, app)));
     }
-    cards.push(("Attention", attention_lines(summary, app)));
-    cards.push(("Delivery Health", delivery_health_lines(summary, app)));
-    cards.push(("Quality / Scope", quality_scope_lines(summary, app)));
-    cards.push(("Releases", release_lines(app, &releases)));
+    cards.push((tl("Attention"), attention_lines(summary, app)));
+    cards.push((tl("Delivery Health"), delivery_health_lines(summary, app)));
+    cards.push((tl("Quality / Scope"), quality_scope_lines(summary, app)));
+    cards.push((tl("Releases"), release_lines(app, &releases)));
     cards
 }
 
@@ -229,7 +230,7 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
             warning_color(summary.needs_review, app),
         ),
         cockpit_metric_optional_dynamic(
-            "To review (me)".to_string(),
+            tl("To review (me)").to_string(),
             // Count, then the age of the oldest request (short: narrow column).
             Some(match summary.oldest_review_wait_days {
                 Some(0) if summary.awaiting_my_review > 0 => {
@@ -260,13 +261,15 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow
     let thresholds = &app.config.cockpit_thresholds;
     let mut lines = vec![
         cockpit_metric_dynamic(
-            format!("Stale > {}d", thresholds.stale_days),
+            tf("Stale > {n}d", &[("n", &thresholds.stale_days.to_string())]),
             summary.stale_7_days,
             warning_color(summary.stale_7_days, app),
         ),
         cockpit_metric_optional(
             "Oldest open",
-            summary.oldest_open_days.map(|days| format!("{}d", days)),
+            summary
+                .oldest_open_days
+                .map(|days| tf("{n}d", &[("n", &days.to_string())])),
             summary
                 .oldest_open_days
                 .map_or(app.theme.muted_inactive, |days| {
@@ -285,7 +288,10 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow
             warning_color(summary.no_milestone, app),
         ),
         cockpit_metric_dynamic(
-            format!("Due next {}d", thresholds.due_soon_days),
+            tf(
+                "Due next {n}d",
+                &[("n", &thresholds.due_soon_days.to_string())],
+            ),
             summary.due_this_week,
             warning_color(summary.due_this_week, app),
         ),
@@ -325,7 +331,7 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow
     } else {
         lines.push(cockpit_metric_optional(
             "Tracker",
-            Some("n/a".to_string()),
+            Some(tl("n/a").to_string()),
             app.theme.muted_inactive,
         ));
     }
@@ -393,7 +399,7 @@ fn cockpit_metric_dynamic(label: String, value: usize, color: Color) -> CockpitR
 
 fn release_metric_line(label: &'static str, value: usize, color: Color) -> CockpitRow {
     CockpitRow::Metric {
-        label: label.to_string(),
+        label: tl(label).to_string(),
         value: value.to_string(),
         color,
         nested: true,
@@ -401,7 +407,7 @@ fn release_metric_line(label: &'static str, value: usize, color: Color) -> Cockp
 }
 
 fn cockpit_metric_optional(label: &'static str, value: Option<String>, color: Color) -> CockpitRow {
-    cockpit_metric_optional_dynamic(label.to_string(), value, color)
+    cockpit_metric_optional_dynamic(tl(label).to_string(), value, color)
 }
 
 fn cockpit_metric_optional_dynamic(

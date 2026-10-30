@@ -1,3 +1,4 @@
+use crate::i18n::{tf, tl, tn};
 use chrono::{DateTime, Utc};
 
 /// Returns `true` when a GitLab display string belongs to the configured username.
@@ -136,38 +137,51 @@ pub fn format_relative_date(iso: &str) -> String {
         let future_months = future_days / 30;
         let future_years = future_days / 365;
 
+        let n = |n: i64| n.unsigned_abs();
         return match (future_secs, future_minutes, future_hours, future_days) {
-            (s, _, _, _) if s < 60 => "just now".to_string(),
-            (_, m, _, _) if m < 60 => format!("in {} min", m),
-            (_, _, h, _) if h < 24 => format!("in {}h", h),
-            (_, _, _, 1) => "tomorrow".to_string(),
-            (_, _, _, d) if d < 7 => format!("in {} days", d),
-            (_, _, _, d) if d < 14 => "next week".to_string(),
-            (_, _, _, d) if d < 30 => format!("in {} weeks", d / 7),
-            (_, _, _, d) if d < 60 => "in about a month".to_string(),
-            _ if future_years >= 1 => format!(
-                "in {} year{}",
-                future_years,
-                if future_years > 1 { "s" } else { "" }
-            ),
-            _ => format!("in {} months", future_months),
+            (s, _, _, _) if s < 60 => tl("just now").to_string(),
+            (_, m, _, _) if m < 60 => tn(n(m), "in {n} min", "in {n} min"),
+            (_, _, h, _) if h < 24 => tn(n(h), "in {n}h", "in {n}h"),
+            (_, _, _, 1) => tl("tomorrow").to_string(),
+            (_, _, _, d) if d < 7 => tn(n(d), "in {n} day", "in {n} days"),
+            (_, _, _, d) if d < 14 => tl("next week").to_string(),
+            (_, _, _, d) if d < 30 => tn(n(d / 7), "in {n} week", "in {n} weeks"),
+            (_, _, _, d) if d < 60 => tl("in about a month").to_string(),
+            _ if future_years >= 1 => tn(n(future_years), "in {n} year", "in {n} years"),
+            _ => tn(n(future_months), "in {n} month", "in {n} months"),
         };
     }
 
     let months = days / 30;
     let years = days / 365;
 
+    let n = |n: i64| n.unsigned_abs();
     match (secs, minutes, hours, days) {
-        (s, _, _, _) if s < 60 => "just now".to_string(),
-        (_, m, _, _) if m < 60 => format!("{} min ago", m),
-        (_, _, h, _) if h < 24 => format!("{}h ago", h),
-        (_, _, _, 1) => "yesterday".to_string(),
-        (_, _, _, d) if d < 7 => format!("{} days ago", d),
-        (_, _, _, d) if d < 14 => "last week".to_string(),
-        (_, _, _, d) if d < 30 => format!("{} weeks ago", d / 7),
-        (_, _, _, d) if d < 60 => "about a month ago".to_string(),
-        _ if years >= 1 => format!("{} year{} ago", years, if years > 1 { "s" } else { "" }),
-        _ => format!("{} months ago", months),
+        (s, _, _, _) if s < 60 => tl("just now").to_string(),
+        (_, m, _, _) if m < 60 => tn(n(m), "{n} min ago", "{n} min ago"),
+        (_, _, h, _) if h < 24 => tn(n(h), "{n}h ago", "{n}h ago"),
+        (_, _, _, 1) => tl("yesterday").to_string(),
+        (_, _, _, d) if d < 7 => tn(n(d), "{n} day ago", "{n} days ago"),
+        (_, _, _, d) if d < 14 => tl("last week").to_string(),
+        (_, _, _, d) if d < 30 => tn(n(d / 7), "{n} week ago", "{n} weeks ago"),
+        (_, _, _, d) if d < 60 => tl("about a month ago").to_string(),
+        _ if years >= 1 => tn(n(years), "{n} year ago", "{n} years ago"),
+        _ => tn(n(months), "{n} month ago", "{n} months ago"),
+    }
+}
+
+impl DurationError {
+    /// The message in the window's language (the `Display` text stays English).
+    pub fn translated(&self) -> String {
+        match self {
+            Self::InvalidHours(s) => tf("Invalid hours in \"{value}\"", &[("value", s)]),
+            Self::InvalidMinutes(s) => tf("Invalid minutes in \"{value}\"", &[("value", s)]),
+            Self::NotPositive => tl("Duration must be greater than zero").to_string(),
+            Self::Unrecognised(s) => tf(
+                "Unrecognised format \"{value}\". Try: 1h30, 90m, 1.5h",
+                &[("value", s)],
+            ),
+        }
     }
 }
 

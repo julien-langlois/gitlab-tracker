@@ -8,6 +8,7 @@
 mod cockpit;
 mod colors;
 mod dialogs;
+mod i18n;
 mod icons;
 mod inspector;
 mod keys;
@@ -29,6 +30,7 @@ use tokio::sync::{mpsc::UnboundedReceiver, mpsc::UnboundedSender, Semaphore};
 use crate::actions::{dispatch, Action, ActionContext};
 use crate::app::App;
 use crate::config::AppConfig;
+use crate::i18n::{tf, tl};
 use crate::models::AppEvent;
 use crate::storage::{ProjectEntry, StateFile, StateWriter};
 use crate::{build_session, Session, Shared};
@@ -196,6 +198,10 @@ struct GuiApp {
     pending: Vec<Action>,
     /// Writes the state off the UI thread.
     state_writer: StateWriter,
+    /// The `language` setting of `projects.toml` (`None`: the system's), and the
+    /// choice being edited in the settings dialog.
+    language: Option<String>,
+    language_draft: Option<String>,
     /// The project being loaded in the background (see [`GuiApp::switch_project`]).
     switching: Option<std::sync::mpsc::Receiver<anyhow::Result<Loaded>>>,
     #[cfg(target_os = "macos")]
@@ -219,10 +225,14 @@ impl GuiApp {
         } = session;
         let events = forward_events(rx, &cc.egui_ctx);
         bevel_theme::fonts::install(&cc.egui_ctx);
+        let projects_config = block_on(crate::storage::load_projects_toml());
+        let language = projects_config.language;
+        i18n::install();
+        i18n::set_language(language.as_deref());
         let projects = if demo {
             Vec::new()
         } else {
-            block_on(crate::storage::load_projects_toml()).projects
+            projects_config.projects
         };
 
         let mut gui = Self {
@@ -246,6 +256,8 @@ impl GuiApp {
             focus_search: false,
             pending: Vec::new(),
             state_writer: StateWriter::default(),
+            language_draft: language.clone(),
+            language,
             switching: None,
             #[cfg(target_os = "macos")]
             movable: None,
@@ -275,6 +287,19 @@ impl GuiApp {
         self.app.ensure_time_entries(&self.tx);
         if needs_save {
             self.save_state();
+        }
+    }
+
+    /// Applies the language picked in the settings dialog and saves it (not in
+    /// the demo, which never writes to disk).
+    fn save_language(&mut self) {
+        if self.language_draft == self.language {
+            return;
+        }
+        self.language = self.language_draft.clone();
+        i18n::set_language(self.language.as_deref());
+        if !self.demo && !self.app.read_only {
+            block_on(crate::storage::set_language_async(self.language.clone()));
         }
     }
 
@@ -314,12 +339,13 @@ impl GuiApp {
             return;
         };
         if self.switching.is_some() {
-            self.app.flash("Another project is still loading", true);
+            self.app.flash(tl("Another project is still loading"), true);
             return;
         }
         self.save_state();
         let name = next.name.clone().unwrap_or_else(|| next.project_id.clone());
-        self.app.flash(format!("Loading {name}…"), false);
+        self.app
+            .flash(tf("Loading {project}…", &[("project", &name)]), false);
 
         let (done, loaded) = std::sync::mpsc::channel();
         self.switching = Some(loaded);
@@ -359,18 +385,16 @@ impl GuiApp {
                 self.set_theme(self.theme.mode);
                 self.projects = projects;
                 let name = self.app.project_name.clone();
-                self.app.flash(
-                    format!(
-                        "✔ Switched to {}",
-                        name.as_deref().unwrap_or(&self.app.project_id)
-                    ),
-                    false,
+                let switched = tf(
+                    "Switched to {project}",
+                    &[("project", name.as_deref().unwrap_or(&self.app.project_id))],
                 );
+                self.app.flash(format!("✔ {switched}"), false);
             }
             Err(e) => {
                 tracing::warn!(error = %e, "Project switch failed — staying on the current project");
                 self.app
-                    .flash(format!("✘ Project switch failed: {e:#}"), true);
+                    .flash(format!("✘ {}: {e:#}", tl("Project switch failed")), true);
             }
         }
     }

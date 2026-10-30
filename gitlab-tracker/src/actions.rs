@@ -12,6 +12,7 @@ use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
 use crate::app::{App, InputMode, LogTimeField, LogTimeForm};
 use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, CachedMrData};
+use crate::i18n::tl;
 use crate::models::{AppEvent, MrStatus};
 use crate::storage::{
     save_branches_async, save_hide_merged_async, save_project_settings_async,
@@ -272,7 +273,7 @@ fn refresh(app: &mut App, api_semaphore: &Arc<Semaphore>, tx: &UnboundedSender<A
         return; // demo: only the countdown restarts
     }
     if app.refresh_in_flight() {
-        app.flash("Refresh already running — wait for it to finish", false);
+        app.flash(tl("Refresh already running — wait for it to finish"), false);
         return;
     }
     app.time_entries.clear();
@@ -317,14 +318,14 @@ fn submit_log_time(app: &mut App, tx: &UnboundedSender<AppEvent>) {
     // Validate duration before submitting.
     let hours = match parse_duration_to_hours(&app.log_time_form.duration_input) {
         Err(e) => {
-            app.log_time_form.error = Some(e.to_string());
+            app.log_time_form.error = Some(e.translated());
             app.log_time_form.focused_field = LogTimeField::Duration;
             return;
         }
         Ok(h) => h,
     };
     if app.activities.is_empty() {
-        app.log_time_form.error = Some("No activities loaded".into());
+        app.log_time_form.error = Some(tl("No activities loaded").into());
         return;
     }
     if app.log_time_form.submitting {
@@ -344,9 +345,14 @@ fn submit_log_time(app: &mut App, tx: &UnboundedSender<AppEvent>) {
         .map(|t| t.id.clone());
 
     let (Some(activity), Some(mr_id), Some(ticket_id)) = (activity, mr_id, ticket_id) else {
-        app.log_time_form.error = Some("No linked ticket selected".into());
+        app.log_time_form.error = Some(tl("No linked ticket selected").into());
         return;
     };
+    if app.read_only {
+        // Demo: logging time would write to the tracker.
+        app.log_time_form.error = Some(tl("Demo: no time is logged").into());
+        return;
+    }
 
     app.log_time_form.submitting = true;
     app.log_time_form.error = None;
