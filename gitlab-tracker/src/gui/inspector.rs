@@ -139,7 +139,81 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     });
                 });
             });
+            if let Some(ticket) = &mr.linked_ticket {
+                if ticket_shortcut(ui, &theme, ticket).clicked() {
+                    g.pending.push(Action::OpenSelectedTicket);
+                }
+            }
         });
+}
+
+/// The MR's ticket as a one-line button: id and subject, shortened to fit.
+fn ticket_shortcut(
+    ui: &mut Ui,
+    theme: &Theme,
+    ticket: &gitlab_tracker_core::LinkedTicket,
+) -> egui::Response {
+    let pad = 10.0;
+    let icon = 13.0;
+    let height = theme.spacing.control_height + 2.0;
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::click());
+    let painter = ui.painter();
+    let fill = if response.hovered() {
+        theme.palette.raised
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    painter.rect(
+        rect,
+        egui::CornerRadius::same(theme.radii.medium),
+        fill,
+        Stroke::new(1.0, theme.palette.border),
+        egui::StrokeKind::Inside,
+    );
+    let elided = |text: String, font: egui::FontId, color: egui::Color32, max: f32| {
+        let mut job = egui::text::LayoutJob::simple_singleline(text, font, color);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(max.max(0.0));
+        painter.layout_job(job)
+    };
+    let y = rect.center().y;
+    let room = rect.width() - 2.0 * pad - icon - 2.0 * 8.0;
+    let id = elided(
+        format!("#{}", ticket.id),
+        egui::FontId::monospace(theme.text_size - 1.0),
+        theme.palette.accent,
+        room / 2.0,
+    );
+    let id_width = id.size().x;
+    let subject = elided(
+        ticket.subject.clone(),
+        egui::FontId::proportional(theme.text_size - 0.5),
+        theme.palette.text_secondary,
+        room - id_width,
+    );
+    let left = rect.left() + pad;
+    painter.galley(
+        egui::pos2(left, y - id.size().y / 2.0),
+        id,
+        theme.palette.accent,
+    );
+    painter.galley(
+        egui::pos2(left + id_width + 8.0, y - subject.size().y / 2.0),
+        subject,
+        theme.palette.text_secondary,
+    );
+    icons::paint(
+        painter,
+        egui::Rect::from_center_size(
+            egui::pos2(rect.right() - pad - icon / 2.0, y),
+            Vec2::splat(icon),
+        ),
+        Icon::ExternalLink,
+        theme.palette.text_secondary,
+    );
+    response
+        .on_hover_text(tl("Open the ticket in the browser (T)"))
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// The author's avatar and name, then when the MR last moved.
@@ -340,7 +414,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     pipelines(ui, &theme, mr);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
-            ui.label(RichText::new(mr.description.trim()).color(theme.palette.text_secondary));
+            g.description.show(ui, &theme, mr);
         });
     }
     ui.add_space(16.0);

@@ -12,6 +12,7 @@ mod i18n;
 mod icons;
 mod inspector;
 mod keys;
+mod markdown;
 mod shell;
 mod sidebar;
 #[cfg(feature = "stats")]
@@ -203,6 +204,8 @@ struct GuiApp {
     pending: Vec<Action>,
     /// Writes the state off the UI thread.
     state_writer: StateWriter,
+    /// The selected MR's description, rendered in the inspector.
+    description: markdown::Description,
     /// The `language` setting of `projects.toml` (`None`: the system's), and the
     /// choice being edited in the settings dialog.
     language: Option<String>,
@@ -264,6 +267,7 @@ impl GuiApp {
             focus_search: false,
             pending: Vec::new(),
             state_writer: StateWriter::default(),
+            description: markdown::Description::default(),
             language_draft: language.clone(),
             language,
             switching: None,

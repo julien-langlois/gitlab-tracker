@@ -27,7 +27,9 @@ stats = ["dep:gitlab-tracker-stats"]
 gui = [
     "dep:eframe",
     "dep:egui",
+    "dep:egui_commonmark",
     "dep:egui_extras",
+    "dep:pulldown-cmark",
     "dep:bevel-i18n",
     "dep:bevel-theme",
     "dep:bevel-widgets",
@@ -70,7 +72,10 @@ zeroize.workspace = true
 # GUI (feature `gui`).
 eframe = { version = "0.37", optional = true, default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "system_fonts", "wayland", "x11"] }
 egui = { version = "0.37", optional = true }
+egui_commonmark = { version = "0.26", optional = true, default-features = false, features = ["pulldown_cmark"] }
 egui_extras = { version = "0.37", optional = true, default-features = false }
+# Same version as egui_commonmark: the description is rewritten before it is shown.
+pulldown-cmark = { version = "0.13", optional = true, default-features = false }
 bevel-i18n = { path = "../../bevel/bevel-i18n", optional = true }
 bevel-theme = { path = "../../bevel/bevel-theme", optional = true, features = ["fonts"] }
 bevel-widgets = { path = "../../bevel/bevel-widgets", optional = true }
