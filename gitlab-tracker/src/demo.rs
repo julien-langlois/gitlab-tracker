@@ -20,7 +20,7 @@ use std::time::Duration;
 /// so the tracker pane, the ticket filter and the log-time dialog show up. It
 /// never fetches anything: the demo's tickets, activities and time entries are
 /// already in the app (see [`demo_app`]), and the demo ignores fetch results.
-struct DemoTracker;
+pub(crate) struct DemoTracker;
 
 #[async_trait::async_trait]
 impl TrackerProvider for DemoTracker {
@@ -38,6 +38,38 @@ impl TrackerProvider for DemoTracker {
 
     fn ticket_url(&self, ticket_id: &str) -> String {
         format!("https://redmine.example.com/issues/{ticket_id}")
+    }
+}
+
+/// The demo's statuses, so the window's board shows its columns. Moving a
+/// ticket is refused: the demo is read-only (the window checks first).
+#[cfg(feature = "gui")]
+#[async_trait::async_trait]
+impl gitlab_tracker_core::TicketTransitionProvider for DemoTracker {
+    async fn fetch_transition_targets(
+        &self,
+    ) -> Result<Vec<gitlab_tracker_core::TicketTransitionTarget>, TrackerError> {
+        Ok([
+            (1, "New"),
+            (2, "In Progress"),
+            (3, "Assigned"),
+            (4, "Feedback"),
+            (5, "Resolved"),
+        ]
+        .into_iter()
+        .map(|(id, label)| gitlab_tracker_core::TicketTransitionTarget {
+            id: id.to_string(),
+            label: label.into(),
+        })
+        .collect())
+    }
+
+    async fn transition_ticket_status(
+        &self,
+        ticket_id: &str,
+        _target_id: &str,
+    ) -> Result<(), TrackerError> {
+        Err(TrackerError::NotFound(ticket_id.to_string()))
     }
 }
 

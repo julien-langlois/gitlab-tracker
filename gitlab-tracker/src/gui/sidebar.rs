@@ -301,6 +301,7 @@ fn view_item(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef, glyph: 
     ui.painter()
         .with_clip_rect(rect.shrink(2.0))
         .galley(pos, galley, label_color);
+    super::widgets::focus_ring(ui, &theme, &response, theme.radii.medium);
     if response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()
@@ -311,6 +312,29 @@ fn view_item(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef, glyph: 
             query: String::new(),
         });
     }
+}
+
+/// "Absent from branch" as a pill per tracked branch: the branches are known,
+/// nothing to type. A second click on the active one clears it.
+fn branch_pills(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
+    let theme = g.theme;
+    ui.add_space(4.0);
+    ui.label(muted(&theme, clean_label(def)));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        for branch in g.app.branches.clone() {
+            let on = g.app.active_filter.index == index && g.app.active_filter.query == branch;
+            let response = pill_toggle(ui, &theme, &branch, theme.tones.red, on)
+                .on_hover_text(tf("The MRs not on {branch} yet", &[("branch", &branch)]));
+            if response.clicked() {
+                g.pending.push(Action::SetFilter {
+                    index: if on { 0 } else { index },
+                    query: if on { String::new() } else { branch },
+                });
+            }
+        }
+    });
+    ui.add_space(2.0);
 }
 
 /// Review effort as three pills; a second click on the active one clears it.
@@ -341,6 +365,10 @@ fn effort_pills(g: &mut GuiApp, ui: &mut Ui, pills: &[(usize, Effort)]) {
 /// it) and the values met on the tracked MRs as suggestions: ↑ and ↓ highlight
 /// one, Enter or a click applies it.
 fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
+    if def.id == "absent_from_branch" && !g.app.branches.is_empty() {
+        branch_pills(g, ui, index, def);
+        return;
+    }
     let theme = g.theme;
     let active = g.app.active_filter.index == index;
     ui.add_space(4.0);
@@ -667,26 +695,43 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
     section_title(ui, &theme, tl("Tracked branches"));
     ui.add_space(4.0);
     let mut removed = None;
-    for branch in &g.app.branches {
-        ui.horizontal(|ui| {
+    let mut moved = None;
+    let count = g.app.branches.len();
+    for (i, branch) in g.app.branches.iter().enumerate() {
+        let row = ui.horizontal(|ui| {
             ui.set_height(24.0);
             dot(ui, theme.tones.green.fg, 6.0);
             ui.label(mono(branch, theme.text_size - 1.0));
-            if !g.app.read_only {
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .add(egui::Button::new(muted(&theme, "✕")).frame(false))
-                        .on_hover_text(tl("Stop tracking this branch"))
-                        .clicked()
-                    {
-                        removed = Some(branch.clone());
-                    }
-                });
-            }
         });
+        // The controls show on hover: the order is the table's columns.
+        if !ui.rect_contains_pointer(row.response.rect) {
+            continue;
+        }
+        let mut controls = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(row.response.rect)
+                .layout(Layout::right_to_left(Align::Center)),
+        );
+        let small = |ui: &mut Ui, text: &str, hint: &str| {
+            ui.add(egui::Button::new(muted(&theme, text)).frame(false))
+                .on_hover_text(hint)
+                .clicked()
+        };
+        if !g.app.read_only && small(&mut controls, "✕", tl("Stop tracking this branch")) {
+            removed = Some(branch.clone());
+        }
+        if i + 1 < count && small(&mut controls, "↓", tl("Move right in the table")) {
+            moved = Some((i, i + 1));
+        }
+        if i > 0 && small(&mut controls, "↑", tl("Move left in the table")) {
+            moved = Some((i, i - 1));
+        }
     }
     if let Some(branch) = removed {
         g.pending.push(Action::SubmitInput(format!("-{branch}")));
+    }
+    if let Some((from, to)) = moved {
+        g.pending.push(Action::MoveBranch { from, to });
     }
     if g.app.read_only {
         return;

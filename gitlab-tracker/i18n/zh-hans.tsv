@@ -436,7 +436,6 @@
 	Log time on the linked ticket	在关联工单上记录工时
 	Statistics (Tab: next tab, W: time window)	统计（Tab：下一个标签页，W：时间段）
 	This list	此列表
-	Close a dialog / leave the statistics	关闭对话框 / 退出统计
 
 # Messages and notifications
 	All	全部
@@ -656,3 +655,62 @@ date	Merged	合并时间
 	Project name	项目名称
 	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	显示在标题栏和项目选择器中，代替项目 ID。留空则显示项目 ID。
 	Project id	项目 ID
+	or	或
+	Pick several MRs, for the bulk actions	选择多个 MR，用于批量操作
+	Command palette: pages, views, MRs and commands	命令面板：页面、视图、MR 和命令
+	Close a dialog / leave the statistics / unpick the MRs	关闭对话框 / 离开统计 / 取消选择 MR
+	The GitLab URL starts with https:// (or http://), without spaces.	GitLab URL 须以 https://（或 http://）开头，且不含空格。
+	The project is its numeric id or its path (group/project), without spaces.	项目为其数字 ID 或路径（组/项目），不含空格。
+	Branch names have no spaces; separate them with commas.	分支名称不含空格；请用逗号分隔。
+	The MRs not on {branch} yet	尚未进入 {branch} 的 MR
+	Move right in the table	在表格中右移
+	Move left in the table	在表格中左移
+	Ctrl+click adds one · Shift+click a range	Ctrl+点击添加一个 · Shift+点击选择范围
+	Clear	清除
+	Stop tracking…	停止跟踪…
+	Stop tracking	停止跟踪
+	Unflag	取消标记
+	Flag	标记
+	Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)	排序、分组、密度和列（S：下一个排序列，Shift+S：反转，C：列）
+	Sort by	排序方式
+	Comfortable	舒适
+	Compact	紧凑
+	One line per MR: twice as many in view	每个 MR 一行：可见数量翻倍
+	Columns… (C)	列… (C)
+	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ 与上一个等长周期相比 · 绿色：更好 · 红色：更差
+	{min}–{max} changed lines	{min}–{max} 行改动
+	{min}+ changed lines	{min}+ 行改动
+	Median time to merge: {time}	合并时间中位数：{time}
+	Click to list the tracked ones	点击列出已跟踪的
+	Size	规模
+	The tracked MRs open now, as on the cockpit	当前打开的已跟踪 MR，与驾驶舱一致
+	Notifications	通知
+	Nothing yet: merges, status changes and pipelines show up here.	暂无：合并、状态变更和流水线会显示在这里。
+	Retry	重试
+	Updated just now	刚刚更新
+	req.	次请求
+	Read-only: the ticket stays where it is	只读：工单保持不变
+	Moving #{id} to {status}…	正在将 #{id} 移至 {status}…
+	#{id} moved to {status}	#{id} 已移至 {status}
+	Welcome to GitLab Tracker	欢迎使用 GitLab Tracker
+	No project is configured yet. Tell it which GitLab project to follow; everything can be changed later in projects.toml.	尚未配置项目。请指定要跟踪的 GitLab 项目；之后可在 projects.toml 中修改。
+	GitLab URL	GitLab URL
+	https://gitlab.com or your own instance	https://gitlab.com 或你自己的实例
+	Project	项目
+	Its numeric id (Settings › General) or its path, group/project	其数字 ID（设置 › 常规）或路径：组/项目
+	Name (optional)	名称（可选）
+	Shown in the title bar instead of the project id	显示在标题栏中，代替项目 ID
+	Comma-separated, in the table's order: main, staging, production	以逗号分隔，按表格顺序：main, staging, production
+	Personal access token	个人访问令牌
+	Scope read_api; saved in the OS keyring, never in a file. Empty: asked in the terminal.	权限 read_api；保存在系统密钥环中，绝不写入文件。留空则在终端中询问。
+	The token could not be saved in the keyring	无法将令牌保存到密钥环
+	Save and open	保存并打开
+	Drop a ticket here to move it	将工单拖到此处以移动
+	Time spent / estimated on these tickets	这些工单的已用 / 预估工时
+	From the stats history since recording started, not the listed MRs	来自开始记录以来的统计历史，而非列出的 MR
+	Green: good news · amber: to watch	绿色：好消息 · 琥珀色：需关注
+@plural	{n} MR selected|{n} MRs selected	已选择 {n} 个 MR
+@plural	Stop tracking {n} MR?|Stop tracking these {n} MRs?	停止跟踪这 {n} 个 MR？
+@plural	{n} merged MR|{n} merged MRs	{n} 个已合并的 MR
+@plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} 个 MR 无法刷新
+@plural	Updated {n} min ago|Updated {n} min ago	{n} 分钟前更新

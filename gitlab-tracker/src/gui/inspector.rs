@@ -41,6 +41,7 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                 return;
             };
             header(g, ui, &mr);
+            anchors(g, ui, &mr);
             // The tracker page brings each MR it opens to its ticket, then leaves the
             // scrolling to the user. It scrolls on its own, away from the other pages.
             let on_tracker = g.page() == Page::Tracker;
@@ -56,6 +57,62 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                     body(g, ui, &mr);
                 });
         });
+}
+
+/// The sections as links under the header (which stays in place): a click
+/// scrolls the body to that section.
+fn anchors(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = g.theme;
+    let mut links = vec![
+        (InspectorSection::Review, tl("Review")),
+        (InspectorSection::Branches, tl("Branches")),
+    ];
+    if g.app.tracker.is_some() || mr.linked_ticket.is_some() {
+        links.push((InspectorSection::Ticket, tl("Ticket")));
+    }
+    links.push((InspectorSection::Pipelines, tl("Pipelines")));
+    if !mr.description.trim().is_empty() {
+        links.push((InspectorSection::Description, tl("Description")));
+    }
+    super::widgets::rule(ui, &theme);
+    egui::Frame::new()
+        .inner_margin(Margin::symmetric(12, 6))
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
+                for (section, name) in links {
+                    let response = ui
+                        .add(
+                            egui::Label::new(
+                                RichText::new(name)
+                                    .size(theme.text_size - 1.5)
+                                    .color(theme.palette.text_secondary),
+                            )
+                            .sense(Sense::click()),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if response.hovered() {
+                        ui.painter().hline(
+                            response.rect.x_range(),
+                            response.rect.bottom(),
+                            Stroke::new(1.0, theme.palette.accent),
+                        );
+                    }
+                    if response.clicked() {
+                        g.scroll_to = Some(section);
+                    }
+                    ui.label(muted(&theme, "·"));
+                }
+            });
+        });
+}
+
+/// Scrolls the body to here when `section` was asked for.
+fn anchor(g: &mut GuiApp, ui: &mut Ui, section: InspectorSection) {
+    if g.scroll_to == Some(section) {
+        ui.scroll_to_cursor(Some(Align::TOP));
+        g.scroll_to = None;
+    }
 }
 
 fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
@@ -363,6 +420,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     people(g, ui, mr);
     planning(ui, &theme, mr);
     history(g, ui, mr);
+    anchor(g, ui, InspectorSection::Review);
     review(g, ui, mr);
     if let Some(stats) = &mr.diff_stats {
         let score = stats.difficulty(&g.app.config.complexity_profile);
@@ -388,6 +446,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ));
         });
     }
+    anchor(g, ui, InspectorSection::Branches);
     branches(g, ui, mr);
     if !mr.labels.is_empty() {
         section(ui, &theme, tl("Labels"), |ui| {
@@ -400,18 +459,13 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         });
     }
     if g.app.tracker.is_some() || mr.linked_ticket.is_some() {
-        if g.scroll_to == Some(InspectorSection::Ticket) {
-            ui.scroll_to_cursor(Some(Align::TOP));
-            g.scroll_to = None;
-        }
+        anchor(g, ui, InspectorSection::Ticket);
         ticket(g, ui, mr);
     }
     threads(ui, &theme, mr);
-    if g.scroll_to == Some(InspectorSection::Pipelines) {
-        ui.scroll_to_cursor(Some(Align::TOP));
-        g.scroll_to = None;
-    }
+    anchor(g, ui, InspectorSection::Pipelines);
     pipelines(ui, &theme, mr);
+    anchor(g, ui, InspectorSection::Description);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
             g.description.show(ui, &theme, mr);

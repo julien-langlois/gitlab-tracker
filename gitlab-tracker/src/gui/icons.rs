@@ -32,12 +32,12 @@ pub enum Icon {
     ArrowDown,
     ArrowUp,
     Clock,
-    /// Rows under headings: the table's grouping.
-    Group,
     /// Three columns of cards: the tracker's board.
     Board,
     /// Lines: the tracker's list.
     List,
+    /// The notifications.
+    Bell,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -293,11 +293,23 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 egui::StrokeKind::Middle,
             );
         }
-        Icon::Group => {
-            line(p(3.0, 5.0), p(10.0, 5.0));
-            line(p(7.0, 10.0), p(21.0, 10.0));
-            line(p(7.0, 14.0), p(21.0, 14.0));
-            line(p(3.0, 19.0), p(10.0, 19.0));
+        Icon::Bell => {
+            painter.add(Shape::line(
+                vec![
+                    p(6.0, 16.5),
+                    p(6.0, 10.5),
+                    p(7.0, 7.0),
+                    p(9.5, 4.8),
+                    p(12.0, 4.2),
+                    p(14.5, 4.8),
+                    p(17.0, 7.0),
+                    p(18.0, 10.5),
+                    p(18.0, 16.5),
+                ],
+                stroke,
+            ));
+            line(p(4.0, 17.0), p(20.0, 17.0));
+            line(p(10.5, 20.0), p(13.5, 20.0));
         }
         Icon::Board => {
             for x in [3.0, 10.0, 17.0] {

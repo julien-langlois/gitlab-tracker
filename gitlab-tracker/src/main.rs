@@ -585,6 +585,16 @@ async fn main() -> anyhow::Result<()> {
         return demo::run_demo_mode(global_config).await;
     }
 
+    // The window asks for the first project itself, rather than the terminal.
+    #[cfg(feature = "gui")]
+    if matches!(args.command, Some(cli::Command::Gui))
+        && args.project.is_none()
+        && storage::needs_first_project().await
+        && !gui::first_run().await?
+    {
+        return Ok(());
+    }
+
     // Resolve the selected project from CLI flags, projects.toml, env vars, or prompt.
     let project = cli::resolve_project(&args).await;
     if let Some(cli::Command::Checklist {

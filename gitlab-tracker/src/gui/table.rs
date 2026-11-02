@@ -26,16 +26,93 @@ use crate::models::{Effort, MrStatus};
 pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let shown = g.app.visible_mrs().count();
     toolbar(g, ui, shown, sizes);
+    super::shell::fetch_errors(g, ui);
     active_filters(g, ui);
+    bulk_bar(g, ui);
 
     if shown == 0 {
         empty_state(g, ui);
         return;
     }
 
+    let inspector_shown = sizes.inspector.is_some();
     egui::Frame::new()
         .inner_margin(Margin::symmetric(8, 0))
-        .show(ui, |ui| table(g, ui, shown));
+        .show(ui, |ui| table(g, ui, shown, inspector_shown));
+}
+
+/// What the bulk bar asked for, applied once the frame is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Bulk {
+    Flag(bool),
+    CopyChecklist,
+    StopTracking,
+}
+
+/// The MRs picked with Ctrl / Shift + click, and what to do with them all.
+fn bulk_bar(g: &mut GuiApp, ui: &mut Ui) {
+    // Gone from the list: no longer picked.
+    let ids: std::collections::HashSet<String> = g.app.mrs.iter().map(|m| m.id.clone()).collect();
+    g.marked.retain(|id| ids.contains(id));
+    if g.marked.is_empty() {
+        return;
+    }
+    let theme = g.theme;
+    let n = g.marked.len();
+    let mut picked = None;
+    let mut clear = false;
+    egui::Frame::new()
+        .fill(theme.palette.selection)
+        .corner_radius(CornerRadius::same(theme.radii.medium))
+        .inner_margin(Margin::symmetric(12, 6))
+        .outer_margin(Margin::symmetric(16, 6))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.label(semibold(
+                    tn(n as u64, "{n} MR selected", "{n} MRs selected"),
+                    theme.text_size,
+                ))
+                .on_hover_text(tl("Ctrl+click adds one · Shift+click a range"));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if button(ui, &theme, Some(Icon::Close), tl("Clear"), false).clicked() {
+                        clear = true;
+                    }
+                    let stop = button(ui, &theme, None, tl("Stop tracking…"), false);
+                    egui::Popup::menu(&stop).show(|ui| {
+                        ui.label(tn(
+                            n as u64,
+                            "Stop tracking {n} MR?",
+                            "Stop tracking these {n} MRs?",
+                        ));
+                        if ui.button(tl("Stop tracking")).clicked() {
+                            picked = Some(Bulk::StopTracking);
+                        }
+                    });
+                    if button(
+                        ui,
+                        &theme,
+                        Some(Icon::Clipboard),
+                        tl("Copy checklist"),
+                        false,
+                    )
+                    .clicked()
+                    {
+                        picked = Some(Bulk::CopyChecklist);
+                    }
+                    if button(ui, &theme, Some(Icon::StarOutline), tl("Unflag"), false).clicked() {
+                        picked = Some(Bulk::Flag(false));
+                    }
+                    if button(ui, &theme, Some(Icon::Star), tl("Flag"), false).clicked() {
+                        picked = Some(Bulk::Flag(true));
+                    }
+                });
+            });
+        });
+    if clear {
+        g.marked.clear();
+    }
+    g.bulk = picked.or(g.bulk);
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -141,27 +218,30 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         if icon_button(ui, tl("Refresh now (R)"), Icon::Refresh, &outlined, height).clicked() {
             g.pending.push(Action::Refresh);
         }
-        if icon_button(ui, tl("Columns (C)"), Icon::Columns, &outlined, height).clicked() {
-            g.app.input_mode = InputMode::ColumnPicker;
-        }
-        sort_button(g, ui);
-        group_button(g, ui);
+        display_button(g, ui);
         search(g, ui);
     });
     milestone_suggestions(g, ui, bar);
 }
 
-/// "↓ Updated": the sort column and order; a click opens the choices.
-fn sort_button(g: &mut GuiApp, ui: &mut Ui) {
+/// "↓ Updated": the sort; a click opens the display menu: sort, grouping,
+/// density and columns, in one place to leave the search its room.
+fn display_button(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let icon = match g.app.sort_order {
         SortOrder::Ascending => Icon::ArrowUp,
         SortOrder::Descending => Icon::ArrowDown,
     };
-    let response = button(ui, &theme, Some(icon), sort_label(g.app.sort_column), false)
-        .on_hover_text(tl("Sort (S: next column, Shift+S: reverse)"));
+    let text = match g.group_by {
+        GroupBy::None => sort_label(g.app.sort_column).to_string(),
+        group => format!("{} · {}", sort_label(g.app.sort_column), group.label()),
+    };
+    let response = button(ui, &theme, Some(icon), &text, false).on_hover_text(tl(
+        "Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)",
+    ));
     egui::Popup::menu(&response).show(|ui| {
-        ui.set_min_width(170.0);
+        ui.set_min_width(200.0);
+        ui.label(muted(&theme, tl("Sort by")));
         for column in [
             SortColumn::UpdatedAt,
             SortColumn::Id,
@@ -181,20 +261,8 @@ fn sort_button(g: &mut GuiApp, ui: &mut Ui) {
         if ui.button(reverse).clicked() {
             g.pending.push(Action::ToggleSortOrder);
         }
-    });
-}
-
-/// "Group": how the rows are grouped; a click opens the choices.
-fn group_button(g: &mut GuiApp, ui: &mut Ui) {
-    let theme = g.theme;
-    let text = match g.group_by {
-        GroupBy::None => tl("Group"),
-        other => other.label(),
-    };
-    let response = button(ui, &theme, Some(Icon::Group), text, false)
-        .on_hover_text(tl("Group the rows under foldable headings"));
-    egui::Popup::menu(&response).show(|ui| {
-        ui.set_min_width(170.0);
+        ui.separator();
+        ui.label(muted(&theme, tl("Group")));
         for group in GroupBy::ALL {
             if ui
                 .selectable_label(g.group_by == group, group.label())
@@ -203,6 +271,22 @@ fn group_button(g: &mut GuiApp, ui: &mut Ui) {
                 g.group_by = group;
                 g.folded.clear();
             }
+        }
+        ui.separator();
+        ui.label(muted(&theme, tl("Density")));
+        if ui.selectable_label(!g.compact, tl("Comfortable")).clicked() {
+            g.compact = false;
+        }
+        if ui
+            .selectable_label(g.compact, tl("Compact"))
+            .on_hover_text(tl("One line per MR: twice as many in view"))
+            .clicked()
+        {
+            g.compact = true;
+        }
+        ui.separator();
+        if ui.button(tl("Columns… (C)")).clicked() {
+            g.app.input_mode = InputMode::ColumnPicker;
         }
     });
 }
@@ -325,6 +409,7 @@ fn removable_chip(ui: &mut Ui, theme: &Theme, text: &str, tone: Tone) -> bool {
         egui::FontId::proportional(theme.text_size - 3.0),
         tone.fg,
     );
+    super::widgets::focus_ring(ui, theme, &response, 12);
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(tl("Remove"))
@@ -603,6 +688,8 @@ const BRANCH_MAX_WIDTH: f32 = 72.0;
 /// Inside a row, left and right.
 const ROW_PADDING: f32 = 8.0;
 const ROW_HEIGHT: f32 = 50.0;
+/// A row in the compact density: the title only.
+const COMPACT_ROW_HEIGHT: f32 = 34.0;
 const ROW_GAP: f32 = 2.0;
 
 /// Fits the wanted columns into `width`: drops the least useful ones until the
@@ -645,6 +732,7 @@ enum Cell {
 struct Grid {
     cells: Vec<(Cell, f32, f32)>,
     width: f32,
+    row_height: f32,
 }
 
 impl Grid {
@@ -674,6 +762,7 @@ impl Grid {
         Self {
             cells,
             width: fixed + title,
+            row_height: ROW_HEIGHT,
         }
     }
 
@@ -698,6 +787,8 @@ struct RowView {
     flagged: bool,
     fresh: bool,
     selected: bool,
+    /// Picked with Ctrl / Shift + click, for the bulk bar.
+    marked: bool,
     status: (&'static str, Tone),
     effort: Option<(&'static str, Tone)>,
     threads: u32,
@@ -769,6 +860,7 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 flagged: mr.flagged,
                 fresh: mr.recently_updated && fresh_window,
                 selected: selected == Some(index),
+                marked: g.marked.contains(&mr.id),
                 status: tones::status(mr.state, &mr.mergeability, tones),
                 effort: mr.diff_stats.as_ref().map(|s| {
                     let effort = Effort::from_score(s.difficulty(&app.config.complexity_profile));
@@ -871,24 +963,31 @@ fn lines(g: &GuiApp) -> Vec<Line> {
 /// What a click in the table asked for, applied once the table is drawn.
 enum RowAction {
     Select(usize),
+    /// Ctrl + click: add it to the picked MRs, or take it out.
+    Toggle(usize),
+    /// Shift + click: pick every MR from the selected one to this one.
+    Range(usize),
     Then(usize, Action),
 }
 
-fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
+fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     let theme = g.theme;
     let lines = lines(g);
     let branches = g.app.branches.clone();
     let wanted = wanted_columns(&g.app);
     let (columns, dropped, branch_width) =
         fit_columns(&wanted, ui.available_width(), branches.len());
-    let grid = Grid::new(&columns, branches.len(), branch_width, ui.available_width());
+    let mut grid = Grid::new(&columns, branches.len(), branch_width, ui.available_width());
+    if g.compact {
+        grid.row_height = COMPACT_ROW_HEIGHT;
+    }
 
     // Keyboard moves bring the selected row into view.
     let selected = g.app.table_state.selected().filter(|&i| i < shown);
     let memory = ui.make_persistent_id("table_scroll");
     let (last_selected, offset, viewport): (Option<usize>, f32, f32) =
         ui.data(|d| d.get_temp(memory)).unwrap_or((None, 0.0, 0.0));
-    let stride = ROW_HEIGHT + ROW_GAP;
+    let stride = grid.row_height + ROW_GAP;
     let mut scroll_to = None;
     let selected_line = selected.and_then(|s| {
         lines
@@ -909,6 +1008,8 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
     let mut sort_by = None;
     let mut action = None;
     let mut fold = None;
+    // From the hidden-columns note: the columns (false), or more room (true).
+    let mut footer_pick: Option<bool> = None;
     egui::ScrollArea::horizontal()
         .auto_shrink(false)
         .show(ui, |ui| {
@@ -920,7 +1021,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
             if let Some(y) = scroll_to {
                 area = area.vertical_scroll_offset(y);
             }
-            let footer = if dropped > 0 { 26.0 } else { 0.0 };
+            let footer = if dropped > 0 { 32.0 } else { 0.0 };
             let output = area
                 .max_height(ui.available_height() - footer)
                 .show_rows(ui, stride, lines.len(), |ui, range| {
@@ -944,7 +1045,15 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
                                 tone,
                                 folded,
                             } => {
-                                if group_heading(ui, &theme, grid.width, label, *count, *tone, *folded) {
+                                if group_heading(
+                                    ui,
+                                    &theme,
+                                    (grid.width, grid.row_height),
+                                    label,
+                                    *count,
+                                    *tone,
+                                    *folded,
+                                ) {
                                     fold = Some(key.clone());
                                 }
                             }
@@ -965,14 +1074,23 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
             });
             if dropped > 0 {
                 ui.add_space(6.0);
-                ui.label(muted(
-                    &theme,
-                    tn(
-                        dropped as u64,
-                        "{n} column hidden to fit the window — widen it, or pick fewer in Columns.",
-                        "{n} columns hidden to fit the window — widen it, or pick fewer in Columns.",
-                    ),
-                ));
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    ui.label(muted(
+                        &theme,
+                        tn(
+                            dropped as u64,
+                            "{n} column hidden to fit the window — widen it, or pick fewer in Columns.",
+                            "{n} columns hidden to fit the window — widen it, or pick fewer in Columns.",
+                        ),
+                    ));
+                    if link(ui, &theme, tl("Columns…")).clicked() {
+                        footer_pick = Some(false);
+                    }
+                    if inspector_shown && link(ui, &theme, tl("Hide the inspector")).clicked() {
+                        footer_pick = Some(true);
+                    }
+                });
             }
         });
 
@@ -985,8 +1103,49 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
         }
     }
     let _ = shown;
+    match footer_pick {
+        Some(true) => g.show_inspector = Some(false),
+        Some(false) => g.app.input_mode = InputMode::ColumnPicker,
+        None => {}
+    }
     match action {
-        Some(RowAction::Select(index)) => select(g, index),
+        Some(RowAction::Select(index)) => {
+            g.marked.clear();
+            select(g, index);
+        }
+        Some(RowAction::Toggle(index)) => {
+            let ids: Vec<String> = g.app.visible_mrs().map(|m| m.id.clone()).collect();
+            if g.marked.is_empty() {
+                if let Some(current) = g.app.table_state.selected().and_then(|i| ids.get(i)) {
+                    g.marked.insert(current.clone());
+                }
+            }
+            if let Some(id) = ids.get(index) {
+                if !g.marked.remove(id) {
+                    g.marked.insert(id.clone());
+                }
+            }
+            select(g, index);
+        }
+        Some(RowAction::Range(index)) => {
+            let ids: Vec<String> = g.app.visible_mrs().map(|m| m.id.clone()).collect();
+            let from = g.app.table_state.selected().unwrap_or(index);
+            // In the order shown: the groups reorder the list.
+            let shown_order: Vec<usize> = lines
+                .iter()
+                .filter_map(|l| match l {
+                    Line::Mr(i) => Some(*i),
+                    Line::Heading { .. } => None,
+                })
+                .collect();
+            let a = shown_order.iter().position(|i| *i == from).unwrap_or(0);
+            let b = shown_order.iter().position(|i| *i == index).unwrap_or(a);
+            g.marked.clear();
+            for i in &shown_order[a.min(b)..=a.max(b)] {
+                g.marked.extend(ids.get(*i).cloned());
+            }
+            select(g, index);
+        }
         Some(RowAction::Then(index, action)) => {
             select(g, index);
             g.pending.push(action);
@@ -1078,13 +1237,13 @@ fn header(
 fn group_heading(
     ui: &mut Ui,
     theme: &Theme,
-    width: f32,
+    (width, height): (f32, f32),
     label: &str,
     count: usize,
     tone: Option<Tone>,
     folded: bool,
 ) -> bool {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
     let band = Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - 30.0), rect.max);
     if response.hovered() {
         ui.painter().rect_filled(
@@ -1146,6 +1305,19 @@ fn group_heading(
         .clicked()
 }
 
+/// Text in the accent that reads as a link; returns its response.
+fn link(ui: &mut Ui, theme: &Theme, text: &str) -> egui::Response {
+    ui.add(
+        egui::Label::new(
+            RichText::new(text)
+                .size(theme.text_size - 1.0)
+                .color(theme.palette.accent),
+        )
+        .sense(Sense::click()),
+    )
+    .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// A rounded bar that pulses: something is loading there.
 fn shimmer(ui: &mut Ui, theme: &Theme, width: f32, height: f32) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
@@ -1163,10 +1335,10 @@ fn shimmer(ui: &mut Ui, theme: &Theme, width: f32, height: f32) -> egui::Respons
 
 /// Draws one row; returns what a click on it asked for.
 fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction> {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(grid.width, ROW_HEIGHT), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(grid.width, grid.row_height), Sense::hover());
     let response = ui.interact(rect, ui.scope_id().with(("row", &r.id)), Sense::click());
     let radius = CornerRadius::same(theme.radii.medium);
-    let fill = if r.selected {
+    let fill = if r.selected || r.marked {
         theme.palette.selection
     } else if r.fresh {
         theme.tones.green.bg.gamma_multiply(0.55)
@@ -1229,10 +1401,24 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
         }
     }
 
+    let modifiers = ui.input(|i| i.modifiers);
     if response.double_clicked() {
         action = Some(RowAction::Then(r.index, Action::OpenSelectedMr));
+    } else if response.clicked() && modifiers.command {
+        action.get_or_insert(RowAction::Toggle(r.index));
+    } else if response.clicked() && modifiers.shift {
+        action.get_or_insert(RowAction::Range(r.index));
     } else if response.clicked() || response.secondary_clicked() {
         action.get_or_insert(RowAction::Select(r.index));
+    }
+    super::widgets::focus_ring(ui, theme, &response, theme.radii.medium);
+    if r.marked && !r.selected {
+        ui.painter().rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0, theme.palette.accent.gamma_multiply(0.5)),
+            egui::StrokeKind::Inside,
+        );
     }
     response.context_menu(|ui| {
         if let Some(picked) = context_menu(ui, r) {
@@ -1363,6 +1549,21 @@ fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
 /// The title over "@author · when" and the scoped labels (unless they have
 /// their own column).
 fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) {
+    if grid.row_height < ROW_HEIGHT {
+        // Compact: the title alone, who and when on hover.
+        let (name, _) = split_person(&r.author);
+        let hint = if r.updated.is_empty() {
+            name.to_string()
+        } else {
+            format!("{name} · {}", r.updated)
+        };
+        ui.add(
+            egui::Label::new(RichText::new(&r.title).font(fonts::medium(theme.text_size)))
+                .truncate(),
+        )
+        .on_hover_text(hint);
+        return;
+    }
     let labels_column = grid
         .cells
         .iter()

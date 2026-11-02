@@ -9,7 +9,7 @@ use super::widgets::{dot, icon_toggle, muted, spinner};
 use super::{cockpit, dialogs, inspector, sidebar, table, tracker, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::InputMode;
-use crate::i18n::{tf, tl};
+use crate::i18n::{tf, tl, tn};
 
 pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     let width = ui.max_rect().width();
@@ -144,6 +144,7 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                     if bar_button(ui, &theme, 44.0, label, icon).clicked() {
                         g.set_theme(next);
                     }
+                    bell(g, ui);
                     if matches!(page, Page::MergeRequests | Page::Tracker) {
                         let shown = sizes.inspector.is_some();
                         let label = tl(if shown {
@@ -165,6 +166,136 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                 });
             });
         });
+}
+
+/// The bell: the session's toasts, the unread ones counted on it.
+fn bell(g: &mut GuiApp, ui: &mut Ui) {
+    let theme = g.theme;
+    let response = bar_button(ui, &theme, 44.0, tl("Notifications"), Icon::Bell);
+    let unread = g.toasts.unread;
+    if unread > 0 {
+        let center = egui::pos2(
+            response.rect.center().x + 7.0,
+            response.rect.center().y - 7.0,
+        );
+        ui.painter()
+            .circle_filled(center, 7.5, theme.palette.chrome);
+        ui.painter().circle_filled(center, 6.0, theme.tones.red.fg);
+        ui.painter().text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            if unread > 9 {
+                "9+".to_string()
+            } else {
+                unread.to_string()
+            },
+            fonts::semibold(8.5),
+            theme.palette.chrome,
+        );
+    }
+    let mut picked = None;
+    let mut clear = false;
+    egui::Popup::menu(&response)
+        .align(egui::RectAlign::BOTTOM_END)
+        .show(|ui| {
+            g.toasts.unread = 0;
+            ui.set_width(320.0);
+            ui.horizontal(|ui| {
+                ui.label(fonts_label(&theme, tl("Notifications")));
+                if !g.toasts.history.is_empty() {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.small_button(tl("Clear")).clicked() {
+                            clear = true;
+                        }
+                    });
+                }
+            });
+            ui.separator();
+            if g.toasts.history.is_empty() {
+                ui.label(muted(
+                    &theme,
+                    tl("Nothing yet: merges, status changes and pipelines show up here."),
+                ));
+            }
+            egui::ScrollArea::vertical()
+                .max_height(360.0)
+                .show(ui, |ui| {
+                    for past in g.toasts.history.iter().rev() {
+                        let response = ui
+                            .horizontal(|ui| {
+                                dot(ui, past.tone.fg, 7.0);
+                                ui.label(muted(&theme, &past.at));
+                                ui.label(&past.text);
+                            })
+                            .response
+                            .interact(Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if response.clicked() {
+                            picked = Some(past.id.clone());
+                        }
+                    }
+                });
+        });
+    if clear {
+        g.toasts.history.clear();
+    }
+    if let Some(id) = picked {
+        g.show_mr(&id);
+    }
+}
+
+fn fonts_label(theme: &Theme, text: &str) -> RichText {
+    RichText::new(text).font(fonts::semibold(theme.text_size))
+}
+
+/// A banner over the table when MRs could not be refreshed: how many, the first
+/// error, and a retry.
+pub fn fetch_errors(g: &mut GuiApp, ui: &mut Ui) {
+    let failed: Vec<&str> = g
+        .app
+        .mrs
+        .iter()
+        .filter_map(|mr| match &mr.status {
+            crate::models::MrStatus::Error(message) => Some(message.as_str()),
+            _ => None,
+        })
+        .collect();
+    let Some(first) = failed.first() else {
+        return;
+    };
+    let theme = g.theme;
+    let tone = theme.tones.red;
+    let mut retry = false;
+    egui::Frame::new()
+        .fill(tone.bg)
+        .corner_radius(CornerRadius::same(theme.radii.medium))
+        .inner_margin(Margin::symmetric(12, 8))
+        .outer_margin(Margin::symmetric(16, 6))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.label(RichText::new("⚠").color(tone.fg));
+                let text = tn(
+                    failed.len() as u64,
+                    "{n} MR could not be refreshed",
+                    "{n} MRs could not be refreshed",
+                );
+                ui.label(
+                    RichText::new(text)
+                        .font(fonts::semibold(theme.text_size))
+                        .color(tone.fg),
+                );
+                ui.add(egui::Label::new(muted(&theme, *first)).truncate());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    retry =
+                        super::widgets::button(ui, &theme, Some(Icon::Refresh), tl("Retry"), false)
+                            .clicked();
+                });
+            });
+        });
+    if retry {
+        g.pending.push(Action::Refresh);
+    }
 }
 
 /// A full-height borderless button in the title bar.
@@ -341,6 +472,17 @@ fn sync_state(g: &GuiApp, ui: &mut Ui) {
         ui.label(muted(theme, tl("Next refresh in")));
         ui.add_space(2.0);
         dot(ui, color, 7.0);
+        if let Some(at) = g.last_sync {
+            let minutes = (chrono::Local::now() - at).num_minutes();
+            let ago = if minutes < 1 {
+                tl("Updated just now").to_string()
+            } else {
+                tn(minutes as u64, "Updated {n} min ago", "Updated {n} min ago")
+            };
+            ui.add_space(6.0);
+            ui.label(muted(theme, format!("{ago} ·")))
+                .on_hover_text(at.format("%H:%M:%S").to_string());
+        }
     }
 }
 
@@ -456,12 +598,13 @@ fn request_estimate(ui: &mut Ui, theme: &Theme, name: &str, next: usize, startup
                 let text = tf("({n} at startup)", &[("n", &startup.to_string())]);
                 ui.label(muted(theme, text).size(size - 0.5));
             }
+            ui.label(muted(theme, tl("req.")).size(size));
             ui.label(
-                RichText::new(next.to_string())
+                RichText::new(format!("~{next}"))
                     .font(fonts::semibold(size))
                     .color(theme.tones.teal.fg),
             );
-            ui.label(muted(theme, format!("{name} ~")).size(size));
+            ui.label(muted(theme, format!("{name}:")).size(size));
         })
         .response;
     let mut hint = tf(
@@ -643,6 +786,7 @@ fn rail_item(
             color,
         );
     }
+    super::widgets::focus_ring(ui, theme, &response, 8);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

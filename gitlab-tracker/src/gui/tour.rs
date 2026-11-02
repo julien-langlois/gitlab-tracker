@@ -70,6 +70,44 @@ const STEPS: &[fn(&mut GuiApp)] = &[
         g.set_theme(bevel_theme::Mode::Light);
         g.open_page(Page::Cockpit);
     },
+    // The second pass: the session card, density and bulk bar, folded
+    // inspector sections, the live backlog, the tracker's statuses, the keys.
+    |g| {
+        g.set_theme(bevel_theme::Mode::Dark);
+        g.app.last_digest =
+            Some("Since last session: 2 merged · 1 new on a branch · 1 CI failing".into());
+        g.digest_closed = false;
+    },
+    |g| {
+        g.open_page(Page::MergeRequests);
+        g.compact = true;
+        g.marked = ["104", "101", "106"]
+            .map(String::from)
+            .into_iter()
+            .collect();
+    },
+    |g| {
+        g.compact = false;
+        g.marked.clear();
+        let mut folded = super::widgets::folded_sections();
+        for title in ["People", "Planning", "History"] {
+            folded.insert(title.to_string());
+        }
+    },
+    #[cfg(feature = "stats")]
+    |g| {
+        g.app.stats_view.tab = crate::app::StatsTab::Overview;
+        g.open_page(Page::Stats);
+    },
+    |g| {
+        g.open_page(Page::Tracker);
+        g.tracker_board = true;
+    },
+    |g| {
+        super::widgets::folded_sections().clear();
+        g.open_page(Page::MergeRequests);
+        dialog(g, '?');
+    },
 ];
 
 /// Replaces the open dialog with the one `shortcut` opens.

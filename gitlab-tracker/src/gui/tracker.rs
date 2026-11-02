@@ -51,6 +51,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
 
     let mut picked = None;
     let mut log_time = None;
+    let mut moved: Option<Move> = None;
     let mut tile = None;
     let board = g.tracker_board;
     let mut set_board = None;
@@ -89,7 +90,17 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 return;
             }
             if board {
-                board_view(ui, &theme, &rows, selected, &mut picked, &mut log_time);
+                let columns = board_columns(&rows, g.statuses.as_deref());
+                let movable = g.app.ticket_transitioner.is_some();
+                board_view(
+                    ui,
+                    &theme,
+                    &rows,
+                    &columns,
+                    movable,
+                    selected,
+                    (&mut picked, &mut log_time, &mut moved),
+                );
                 return;
             }
             egui::ScrollArea::vertical()
@@ -98,7 +109,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     for (status, group) in by_status(&rows) {
                         let tone = tones::ticket_status(status, &theme.tones);
-                        group_heading(ui, &theme, status, tone, group.len());
+                        group_heading(ui, &theme, status, tone, group.len(), time_total(&group));
                         for row in group {
                             let (card, avatar) =
                                 ticket_row(ui, &theme, row, selected == Some(row.index));
@@ -129,6 +140,68 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     if log_time.is_some() {
         g.pending.push(Action::OpenLogTime);
     }
+    if let Some(m) = moved {
+        g.move_ticket(m.ticket, m.target, m.label);
+    }
+    g.ensure_statuses();
+}
+
+/// A ticket dropped on another column: its id, the status's id and name.
+pub struct Move {
+    pub ticket: String,
+    pub target: String,
+    pub label: String,
+}
+
+/// What a card carries while dragged.
+struct Dragged {
+    ticket: String,
+    status: String,
+}
+
+/// The board's columns: the tracker's statuses in its order (with their id, to
+/// move a ticket there), then the statuses of the tickets it did not list.
+fn board_columns(
+    rows: &[Row],
+    statuses: Option<&[gitlab_tracker_core::TicketTransitionTarget]>,
+) -> Vec<(String, Option<String>)> {
+    let mut columns: Vec<(String, Option<String>)> = statuses
+        .unwrap_or_default()
+        .iter()
+        .map(|t| (t.label.clone(), Some(t.id.clone())))
+        .collect();
+    for row in rows {
+        let known = columns
+            .iter()
+            .any(|(label, _)| label.eq_ignore_ascii_case(&row.ticket.status));
+        if !known {
+            columns.push((row.ticket.status.clone(), None));
+        }
+    }
+    columns
+}
+
+/// Spent / estimated over the tickets, once each: "5h / 8h".
+fn time_total(rows: &[&Row]) -> Option<String> {
+    let mut seen = std::collections::HashSet::new();
+    let tickets: Vec<&LinkedTicket> = rows
+        .iter()
+        .map(|r| &r.ticket)
+        .filter(|t| seen.insert(t.id.clone()))
+        .collect();
+    let spent: u32 = tickets.iter().filter_map(|t| t.time_spent).sum();
+    let estimated: u32 = tickets.iter().filter_map(|t| t.time_estimate).sum();
+    (spent > 0 || estimated > 0).then(|| {
+        format!(
+            "{} / {}",
+            duration(spent),
+            if estimated > 0 {
+                duration(estimated)
+            } else {
+                "—".into()
+            }
+        )
+    })
 }
 
 /// A "+ Log time" button over the right of `card` while the pointer is on it,
@@ -166,49 +239,86 @@ fn quick_log(ui: &mut Ui, theme: &Theme, card: &egui::Response, right: f32) -> b
 }
 
 /// The tickets as a board: a column per status, compact cards in each, the
-/// columns side by side (scrolling sideways when they do not fit).
+/// columns side by side (scrolling sideways when they do not fit). With a
+/// tracker that can move tickets, a card dropped on a column moves it there.
 fn board_view(
     ui: &mut Ui,
     theme: &Theme,
     rows: &[Row],
+    columns: &[(String, Option<String>)],
+    movable: bool,
     selected: Option<usize>,
-    picked: &mut Option<usize>,
-    log_time: &mut Option<usize>,
+    (picked, log_time, moved): (&mut Option<usize>, &mut Option<usize>, &mut Option<Move>),
 ) {
-    let groups = by_status(rows);
     let gap = 12.0;
-    let count = groups.len().max(1) as f32;
+    let count = columns.len().max(1) as f32;
     let width = ((ui.available_width() - gap * (count - 1.0)) / count).max(BOARD_COLUMN_WIDTH);
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
-            for (status, group) in &groups {
+            for (status, target) in columns {
+                let group: Vec<&Row> = rows
+                    .iter()
+                    .filter(|r| r.ticket.status.eq_ignore_ascii_case(status))
+                    .collect();
                 let tone = tones::ticket_status(status, &theme.tones);
                 ui.allocate_ui_with_layout(
                     Vec2::new(width, 0.0),
                     Layout::top_down(Align::Min),
                     |ui| {
                         ui.set_width(width);
-                        let column = egui::Frame::new()
+                        let frame = egui::Frame::new()
                             .fill(theme.palette.panel.gamma_multiply(0.6))
                             .corner_radius(CornerRadius::same(theme.radii.large))
-                            .inner_margin(Margin::same(10))
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.add_space(2.0);
-                                group_heading(ui, theme, status, tone, group.len());
-                                ui.spacing_mut().item_spacing.y = 8.0;
-                                for row in group {
-                                    let card =
-                                        board_card(ui, theme, row, selected == Some(row.index));
-                                    if card.clicked() {
-                                        *picked = Some(row.index);
-                                    }
-                                    if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
-                                        *log_time = Some(row.index);
-                                    }
+                            .inner_margin(Margin::same(10));
+                        let (column, dropped) = ui.dnd_drop_zone::<Dragged, _>(frame, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.add_space(2.0);
+                            group_heading(ui, theme, status, tone, group.len(), time_total(&group));
+                            ui.spacing_mut().item_spacing.y = 8.0;
+                            if group.is_empty() {
+                                ui.add_space(4.0);
+                                let hint = if movable && target.is_some() {
+                                    tl("Drop a ticket here to move it")
+                                } else {
+                                    tl("No ticket")
+                                };
+                                ui.vertical_centered(|ui| ui.label(muted(theme, hint)));
+                                ui.add_space(8.0);
+                            }
+                            for row in &group {
+                                let selected = selected == Some(row.index);
+                                let card = if movable {
+                                    let id =
+                                        egui::Id::unique(("board_card", &row.ticket.id, row.index));
+                                    let payload = Dragged {
+                                        ticket: row.ticket.id.clone(),
+                                        status: row.ticket.status.clone(),
+                                    };
+                                    ui.dnd_drag_source(id, payload, |ui| {
+                                        board_card(ui, theme, row, selected)
+                                    })
+                                    .inner
+                                } else {
+                                    board_card(ui, theme, row, selected)
+                                };
+                                if card.clicked() {
+                                    *picked = Some(row.index);
                                 }
-                            });
+                                if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
+                                    *log_time = Some(row.index);
+                                }
+                            }
+                        });
+                        if let (Some(dragged), Some(target)) = (dropped, target) {
+                            if !dragged.status.eq_ignore_ascii_case(status) {
+                                *moved = Some(Move {
+                                    ticket: dragged.ticket.clone(),
+                                    target: target.clone(),
+                                    label: status.clone(),
+                                });
+                            }
+                        }
                         // The status's tone along the top of the column.
                         let top = column.response.rect;
                         let radius = theme.radii.large;
@@ -415,12 +525,28 @@ fn summary(
     rects
 }
 
-fn group_heading(ui: &mut Ui, theme: &Theme, status: &str, tone: Tone, count: usize) {
+/// A status's heading: its dot, name and count, and the time of its tickets.
+fn group_heading(
+    ui: &mut Ui,
+    theme: &Theme,
+    status: &str,
+    tone: Tone,
+    count: usize,
+    time: Option<String>,
+) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         dot(ui, tone.fg, 8.0);
         ui.label(semibold(status, theme.text_size));
         ui.add(Chip::new(&count.to_string(), theme.tones.gray).pill());
+        if let Some(time) = time {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let (clock, _) = ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
+                icons::paint(ui.painter(), clock, Icon::Clock, theme.palette.text_muted);
+                ui.label(muted(theme, time))
+                    .on_hover_text(tl("Time spent / estimated on these tickets"));
+            });
+        }
     });
     ui.add_space(8.0);
 }

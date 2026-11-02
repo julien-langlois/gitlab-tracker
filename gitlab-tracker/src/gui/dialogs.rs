@@ -425,6 +425,10 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("E", "Copy the visible MRs as a Markdown checklist"),
             ("Del", "Stop tracking the selected MR"),
             ("R", "Refresh now"),
+            (
+                "Ctrl+click  or  Shift+click",
+                "Pick several MRs, for the bulk actions",
+            ),
         ],
     ),
     (
@@ -442,32 +446,86 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
     (
         "Elsewhere",
         &[
+            ("Ctrl+K", "Command palette: pages, views, MRs and commands"),
             ("L", "Log time on the linked ticket"),
             ("G", "Statistics (Tab: next tab, W: time window)"),
             ("W", "Switch project"),
             (",", "Settings"),
             ("?", "This list"),
-            ("Esc", "Close a dialog / leave the statistics"),
+            (
+                "Esc",
+                "Close a dialog / leave the statistics / unpick the MRs",
+            ),
         ],
     ),
 ];
 
+/// Width of the keys' column, the same in every section.
+const KEYS_WIDTH: f32 = 200.0;
+
+/// The keys of a shortcut as keycaps: "↑ / ↓  or  k / j" gives four caps, the
+/// "/" and "or" between them as plain text.
+fn keys(ui: &mut Ui, theme: &Theme, keys: &str) {
+    ui.spacing_mut().item_spacing.x = 4.0;
+    for (i, token) in keys.split_whitespace().enumerate() {
+        // Between keys, "/" and "or" are words; first, "/" is the search key.
+        if i > 0 && (token == "/" || token == "or") {
+            ui.label(muted(theme, tl(token)));
+            continue;
+        }
+        let galley = ui.painter().layout_no_wrap(
+            token.to_string(),
+            egui::FontId::monospace(theme.text_size - 1.5),
+            theme.palette.text,
+        );
+        let size = Vec2::new((galley.size().x + 12.0).max(22.0), 22.0);
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        let radius = CornerRadius::same(theme.radii.small);
+        ui.painter().rect_filled(rect, radius, theme.palette.panel);
+        ui.painter().rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0, theme.palette.border),
+            egui::StrokeKind::Inside,
+        );
+        // The cap's lower edge, a little thicker.
+        ui.painter().hline(
+            rect.x_range().shrink(2.0),
+            rect.bottom() - 1.0,
+            Stroke::new(1.5, theme.palette.border),
+        );
+        ui.painter().galley(
+            rect.center() - galley.size() / 2.0,
+            galley,
+            theme.palette.text,
+        );
+    }
+}
+
 fn help(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
-    for (section, entries) in SHORTCUTS {
-        section_title(ui, &theme, tl(section));
-        egui::Grid::new(section)
-            .num_columns(2)
-            .spacing([16.0, 4.0])
-            .show(ui, |ui| {
+    egui::ScrollArea::vertical()
+        .max_height(ui.ctx().content_rect().height() * 0.7)
+        .show(ui, |ui| {
+            for (section, entries) in SHORTCUTS {
+                section_title(ui, &theme, tl(section));
+                ui.add_space(4.0);
                 for (key, what) in *entries {
-                    ui.label(RichText::new(*key).monospace().color(theme.palette.accent));
-                    ui.label(tl(what));
-                    ui.end_row();
+                    ui.horizontal(|ui| {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(KEYS_WIDTH, 24.0),
+                            Layout::left_to_right(Align::Center),
+                            |ui| {
+                                ui.set_width(KEYS_WIDTH);
+                                keys(ui, &theme, key);
+                            },
+                        );
+                        ui.label(tl(what));
+                    });
                 }
-            });
-        ui.add_space(10.0);
-    }
+                ui.add_space(10.0);
+            }
+        });
     buttons(ui, |ui| {
         if primary_button(ui, &theme, tl("Close")).clicked() {
             close(g);

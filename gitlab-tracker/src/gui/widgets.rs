@@ -105,6 +105,7 @@ pub fn button(
             tint,
         );
     }
+    focus_ring(ui, theme, &response, theme.radii.medium);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -127,16 +128,82 @@ pub fn section_title(ui: &mut Ui, theme: &Theme, text: &str) {
 }
 
 /// A section of a side panel: a soft rule above, then the title and the body.
+/// A click on the title folds the section away; it stays folded for every MR
+/// (and across restarts) until unfolded.
 pub fn section(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut Ui)) {
     rule(ui, theme);
+    let open = !folded_sections().contains(title);
     egui::Frame::new()
         .inner_margin(Margin::symmetric(16, 12))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 8.0;
-            section_title(ui, theme, title);
-            body(ui);
+            let (rect, response) = ui.allocate_exact_size(
+                Vec2::new(ui.available_width(), theme.text_size + 4.0),
+                Sense::click(),
+            );
+            let color = if response.hovered() {
+                theme.palette.text
+            } else {
+                theme.palette.text_secondary
+            };
+            let galley = ui.painter().layout_no_wrap(
+                title.to_owned(),
+                fonts::semibold(theme.text_size - 1.0),
+                color,
+            );
+            ui.painter().galley(
+                egui::pos2(rect.left(), rect.center().y - galley.size().y / 2.0),
+                galley,
+                color,
+            );
+            ui.painter().text(
+                egui::pos2(rect.right() - 4.0, rect.center().y),
+                egui::Align2::RIGHT_CENTER,
+                if open { "▾" } else { "▸" },
+                FontId::proportional(theme.text_size - 1.0),
+                theme.palette.text_muted,
+            );
+            focus_ring(ui, theme, &response, theme.radii.small);
+            let response = response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(crate::i18n::tl(if open { "Fold" } else { "Unfold" }));
+            if response.clicked() {
+                let mut folded = folded_sections();
+                if open {
+                    folded.insert(title.to_string());
+                } else {
+                    folded.remove(title);
+                }
+            }
+            if open {
+                body(ui);
+            }
         });
+}
+
+/// The inspector sections folded away, by title: saved with the window's
+/// preferences (see `prefs`).
+static FOLDED_SECTIONS: std::sync::Mutex<std::collections::BTreeSet<String>> =
+    std::sync::Mutex::new(std::collections::BTreeSet::new());
+
+pub fn folded_sections() -> std::sync::MutexGuard<'static, std::collections::BTreeSet<String>> {
+    FOLDED_SECTIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The accent ring around a widget that has the keyboard focus (Tab): the
+/// window's own widgets paint themselves, so they draw it too.
+pub fn focus_ring(ui: &Ui, theme: &Theme, response: &egui::Response, radius: u8) {
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            response.rect.expand(2.0),
+            CornerRadius::same(radius.saturating_add(2)),
+            Stroke::new(2.0, theme.palette.accent),
+            egui::StrokeKind::Outside,
+        );
+    }
 }
 
 /// A full-width soft line between sections.
@@ -333,6 +400,7 @@ pub fn switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> egui::Respon
             theme.palette.text,
         );
     }
+    focus_ring(ui, theme, &response, 9);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -371,6 +439,7 @@ pub fn pill_toggle(ui: &mut Ui, theme: &Theme, text: &str, tone: Tone, on: bool)
         ui.painter()
             .galley(rect.center() - galley.size() / 2.0, galley, color);
     }
+    focus_ring(ui, theme, &response, 13);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

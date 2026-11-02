@@ -14,6 +14,8 @@ mod inspector;
 mod keys;
 mod markdown;
 mod palette;
+mod prefs;
+mod setup;
 mod shell;
 mod sidebar;
 #[cfg(feature = "stats")]
@@ -75,6 +77,9 @@ pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
             }
         }
     });
+    // Statuses for the board's columns; moving a ticket stays refused.
+    let mut app = app;
+    app.ticket_transitioner = Some(Arc::new(crate::demo::DemoTracker));
     let session = Session {
         app,
         tx,
@@ -93,6 +98,12 @@ pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
         shared,
         demo: true,
     })
+}
+
+/// With no project configured: asks for the first one in a window. `false`
+/// when it was closed without one.
+pub async fn first_run() -> anyhow::Result<bool> {
+    setup::run().await
 }
 
 /// Everything the window starts from.
@@ -124,6 +135,11 @@ fn open_window(launch: Launch) -> anyhow::Result<()> {
             .map(|(w, h)| (w.parse::<f32>(), h.parse::<f32>()))
     }) {
         Some((Ok(w), Ok(h))) => viewport.with_inner_size([w, h]),
+        _ => viewport,
+    };
+    // The size the window had when it was last closed (not for the demo).
+    let viewport = match prefs::load().window.filter(|_| !launch.demo) {
+        Some([w, h]) if w >= 960.0 && h >= 600.0 => viewport.with_inner_size([w, h]),
         _ => viewport,
     };
     let options = eframe::NativeOptions {
@@ -165,8 +181,11 @@ enum Page {
 /// An inspector section a shortcut brings into view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InspectorSection {
+    Review,
+    Branches,
     Pipelines,
     Ticket,
+    Description,
 }
 
 /// The window's state: the project session plus what only the window needs.
@@ -224,6 +243,13 @@ struct GuiApp {
     folded: HashSet<String>,
     /// The tracker page shows its tickets as a board (columns by status).
     tracker_board: bool,
+    /// The table's compact density: one line per MR.
+    compact: bool,
+    /// MRs picked with Ctrl / Shift + click, by id, and what the bulk bar asked for.
+    marked: HashSet<String>,
+    bulk: Option<table::Bulk>,
+    /// The window's inner size, saved with the preferences.
+    window_size: Option<egui::Vec2>,
     /// Picked while drawing, applied once the frame is drawn: a focus to show
     /// (`Some(None)` clears it) and an MR to select, by id.
     next_focus: Option<Option<Focus>>,
@@ -232,6 +258,19 @@ struct GuiApp {
     palette: Option<palette::Palette>,
     /// What changed at the last refreshes, in the window's corner.
     toasts: toasts::Toasts,
+    /// When the list was last complete (startup load or refresh), and whether
+    /// fetches were running at the last frame.
+    last_sync: Option<chrono::DateTime<chrono::Local>>,
+    was_syncing: bool,
+    /// The "since your last session" card was closed.
+    digest_closed: bool,
+    /// The tracker's statuses (the board's columns), once fetched, and the
+    /// fetch in flight.
+    statuses: Option<Vec<gitlab_tracker_core::TicketTransitionTarget>>,
+    statuses_rx:
+        Option<std::sync::mpsc::Receiver<Vec<gitlab_tracker_core::TicketTransitionTarget>>>,
+    /// Tickets being moved to another status: what to say once done.
+    moves: (MoveSender, std::sync::mpsc::Receiver<MoveResult>),
     /// The project being loaded in the background (see [`GuiApp::switch_project`]).
     switching: Option<std::sync::mpsc::Receiver<anyhow::Result<Loaded>>>,
     #[cfg(debug_assertions)]
@@ -299,17 +338,118 @@ impl GuiApp {
             group_by: table::GroupBy::None,
             folded: HashSet::new(),
             tracker_board: false,
+            compact: false,
+            marked: HashSet::new(),
+            bulk: None,
+            window_size: None,
             next_focus: None,
             select_id: None,
             palette: None,
             toasts: toasts::Toasts::default(),
+            last_sync: None,
+            was_syncing: false,
+            digest_closed: false,
+            statuses: None,
+            statuses_rx: None,
+            moves: std::sync::mpsc::channel(),
             #[cfg(debug_assertions)]
             tour: tour::Tour::from_env(),
             #[cfg(target_os = "macos")]
             movable: None,
         };
         gui.set_theme(bevel_theme::Mode::Dark);
+        if !gui.demo {
+            prefs::apply(&mut gui, &prefs::load());
+        }
         gui
+    }
+
+    /// Fetches the tracker's statuses once (for the board's columns).
+    fn ensure_statuses(&mut self) {
+        if self.statuses.is_some() || self.statuses_rx.is_some() {
+            return;
+        }
+        let Some(transitioner) = self.app.ticket_transitioner.clone() else {
+            return;
+        };
+        let (done, rx) = std::sync::mpsc::channel();
+        self.statuses_rx = Some(rx);
+        let ctx = self.ctx.clone();
+        tokio::spawn(async move {
+            let statuses = match transitioner.fetch_transition_targets().await {
+                Ok(statuses) => statuses,
+                Err(e) => {
+                    tracing::warn!(error = %e, "Could not fetch the tracker's statuses");
+                    Vec::new()
+                }
+            };
+            let _ = done.send(statuses);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Moves `ticket` to the status `target` (named `label`) in the tracker, then
+    /// refreshes; the demo only says it is read-only.
+    fn move_ticket(&mut self, ticket: String, target: String, label: String) {
+        if self.app.read_only {
+            self.app
+                .flash(tl("Read-only: the ticket stays where it is"), true);
+            return;
+        }
+        let Some(transitioner) = self.app.ticket_transitioner.clone() else {
+            return;
+        };
+        self.app.flash(
+            tf(
+                "Moving #{id} to {status}…",
+                &[("id", &ticket), ("status", &label)],
+            ),
+            false,
+        );
+        let done = self.moves.0.clone();
+        let ctx = self.ctx.clone();
+        tokio::spawn(async move {
+            let result = match transitioner
+                .transition_ticket_status(&ticket, &target)
+                .await
+            {
+                Ok(()) => Ok(tf(
+                    "#{id} moved to {status}",
+                    &[("id", &ticket), ("status", &label)],
+                )),
+                Err(e) => Err(format!("#{ticket}: {e}")),
+            };
+            let _ = done.send(result);
+            ctx.request_repaint();
+        });
+    }
+
+    /// Takes the tracker's answers: the statuses, the tickets moved.
+    fn poll_tracker(&mut self) {
+        if let Some(statuses) = self.statuses_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.statuses = Some(statuses);
+            self.statuses_rx = None;
+        }
+        while let Ok(result) = self.moves.1.try_recv() {
+            match result {
+                Ok(message) => {
+                    self.app.flash(format!("✔ {message}"), false);
+                    self.pending.push(Action::Refresh);
+                }
+                Err(message) => self.app.flash(format!("✘ {message}"), true),
+            }
+        }
+    }
+
+    /// Notes when the fetches in flight are all back: "updated N min ago".
+    fn track_sync(&mut self) {
+        let syncing = !self.app.pending_initial_fetches.is_empty()
+            || !self.app.pending_refresh_fetches.is_empty();
+        let first = self.last_sync.is_none() && !self.app.mrs.is_empty();
+        if !syncing && (self.was_syncing || first) {
+            self.last_sync = Some(chrono::Local::now());
+        }
+        self.was_syncing = syncing;
     }
 
     /// Applies the events received since the last frame, as the TUI loop does.
@@ -430,6 +570,10 @@ impl GuiApp {
                 self.text_filter = (None, String::new());
                 self.baseline = None;
                 self.toasts = toasts::Toasts::default();
+                self.statuses = None;
+                self.statuses_rx = None;
+                self.marked.clear();
+                self.last_sync = None;
                 self.set_theme(self.theme.mode);
                 self.projects = projects;
                 let name = self.app.project_name.clone();
@@ -498,7 +642,9 @@ impl GuiApp {
 
     /// Lists the MRs behind the cockpit counter `key` on the merge requests page.
     fn focus_on(&mut self, key: &str, label: impl Into<String>) {
-        let ids = members_of(&self.members, key).into_iter().collect();
+        let ids = members_of(&self.app, &self.members, key)
+            .into_iter()
+            .collect();
         self.next_focus = Some(Some(Focus {
             key: key.to_string(),
             label: label.into(),
@@ -522,8 +668,14 @@ impl GuiApp {
         self.app.focus_suspended = true;
         self.members = crate::ui::cockpit::metric_members(&self.app);
         self.app.focus_suspended = self.page() == Page::Cockpit;
-        if let Some(focus) = &mut self.app.focus {
-            focus.ids = members_of(&self.members, &focus.key).into_iter().collect();
+        let key = self.app.focus.as_ref().map(|f| f.key.clone());
+        if let Some(key) = key.filter(|k| !k.is_empty()) {
+            let ids = members_of(&self.app, &self.members, &key)
+                .into_iter()
+                .collect();
+            if let Some(focus) = &mut self.app.focus {
+                focus.ids = ids;
+            }
         }
         let complete = self.app.pending_initial_fetches.is_empty() && !self.app.mrs.is_empty();
         if self.baseline.is_none() && complete {
@@ -538,8 +690,48 @@ impl GuiApp {
         }
     }
 
+    /// Applies what the bulk bar asked for to every picked MR.
+    fn apply_bulk(&mut self) {
+        let Some(bulk) = self.bulk.take() else {
+            return;
+        };
+        let ids = self.marked.clone();
+        match bulk {
+            table::Bulk::Flag(on) => {
+                for mr in self.app.mrs.iter_mut().filter(|m| ids.contains(&m.id)) {
+                    mr.flagged = on;
+                }
+                if !self.demo && !self.app.read_only {
+                    self.save_state();
+                }
+            }
+            table::Bulk::StopTracking => {
+                for id in &ids {
+                    self.pending.push(Action::SubmitInput(format!("-{id}")));
+                }
+                self.marked.clear();
+                self.dispatch_pending();
+            }
+            table::Bulk::CopyChecklist => {
+                // The checklist copies the listed MRs: list the picked ones for it.
+                let focus = self.app.focus.take();
+                let selected = self.app.table_state.selected();
+                self.app.set_focus(Some(Focus {
+                    key: String::new(),
+                    label: String::new(),
+                    ids,
+                }));
+                self.pending.push(Action::CopyChecklist);
+                self.dispatch_pending();
+                self.app.focus = focus;
+                self.app.table_state.select(selected);
+            }
+        }
+    }
+
     /// Applies what the frame picked: the focus, then the MR to select.
     fn apply_picks(&mut self) {
+        self.apply_bulk();
         if let Some(focus) = self.next_focus.take() {
             self.app.focus_suspended = false;
             self.app.set_focus(focus);
@@ -554,15 +746,37 @@ impl GuiApp {
     }
 }
 
+/// What moving a ticket said: the message to flash, or the error.
+type MoveResult = Result<String, String>;
+type MoveSender = std::sync::mpsc::Sender<MoveResult>;
+
 /// The counters when the list was first complete, and when that was.
 struct Baseline {
     counts: HashMap<String, usize>,
     at: String,
 }
 
-/// The MRs behind `key`: a counter of the cockpit, or `release-open:<title>`,
-/// the release's MRs still to merge.
-fn members_of(members: &HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
+/// The MRs behind `key`: a counter of the cockpit, `release-open:<title>` (the
+/// release's MRs still to merge), or `size:<min>:<max>` (the merged MRs with that
+/// many changed lines, a bucket of the stats).
+fn members_of(app: &App, members: &HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
+    if let Some(range) = key.strip_prefix("size:") {
+        let mut bounds = range.split(':').map(|b| b.parse::<u32>().ok());
+        let min = bounds.next().flatten().unwrap_or(0);
+        let max = bounds.next().flatten();
+        return app
+            .mrs
+            .iter()
+            .filter(|mr| mr.state == crate::models::GitlabMrState::Merged)
+            .filter(|mr| {
+                mr.diff_stats.as_ref().is_some_and(|d| {
+                    let lines = d.additions + d.deletions;
+                    lines >= min && max.is_none_or(|max| lines <= max)
+                })
+            })
+            .map(|mr| mr.id.clone())
+            .collect();
+    }
     if let Some(release) = key.strip_prefix("release-open:") {
         return ["WIP", "Blocked", "Review"]
             .iter()
@@ -645,6 +859,11 @@ impl eframe::App for GuiApp {
         tour::drive(self, ui.ctx());
         self.dispatch_pending();
         self.count_members();
+        self.track_sync();
+        self.poll_tracker();
+        self.window_size = ui
+            .ctx()
+            .input(|i| i.viewport().inner_rect.map(|r| r.size()));
         self.toasts
             .watch(&self.app, &self.theme, ui.input(|i| i.time));
 
@@ -669,9 +888,13 @@ impl eframe::App for GuiApp {
         screenshot_for_development(ui.ctx());
     }
 
-    /// Writes the last state queued before the window closed.
+    /// Writes the last state queued before the window closed, and the window's
+    /// preferences.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         block_on(self.state_writer.flush());
+        if !self.demo {
+            prefs::save(&prefs::current(self));
+        }
     }
 }
 

@@ -77,6 +77,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     });
     ui.add_space(16.0);
 
+    let mut close_digest = false;
     let counts = Counts {
         members: &g.members,
         baseline: g.baseline.as_ref().map(|b| &b.counts),
@@ -86,6 +87,12 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
+            if let Some(digest) = g.app.last_digest.as_deref().filter(|_| !g.digest_closed) {
+                if since_last_session(ui, &theme, digest) {
+                    close_digest = true;
+                }
+                ui.add_space(12.0);
+            }
             let from_tiles = tiles(ui, &theme, &headline, &counts);
             ui.add_space(12.0);
             let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
@@ -93,11 +100,40 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             pick = from_tiles.or(from_cards).or(from_list);
         });
 
+    if close_digest {
+        g.digest_closed = true;
+    }
     match pick {
         Some(Pick::Focus(key, label)) => g.focus_on(&key, label),
         Some(Pick::Mr(id)) => g.show_mr(&id),
         None => {}
     }
+}
+
+/// What changed while the app was closed, from the startup load. Returns
+/// whether it was closed.
+fn since_last_session(ui: &mut Ui, theme: &Theme, digest: &str) -> bool {
+    let mut closed = false;
+    egui::Frame::new()
+        .fill(theme.tones.blue.bg)
+        .corner_radius(CornerRadius::same(theme.radii.large))
+        .inner_margin(egui::Margin::symmetric(16, 12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                // The digest names itself ("Since last session: …").
+                ui.label(RichText::new("ⓘ").color(theme.tones.blue.fg));
+                ui.add(egui::Label::new(RichText::new(digest).color(theme.palette.text)).wrap());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    closed = ui
+                        .add(egui::Button::new(muted(theme, "✕")).frame(false))
+                        .on_hover_text(tl("Close"))
+                        .clicked();
+                });
+            });
+        });
+    closed
 }
 
 // ── Headline tiles ───────────────────────────────────────────────────────────
@@ -318,8 +354,9 @@ fn grid(
                                 }
                             }
                         } else {
+                            let history = *title == tl("Flow");
                             for row in rows {
-                                if let Some(p) = cockpit_row(ui, theme, row, counts) {
+                                if let Some(p) = cockpit_row(ui, theme, row, counts, history) {
                                     pick = Some(p);
                                 }
                             }
@@ -345,7 +382,15 @@ fn grid(
     (pick, heights)
 }
 
-fn cockpit_row(ui: &mut Ui, theme: &Theme, row: &CockpitRow, counts: &Counts<'_>) -> Option<Pick> {
+/// One line of a card. In the Flow card (`history`), the figures without a key
+/// come from the stats' history, not the listed MRs: a clock says so.
+fn cockpit_row(
+    ui: &mut Ui,
+    theme: &Theme,
+    row: &CockpitRow,
+    counts: &Counts<'_>,
+    history: bool,
+) -> Option<Pick> {
     match row {
         CockpitRow::Heading { text, color, alert } => {
             let color = colors::foreground(*color, theme).unwrap_or(theme.palette.text);
@@ -378,12 +423,12 @@ fn cockpit_row(ui: &mut Ui, theme: &Theme, row: &CockpitRow, counts: &Counts<'_>
                 return None;
             }
             let value_color = if zero {
-                theme.palette.text_muted.gamma_multiply(0.7)
+                theme.palette.text_muted
             } else {
                 colors::foreground(*color, theme).unwrap_or(theme.palette.text)
             };
             let label_color = if zero {
-                theme.palette.text_muted.gamma_multiply(0.8)
+                theme.palette.text_muted
             } else {
                 theme.palette.text_secondary
             };
@@ -410,6 +455,19 @@ fn cockpit_row(ui: &mut Ui, theme: &Theme, row: &CockpitRow, counts: &Counts<'_>
             );
             if *nested {
                 inner.add_space(12.0);
+            }
+            if history && key.is_none() {
+                let (clock, response) =
+                    inner.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
+                super::icons::paint(
+                    inner.painter(),
+                    clock,
+                    super::icons::Icon::Clock,
+                    theme.palette.text_muted,
+                );
+                response.on_hover_text(tl(
+                    "From the stats history since recording started, not the listed MRs",
+                ));
             }
             inner.label(RichText::new(label).color(label_color));
             inner.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -456,9 +514,13 @@ fn trend(ui: &mut Ui, theme: &Theme, counts: &Counts<'_>, key: &str) {
             .size(theme.text_size - 2.5)
             .color(tone.fg),
     )
-    .on_hover_text(tf(
-        "{delta} since {time}",
-        &[("delta", &format!("{delta:+}")), ("time", since)],
+    .on_hover_text(format!(
+        "{}\n{}",
+        tf(
+            "{delta} since {time}",
+            &[("delta", &format!("{delta:+}")), ("time", since)],
+        ),
+        tl("Green: good news · amber: to watch")
     ));
 }
 

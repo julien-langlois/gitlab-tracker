@@ -585,6 +585,51 @@ pub async fn resolve_active_project() -> ProjectEntry {
     entry
 }
 
+/// Whether no project can be found: no `GITLAB_URL` + `GITLAB_PROJECT_ID`, an
+/// empty `projects.toml`, and no legacy `config.json` to migrate (migrated here
+/// when there is one). The window then asks for the first project itself.
+#[cfg(feature = "gui")]
+pub async fn needs_first_project() -> bool {
+    let env = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
+    if env("GITLAB_URL").is_some() && env("GITLAB_PROJECT_ID").is_some() {
+        return false;
+    }
+    if !load_projects_toml().await.projects.is_empty() {
+        return false;
+    }
+    try_migrate_from_config_json().await.is_none()
+}
+
+/// Saves the first project to `projects.toml`, active, and its token to the OS
+/// keyring when one is given. The error says why the token could not be saved
+/// (the project is saved anyway; the token is asked again at startup).
+#[cfg(feature = "gui")]
+pub async fn add_first_project(
+    entry: ProjectEntry,
+    token: Zeroizing<String>,
+) -> Result<(), String> {
+    let account = account_for(&entry.gitlab_url);
+    let mut cfg = load_projects_toml().await;
+    for p in &mut cfg.projects {
+        p.active = false;
+    }
+    cfg.projects.push(ProjectEntry {
+        active: true,
+        ..entry
+    });
+    save_projects_toml(&cfg).await;
+    if token.trim().is_empty() {
+        return Ok(());
+    }
+    tokio::task::spawn_blocking(move || {
+        keyring::Entry::new(KEYRING_SERVICE, &account)
+            .and_then(|e| e.set_password(token.trim()))
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// First-run onboarding: asks for the GitLab URL, project ID and an optional name.
 fn prompt_new_project() -> ProjectEntry {
     println!("⚙️  No project configured yet. Let's set one up.\n");

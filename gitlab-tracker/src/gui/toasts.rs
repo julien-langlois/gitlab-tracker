@@ -24,10 +24,26 @@ pub struct Toast {
     born: f64,
 }
 
+/// A toast kept for the bell: what and when.
+pub struct Past {
+    pub id: String,
+    pub text: String,
+    pub tone: Tone,
+    /// "14:05".
+    pub at: String,
+}
+
+/// Toasts the bell keeps; older ones go first.
+const HISTORY: usize = 50;
+
 /// The toasts shown, and what each MR looked like at the last frame.
 #[derive(Default)]
 pub struct Toasts {
     list: Vec<Toast>,
+    /// Every toast of the session, newest last, for the bell.
+    pub history: Vec<Past>,
+    /// Toasts since the bell was last opened.
+    pub unread: usize,
     /// Status badge and last pipeline, by MR id.
     seen: HashMap<String, (&'static str, Option<PipelineState>)>,
 }
@@ -79,6 +95,16 @@ impl Toasts {
     }
 
     pub fn push(&mut self, id: &str, text: String, tone: Tone, now: f64) {
+        self.history.push(Past {
+            id: id.to_string(),
+            text: text.clone(),
+            tone,
+            at: chrono::Local::now().format("%H:%M").to_string(),
+        });
+        if self.history.len() > HISTORY {
+            self.history.remove(0);
+        }
+        self.unread += 1;
         self.list.push(Toast {
             id: id.to_string(),
             text,

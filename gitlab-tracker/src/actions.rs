@@ -57,6 +57,12 @@ pub enum Action {
     ToggleSortOrder,
     /// Stops tracking the selected MR.
     RemoveSelected,
+    /// Moves a tracked branch (its table column) from one place to another.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    MoveBranch {
+        from: usize,
+        to: usize,
+    },
     /// Opens the Log Time form for the selected MR's ticket, loading the
     /// activities on first use. Does nothing when the MR has no linked ticket.
     OpenLogTime,
@@ -99,6 +105,16 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
     let tx = ctx.tx;
     match action {
         Action::SubmitInput(value) => submit_input(app, &value, ctx.api_semaphore, tx).await,
+
+        Action::MoveBranch { from, to } => {
+            if from < app.branches.len() && to < app.branches.len() && from != to {
+                let branch = app.branches.remove(from);
+                app.branches.insert(to, branch);
+                if !app.read_only {
+                    save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
+                }
+            }
+        }
 
         Action::TrackMilestone(title) => {
             // Filter by milestone title — the GitLab MRs API uses the title,

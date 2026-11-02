@@ -278,12 +278,14 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
         return;
     };
     let window = view.window.label();
+    let live = Live::of(&g.app);
+    let mut pick = None;
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = GAP;
             match tab {
-                StatsTab::Overview => overview(ui, &theme, &report),
+                StatsTab::Overview => pick = overview(ui, &theme, &report, &live),
                 StatsTab::Flow => flow(ui, &theme, &report),
                 StatsTab::Quality => quality(ui, &theme, &report),
                 StatsTab::Forecasts => forecasts(ui, &theme, &report),
@@ -303,6 +305,50 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
                 ),
             ));
         });
+    if let Some((key, label)) = pick {
+        g.focus_on(&key, label);
+    }
+}
+
+/// What is open right now, from the tracked MRs: the backlog shows the same
+/// MRs as the cockpit (the snapshots only know the MRs recorded in the window).
+struct Live {
+    /// Open MRs.
+    open: usize,
+    /// Ages in days of the open MRs (those with a creation date), ascending.
+    ages: Vec<f64>,
+    /// Open MRs untouched for 7, 14 and 30 days.
+    stale: [usize; 3],
+}
+
+impl Live {
+    fn of(app: &crate::app::App) -> Self {
+        let now = chrono::Utc::now();
+        let days = |at: Option<&str>| {
+            at.and_then(|at| at.parse::<chrono::DateTime<chrono::Utc>>().ok())
+                .map(|at| (now - at).num_hours() as f64 / 24.0)
+        };
+        let open: Vec<_> = app
+            .mrs
+            .iter()
+            .filter(|mr| mr.state == crate::models::GitlabMrState::Opened)
+            .collect();
+        let mut ages: Vec<f64> = open
+            .iter()
+            .filter_map(|mr| days(mr.created_at.as_deref()))
+            .collect();
+        ages.sort_by(f64::total_cmp);
+        let idle: Vec<f64> = open
+            .iter()
+            .filter_map(|mr| days(mr.updated_at.as_deref()))
+            .collect();
+        let stale = [7.0, 14.0, 30.0].map(|limit| idle.iter().filter(|d| **d >= limit).count());
+        Self {
+            open: open.len(),
+            ages,
+            stale,
+        }
+    }
 }
 
 /// `count` equal columns `GAP` apart, each drawn by `cell(ui, index)`.
@@ -622,20 +668,32 @@ fn kpi(
                         .on_hover_text(&trend.previous);
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.add(egui::Label::new(muted(theme, label)).truncate());
+                        ui.add(egui::Label::new(muted(theme, label)).truncate())
+                            .on_hover_text(label);
                     });
                 });
             });
             ui.label(semibold(value, 24.0).color(theme.palette.text));
-            ui.label(
-                RichText::new(caption)
-                    .size(theme.text_size - 1.5)
-                    .color(caption_color),
-            );
+            // One line, so the tiles of a row keep the same height.
+            ui.add(
+                egui::Label::new(
+                    RichText::new(caption)
+                        .size(theme.text_size - 1.5)
+                        .color(caption_color),
+                )
+                .truncate(),
+            )
+            .on_hover_text(caption);
         });
 }
 
-fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
+/// The overview; returns the MRs a click on the size chart asked for (key, label).
+fn overview(
+    ui: &mut Ui,
+    theme: &Theme,
+    report: &StatReport,
+    live: &Live,
+) -> Option<(String, String)> {
     let a = &report.aggregated;
     let t = &theme.tones;
     let kpis: [(&str, String, String, Color32); 4] = [
@@ -736,10 +794,17 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             }
         });
     }
+    if b.is_some() {
+        ui.label(muted(
+            theme,
+            tl("▲ ▼ against the previous period of the same length · green: better · red: worse"),
+        ));
+    }
 
     let side_by_side = ui.available_width() > 760.0;
-    let draw_sizes = |ui: &mut Ui| size_chart(ui, theme, report);
-    let draw_backlog = |ui: &mut Ui| backlog(ui, theme, report);
+    let mut pick = None;
+    let mut draw_sizes = |ui: &mut Ui| pick = size_chart(ui, theme, report);
+    let draw_backlog = |ui: &mut Ui| backlog(ui, theme, report, live);
     if side_by_side {
         let width = ui.available_width();
         let left = (width - GAP) * 0.6;
@@ -762,11 +827,14 @@ fn overview(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         draw_sizes(ui);
         draw_backlog(ui);
     }
+    pick
 }
 
-/// Median time to merge per MR size, as vertical bars.
-fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) {
+/// Median time to merge per MR size, as vertical bars. A size reads in full on
+/// hover; a click lists its merged MRs still tracked (key, label).
+fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) -> Option<(String, String)> {
     let buckets = &report.aggregated.size_buckets;
+    let mut pick = None;
     card(ui, theme, tl("Time to merge by MR size"), |ui| {
         ui.horizontal(|ui| {
             dot(ui, theme.palette.accent, 8.0);
@@ -805,6 +873,53 @@ fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         let slot = chart.width() / buckets.len() as f32;
         for (i, bucket) in buckets.iter().enumerate() {
             let center = chart.left() + slot * (i as f32 + 0.5);
+            let column = egui::Rect::from_min_max(
+                egui::pos2(chart.left() + slot * i as f32, chart.top()),
+                egui::pos2(chart.left() + slot * (i as f32 + 1.0), rect.bottom()),
+            );
+            let response = ui.interact(column, ui.scope_id().with(("size", i)), Sense::click());
+            if response.hovered() {
+                ui.painter().rect_filled(
+                    column,
+                    CornerRadius::same(theme.radii.medium),
+                    theme.palette.raised.gamma_multiply(0.6),
+                );
+            }
+            let range = match bucket.max_changed_lines {
+                Some(max) => tf(
+                    "{min}–{max} changed lines",
+                    &[
+                        ("min", &bucket.min_changed_lines.to_string()),
+                        ("max", &max.to_string()),
+                    ],
+                ),
+                None => tf(
+                    "{min}+ changed lines",
+                    &[("min", &bucket.min_changed_lines.to_string())],
+                ),
+            };
+            let response = response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(format!(
+                    "{} · {range}\n{}\n{}\n{}",
+                    tl(&bucket.label),
+                    tf(
+                        "Median time to merge: {time}",
+                        &[("time", &hours(bucket.cycle_time_median_hours))]
+                    ),
+                    tn(bucket.merged_mrs as u64, "{n} merged MR", "{n} merged MRs"),
+                    tl("Click to list the tracked ones"),
+                ));
+            if response.clicked() {
+                let key = format!(
+                    "size:{}:{}",
+                    bucket.min_changed_lines,
+                    bucket
+                        .max_changed_lines
+                        .map_or(String::new(), |m| m.to_string())
+                );
+                pick = Some((key, format!("{} · {}", tl("Size"), tl(&bucket.label))));
+            }
             let bar_width = (slot * 0.28).min(36.0);
             let time = bucket.cycle_time_median_hours.unwrap_or(0.0);
             let time_height = (time / max_time) as f32 * (height - 20.0);
@@ -850,17 +965,21 @@ fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             );
         }
     });
+    pick
 }
 
-fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
-    let a = &report.aggregated;
+fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport, live: &Live) {
     let t = &theme.tones;
-    let ages = &a.open_mr_ages_days;
-    let open = ages.len();
+    let ages = &live.ages;
+    let open = live.open;
     let median = (!ages.is_empty()).then(|| ages[ages.len() / 2]);
     let oldest = ages.last().copied();
     let queue = &report.poisson.queue_insight;
     card(ui, theme, tl("Backlog health"), |ui| {
+        ui.label(muted(
+            theme,
+            tl("The tracked MRs open now, as on the cockpit"),
+        ));
         let scale = oldest.unwrap_or(1.0).max(30.0) as f32;
         meter(
             ui,
@@ -886,16 +1005,13 @@ fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             oldest.unwrap_or(0.0) as f32 / scale,
             t.red.fg,
         );
-        let stale = format!(
-            "{} · {} · {}",
-            a.stale_open_mrs_7d, a.stale_open_mrs_14d, a.stale_open_mrs_30d
-        );
+        let stale = format!("{} · {} · {}", live.stale[0], live.stale[1], live.stale[2]);
         meter(
             ui,
             theme,
             tl("Stale ≥ 7 · 14 · 30 days"),
             &stale,
-            a.stale_open_mrs_7d as f32 / open.max(1) as f32,
+            live.stale[0] as f32 / open.max(1) as f32,
             t.amber.fg,
         );
         let wait = match queue.status {

@@ -436,7 +436,6 @@
 	Log time on the linked ticket	Zeit auf das verknüpfte Ticket buchen
 	Statistics (Tab: next tab, W: time window)	Statistiken (Tab: nächster Reiter, W: Zeitraum)
 	This list	Diese Liste
-	Close a dialog / leave the statistics	Dialog schließen / Statistiken verlassen
 
 # Messages and notifications
 	All	Alle
@@ -656,3 +655,62 @@ date	Merged	Gemergt
 	Project name	Projektname
 	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	Wird in der Titelleiste und der Projektauswahl statt der Projekt-ID angezeigt. Leer: die Projekt-ID.
 	Project id	Projekt-ID
+	or	oder
+	Pick several MRs, for the bulk actions	Mehrere MRs auswählen, für Sammelaktionen
+	Command palette: pages, views, MRs and commands	Befehlspalette: Seiten, Ansichten, MRs und Befehle
+	Close a dialog / leave the statistics / unpick the MRs	Dialog schließen / Statistik verlassen / MR-Auswahl aufheben
+	The GitLab URL starts with https:// (or http://), without spaces.	Die GitLab-URL beginnt mit https:// (oder http://), ohne Leerzeichen.
+	The project is its numeric id or its path (group/project), without spaces.	Das Projekt ist seine numerische ID oder sein Pfad (Gruppe/Projekt), ohne Leerzeichen.
+	Branch names have no spaces; separate them with commas.	Branch-Namen haben keine Leerzeichen; trenne sie mit Kommas.
+	The MRs not on {branch} yet	Die MRs, die noch nicht auf {branch} sind
+	Move right in the table	In der Tabelle nach rechts
+	Move left in the table	In der Tabelle nach links
+	Ctrl+click adds one · Shift+click a range	Strg+Klick fügt eine hinzu · Umschalt+Klick einen Bereich
+	Clear	Leeren
+	Stop tracking…	Nicht mehr verfolgen…
+	Stop tracking	Nicht mehr verfolgen
+	Unflag	Markierung entfernen
+	Flag	Markieren
+	Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)	Sortierung, Gruppierung, Dichte und Spalten (S: nächste Sortierspalte, Umschalt+S: umkehren, C: Spalten)
+	Sort by	Sortieren nach
+	Comfortable	Komfortabel
+	Compact	Kompakt
+	One line per MR: twice as many in view	Eine Zeile pro MR: doppelt so viele im Blick
+	Columns… (C)	Spalten… (C)
+	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ gegenüber dem vorherigen gleich langen Zeitraum · grün: besser · rot: schlechter
+	{min}–{max} changed lines	{min}–{max} geänderte Zeilen
+	{min}+ changed lines	{min}+ geänderte Zeilen
+	Median time to merge: {time}	Mediane Zeit bis zum Merge: {time}
+	Click to list the tracked ones	Klicken, um die verfolgten aufzulisten
+	Size	Größe
+	The tracked MRs open now, as on the cockpit	Die jetzt offenen verfolgten MRs, wie im Cockpit
+	Notifications	Benachrichtigungen
+	Nothing yet: merges, status changes and pipelines show up here.	Noch nichts: Merges, Statusänderungen und Pipelines erscheinen hier.
+	Retry	Erneut versuchen
+	Updated just now	Gerade aktualisiert
+	req.	Anfr.
+	Read-only: the ticket stays where it is	Schreibgeschützt: das Ticket bleibt, wo es ist
+	Moving #{id} to {status}…	#{id} wird nach {status} verschoben…
+	#{id} moved to {status}	#{id} nach {status} verschoben
+	Welcome to GitLab Tracker	Willkommen bei GitLab Tracker
+	No project is configured yet. Tell it which GitLab project to follow; everything can be changed later in projects.toml.	Noch kein Projekt eingerichtet. Gib an, welchem GitLab-Projekt gefolgt werden soll; alles lässt sich später in projects.toml ändern.
+	GitLab URL	GitLab-URL
+	https://gitlab.com or your own instance	https://gitlab.com oder deine eigene Instanz
+	Project	Projekt
+	Its numeric id (Settings › General) or its path, group/project	Seine numerische ID (Einstellungen › Allgemein) oder sein Pfad, Gruppe/Projekt
+	Name (optional)	Name (optional)
+	Shown in the title bar instead of the project id	Wird in der Titelleiste statt der Projekt-ID angezeigt
+	Comma-separated, in the table's order: main, staging, production	Durch Kommas getrennt, in der Reihenfolge der Tabelle: main, staging, production
+	Personal access token	Persönliches Zugriffstoken
+	Scope read_api; saved in the OS keyring, never in a file. Empty: asked in the terminal.	Bereich read_api; im Schlüsselbund des Systems gespeichert, nie in einer Datei. Leer: wird im Terminal abgefragt.
+	The token could not be saved in the keyring	Das Token konnte nicht im Schlüsselbund gespeichert werden
+	Save and open	Speichern und öffnen
+	Drop a ticket here to move it	Ticket hier ablegen, um es zu verschieben
+	Time spent / estimated on these tickets	Aufgewendete / geschätzte Zeit dieser Tickets
+	From the stats history since recording started, not the listed MRs	Aus dem Statistikverlauf seit Aufzeichnungsbeginn, nicht aus den gelisteten MRs
+	Green: good news · amber: to watch	Grün: gute Nachricht · gelb: im Blick behalten
+@plural	{n} MR selected|{n} MRs selected	{n} MR ausgewählt|{n} MRs ausgewählt
+@plural	Stop tracking {n} MR?|Stop tracking these {n} MRs?	{n} MR nicht mehr verfolgen?|Diese {n} MRs nicht mehr verfolgen?
+@plural	{n} merged MR|{n} merged MRs	{n} gemergte MR|{n} gemergte MRs
+@plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} MR konnte nicht aktualisiert werden|{n} MRs konnten nicht aktualisiert werden
+@plural	Updated {n} min ago|Updated {n} min ago	Vor {n} Min. aktualisiert|Vor {n} Min. aktualisiert

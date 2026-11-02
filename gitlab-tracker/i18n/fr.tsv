@@ -436,7 +436,6 @@
 	Log time on the linked ticket	Saisir du temps sur le ticket lié
 	Statistics (Tab: next tab, W: time window)	Statistiques (Tab : onglet suivant, W : période)
 	This list	Cette liste
-	Close a dialog / leave the statistics	Fermer une boîte de dialogue / quitter les statistiques
 
 # Messages and notifications
 	All	Toutes
@@ -656,3 +655,62 @@ date	Merged	Fusionnée
 	Project name	Nom du projet
 	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	Affiché dans la barre de titre et le sélecteur de projet à la place de l'identifiant. Vide : l'identifiant du projet.
 	Project id	Identifiant du projet
+	or	ou
+	Pick several MRs, for the bulk actions	Sélectionner plusieurs MR, pour les actions groupées
+	Command palette: pages, views, MRs and commands	Palette de commandes : pages, vues, MR et commandes
+	Close a dialog / leave the statistics / unpick the MRs	Fermer un dialogue / quitter les statistiques / désélectionner les MR
+	The GitLab URL starts with https:// (or http://), without spaces.	L'URL GitLab commence par https:// (ou http://), sans espace.
+	The project is its numeric id or its path (group/project), without spaces.	Le projet est son identifiant numérique ou son chemin (groupe/projet), sans espace.
+	Branch names have no spaces; separate them with commas.	Les noms de branche n'ont pas d'espace ; séparez-les par des virgules.
+	The MRs not on {branch} yet	Les MR pas encore sur {branch}
+	Move right in the table	Décaler à droite dans le tableau
+	Move left in the table	Décaler à gauche dans le tableau
+	Ctrl+click adds one · Shift+click a range	Ctrl+clic en ajoute une · Maj+clic une plage
+	Clear	Effacer
+	Stop tracking…	Arrêter le suivi…
+	Stop tracking	Arrêter le suivi
+	Unflag	Démarquer
+	Flag	Marquer
+	Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)	Tri, regroupement, densité et colonnes (S : colonne de tri suivante, Maj+S : inverser, C : colonnes)
+	Sort by	Trier par
+	Comfortable	Confortable
+	Compact	Compacte
+	One line per MR: twice as many in view	Une ligne par MR : deux fois plus à l'écran
+	Columns… (C)	Colonnes… (C)
+	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ par rapport à la période précédente de même durée · vert : mieux · rouge : moins bien
+	{min}–{max} changed lines	{min} à {max} lignes modifiées
+	{min}+ changed lines	{min} lignes modifiées ou plus
+	Median time to merge: {time}	Délai médian de fusion : {time}
+	Click to list the tracked ones	Cliquer pour afficher celles qui sont suivies
+	Size	Taille
+	The tracked MRs open now, as on the cockpit	Les MR suivies ouvertes en ce moment, comme dans le cockpit
+	Notifications	Notifications
+	Nothing yet: merges, status changes and pipelines show up here.	Rien pour l'instant : les fusions, changements de statut et pipelines s'afficheront ici.
+	Retry	Réessayer
+	Updated just now	Mis à jour à l'instant
+	req.	req.
+	Read-only: the ticket stays where it is	Lecture seule : le ticket reste où il est
+	Moving #{id} to {status}…	Déplacement de #{id} vers {status}…
+	#{id} moved to {status}	#{id} déplacé vers {status}
+	Welcome to GitLab Tracker	Bienvenue dans GitLab Tracker
+	No project is configured yet. Tell it which GitLab project to follow; everything can be changed later in projects.toml.	Aucun projet n'est encore configuré. Indiquez quel projet GitLab suivre ; tout reste modifiable ensuite dans projects.toml.
+	GitLab URL	URL GitLab
+	https://gitlab.com or your own instance	https://gitlab.com ou votre propre instance
+	Project	Projet
+	Its numeric id (Settings › General) or its path, group/project	Son identifiant numérique (Paramètres › Général) ou son chemin, groupe/projet
+	Name (optional)	Nom (facultatif)
+	Shown in the title bar instead of the project id	Affiché dans la barre de titre à la place de l'identifiant
+	Comma-separated, in the table's order: main, staging, production	Séparées par des virgules, dans l'ordre du tableau : main, staging, production
+	Personal access token	Jeton d'accès personnel
+	Scope read_api; saved in the OS keyring, never in a file. Empty: asked in the terminal.	Portée read_api ; enregistré dans le trousseau du système, jamais dans un fichier. Vide : demandé dans le terminal.
+	The token could not be saved in the keyring	Le jeton n'a pas pu être enregistré dans le trousseau
+	Save and open	Enregistrer et ouvrir
+	Drop a ticket here to move it	Déposez un ticket ici pour le déplacer
+	Time spent / estimated on these tickets	Temps passé / estimé sur ces tickets
+	From the stats history since recording started, not the listed MRs	Issu de l'historique des stats depuis le début de l'enregistrement, pas des MR listées
+	Green: good news · amber: to watch	Vert : bonne nouvelle · orange : à surveiller
+@plural	{n} MR selected|{n} MRs selected	{n} MR sélectionnée|{n} MR sélectionnées
+@plural	Stop tracking {n} MR?|Stop tracking these {n} MRs?	Arrêter le suivi de {n} MR ?|Arrêter le suivi de ces {n} MR ?
+@plural	{n} merged MR|{n} merged MRs	{n} MR fusionnée|{n} MR fusionnées
+@plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} MR n'a pas pu être rafraîchie|{n} MR n'ont pas pu être rafraîchies
+@plural	Updated {n} min ago|Updated {n} min ago	Mis à jour il y a {n} min|Mis à jour il y a {n} min

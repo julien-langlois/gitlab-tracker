@@ -361,6 +361,9 @@ pub struct App {
     /// State of the MRs fetched at startup as it was saved, compared once the
     /// initial sync is over for the "since last session" summary.
     startup_baseline: HashMap<String, MrBaseline>,
+    /// What changed while the app was closed, once the startup load is over
+    /// (the window shows it on the cockpit).
+    pub last_digest: Option<String>,
     /// List of active/upcoming milestones fetched from GitLab on startup.
     /// Used to power the milestone autocomplete in the input field.
     pub milestones: Vec<GitLabMilestone>,
@@ -578,6 +581,7 @@ impl App {
             update_highlight_ticks: 0,
             flash: None,
             startup_baseline: HashMap::new(),
+            last_digest: None,
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
@@ -1776,6 +1780,7 @@ impl App {
         if initial_sync {
             let baseline = std::mem::take(&mut self.startup_baseline);
             if let Some(digest) = session_digest(&baseline, &self.mrs) {
+                self.last_digest = Some(digest.clone());
                 self.flash_for(digest, false, DIGEST_TICKS);
             }
         }

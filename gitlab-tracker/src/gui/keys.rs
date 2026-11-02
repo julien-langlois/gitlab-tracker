@@ -52,6 +52,7 @@ fn named_key(g: &mut GuiApp, key: Key, modifiers: Modifiers) {
         Key::Escape => {
             g.app.input.clear();
             g.app.milestone_suggestions.clear();
+            g.marked.clear();
         }
         // Space arrives as a key, not as text, when nothing has focus.
         Key::Space if modifiers.is_none() => g.pending.push(Action::ToggleFlagSelected),
