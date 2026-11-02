@@ -209,6 +209,9 @@ struct GuiApp {
     /// The user's choice to show the side panels; `None` follows the window width.
     show_views: Option<bool>,
     show_inspector: Option<bool>,
+    /// Whether the views panel showed on the last frame, once the width is applied:
+    /// the `F` key toggles from it.
+    views_shown: bool,
     /// The page shown when the stats are not open (see [`GuiApp::page`]).
     page: Page,
     /// Set by a shortcut: the inspector scrolls to this section on the next frame.
@@ -321,6 +324,7 @@ impl GuiApp {
             demo,
             show_views: None,
             show_inspector: None,
+            views_shown: false,
             page: Page::MergeRequests,
             scroll_to: None,
             ticket_anchor: None,

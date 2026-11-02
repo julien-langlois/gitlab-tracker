@@ -435,7 +435,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
         "Views",
         &[
             ("/  or  I", "Search (Enter on a number tracks the MR)"),
-            ("F", "Show the views panel"),
+            ("F", "Show / hide the views panel"),
             ("M", "Hide / show merged MRs"),
             ("S / Shift+S", "Next sort column / reverse the order"),
             ("C", "Columns"),

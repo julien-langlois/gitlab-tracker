@@ -15,6 +15,7 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     let width = ui.max_rect().width();
     let page = g.page();
     let mut sizes = Sizes::for_width(width, g.show_views, g.show_inspector);
+    g.views_shown = page == Page::MergeRequests && sizes.views.is_some();
     if page == Page::Tracker {
         sizes.widen_inspector(width);
     } else {

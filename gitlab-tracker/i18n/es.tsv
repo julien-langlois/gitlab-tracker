@@ -427,7 +427,7 @@
 	Stop tracking the selected MR	Dejar de seguir la MR seleccionada
 	Refresh now	Actualizar ahora
 	Search (Enter on a number tracks the MR)	Buscar (Intro sobre un número sigue la MR)
-	Show the views panel	Mostrar el panel de vistas
+	Show / hide the views panel	Mostrar / ocultar el panel de vistas
 	Hide / show merged MRs	Ocultar / mostrar las MR fusionadas
 	Next sort column / reverse the order	Siguiente columna de orden / invertir el orden
 	Inspector: details / pipelines	Inspector: detalles / pipelines

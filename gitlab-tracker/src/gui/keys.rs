@@ -95,7 +95,7 @@ pub(super) fn character(g: &mut GuiApp, c: char) {
             return;
         }
         'f' | 'F' => {
-            g.show_views = Some(true);
+            toggle_views(g);
             return;
         }
         'c' | 'C' => {
@@ -118,6 +118,17 @@ pub(super) fn character(g: &mut GuiApp, c: char) {
         _ => return,
     };
     g.pending.push(action);
+}
+
+/// Shows or hides the views panel, like its toolbar button. The panel lives on the
+/// MR page only, so elsewhere the key opens that page with the panel shown.
+fn toggle_views(g: &mut GuiApp) {
+    if g.page() != Page::MergeRequests {
+        g.open_page(Page::MergeRequests);
+        g.show_views = Some(true);
+    } else {
+        g.show_views = Some(!g.views_shown);
+    }
 }
 
 /// Shows the inspector and scrolls it to `section`.

@@ -427,7 +427,7 @@
 	Stop tracking the selected MR	停止跟踪所选 MR
 	Refresh now	立即刷新
 	Search (Enter on a number tracks the MR)	搜索（对编号按回车可跟踪该 MR）
-	Show the views panel	显示视图面板
+	Show / hide the views panel	显示 / 隐藏视图面板
 	Hide / show merged MRs	隐藏 / 显示已合并的 MR
 	Next sort column / reverse the order	下一个排序列 / 反转顺序
 	Inspector: details / pipelines	检查器：详情 / 流水线
