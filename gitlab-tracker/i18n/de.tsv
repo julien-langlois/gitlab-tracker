@@ -329,7 +329,22 @@
 	Value {observed}: pressure signal	Wert {observed}: Drucksignal
 	Throughput forecasts	Durchsatzprognosen
 	Not enough merged MRs to forecast.	Nicht genug gemergte MRs für eine Prognose.
-	≥ {n} merges in {weeks} weeks	≥ {n} Merges in {weeks} Wochen
+	≥ {merges} in {weeks}	≥ {merges} in {weeks}
+	{n} pt	{n} Pkt.
+	Previous period: {value}	Vorheriger Zeitraum: {value}
+	Mean lines changed (added + removed) per MR.	Durchschnittlich geänderte Zeilen (hinzugefügt + entfernt) pro MR.
+	Mean number of comments per MR.	Durchschnittliche Anzahl Kommentare pro MR.
+	Comments per 100 changed lines: how much discussion each line draws.	Kommentare pro 100 geänderte Zeilen: wie viel Diskussion jede Zeile auslöst.
+	Mean share of failed pipelines, on the MRs that ran some.	Durchschnittlicher Anteil fehlgeschlagener Pipelines, bei MRs mit Pipelines.
+	Share of the finished MRs closed without being merged.	Anteil der abgeschlossenen MRs, die ohne Merge geschlossen wurden.
+	Medians and correlations become reliable from about 30 MRs.	Mediane und Korrelationen werden ab etwa 30 MRs verlässlich.
+	How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.	Auslastung des Review-Flusses: Zugänge ÷ Kapazität. Über 100 % wächst der Rückstand.
+	MRs merged per week: the flow entering the queue.	Gemergte MRs pro Woche: der Zufluss in die Warteschlange.
+	MRs per week the team can get through, from the median time to merge.	MRs pro Woche, die das Team bewältigen kann, aus der medianen Zeit bis zum Merge.
+	MRs expected to be waiting or in review at any time.	MRs, die zu jedem Zeitpunkt voraussichtlich warten oder im Review sind.
+	How long a new MR should wait before it is merged.	Wie lange ein neuer MR voraussichtlich bis zum Merge wartet.
+	Grayed out: not significant (p ≥ 0.05). Hover a row for its p-value and sample size.	Ausgegraut: nicht signifikant (p ≥ 0,05). Für p-Wert und Stichprobengröße über eine Zeile fahren.
+	See {tab} →	{tab} ansehen →
 	λ = {n} merges per week	λ = {n} Merges pro Woche
 	Review queue	Review-Warteschlange
 	OVER CAPACITY	ÜBERLASTET
@@ -537,3 +552,5 @@ date	Merged	Gemergt
 @plural	in {n} week|in {n} weeks	in {n} Woche|in {n} Wochen
 @plural	in {n} month|in {n} months	in {n} Monat|in {n} Monaten
 @plural	in {n} year|in {n} years	in {n} Jahr|in {n} Jahren
+@plural	{n} merge|{n} merges	{n} Merge|{n} Merges
+@plural	{n} week|{n} weeks	{n} Woche|{n} Wochen

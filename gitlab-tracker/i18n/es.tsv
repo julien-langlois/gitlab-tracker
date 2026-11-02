@@ -329,7 +329,22 @@
 	Value {observed}: pressure signal	Valor {observed}: señal de presión
 	Throughput forecasts	Previsiones de rendimiento
 	Not enough merged MRs to forecast.	No hay suficientes MR fusionadas para prever.
-	≥ {n} merges in {weeks} weeks	≥ {n} fusiones en {weeks} semanas
+	≥ {merges} in {weeks}	≥ {merges} en {weeks}
+	{n} pt	{n} pt
+	Previous period: {value}	Periodo anterior: {value}
+	Mean lines changed (added + removed) per MR.	Media de líneas modificadas (añadidas + eliminadas) por MR.
+	Mean number of comments per MR.	Número medio de comentarios por MR.
+	Comments per 100 changed lines: how much discussion each line draws.	Comentarios por cada 100 líneas modificadas: cuánta discusión genera cada línea.
+	Mean share of failed pipelines, on the MRs that ran some.	Proporción media de pipelines fallidos, en los MR que ejecutaron alguno.
+	Share of the finished MRs closed without being merged.	Proporción de MR terminados que se cerraron sin fusionarse.
+	Medians and correlations become reliable from about 30 MRs.	Las medianas y correlaciones son fiables a partir de unos 30 MR.
+	How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.	Lo ocupado que está el flujo de revisión: llegadas ÷ capacidad. Por encima del 100 %, el atraso crece.
+	MRs merged per week: the flow entering the queue.	MR fusionados por semana: el flujo que entra en la cola.
+	MRs per week the team can get through, from the median time to merge.	MR por semana que el equipo puede sacar adelante, según la mediana del tiempo hasta la fusión.
+	MRs expected to be waiting or in review at any time.	MR que se espera que estén esperando o en revisión en cada momento.
+	How long a new MR should wait before it is merged.	Cuánto debería esperar un MR nuevo antes de fusionarse.
+	Grayed out: not significant (p ≥ 0.05). Hover a row for its p-value and sample size.	En gris: no significativo (p ≥ 0,05). Pasa el ratón sobre una fila para ver su valor p y el tamaño de la muestra.
+	See {tab} →	Ver {tab} →
 	λ = {n} merges per week	λ = {n} fusiones por semana
 	Review queue	Cola de revisión
 	OVER CAPACITY	SOBRE CAPACIDAD
@@ -537,3 +552,5 @@ date	Merged	Fusionada
 @plural	in {n} week|in {n} weeks	en {n} semana|en {n} semanas
 @plural	in {n} month|in {n} months	en {n} mes|en {n} meses
 @plural	in {n} year|in {n} years	en {n} año|en {n} años
+@plural	{n} merge|{n} merges	{n} fusión|{n} fusiones
+@plural	{n} week|{n} weeks	{n} semana|{n} semanas

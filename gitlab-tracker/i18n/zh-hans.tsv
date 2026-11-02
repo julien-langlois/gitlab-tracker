@@ -329,7 +329,22 @@
 	Value {observed}: pressure signal	数值 {observed}：压力信号
 	Throughput forecasts	吞吐量预测
 	Not enough merged MRs to forecast.	已合并的 MR 不足，无法预测。
-	≥ {n} merges in {weeks} weeks	{weeks} 周内 ≥ {n} 次合并
+	≥ {merges} in {weeks}	{weeks}内 ≥ {merges}
+	{n} pt	{n} 个百分点
+	Previous period: {value}	上一周期：{value}
+	Mean lines changed (added + removed) per MR.	每个 MR 平均改动行数（新增 + 删除）。
+	Mean number of comments per MR.	每个 MR 的平均评论数。
+	Comments per 100 changed lines: how much discussion each line draws.	每 100 行改动的评论数：每行代码引发的讨论量。
+	Mean share of failed pipelines, on the MRs that ran some.	运行过流水线的 MR 中，失败流水线的平均占比。
+	Share of the finished MRs closed without being merged.	已结束的 MR 中未合并即关闭的占比。
+	Medians and correlations become reliable from about 30 MRs.	约 30 个 MR 起，中位数和相关性才可靠。
+	How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.	评审流程的繁忙程度：到达量 ÷ 处理能力。超过 100% 时积压会增长。
+	MRs merged per week: the flow entering the queue.	每周合并的 MR：进入队列的流量。
+	MRs per week the team can get through, from the median time to merge.	团队每周能处理的 MR 数，由合并耗时中位数推算。
+	MRs expected to be waiting or in review at any time.	任一时刻预计在等待或评审中的 MR 数。
+	How long a new MR should wait before it is merged.	新 MR 预计等待多久才会被合并。
+	Grayed out: not significant (p ≥ 0.05). Hover a row for its p-value and sample size.	灰色：不显著（p ≥ 0.05）。悬停某行可查看其 p 值和样本量。
+	See {tab} →	查看{tab} →
 	λ = {n} merges per week	λ = 每周 {n} 次合并
 	Review queue	评审队列
 	OVER CAPACITY	超出容量
@@ -537,3 +552,5 @@ date	Merged	合并时间
 @plural	in {n} week|in {n} weeks	{n} 周后
 @plural	in {n} month|in {n} months	{n} 个月后
 @plural	in {n} year|in {n} years	{n} 年后
+@plural	{n} merge|{n} merges	{n} 次合并
+@plural	{n} week|{n} weeks	{n} 周

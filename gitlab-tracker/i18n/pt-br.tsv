@@ -329,7 +329,22 @@
 	Value {observed}: pressure signal	Valor {observed}: sinal de pressão
 	Throughput forecasts	Previsões de vazão
 	Not enough merged MRs to forecast.	Não há MRs mescladas suficientes para prever.
-	≥ {n} merges in {weeks} weeks	≥ {n} mesclagens em {weeks} semanas
+	≥ {merges} in {weeks}	≥ {merges} em {weeks}
+	{n} pt	{n} p.p.
+	Previous period: {value}	Período anterior: {value}
+	Mean lines changed (added + removed) per MR.	Média de linhas alteradas (adicionadas + removidas) por MR.
+	Mean number of comments per MR.	Número médio de comentários por MR.
+	Comments per 100 changed lines: how much discussion each line draws.	Comentários a cada 100 linhas alteradas: quanta discussão cada linha gera.
+	Mean share of failed pipelines, on the MRs that ran some.	Proporção média de pipelines com falha, nos MRs que executaram algum.
+	Share of the finished MRs closed without being merged.	Proporção dos MRs finalizados que foram fechados sem mesclagem.
+	Medians and correlations become reliable from about 30 MRs.	Medianas e correlações ficam confiáveis a partir de cerca de 30 MRs.
+	How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.	Quão ocupado está o fluxo de revisão: chegadas ÷ capacidade. Acima de 100%, o backlog cresce.
+	MRs merged per week: the flow entering the queue.	MRs mesclados por semana: o fluxo que entra na fila.
+	MRs per week the team can get through, from the median time to merge.	MRs por semana que a equipe consegue concluir, pela mediana do tempo até a mesclagem.
+	MRs expected to be waiting or in review at any time.	MRs que se espera estarem aguardando ou em revisão a qualquer momento.
+	How long a new MR should wait before it is merged.	Quanto um novo MR deve esperar até ser mesclado.
+	Grayed out: not significant (p ≥ 0.05). Hover a row for its p-value and sample size.	Em cinza: não significativo (p ≥ 0,05). Passe o mouse sobre uma linha para ver o valor-p e o tamanho da amostra.
+	See {tab} →	Ver {tab} →
 	λ = {n} merges per week	λ = {n} mesclagens por semana
 	Review queue	Fila de revisão
 	OVER CAPACITY	ACIMA DA CAPACIDADE
@@ -537,3 +552,5 @@ date	Merged	Mesclada
 @plural	in {n} week|in {n} weeks	em {n} semana|em {n} semanas
 @plural	in {n} month|in {n} months	em {n} mês|em {n} meses
 @plural	in {n} year|in {n} years	em {n} ano|em {n} anos
+@plural	{n} merge|{n} merges	{n} mesclagem|{n} mesclagens
+@plural	{n} week|{n} weeks	{n} semana|{n} semanas

@@ -329,7 +329,22 @@
 	Value {observed}: pressure signal	Valeur {observed} : signal de tension
 	Throughput forecasts	Prévisions de débit
 	Not enough merged MRs to forecast.	Pas assez de MR fusionnées pour prévoir.
-	≥ {n} merges in {weeks} weeks	≥ {n} fusions en {weeks} semaines
+	≥ {merges} in {weeks}	≥ {merges} en {weeks}
+	{n} pt	{n} pt
+	Previous period: {value}	Période précédente : {value}
+	Mean lines changed (added + removed) per MR.	Nombre moyen de lignes modifiées (ajoutées + supprimées) par MR.
+	Mean number of comments per MR.	Nombre moyen de commentaires par MR.
+	Comments per 100 changed lines: how much discussion each line draws.	Commentaires pour 100 lignes modifiées : la discussion que suscite chaque ligne.
+	Mean share of failed pipelines, on the MRs that ran some.	Part moyenne de pipelines en échec, sur les MR qui en ont lancé.
+	Share of the finished MRs closed without being merged.	Part des MR terminées qui ont été fermées sans être fusionnées.
+	Medians and correlations become reliable from about 30 MRs.	Les médianes et les corrélations deviennent fiables à partir d'environ 30 MR.
+	How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.	La charge du flux de relecture : arrivées ÷ capacité. Au-delà de 100 %, le backlog grossit.
+	MRs merged per week: the flow entering the queue.	MR fusionnées par semaine : le flux qui entre dans la file.
+	MRs per week the team can get through, from the median time to merge.	MR par semaine que l'équipe peut traiter, d'après le délai médian de fusion.
+	MRs expected to be waiting or in review at any time.	MR attendues en attente ou en relecture à tout moment.
+	How long a new MR should wait before it is merged.	Le temps qu'une nouvelle MR devrait attendre avant d'être fusionnée.
+	Grayed out: not significant (p ≥ 0.05). Hover a row for its p-value and sample size.	En grisé : non significatif (p ≥ 0,05). Survolez une ligne pour sa p-valeur et la taille de l'échantillon.
+	See {tab} →	Voir {tab} →
 	λ = {n} merges per week	λ = {n} fusions par semaine
 	Review queue	File de relecture
 	OVER CAPACITY	SURCAPACITÉ
@@ -537,3 +552,5 @@ date	Merged	Fusionnée
 @plural	in {n} week|in {n} weeks	dans {n} semaine|dans {n} semaines
 @plural	in {n} month|in {n} months	dans {n} mois|dans {n} mois
 @plural	in {n} year|in {n} years	dans {n} an|dans {n} ans
+@plural	{n} merge|{n} merges	{n} fusion|{n} fusions
+@plural	{n} week|{n} weeks	{n} semaine|{n} semaines

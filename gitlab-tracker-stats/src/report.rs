@@ -36,6 +36,11 @@ pub struct StatReport {
     /// project is selected or nothing was promoted yet.
     #[serde(default)]
     pub promotions: Vec<PromotionLeadTime>,
+
+    /// The same statistics over the previous window of the same length, for the
+    /// trends. `None` for "all time".
+    #[serde(default)]
+    pub baseline: Option<AggregatedStats>,
 }
 
 impl StatReport {
@@ -97,6 +102,7 @@ impl StatReport {
             correlations: compute_all_correlations(metrics),
             poisson,
             promotions: Vec::new(),
+            baseline: baseline.cloned(),
         }
     }
 }

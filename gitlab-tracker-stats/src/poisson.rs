@@ -352,7 +352,8 @@ impl PoissonInsights {
 
 /// Builds actionable throughput forecasts from the observed weekly rate λ.
 ///
-/// Five forecasts are produced:
+/// Up to five forecasts, sorted by horizon then target (those whose targets
+/// coincide, as with a whole λ, are kept once):
 /// 1. **At-pace 1w** — P(≥ ceil(λ) in 1 week): will we match our usual weekly pace?
 /// 2. **At-pace 2w** — P(≥ ceil(λ×2) in 2 weeks): will we match our usual sprint pace?
 /// 3. **Sprint pace** — P(≥ round(λ×2) in 2w): realistic sprint target using round
@@ -381,13 +382,16 @@ fn build_throughput_forecasts(
     // Stretch: +20% above sprint pace.
     let stretch_target = (lambda * sw * 1.2).ceil() as u32;
 
-    vec![
+    let mut forecasts = vec![
         ThroughputForecast::new(lambda, 1, target_1w),
         ThroughputForecast::new(lambda, sprint_weeks, target_sprint_ceil),
         ThroughputForecast::new(lambda, sprint_weeks, sprint_target),
         ThroughputForecast::new(lambda, sprint_weeks, stretch_target),
         ThroughputForecast::new(lambda, 1, 1),
-    ]
+    ];
+    forecasts.sort_by_key(|f| (f.forecast_weeks, f.target_merges));
+    forecasts.dedup_by_key(|f| (f.forecast_weeks, f.target_merges));
+    forecasts
 }
 
 /// Builds anomaly signals from the current window and, when available, a
@@ -713,6 +717,50 @@ mod tests {
         assert!((forecast.expected_merges - 6.0).abs() < 1e-9);
         // P(X ≥ 6 | λ=6) ≈ 0.554, should be > 0 and < 1
         assert!(forecast.probability > 0.0 && forecast.probability < 1.0);
+    }
+
+    #[test]
+    fn throughput_forecasts_are_sorted_and_unique() {
+        use std::collections::HashMap;
+        // λ = 2: the at-pace and the sprint-pace targets are both 4 in 2 weeks.
+        let stats = AggregatedStats {
+            total_mrs: 4,
+            merged_count: 4,
+            closed_count: 0,
+            abandon_rate: None,
+            merged_today: 0,
+            merged_this_week: 0,
+            merged_this_month: 0,
+            merged_last_7_days: 0,
+            merged_last_30_days: 0,
+            throughput_per_week: Some(2.0),
+            cycle_time_median_hours: None,
+            cycle_time_p75_hours: None,
+            cycle_time_p90_hours: None,
+            cycle_time_by_author: HashMap::new(),
+            cycle_time_by_reviewer: HashMap::new(),
+            cycle_time_by_milestone: HashMap::new(),
+            avg_diff_size: 0.0,
+            avg_comments: 0.0,
+            avg_comment_density: None,
+            avg_pipeline_failure_rate: None,
+            pipeline_data_coverage: 0.0,
+            cycle_time_sample_size: 4,
+            pipeline_sample_size: 0,
+            reviewer_coverage: 0.0,
+            milestone_coverage: 0.0,
+            size_buckets: vec![],
+            open_mr_ages_days: vec![],
+            stale_open_mrs_7d: 0,
+            stale_open_mrs_14d: 0,
+            stale_open_mrs_30d: 0,
+            throughput_by_milestone: HashMap::new(),
+        };
+        let targets: Vec<_> = build_throughput_forecasts(&stats, 2)
+            .iter()
+            .map(|f| (f.forecast_weeks, f.target_merges))
+            .collect();
+        assert_eq!(targets, [(1, 1), (1, 2), (2, 4), (2, 5)]);
     }
 
     #[test]
