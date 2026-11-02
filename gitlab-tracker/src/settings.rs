@@ -128,6 +128,9 @@ impl SettingsEditorState {
     pub fn apply_to_app(&self, app: &mut App) {
         for item in &self.items {
             match (item.def.id, &item.value) {
+                ("core.name", ProjectSettingValue::Text(name)) => {
+                    app.project_name = crate::settings_core::clean_project_name(name);
+                }
                 ("core.show_cockpit", ProjectSettingValue::Bool(value)) => {
                     app.config.show_cockpit = *value;
                 }

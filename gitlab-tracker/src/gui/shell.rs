@@ -50,6 +50,8 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     }
 
     dialogs::show(g, ui.ctx());
+    super::palette::show(g, ui.ctx());
+    super::toasts::show(g, ui.ctx());
 }
 
 // ── Responsive layout ────────────────────────────────────────────────────────
@@ -496,6 +498,25 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                 Stroke::new(1.0, theme.palette.border),
             );
             ui.spacing_mut().item_spacing.y = 6.0;
+            let count = |key: &str| g.members.get(key).map_or(0, Vec::len);
+            let tones = &theme.tones;
+            // What waits on each page: my reviews, the blocked MRs, the tickets
+            // over their estimate.
+            let badges = [
+                (
+                    Page::MergeRequests,
+                    count("To review (me)"),
+                    tones.amber,
+                    tl("waiting for your review"),
+                ),
+                (Page::Cockpit, count("Blocked"), tones.red, tl("blocked")),
+                (
+                    Page::Tracker,
+                    count("Over estimate"),
+                    tones.red,
+                    tl("over their estimate"),
+                ),
+            ];
             ui.vertical_centered(|ui| {
                 let mut items = vec![
                     (
@@ -517,10 +538,19 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                 #[cfg(feature = "stats")]
                 items.push((Page::Stats, Icon::Stats, tl("Stats"), tl("Statistics (G)")));
                 for (target, icon, label, hint) in items {
-                    if rail_item(ui, &theme, icon, Some(label), page == target)
-                        .on_hover_text(hint)
-                        .clicked()
-                    {
+                    let badge = badges
+                        .iter()
+                        .find(|b| b.0 == target && b.1 > 0)
+                        .map(|b| (b.1, b.2));
+                    let hint = match badges.iter().find(|b| b.0 == target && b.1 > 0) {
+                        Some((_, n, _, what)) => format!("{hint} · {n} {what}"),
+                        None => hint.to_string(),
+                    };
+                    let response = rail_item(ui, &theme, icon, Some(label), page == target);
+                    if let Some((n, tone)) = badge {
+                        rail_badge(ui, &theme, response.rect, n, tone);
+                    }
+                    if response.on_hover_text(hint).clicked() {
                         g.open_page(target);
                     }
                 }
@@ -540,6 +570,34 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                 });
             });
         });
+}
+
+/// A count on a rail entry's top-right corner, in `tone`.
+fn rail_badge(ui: &Ui, theme: &Theme, item: Rect, n: usize, tone: bevel_theme::Tone) {
+    let text = if n > 99 {
+        "99+".to_string()
+    } else {
+        n.to_string()
+    };
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text, fonts::semibold(9.5), Color32::WHITE);
+    let width = (galley.size().x + 8.0).max(16.0);
+    let rect = Rect::from_center_size(
+        egui::pos2(item.right() - 6.0, item.top() + 6.0),
+        Vec2::new(width, 16.0),
+    );
+    ui.painter()
+        .rect_filled(rect.expand(1.5), CornerRadius::same(10), theme.palette.rail);
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(8), tone.fg);
+    let text_color = if theme.mode == bevel_theme::Mode::Dark {
+        theme.palette.rail
+    } else {
+        Color32::WHITE
+    };
+    ui.painter()
+        .galley(rect.center() - galley.size() / 2.0, galley, text_color);
 }
 
 /// A rail entry: an icon over a short caption, highlighted when `active`.

@@ -32,6 +32,12 @@ pub enum Icon {
     ArrowDown,
     ArrowUp,
     Clock,
+    /// Rows under headings: the table's grouping.
+    Group,
+    /// Three columns of cards: the tracker's board.
+    Board,
+    /// Lines: the tracker's list.
+    List,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -286,6 +292,24 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 stroke,
                 egui::StrokeKind::Middle,
             );
+        }
+        Icon::Group => {
+            line(p(3.0, 5.0), p(10.0, 5.0));
+            line(p(7.0, 10.0), p(21.0, 10.0));
+            line(p(7.0, 14.0), p(21.0, 14.0));
+            line(p(3.0, 19.0), p(10.0, 19.0));
+        }
+        Icon::Board => {
+            for x in [3.0, 10.0, 17.0] {
+                let column = Rect::from_min_max(p(x, 4.0), p(x + 4.5, 20.0));
+                painter.rect_stroke(column, 1.5 * scale, stroke, egui::StrokeKind::Middle);
+            }
+        }
+        Icon::List => {
+            for y in [6.0, 12.0, 18.0] {
+                line(p(4.0, y), p(5.0, y));
+                line(p(8.5, y), p(20.0, y));
+            }
         }
         Icon::Clock => {
             circle(p(12.0, 12.0), 8.5);

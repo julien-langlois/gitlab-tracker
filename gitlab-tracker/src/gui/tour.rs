@@ -38,6 +38,38 @@ const STEPS: &[fn(&mut GuiApp)] = &[
     },
     |g| dialog(g, ','),
     |g| dialog(g, '?'),
+    // The views added since: grouped table, a cockpit counter listed, the
+    // tracker's board, the palette, toasts.
+    |g| {
+        g.app.input_mode = InputMode::Normal;
+        g.group_by = super::table::GroupBy::Status;
+    },
+    |g| {
+        g.group_by = super::table::GroupBy::None;
+        g.focus_on("Blocked", "Blocked");
+    },
+    |g| {
+        g.next_focus = Some(None);
+        g.tracker_board = true;
+        g.open_page(Page::Tracker);
+    },
+    |g| {
+        g.open_page(Page::MergeRequests);
+        g.palette = Some(super::palette::Palette::with_query("rel"));
+    },
+    |g| {
+        g.palette = None;
+        let now = g.ctx.input(|i| i.time);
+        let tones = g.theme.tones;
+        g.toasts
+            .push("106", "!106 · pipeline failed".into(), tones.red, now);
+        g.toasts
+            .push("104", "!104 · now MERGED".into(), tones.purple, now);
+    },
+    |g| {
+        g.set_theme(bevel_theme::Mode::Light);
+        g.open_page(Page::Cockpit);
+    },
 ];
 
 /// Replaces the open dialog with the one `shortcut` opens.

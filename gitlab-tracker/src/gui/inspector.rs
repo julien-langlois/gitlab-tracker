@@ -362,7 +362,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     people(g, ui, mr);
     planning(ui, &theme, mr);
-    history(ui, &theme, mr);
+    history(g, ui, mr);
     review(g, ui, mr);
     if let Some(stats) = &mr.diff_stats {
         let score = stats.difficulty(&g.app.config.complexity_profile);
@@ -588,6 +588,8 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let rows = g.app.branch_rows(mr);
     let failed = matches!(mr.status, MrStatus::Error(_));
+    let fetching = g.app.pending_initial_fetches.contains(&mr.id)
+        || g.app.pending_refresh_fetches.contains(&mr.id);
     let commits = mr.commits.len();
     section(ui, &theme, tl("Branches"), |ui| {
         // One column for the names, as wide as the longest one, so the chips line up.
@@ -607,7 +609,13 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             .collect();
         let name_width = names.iter().map(|name| name.size().x).fold(0.0, f32::max);
         for (row, name) in rows.iter().zip(names) {
-            let (glyph, label, tone) = tones::presence(row.presence, failed, &theme.tones);
+            let (glyph, label, tone) = match tones::presence(row.presence, failed, &theme.tones) {
+                // Not loading: nothing is on its way, the next refresh tells.
+                _ if row.presence.is_none() && !failed && !fetching => {
+                    ("—", tl("Not checked yet"), theme.tones.gray)
+                }
+                cell => cell,
+            };
             let detail = match row.presence {
                 Some(BranchPresence::Partial) if commits > 0 => tf(
                     "{n} of {total} commits missing",
@@ -1134,22 +1142,73 @@ fn when(iso: Option<&str>) -> String {
     }
 }
 
-fn history(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
-    section(ui, theme, tl("History"), |ui| {
-        key_values(ui, theme, |rows| {
-            rows.row(tl("Created"), |ui| {
-                ui.label(when(mr.created_at.as_deref()));
+/// One step of the history timeline.
+struct Step {
+    title: String,
+    detail: Option<String>,
+    color: egui::Color32,
+    /// Not reached yet: a hollow node, muted text.
+    pending: bool,
+}
+
+fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = &g.theme;
+    let tones = &theme.tones;
+    let mut steps = vec![Step {
+        title: tl("Created").into(),
+        detail: Some(when(mr.created_at.as_deref())),
+        color: tones.blue.fg,
+        pending: false,
+    }];
+    match mr.state {
+        GitlabMrState::Merged => {
+            let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
+            steps.push(Step {
+                title: tc("date", "Merged").into(),
+                detail: Some(tf(
+                    "{when} by {name}",
+                    &[("when", &when(mr.merged_at.as_deref())), ("name", by)],
+                )),
+                color: tones.purple.fg,
+                pending: false,
             });
-            rows.row(tl("Updated"), |ui| {
-                ui.label(when(mr.updated_at.as_deref()));
-            });
-            if mr.state == GitlabMrState::Merged {
-                rows.row(tc("date", "Merged"), |ui| {
-                    let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
-                    let at = when(mr.merged_at.as_deref());
-                    ui.label(tf("{when} by {name}", &[("when", &at), ("name", by)]));
+            for branch in &g.app.branches {
+                let presence = g.app.branch_presence(mr, branch);
+                let (_, label, tone) = super::tones::presence(presence, false, tones);
+                let reached = presence.is_some_and(|p| !p.is_missing());
+                steps.push(Step {
+                    title: tf("On {branch}", &[("branch", branch)]),
+                    detail: Some(label.to_string()),
+                    color: tone.fg,
+                    pending: !reached,
                 });
             }
+        }
+        GitlabMrState::Closed => steps.push(Step {
+            title: tl("Closed").into(),
+            detail: Some(when(mr.updated_at.as_deref())),
+            color: tones.gray.fg,
+            pending: false,
+        }),
+        GitlabMrState::Opened => {
+            steps.push(Step {
+                title: tl("Last update").into(),
+                detail: Some(when(mr.updated_at.as_deref())),
+                color: tones.amber.fg,
+                pending: false,
+            });
+            steps.push(Step {
+                title: tl("Merge").into(),
+                detail: Some(tl("not merged yet").into()),
+                color: tones.gray.fg,
+                pending: true,
+            });
+        }
+    }
+    section(ui, theme, tl("History"), |ui| {
+        timeline(ui, theme, &steps);
+        ui.add_space(4.0);
+        key_values(ui, theme, |rows| {
             rows.row(tl("Commit"), |ui| {
                 let sha = mr
                     .sha
@@ -1163,4 +1222,60 @@ fn history(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
             });
         });
     });
+}
+
+/// The steps down a line: a node per step, its title and detail beside it.
+fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let mut nodes = Vec::new();
+    for step in steps {
+        let response = ui
+            .horizontal_top(|ui| {
+                ui.add_space(22.0);
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    let title_color = if step.pending {
+                        theme.palette.text_muted
+                    } else {
+                        theme.palette.text
+                    };
+                    ui.label(
+                        RichText::new(&step.title)
+                            .font(fonts::medium(theme.text_size - 0.5))
+                            .color(title_color),
+                    );
+                    if let Some(detail) = &step.detail {
+                        ui.label(muted(theme, detail).size(theme.text_size - 1.5));
+                    }
+                    ui.add_space(10.0);
+                });
+            })
+            .response;
+        nodes.push((response.rect, step));
+    }
+    let painter = ui.painter();
+    let x = |r: egui::Rect| r.left() + 7.0;
+    for pair in nodes.windows(2) {
+        let (a, _) = pair[0];
+        let (b, next) = pair[1];
+        let color = if next.pending {
+            theme.palette.border
+        } else {
+            theme.palette.text_muted.gamma_multiply(0.6)
+        };
+        painter.vline(
+            x(a),
+            (a.top() + 15.0)..=(b.top() + 3.0),
+            egui::Stroke::new(1.5, color),
+        );
+    }
+    for (rect, step) in nodes {
+        let center = egui::pos2(x(rect), rect.top() + 9.0);
+        if step.pending {
+            painter.circle_filled(center, 5.0, theme.palette.panel);
+            painter.circle_stroke(center, 4.5, egui::Stroke::new(1.5, step.color));
+        } else {
+            painter.circle_filled(center, 5.5, step.color);
+        }
+    }
 }

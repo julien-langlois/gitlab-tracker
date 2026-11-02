@@ -241,6 +241,18 @@ impl ActiveFilter {
     }
 }
 
+/// A set of MRs picked from elsewhere (a cockpit counter in the window), shown
+/// on top of the active filter until it is cleared.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub struct Focus {
+    /// The counter it came from, to refresh `ids` as the MRs change.
+    pub key: String,
+    /// What the window shows for it ("Blocked").
+    pub label: String,
+    pub ids: HashSet<String>,
+}
+
 /// State held by the filter picker popup while it is open.
 #[derive(Debug, Clone, Default)]
 pub struct FilterPickerState {
@@ -360,6 +372,10 @@ pub struct App {
     pub milestone_suggestion_cursor: usize,
     /// Active filter applied to the MR table — selected via the `[F]` picker popup.
     pub active_filter: ActiveFilter,
+    /// MRs picked from a cockpit counter, on top of the filter (window only).
+    pub focus: Option<Focus>,
+    /// Set while the cockpit counts the MRs: they ignore `focus`.
+    pub focus_suspended: bool,
     /// State of the filter picker popup (cursor position + text input).
     /// Reset each time the popup is opened.
     pub filter_picker: FilterPickerState,
@@ -566,6 +582,8 @@ impl App {
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
             active_filter: ActiveFilter::default(),
+            focus: None,
+            focus_suspended: false,
             filter_picker: FilterPickerState::default(),
             filter_defs: collect_all_filters(),
             column_defs,
@@ -753,6 +771,17 @@ impl App {
         self.layout.inspector.reset();
     }
 
+    /// Shows only the MRs of `focus` (or every MR again with `None`), on top of
+    /// the active filter, and selects the first one.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub fn set_focus(&mut self, focus: Option<Focus>) {
+        self.focus = focus;
+        self.visible_cache = None;
+        let any = self.visible_mrs().next().is_some();
+        self.table_state.select(any.then_some(0));
+        self.layout.inspector.reset();
+    }
+
     /// Returns an iterator over the MRs that pass the current filter,
     /// ordered by fuzzy relevance when a search query is active in the input field.
     ///
@@ -812,6 +841,10 @@ impl App {
             .iter()
             .enumerate()
             .filter(|(_, mr)| self.filter_passes(mr))
+            .filter(|(_, mr)| match &self.focus {
+                Some(focus) if !self.focus_suspended => focus.ids.contains(&mr.id),
+                _ => true,
+            })
             .filter_map(|(i, mr)| {
                 if let Some(ref q) = query {
                     // Score against the most user-visible fields — highest wins.

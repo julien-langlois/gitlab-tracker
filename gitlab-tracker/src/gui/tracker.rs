@@ -1,6 +1,6 @@
-//! The tracker page: the tickets linked to the listed MRs, grouped by status, with
-//! a summary of the time on top. A click selects the MR, whose ticket the
-//! inspector shows.
+//! The tracker page: the tickets linked to the listed MRs, grouped by status (a
+//! list, or a board of columns), with a summary of the time on top. A click
+//! selects the MR, whose ticket the inspector shows.
 
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Stroke, Ui, Vec2};
@@ -8,14 +8,19 @@ use gitlab_tracker_core::LinkedTicket;
 
 use super::icons::{self, Icon};
 use super::inspector::duration;
-use super::widgets::{avatar, bar, dot, kpi, mono, muted, page_title, semibold, split_person};
+use super::widgets::{
+    avatar, bar, dot, icon_toggle, kpi, mono, muted, page_title, semibold, split_person,
+};
 use super::{tones, GuiApp};
+use crate::actions::Action;
 use crate::i18n::{tf, tl, tn};
 
 /// Below this list width the progress column goes under the subject.
 const WIDE_ROW: f32 = 720.0;
 const PROGRESS_WIDTH: f32 = 180.0;
 const ID_WIDTH: f32 = 72.0;
+/// A board column is never narrower than this; past it the board scrolls sideways.
+const BOARD_COLUMN_WIDTH: f32 = 260.0;
 
 /// A listed MR with its ticket.
 struct Row {
@@ -45,17 +50,33 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let provider = g.app.tracker.as_ref().map_or("Tracker", |t| t.name());
 
     let mut picked = None;
+    let mut log_time = None;
+    let mut tile = None;
+    let board = g.tracker_board;
+    let mut set_board = None;
     egui::Frame::new()
         .inner_margin(Margin::symmetric(24, 20))
         .show(ui, |ui| {
-            page_title(
-                ui,
-                &theme,
-                tl("Linked tickets"),
-                tf("{provider} · live from the list", &[("provider", provider)]),
-            );
+            ui.horizontal(|ui| {
+                page_title(
+                    ui,
+                    &theme,
+                    tl("Linked tickets"),
+                    tf("{provider} · live from the list", &[("provider", provider)]),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    let style = theme.icon_button();
+                    if icon_toggle(ui, tl("Board"), Icon::Board, &style, 30.0, board).clicked() {
+                        set_board = Some(true);
+                    }
+                    if icon_toggle(ui, tl("List"), Icon::List, &style, 30.0, !board).clicked() {
+                        set_board = Some(false);
+                    }
+                });
+            });
             ui.add_space(16.0);
-            summary(ui, &theme, &rows, listed);
+            summary(ui, &theme, &rows, listed, &mut tile);
             ui.add_space(20.0);
             if rows.is_empty() {
                 ui.add_space(32.0);
@@ -67,6 +88,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 });
                 return;
             }
+            if board {
+                board_view(ui, &theme, &rows, selected, &mut picked, &mut log_time);
+                return;
+            }
             egui::ScrollArea::vertical()
                 .auto_shrink(false)
                 .show(ui, |ui| {
@@ -75,11 +100,15 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         let tone = tones::ticket_status(status, &theme.tones);
                         group_heading(ui, &theme, status, tone, group.len());
                         for row in group {
-                            if ticket_row(ui, &theme, row, selected == Some(row.index))
-                                .0
-                                .clicked()
-                            {
+                            let (card, avatar) =
+                                ticket_row(ui, &theme, row, selected == Some(row.index));
+                            if card.clicked() {
                                 picked = Some(row.index);
+                            }
+                            let right =
+                                avatar.map_or(card.rect.right() - 14.0, |a| a.left() - 10.0);
+                            if quick_log(ui, &theme, &card, right) {
+                                log_time = Some(row.index);
                             }
                             ui.add_space(6.0);
                         }
@@ -87,10 +116,174 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     }
                 });
         });
-    if let Some(index) = picked {
+    if let Some(board) = set_board {
+        g.tracker_board = board;
+    }
+    if let Some((key, label)) = tile {
+        g.focus_on(key, tl(label));
+    }
+    if let Some(index) = picked.or(log_time) {
         g.app.table_state.select(Some(index));
         g.app.layout.inspector.reset();
     }
+    if log_time.is_some() {
+        g.pending.push(Action::OpenLogTime);
+    }
+}
+
+/// A "+ Log time" button over the right of `card` while the pointer is on it,
+/// its right edge at `right`. Returns whether it was clicked.
+fn quick_log(ui: &mut Ui, theme: &Theme, card: &egui::Response, right: f32) -> bool {
+    if !ui.rect_contains_pointer(card.rect) {
+        return false;
+    }
+    let size = Vec2::new(28.0, 28.0);
+    let rect = egui::Rect::from_min_size(egui::pos2(right - size.x, card.rect.top() + 10.0), size);
+    let response = ui
+        .interact(rect, card.id.with("log_time"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl("Log time… (L)"));
+    let fill = if response.hovered() {
+        theme.palette.accent_fill
+    } else {
+        theme.palette.raised
+    };
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(theme.radii.medium), fill);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::same(theme.radii.medium),
+        Stroke::new(1.0, theme.palette.border),
+        egui::StrokeKind::Inside,
+    );
+    let tint = if response.hovered() {
+        egui::Color32::WHITE
+    } else {
+        theme.palette.text_secondary
+    };
+    icons::paint(ui.painter(), rect.shrink(7.0), Icon::Plus, tint);
+    response.clicked()
+}
+
+/// The tickets as a board: a column per status, compact cards in each, the
+/// columns side by side (scrolling sideways when they do not fit).
+fn board_view(
+    ui: &mut Ui,
+    theme: &Theme,
+    rows: &[Row],
+    selected: Option<usize>,
+    picked: &mut Option<usize>,
+    log_time: &mut Option<usize>,
+) {
+    let groups = by_status(rows);
+    let gap = 12.0;
+    let count = groups.len().max(1) as f32;
+    let width = ((ui.available_width() - gap * (count - 1.0)) / count).max(BOARD_COLUMN_WIDTH);
+    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            for (status, group) in &groups {
+                let tone = tones::ticket_status(status, &theme.tones);
+                ui.allocate_ui_with_layout(
+                    Vec2::new(width, 0.0),
+                    Layout::top_down(Align::Min),
+                    |ui| {
+                        ui.set_width(width);
+                        let column = egui::Frame::new()
+                            .fill(theme.palette.panel.gamma_multiply(0.6))
+                            .corner_radius(CornerRadius::same(theme.radii.large))
+                            .inner_margin(Margin::same(10))
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                ui.add_space(2.0);
+                                group_heading(ui, theme, status, tone, group.len());
+                                ui.spacing_mut().item_spacing.y = 8.0;
+                                for row in group {
+                                    let card =
+                                        board_card(ui, theme, row, selected == Some(row.index));
+                                    if card.clicked() {
+                                        *picked = Some(row.index);
+                                    }
+                                    if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
+                                        *log_time = Some(row.index);
+                                    }
+                                }
+                            });
+                        // The status's tone along the top of the column.
+                        let top = column.response.rect;
+                        let radius = theme.radii.large;
+                        ui.painter().rect_filled(
+                            egui::Rect::from_min_size(top.min, Vec2::new(top.width(), 3.0)),
+                            CornerRadius {
+                                nw: radius,
+                                ne: radius,
+                                sw: 0,
+                                se: 0,
+                            },
+                            tone.fg,
+                        );
+                    },
+                );
+            }
+        });
+    });
+}
+
+/// A ticket on the board: id and type, subject, MR, progress, assignee.
+fn board_card(ui: &mut Ui, theme: &Theme, row: &Row, selected: bool) -> egui::Response {
+    let ticket = &row.ticket;
+    let (fill, stroke) = if selected {
+        (theme.palette.selection, theme.palette.accent)
+    } else {
+        (theme.palette.raised, theme.palette.border_soft)
+    };
+    let response = egui::Frame::new()
+        .fill(fill)
+        .stroke(Stroke::new(1.0, stroke))
+        .corner_radius(CornerRadius::same(theme.radii.medium))
+        .inner_margin(Margin::same(12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 6.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                ui.label(
+                    mono(format!("#{}", ticket.id), theme.text_size - 1.0)
+                        .color(theme.palette.accent),
+                );
+                if let Some(kind) = &ticket.tracker_type {
+                    ui.label(muted(theme, kind).size(theme.text_size - 2.0));
+                }
+                if let Some(assignee) = &ticket.assignee {
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let (name, _) = split_person(assignee);
+                        avatar(ui, theme, name, 20.0)
+                            .on_hover_text(tf("Assigned to {name}", &[("name", assignee)]));
+                    });
+                }
+            });
+            ui.add(
+                egui::Label::new(
+                    RichText::new(&ticket.subject).font(fonts::medium(theme.text_size)),
+                )
+                .wrap(),
+            );
+            mr_line(ui, theme, row);
+            ui.add_space(2.0);
+            progress(ui, theme, ticket);
+        })
+        .response
+        .interact(Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    if response.hovered() && !selected {
+        ui.painter().rect_stroke(
+            response.rect,
+            CornerRadius::same(theme.radii.medium),
+            Stroke::new(1.0, theme.palette.border),
+            egui::StrokeKind::Inside,
+        );
+    }
+    response
 }
 
 /// The rows by ticket status, statuses in the order they first show up.
@@ -108,7 +301,16 @@ fn by_status(rows: &[Row]) -> Vec<(&str, Vec<&Row>)> {
 /// Four tiles: linked tickets, MRs without one, time spent against estimated,
 /// tickets over their estimate. Two per line when the page is narrow. Returns
 /// where each tile went.
-fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui::Rect> {
+///
+/// The tiles about MRs are links: a click lists them (`clicked`: the cockpit
+/// counter's key and label).
+fn summary(
+    ui: &mut Ui,
+    theme: &Theme,
+    rows: &[Row],
+    listed: usize,
+    clicked: &mut Option<(&'static str, &'static str)>,
+) -> Vec<egui::Rect> {
     // A ticket linked from two MRs counts once in the totals.
     let mut seen = std::collections::HashSet::new();
     let tickets: Vec<&LinkedTicket> = rows
@@ -132,12 +334,14 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
                 ],
             ),
             None,
+            Some(("With ticket", "With ticket")),
         ),
         (
             tl("Without a ticket"),
             (listed - rows.len()).to_string(),
             tl("merge requests").to_owned(),
             (listed > rows.len()).then_some(tones.amber),
+            (listed > rows.len()).then_some(("No ticket", "No ticket")),
         ),
         (
             tl("Time spent"),
@@ -148,12 +352,14 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
                 tl("no estimate").to_owned()
             },
             (estimated > 0 && spent > estimated).then_some(tones.red),
+            None,
         ),
         (
             tl("Over estimate"),
             over.to_string(),
             tn(over as u64, "ticket", "tickets"),
             (over > 0).then_some(tones.red),
+            (over > 0).then_some(("Over estimate", "Over estimate")),
         ),
     ];
     let gap = 12.0;
@@ -169,7 +375,7 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
         // with every tile, a step lower each time.
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = gap;
-            for (caption, value, detail, tone) in line {
+            for (caption, value, detail, tone, link) in line {
                 let size = Vec2::new(width, 0.0);
                 let response =
                     ui.allocate_ui_with_layout(size, Layout::top_down(Align::Min), |ui| {
@@ -184,7 +390,24 @@ fn summary(ui: &mut Ui, theme: &Theme, rows: &[Row], listed: usize) -> Vec<egui:
                             theme.palette.text_muted,
                         );
                     });
-                rects.push(response.response.rect);
+                let rect = response.response.rect;
+                rects.push(rect);
+                let Some(link) = link else { continue };
+                let response = ui
+                    .interact(rect, ui.scope_id().with(("tile", link.0)), Sense::click())
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .on_hover_text(tl("Click to list these MRs"));
+                if response.hovered() {
+                    ui.painter().rect_stroke(
+                        rect,
+                        CornerRadius::same(theme.radii.large),
+                        Stroke::new(1.0, theme.palette.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                if response.clicked() {
+                    *clicked = Some(*link);
+                }
             }
         });
         ui.add_space(gap);
@@ -344,7 +567,18 @@ fn mr_line(ui: &mut Ui, theme: &Theme, row: &Row) {
     });
 }
 
-/// Spent / estimated and the done ratio over a bar, red past the estimate.
+/// The bar's color for the time used: the accent, amber from 80 % of the
+/// estimate, red past it.
+fn consumption_color(theme: &Theme, ticket: &LinkedTicket) -> egui::Color32 {
+    match (ticket.time_spent, ticket.time_estimate) {
+        (Some(s), Some(e)) if e > 0 && s > e => theme.tones.red.fg,
+        (Some(s), Some(e)) if e > 0 && s as f32 >= e as f32 * 0.8 => theme.tones.amber.fg,
+        _ => theme.palette.accent,
+    }
+}
+
+/// Spent / estimated and the done ratio over a bar, amber near the estimate and
+/// red past it.
 fn progress(ui: &mut Ui, theme: &Theme, ticket: &LinkedTicket) {
     let size = theme.text_size - 1.5;
     let fraction = ticket.done_ratio.map(|d| d as f32 / 100.0).or(
@@ -353,12 +587,8 @@ fn progress(ui: &mut Ui, theme: &Theme, ticket: &LinkedTicket) {
             _ => None,
         },
     );
-    let over = is_over(ticket);
-    let color = if over {
-        theme.tones.red.fg
-    } else {
-        theme.palette.accent
-    };
+    let color = consumption_color(theme, ticket);
+    let warn = color != theme.palette.accent;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         let time = match (ticket.time_spent, ticket.time_estimate) {
@@ -376,7 +606,7 @@ fn progress(ui: &mut Ui, theme: &Theme, ticket: &LinkedTicket) {
                 ui.label(
                     RichText::new(time)
                         .font(fonts::medium(size))
-                        .color(if over {
+                        .color(if warn {
                             color
                         } else {
                             theme.palette.text_secondary
@@ -418,7 +648,7 @@ mod tests {
             ..Default::default()
         };
         let mut rects = Vec::new();
-        let mut output = ctx.run_ui(input, |ui| rects = summary(ui, &theme, &[], 5));
+        let mut output = ctx.run_ui(input, |ui| rects = summary(ui, &theme, &[], 5, &mut None));
         output.textures_delta.clear();
         rects
     }

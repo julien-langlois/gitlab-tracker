@@ -252,7 +252,13 @@ fn setting_control(ui: &mut Ui, theme: &Theme, item: &mut SettingsEditorItem) {
             ui.add_sized([96.0, theme.spacing.control_height], value);
         }
         (ProjectSettingKind::Text, ProjectSettingValue::Text(text)) => {
-            ui.add(egui::TextEdit::singleline(text).desired_width(CONTROL_WIDTH));
+            let mut edit = egui::TextEdit::singleline(text).desired_width(CONTROL_WIDTH);
+            if item.def.id == "core.name" {
+                edit = edit
+                    .char_limit(crate::settings_core::MAX_PROJECT_NAME_CHARS)
+                    .hint_text(tl("Project id"));
+            }
+            ui.add(edit);
         }
         _ => {
             ui.label(muted(theme, "—"));

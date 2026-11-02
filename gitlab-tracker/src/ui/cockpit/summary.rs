@@ -1,6 +1,6 @@
 use crate::app::App;
 use crate::config::CockpitThresholds;
-use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState};
+use crate::models::{GitlabMrState, MergeabilityStatus, PipelineState, TrackedMr};
 use crate::utils::{awaiting_review_by, matches_gitlab_username, review_waiting_since};
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use std::collections::BTreeMap;
@@ -90,7 +90,7 @@ impl ReleaseSummary {
 
 impl DashboardSummary {
     pub(super) fn from_app(app: &App) -> Self {
-        Self::from_visible_mrs(app)
+        Self::from_mrs(app, app.visible_mrs())
     }
 
     /// Flow counters. Merges and closes come from the stats snapshots over the
@@ -124,7 +124,9 @@ impl DashboardSummary {
         Some(summary)
     }
 
-    fn from_visible_mrs(app: &App) -> Self {
+    /// The counters over `mrs`. Over a single MR, each counter is 0 or 1: which
+    /// counters it is part of (see [`metric_members`]).
+    fn from_mrs<'a>(app: &App, mrs: impl Iterator<Item = &'a TrackedMr>) -> Self {
         let mut summary = Self::default();
         // Local time: "today", "this week" and "overdue" follow the user's calendar,
         // not UTC (a merge at 23:30 UTC is tomorrow in UTC+2).
@@ -137,7 +139,7 @@ impl DashboardSummary {
         let tracker_enabled = app.tracker.is_some();
         let thresholds = &app.config.cockpit_thresholds;
 
-        for mr in app.visible_mrs() {
+        for mr in mrs {
             match mr.state {
                 GitlabMrState::Opened => summary.open += 1,
                 GitlabMrState::Merged => {
@@ -317,6 +319,89 @@ impl DashboardSummary {
     }
 }
 
+impl DashboardSummary {
+    /// The counters of the MRs listed, by key (the English label of the cockpit
+    /// row; see [`super::metric_key`]).
+    pub(super) fn counters(self) -> [(&'static str, usize); 31] {
+        [
+            ("Open", self.open),
+            ("Mergeable", self.mergeable),
+            ("Draft", self.draft),
+            ("Blocked", self.total_blocked()),
+            ("Conflicts", self.conflicts),
+            ("Needs rebase", self.needs_rebase),
+            ("CI failing", self.ci_failing),
+            ("Discussions", self.discussions),
+            ("Changes req.", self.requested_changes),
+            ("Needs review", self.needs_review),
+            ("To review (me)", self.awaiting_my_review),
+            ("No reviewer", self.no_reviewer),
+            ("No assignee", self.no_assignee),
+            ("Flagged", self.flagged),
+            ("Stale", self.stale_7_days),
+            ("No milestone", self.no_milestone),
+            ("Due soon", self.due_this_week),
+            ("Overdue", self.overdue),
+            ("Behind target", self.behind_target),
+            ("Hot threads", self.hot_threads),
+            ("With ticket", self.with_ticket),
+            ("No ticket", self.no_ticket),
+            ("Over estimate", self.over_estimate),
+            ("Complex", self.complex),
+            ("Large diff", self.large_diff),
+            ("Many commits", self.many_commits),
+            ("Many files", self.many_files),
+            ("No diff stats", self.no_diff_stats),
+            ("Pipeline unknown", self.pipeline_unknown),
+            ("CI skipped", self.ci_skipped),
+            ("Recently updated", self.recently_updated),
+        ]
+    }
+}
+
+/// The ids of the listed MRs behind each cockpit counter, by key: the live
+/// counters, and `release:<milestone>:<bucket>` for the release rows.
+pub(super) fn metric_members(app: &App) -> std::collections::HashMap<String, Vec<String>> {
+    let mut members = std::collections::HashMap::<String, Vec<String>>::new();
+    for mr in app.visible_mrs() {
+        let one = DashboardSummary::from_mrs(app, std::iter::once(mr));
+        for (key, count) in one.counters() {
+            if count > 0 {
+                members
+                    .entry(key.to_string())
+                    .or_default()
+                    .push(mr.id.clone());
+            }
+        }
+        if let (Some(milestone), Some(bucket)) = (mr.milestone.as_deref(), release_bucket(mr)) {
+            members
+                .entry(release_key(milestone, bucket))
+                .or_default()
+                .push(mr.id.clone());
+        }
+    }
+    members
+}
+
+/// The key of a release row: `bucket` is one of "Merged", "WIP", "Blocked", "Review".
+pub(super) fn release_key(milestone: &str, bucket: &str) -> String {
+    format!("release:{milestone}:{bucket}")
+}
+
+/// Where an MR counts in its release: merged, in progress, blocked or waiting
+/// for a review (closed ones do not count).
+fn release_bucket(mr: &TrackedMr) -> Option<&'static str> {
+    match mr.state {
+        GitlabMrState::Merged => Some("Merged"),
+        GitlabMrState::Opened => Some(match mr.mergeability {
+            MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => "Blocked",
+            MergeabilityStatus::NotApproved | MergeabilityStatus::RequestedChanges => "Review",
+            _ => "WIP",
+        }),
+        GitlabMrState::Closed => None,
+    }
+}
+
 pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
     let today = Local::now().date_naive();
     let mut releases = BTreeMap::<String, ReleaseSummary>::new();
@@ -340,18 +425,12 @@ pub(super) fn release_summaries(app: &App) -> Vec<ReleaseSummary> {
             entry.due_date = parse_gitlab_date(mr.milestone_due_date.as_deref());
         }
 
-        match mr.state {
-            GitlabMrState::Merged => entry.merged += 1,
-            GitlabMrState::Opened => match mr.mergeability {
-                MergeabilityStatus::Conflict | MergeabilityStatus::NeedsRebase => {
-                    entry.blocked += 1;
-                }
-                MergeabilityStatus::NotApproved | MergeabilityStatus::RequestedChanges => {
-                    entry.waiting_review += 1;
-                }
-                _ => entry.in_progress += 1,
-            },
-            GitlabMrState::Closed => {}
+        match release_bucket(mr) {
+            Some("Merged") => entry.merged += 1,
+            Some("Blocked") => entry.blocked += 1,
+            Some("Review") => entry.waiting_review += 1,
+            Some(_) => entry.in_progress += 1,
+            None => {}
         }
     }
 

@@ -8,7 +8,12 @@ use crate::actions::Action;
 use crate::app::InputMode;
 
 pub fn handle(g: &mut GuiApp, ctx: &egui::Context) {
-    if ctx.memory(|m| m.focused().is_some()) {
+    // The palette's shortcut works everywhere, even from a text field.
+    if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::K)) {
+        super::palette::toggle(g);
+        return;
+    }
+    if g.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
         return;
     }
     let events = ctx.input(|i| i.events.clone());

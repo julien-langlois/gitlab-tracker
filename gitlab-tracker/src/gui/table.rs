@@ -26,17 +26,10 @@ use crate::models::{Effort, MrStatus};
 pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let shown = g.app.visible_mrs().count();
     toolbar(g, ui, shown, sizes);
+    active_filters(g, ui);
 
     if shown == 0 {
-        ui.add_space(48.0);
-        ui.vertical_centered(|ui| {
-            let text = tl(if g.app.mrs.is_empty() {
-                "No tracked merge request yet: type its number in the search field and press Enter."
-            } else {
-                "No merge request matches this view."
-            });
-            ui.label(muted(&g.theme, text));
-        });
+        empty_state(g, ui);
         return;
     }
 
@@ -46,6 +39,33 @@ pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
+
+/// How the table groups its rows, under foldable headings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupBy {
+    None,
+    Status,
+    Milestone,
+    Author,
+}
+
+impl GroupBy {
+    const ALL: [GroupBy; 4] = [
+        GroupBy::None,
+        GroupBy::Status,
+        GroupBy::Milestone,
+        GroupBy::Author,
+    ];
+
+    fn label(self) -> &'static str {
+        tl(match self {
+            GroupBy::None => "No grouping",
+            GroupBy::Status => "By status",
+            GroupBy::Milestone => "By milestone",
+            GroupBy::Author => "By author",
+        })
+    }
+}
 
 fn sort_label(column: SortColumn) -> &'static str {
     tl(match column {
@@ -125,6 +145,7 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
             g.app.input_mode = InputMode::ColumnPicker;
         }
         sort_button(g, ui);
+        group_button(g, ui);
         search(g, ui);
     });
     milestone_suggestions(g, ui, bar);
@@ -159,6 +180,210 @@ fn sort_button(g: &mut GuiApp, ui: &mut Ui) {
         });
         if ui.button(reverse).clicked() {
             g.pending.push(Action::ToggleSortOrder);
+        }
+    });
+}
+
+/// "Group": how the rows are grouped; a click opens the choices.
+fn group_button(g: &mut GuiApp, ui: &mut Ui) {
+    let theme = g.theme;
+    let text = match g.group_by {
+        GroupBy::None => tl("Group"),
+        other => other.label(),
+    };
+    let response = button(ui, &theme, Some(Icon::Group), text, false)
+        .on_hover_text(tl("Group the rows under foldable headings"));
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(170.0);
+        for group in GroupBy::ALL {
+            if ui
+                .selectable_label(g.group_by == group, group.label())
+                .clicked()
+            {
+                g.group_by = group;
+                g.folded.clear();
+            }
+        }
+    });
+}
+
+/// What narrows the list beyond every tracked MR, as chips that each undo
+/// theirs: the cockpit focus, the view, the search, hidden merged MRs.
+fn active_filters(g: &mut GuiApp, ui: &mut Ui) {
+    let theme = g.theme;
+    let tones = &theme.tones;
+    let mut chips: Vec<(String, Tone, Undo)> = Vec::new();
+    if let Some(focus) = &g.app.focus {
+        chips.push((
+            tf("Cockpit: {name}", &[("name", &focus.label)]),
+            tones.blue,
+            Undo::Focus,
+        ));
+    }
+    if g.app.active_filter.index != 0 {
+        let label = g.app.active_filter.label(&g.app.filter_defs);
+        chips.push((
+            tf("View: {name}", &[("name", &label)]),
+            tones.purple,
+            Undo::View,
+        ));
+    }
+    let search = g.app.input.trim();
+    if !search.is_empty() && !search.starts_with('@') {
+        chips.push((
+            tf("Search: {text}", &[("text", search)]),
+            tones.teal,
+            Undo::Search,
+        ));
+    }
+    if g.app.config.hide_merged {
+        chips.push((tl("Merged hidden").into(), tones.gray, Undo::HideMerged));
+    }
+    if chips.is_empty() {
+        return;
+    }
+    let mut undo = Vec::new();
+    egui::Frame::new()
+        .inner_margin(Margin::symmetric(16, 8))
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+                ui.label(muted(&theme, tl("Showing")));
+                for (text, tone, what) in &chips {
+                    if removable_chip(ui, &theme, text, *tone) {
+                        undo.push(*what);
+                    }
+                }
+                if chips.len() > 1 {
+                    let reset = ui
+                        .add(
+                            egui::Label::new(
+                                RichText::new(tl("Clear all"))
+                                    .size(theme.text_size - 1.0)
+                                    .color(theme.palette.accent),
+                            )
+                            .sense(Sense::click()),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if reset.clicked() {
+                        undo = chips.iter().map(|c| c.2).collect();
+                    }
+                }
+            });
+        });
+    for what in undo {
+        apply_undo(g, what);
+    }
+}
+
+/// What a chip of [`active_filters`] undoes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Undo {
+    Focus,
+    View,
+    Search,
+    HideMerged,
+}
+
+fn apply_undo(g: &mut GuiApp, what: Undo) {
+    match what {
+        Undo::Focus => g.next_focus = Some(None),
+        Undo::View => g.pending.push(Action::SetFilter {
+            index: 0,
+            query: String::new(),
+        }),
+        Undo::Search => {
+            g.app.input.clear();
+            g.app.milestone_suggestions.clear();
+        }
+        Undo::HideMerged => g.pending.push(Action::ToggleHideMerged),
+    }
+}
+
+/// A chip in `tone` with a ✕; returns whether it was clicked.
+fn removable_chip(ui: &mut Ui, theme: &Theme, text: &str, tone: Tone) -> bool {
+    let font = fonts::medium(theme.text_size - 1.5);
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), font, tone.fg);
+    let size = Vec2::new(galley.size().x + 32.0, 24.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let fill = if response.hovered() {
+        tone.bg.gamma_multiply(1.4)
+    } else {
+        tone.bg
+    };
+    let radius = CornerRadius::same(12);
+    ui.painter().rect_filled(rect, radius, fill);
+    ui.painter().galley(
+        egui::pos2(rect.left() + 10.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        tone.fg,
+    );
+    ui.painter().text(
+        egui::pos2(rect.right() - 12.0, rect.center().y),
+        egui::Align2::CENTER_CENTER,
+        "✕",
+        egui::FontId::proportional(theme.text_size - 3.0),
+        tone.fg,
+    );
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl("Remove"))
+        .clicked()
+}
+
+/// No row to show: why, and the way back.
+fn empty_state(g: &mut GuiApp, ui: &mut Ui) {
+    let theme = g.theme;
+    let nothing_tracked = g.app.mrs.is_empty();
+    let narrowed = g.app.focus.is_some()
+        || g.app.active_filter.index != 0
+        || !g.app.input.trim().is_empty()
+        || g.app.config.hide_merged;
+    ui.add_space(72.0);
+    ui.vertical_centered(|ui| {
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(64.0), Sense::hover());
+        ui.painter()
+            .circle_filled(rect.center(), 32.0, theme.palette.raised);
+        let icon = if nothing_tracked {
+            Icon::MergeRequests
+        } else {
+            Icon::Search
+        };
+        icons::paint(
+            ui.painter(),
+            Rect::from_center_size(rect.center(), Vec2::splat(28.0)),
+            icon,
+            theme.palette.text_muted,
+        );
+        ui.add_space(14.0);
+        let (title, text) = if nothing_tracked {
+            (
+                tl("No merge request tracked yet"),
+                tl("Type an MR number in the search field and press Enter, or @ and a milestone to track all of its MRs."),
+            )
+        } else {
+            (
+                tl("No merge request matches"),
+                tl("The view, the search or the cockpit selection hides every tracked MR."),
+            )
+        };
+        ui.label(semibold(title, theme.text_size + 2.0));
+        ui.add_space(4.0);
+        ui.label(muted(&theme, text));
+        ui.add_space(16.0);
+        if nothing_tracked {
+            if button(ui, &theme, Some(Icon::Search), tl("Track an MR"), true).clicked() {
+                g.focus_search = true;
+            }
+        } else if narrowed
+            && button(ui, &theme, Some(Icon::Close), tl("Show every MR"), true).clicked()
+        {
+            for what in [Undo::Focus, Undo::View, Undo::Search] {
+                apply_undo(g, what);
+            }
+            if g.app.config.hide_merged {
+                apply_undo(g, Undo::HideMerged);
+            }
         }
     });
 }
@@ -318,13 +543,13 @@ impl Col {
 
     fn width(self) -> f32 {
         match self {
-            Col::Effort => 80.0,
+            Col::Effort => 92.0,
             Col::Notes => 44.0,
-            Col::Activity => 80.0,
+            Col::Activity => 96.0,
             Col::Labels => 200.0,
             Col::Milestone => 140.0,
             Col::Target => 120.0,
-            Col::Behind => 56.0,
+            Col::Behind => 68.0,
             Col::Ticket => 150.0,
         }
     }
@@ -363,7 +588,7 @@ fn wanted_columns(app: &App) -> Vec<Col> {
 
 const FLAG_WIDTH: f32 = 18.0;
 const ID_WIDTH: f32 = 52.0;
-const STATUS_WIDTH: f32 = 96.0;
+const STATUS_WIDTH: f32 = 116.0;
 /// Fixed columns: flag, MR, status (the title takes the rest).
 const FIXED_COLUMNS_WIDTH: f32 = FLAG_WIDTH + ID_WIDTH + STATUS_WIDTH;
 /// The title never gets narrower than this; below, the table scrolls sideways.
@@ -371,7 +596,10 @@ const MIN_TITLE_WIDTH: f32 = 200.0;
 /// Room the title keeps before an optional column is dropped.
 const TITLE_COMFORT_WIDTH: f32 = 220.0;
 const COLUMN_GAP: f32 = 8.0;
-const BRANCH_WIDTH: f32 = 78.0;
+/// A dot per branch: narrow, the branch's name on top (in full on hover).
+const BRANCH_WIDTH: f32 = 50.0;
+/// Branch cells stop growing there: the room left goes to the title.
+const BRANCH_MAX_WIDTH: f32 = 72.0;
 /// Inside a row, left and right.
 const ROW_PADDING: f32 = 8.0;
 const ROW_HEIGHT: f32 = 50.0;
@@ -397,7 +625,7 @@ pub fn fit_columns(wanted: &[Col], width: f32, branch_count: usize) -> (Vec<Col>
     let branch_width = if branch_count == 0 {
         BRANCH_WIDTH
     } else {
-        (BRANCH_WIDTH + left / branch_count as f32 / 4.0).min(120.0)
+        (BRANCH_WIDTH + left / branch_count as f32 / 4.0).min(BRANCH_MAX_WIDTH)
     };
     (kept.clone(), wanted.len() - kept.len(), branch_width)
 }
@@ -474,7 +702,11 @@ struct RowView {
     effort: Option<(&'static str, Tone)>,
     threads: u32,
     activity: (&'static str, Tone),
-    branches: Vec<(&'static str, &'static str, Tone)>,
+    /// The color of the "updated" date: amber once slowing, red once stale.
+    age: Option<egui::Color32>,
+    /// The title is not loaded yet, and a fetch is on its way.
+    loading: bool,
+    branches: Vec<BranchCell>,
     milestone: Option<String>,
     target: String,
     behind: Option<u32>,
@@ -482,20 +714,33 @@ struct RowView {
     has_ticket: bool,
 }
 
-/// The rows of `range` (indexes into the visible list): only those in view are
-/// copied out, so a frame costs the same whatever the number of MRs.
-fn row_views(g: &GuiApp, range: std::ops::Range<usize>) -> Vec<RowView> {
+/// A branch cell: where the MR stands on it, or why that is not known yet.
+#[derive(Debug, Clone, Copy)]
+enum BranchCell {
+    Known(&'static str, &'static str, Tone),
+    /// A fetch is on its way.
+    Loading,
+    /// Not fetched, and nothing on its way: the next refresh tells.
+    Unknown,
+}
+
+/// The rows of `indexes` (into the visible list): only those in view are copied
+/// out, so a frame costs the same whatever the number of MRs.
+fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
     let app = &g.app;
     let theme = &g.theme;
     let tones = &theme.tones;
     let selected = app.table_state.selected();
     let fresh_window = app.update_highlight_ticks > 0;
-    app.visible_mrs()
+    let mut views: Vec<RowView> = app
+        .visible_mrs()
         .enumerate()
-        .skip(range.start)
-        .take(range.len())
+        .filter(|(index, _)| indexes.contains(index))
         .map(|(index, mr)| {
             let failed = matches!(mr.status, MrStatus::Error(_));
+            let fetching = app.pending_initial_fetches.contains(&mr.id)
+                || app.pending_refresh_fetches.contains(&mr.id);
+            let activity = activity(app, mr.updated_at.as_deref(), theme);
             RowView {
                 index,
                 id: mr.id.clone(),
@@ -504,6 +749,11 @@ fn row_views(g: &GuiApp, range: std::ops::Range<usize>) -> Vec<RowView> {
                 } else {
                     mr.title.clone()
                 },
+                loading: mr.title.is_empty() && fetching,
+                age: [tones.amber, tones.red]
+                    .iter()
+                    .find(|t| t.fg == activity.1.fg)
+                    .map(|t| t.fg),
                 author: mr.author.clone(),
                 updated: mr
                     .updated_at
@@ -525,11 +775,18 @@ fn row_views(g: &GuiApp, range: std::ops::Range<usize>) -> Vec<RowView> {
                     tones::effort(effort, tones)
                 }),
                 threads: mr.user_notes_count,
-                activity: activity(app, mr.updated_at.as_deref(), theme),
+                activity,
                 branches: app
                     .branches
                     .iter()
-                    .map(|b| tones::presence(app.branch_presence(mr, b), failed, tones))
+                    .map(|b| match app.branch_presence(mr, b) {
+                        None if !failed && fetching => BranchCell::Loading,
+                        None if !failed => BranchCell::Unknown,
+                        presence => {
+                            let (glyph, label, tone) = tones::presence(presence, failed, tones);
+                            BranchCell::Known(glyph, label, tone)
+                        }
+                    })
                     .collect(),
                 milestone: mr.milestone.clone(),
                 target: mr.target_branch.clone(),
@@ -541,7 +798,74 @@ fn row_views(g: &GuiApp, range: std::ops::Range<usize>) -> Vec<RowView> {
                 has_ticket: mr.linked_ticket.is_some() && app.tracker.is_some(),
             }
         })
-        .collect()
+        .collect();
+    // In the order asked for (the groups reorder the list).
+    views.sort_by_key(|v| indexes.iter().position(|i| *i == v.index));
+    views
+}
+
+/// A line of the table: a group's heading, or an MR (its index in the visible list).
+enum Line {
+    Heading {
+        key: String,
+        label: String,
+        count: usize,
+        tone: Option<Tone>,
+        folded: bool,
+    },
+    Mr(usize),
+}
+
+/// The table's lines: the visible MRs, under their group's heading when grouped,
+/// folded groups without their MRs.
+fn lines(g: &GuiApp) -> Vec<Line> {
+    let app = &g.app;
+    if g.group_by == GroupBy::None {
+        return (0..app.visible_mrs().count()).map(Line::Mr).collect();
+    }
+    let tones = &g.theme.tones;
+    // (key, label, tone, members), groups in the order they first show up.
+    let mut groups: Vec<(String, String, Option<Tone>, Vec<usize>)> = Vec::new();
+    for (index, mr) in app.visible_mrs().enumerate() {
+        let (label, tone) = match g.group_by {
+            GroupBy::Status => {
+                let (label, tone) = tones::status(mr.state, &mr.mergeability, tones);
+                (label.to_string(), Some(tone))
+            }
+            GroupBy::Milestone => (
+                mr.milestone
+                    .clone()
+                    .unwrap_or_else(|| tl("No milestone").into()),
+                None,
+            ),
+            GroupBy::Author => (split_person(&mr.author).0.to_string(), None),
+            GroupBy::None => unreachable!(),
+        };
+        match groups.iter_mut().find(|grp| grp.1 == label) {
+            Some(group) => group.3.push(index),
+            None => groups.push((
+                format!("{:?}:{label}", g.group_by),
+                label,
+                tone,
+                vec![index],
+            )),
+        }
+    }
+    let mut lines = Vec::new();
+    for (key, label, tone, members) in groups {
+        let folded = g.folded.contains(&key);
+        lines.push(Line::Heading {
+            key,
+            label,
+            count: members.len(),
+            tone,
+            folded,
+        });
+        if !folded {
+            lines.extend(members.into_iter().map(Line::Mr));
+        }
+    }
+    lines
 }
 
 /// What a click in the table asked for, applied once the table is drawn.
@@ -552,6 +876,7 @@ enum RowAction {
 
 fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
     let theme = g.theme;
+    let lines = lines(g);
     let branches = g.app.branches.clone();
     let wanted = wanted_columns(&g.app);
     let (columns, dropped, branch_width) =
@@ -565,8 +890,13 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
         ui.data(|d| d.get_temp(memory)).unwrap_or((None, 0.0, 0.0));
     let stride = ROW_HEIGHT + ROW_GAP;
     let mut scroll_to = None;
-    if let Some(index) = selected.filter(|_| selected != last_selected) {
-        let top = index as f32 * stride;
+    let selected_line = selected.and_then(|s| {
+        lines
+            .iter()
+            .position(|l| matches!(l, Line::Mr(i) if *i == s))
+    });
+    if let Some(line) = selected_line.filter(|_| selected != last_selected) {
+        let top = line as f32 * stride;
         let bottom = top + stride;
         if top < offset {
             scroll_to = Some(top);
@@ -578,6 +908,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
     let sort = (g.app.sort_column, g.app.sort_order);
     let mut sort_by = None;
     let mut action = None;
+    let mut fold = None;
     egui::ScrollArea::horizontal()
         .auto_shrink(false)
         .show(ui, |ui| {
@@ -592,12 +923,37 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
             let footer = if dropped > 0 { 26.0 } else { 0.0 };
             let output = area
                 .max_height(ui.available_height() - footer)
-                .show_rows(ui, stride, shown, |ui, range| {
+                .show_rows(ui, stride, lines.len(), |ui, range| {
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    for r in &row_views(g, range) {
+                    let in_view = &lines[range];
+                    let indexes: Vec<usize> = in_view
+                        .iter()
+                        .filter_map(|l| match l {
+                            Line::Mr(i) => Some(*i),
+                            Line::Heading { .. } => None,
+                        })
+                        .collect();
+                    let mut views = row_views(g, &indexes).into_iter();
+                    for line in in_view {
                         ui.add_space(ROW_GAP);
-                        if let Some(picked) = row(ui, &theme, &grid, r) {
-                            action = Some(picked);
+                        match line {
+                            Line::Heading {
+                                key,
+                                label,
+                                count,
+                                tone,
+                                folded,
+                            } => {
+                                if group_heading(ui, &theme, grid.width, label, *count, *tone, *folded) {
+                                    fold = Some(key.clone());
+                                }
+                            }
+                            Line::Mr(_) => {
+                                let Some(r) = views.next() else { continue };
+                                if let Some(picked) = row(ui, &theme, &grid, &r) {
+                                    action = Some(picked);
+                                }
+                            }
                         }
                     }
                 });
@@ -623,6 +979,12 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize) {
     if let Some(column) = sort_by {
         g.pending.push(Action::SortBy(column));
     }
+    if let Some(key) = fold {
+        if !g.folded.remove(&key) {
+            g.folded.insert(key);
+        }
+    }
+    let _ = shown;
     match action {
         Some(RowAction::Select(index)) => select(g, index),
         Some(RowAction::Then(index, action)) => {
@@ -703,11 +1065,100 @@ fn header(
                         mono(name, theme.text_size - 1.5).color(theme.palette.text_muted),
                     )
                     .truncate(),
-                );
+                )
+                .on_hover_text(name);
             }
             _ => {}
         }
     }
+}
+
+/// A group's heading, as tall as a row: a chevron, its name and its count.
+/// Returns whether it was clicked (to fold or unfold it).
+fn group_heading(
+    ui: &mut Ui,
+    theme: &Theme,
+    width: f32,
+    label: &str,
+    count: usize,
+    tone: Option<Tone>,
+    folded: bool,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::click());
+    let band = Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - 30.0), rect.max);
+    if response.hovered() {
+        ui.painter().rect_filled(
+            band,
+            CornerRadius::same(theme.radii.medium),
+            theme.palette.border_soft.gamma_multiply(0.6),
+        );
+    }
+    ui.painter().hline(
+        band.x_range(),
+        band.bottom() - 0.5,
+        Stroke::new(1.0, theme.palette.border_soft),
+    );
+    let y = band.center().y;
+    let chevron = if folded { "▸" } else { "▾" };
+    ui.painter().text(
+        egui::pos2(band.left() + 14.0, y),
+        egui::Align2::CENTER_CENTER,
+        chevron,
+        egui::FontId::proportional(theme.text_size),
+        theme.palette.text_muted,
+    );
+    let mut x = band.left() + 28.0;
+    if let Some(tone) = tone {
+        ui.painter()
+            .circle_filled(egui::pos2(x + 4.0, y), 4.0, tone.fg);
+        x += 14.0;
+    }
+    let galley = ui.painter().layout_no_wrap(
+        label.to_owned(),
+        fonts::semibold(theme.text_size),
+        theme.palette.text,
+    );
+    let text_width = galley.size().x;
+    ui.painter().galley(
+        egui::pos2(x, y - galley.size().y / 2.0),
+        galley,
+        theme.palette.text,
+    );
+    let count = ui.painter().layout_no_wrap(
+        count.to_string(),
+        fonts::medium(theme.text_size - 2.0),
+        theme.palette.text_secondary,
+    );
+    let pill = Rect::from_center_size(
+        egui::pos2(x + text_width + 10.0 + count.size().x / 2.0 + 7.0, y),
+        Vec2::new(count.size().x + 14.0, 18.0),
+    );
+    ui.painter()
+        .rect_filled(pill, CornerRadius::same(9), theme.tones.gray.bg);
+    ui.painter().galley(
+        pill.center() - count.size() / 2.0,
+        count,
+        theme.palette.text_secondary,
+    );
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl(if folded { "Unfold" } else { "Fold" }))
+        .clicked()
+}
+
+/// A rounded bar that pulses: something is loading there.
+fn shimmer(ui: &mut Ui, theme: &Theme, width: f32, height: f32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    let time = ui.input(|i| i.time);
+    let pulse = 0.35 + 0.25 * ((time * 3.0).sin() as f32 + 1.0) / 2.0;
+    ui.painter().rect_filled(
+        rect,
+        CornerRadius::same((height / 2.0) as u8),
+        theme.palette.text_muted.gamma_multiply(pulse * 0.5),
+    );
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(50));
+    response
 }
 
 /// Draws one row; returns what a click on it asked for.
@@ -733,6 +1184,13 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
             egui::StrokeKind::Inside,
         );
     }
+    // The status in the margin, to scan the list by color.
+    let stripe = Rect::from_min_size(
+        egui::pos2(rect.left() + 2.0, rect.top() + 9.0),
+        Vec2::new(3.0, rect.height() - 18.0),
+    );
+    ui.painter()
+        .rect_filled(stripe, CornerRadius::same(2), r.status.1.fg);
 
     let mut action = None;
     for &(cell, x, w) in &grid.cells {
@@ -764,8 +1222,8 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
             }
             Cell::Optional(col) => cell_content(&mut ui, theme, r, col),
             Cell::Branch(i) => {
-                if let Some((glyph, label, tone)) = r.branches.get(i) {
-                    ui.add(Chip::new(label, *tone).glyph(glyph));
+                if let Some(cell) = r.branches.get(i) {
+                    branch_cell(&mut ui, theme, *cell);
                 }
             }
         }
@@ -783,6 +1241,104 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
         }
     });
     action
+}
+
+/// A branch cell: a dot in the presence's tone with its glyph, named on hover.
+fn branch_cell(ui: &mut Ui, theme: &Theme, cell: BranchCell) {
+    match cell {
+        BranchCell::Known(glyph, label, tone) => {
+            let (rect, response) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::hover());
+            ui.painter().circle_filled(rect.center(), 11.0, tone.bg);
+            presence_glyph(ui.painter(), rect.center(), glyph, tone.fg);
+            response.on_hover_text(label);
+        }
+        BranchCell::Loading => {
+            shimmer(ui, theme, 22.0, 22.0).on_hover_text(tl("Loading"));
+        }
+        BranchCell::Unknown => {
+            ui.add_space(7.0);
+            ui.label(muted(theme, "—"))
+                .on_hover_text(tl("Not checked yet: the next refresh will tell"));
+        }
+    }
+}
+
+/// Paints a presence glyph (see `tones::presence`) as shapes centered on
+/// `center`: the font's glyphs sit off center, each by its own offset.
+fn presence_glyph(painter: &egui::Painter, center: egui::Pos2, glyph: &str, color: egui::Color32) {
+    let r = 4.5;
+    let stroke = Stroke::new(1.5, color);
+    match glyph {
+        // Present.
+        "●" => {
+            painter.circle_filled(center, r, color);
+        }
+        // Absent.
+        "○" => {
+            painter.circle_stroke(center, r - 0.5, stroke);
+        }
+        // Partial: the left half filled.
+        "◐" => {
+            let half: Vec<egui::Pos2> = (0..=16)
+                .map(|i| {
+                    let angle =
+                        std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / 16.0;
+                    center + Vec2::angled(angle) * r
+                })
+                .collect();
+            painter.add(egui::Shape::convex_polygon(half, color, Stroke::NONE));
+            painter.circle_stroke(center, r - 0.5, stroke);
+        }
+        // Cherry-picked.
+        "◆" => {
+            let d = r + 0.5;
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    center + Vec2::new(0.0, -d),
+                    center + Vec2::new(d, 0.0),
+                    center + Vec2::new(0.0, d),
+                    center + Vec2::new(-d, 0.0),
+                ],
+                color,
+                Stroke::NONE,
+            ));
+        }
+        // Copied: two waves.
+        "≈" => {
+            for dy in [-2.0, 2.0] {
+                let wave: Vec<egui::Pos2> = (0..=12)
+                    .map(|i| {
+                        let t = i as f32 / 12.0;
+                        let x = (t - 0.5) * 2.0 * r;
+                        let y = dy - (t * std::f32::consts::TAU).sin() * 1.2;
+                        center + Vec2::new(x, y)
+                    })
+                    .collect();
+                painter.add(egui::Shape::line(wave, stroke));
+            }
+        }
+        // Failed.
+        "✕" => {
+            let d = r - 1.0;
+            painter.line_segment(
+                [center + Vec2::new(-d, -d), center + Vec2::new(d, d)],
+                stroke,
+            );
+            painter.line_segment(
+                [center + Vec2::new(-d, d), center + Vec2::new(d, -d)],
+                stroke,
+            );
+        }
+        other => {
+            painter.text(
+                center,
+                egui::Align2::CENTER_CENTER,
+                other,
+                egui::FontId::proportional(11.0),
+                color,
+            );
+        }
+    }
 }
 
 fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
@@ -814,10 +1370,16 @@ fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         ui.add_space(6.0);
-        ui.add(
-            egui::Label::new(RichText::new(&r.title).font(fonts::medium(theme.text_size)))
-                .truncate(),
-        );
+        if r.loading {
+            ui.add_space(3.0);
+            shimmer(ui, theme, (ui.available_width() * 0.6).min(260.0), 12.0);
+            ui.add_space(3.0);
+        } else {
+            ui.add(
+                egui::Label::new(RichText::new(&r.title).font(fonts::medium(theme.text_size)))
+                    .truncate(),
+            );
+        }
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
             meta_line(ui, theme, r);
@@ -853,13 +1415,13 @@ fn meta_line(ui: &mut Ui, theme: &Theme, r: &RowView) {
             .size(size)
             .color(theme.palette.text_muted),
     );
+    let color = r.age.unwrap_or(theme.palette.text_muted);
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
-    icons::paint(ui.painter(), rect, Icon::Clock, theme.palette.text_muted);
-    ui.label(
-        RichText::new(&r.updated)
-            .size(size)
-            .color(theme.palette.text_muted),
-    );
+    icons::paint(ui.painter(), rect, Icon::Clock, color);
+    let date = ui.label(RichText::new(&r.updated).size(size).color(color));
+    if r.age.is_some() {
+        date.on_hover_text(r.activity.0);
+    }
 }
 
 fn select(g: &mut GuiApp, index: usize) {
@@ -988,8 +1550,9 @@ mod tests {
         let (kept, dropped, branch) = fit_columns(&WANTED, 840.0, 3);
         assert_eq!(kept, [Col::Effort, Col::Notes]);
         assert_eq!(dropped, 4);
+        // The dots leave a little room, shared with the branch cells.
         assert!(
-            (BRANCH_WIDTH..BRANCH_WIDTH + 4.0).contains(&branch),
+            (BRANCH_WIDTH..BRANCH_WIDTH + 8.0).contains(&branch),
             "{branch}"
         );
     }
@@ -1000,7 +1563,7 @@ mod tests {
         let (kept, dropped, branch) = fit_columns(&WANTED, 4300.0, 3);
         assert_eq!(kept, WANTED);
         assert_eq!(dropped, 0);
-        assert_eq!(branch, 120.0);
+        assert_eq!(branch, BRANCH_MAX_WIDTH);
     }
 
     #[test]
@@ -1008,8 +1571,10 @@ mod tests {
         // 1080p with both panels: about 1100 points of table.
         let (kept, _, _) = fit_columns(&WANTED, 1100.0, 3);
         assert_eq!(kept, [Col::Effort, Col::Notes, Col::Milestone, Col::Target]);
-        // Narrower still: only the effort is left.
+        // Narrower still: effort and threads, then only the effort.
         let (kept, _, _) = fit_columns(&WANTED, 780.0, 3);
+        assert_eq!(kept, [Col::Effort, Col::Notes]);
+        let (kept, _, _) = fit_columns(&WANTED, 740.0, 3);
         assert_eq!(kept, [Col::Effort]);
     }
 

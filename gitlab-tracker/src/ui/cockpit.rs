@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
-use summary::{release_summaries, DashboardSummary, ReleaseSummary};
+use summary::{release_key, release_summaries, DashboardSummary, ReleaseSummary};
 
 mod summary;
 
@@ -39,22 +39,27 @@ fn release_lines(app: &App, releases: &[ReleaseSummary]) -> Vec<CockpitRow> {
             color: title_color,
             alert: at_risk,
         });
+        let title = &release.title;
         lines.push(release_metric_line(
+            title,
             "Merged",
             release.merged,
             app.theme.accent_green,
         ));
         lines.push(release_metric_line(
+            title,
             "WIP",
             release.in_progress,
             app.theme.fg,
         ));
         lines.push(release_metric_line(
+            title,
             "Blocked",
             release.blocked,
             alert_color(release.blocked, app),
         ));
         lines.push(release_metric_line(
+            title,
             "Review",
             release.waiting_review,
             warning_color(release.waiting_review, app),
@@ -81,12 +86,16 @@ pub enum CockpitRow {
         color: Color,
         alert: bool,
     },
-    /// A counter: `nested` ones belong to the heading above them.
+    /// A counter: `nested` ones belong to the heading above them. `key` names
+    /// the MRs it counts in [`metric_members`] (`None`: not a count of the listed
+    /// MRs, like an average or the stats' history).
     Metric {
         label: String,
         value: String,
         color: Color,
         nested: bool,
+        #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+        key: Option<String>,
     },
 }
 
@@ -108,6 +117,7 @@ impl CockpitRow {
                 value,
                 color,
                 nested,
+                ..
             } => {
                 let label = if *nested {
                     format!("    {label:<8}")
@@ -143,6 +153,84 @@ pub fn cockpit_cards(app: &App) -> Vec<(&'static str, Vec<CockpitRow>)> {
     cards
 }
 
+/// The ids of the listed MRs behind each counter of [`cockpit_cards`], by the
+/// counter's `key`.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn metric_members(app: &App) -> std::collections::HashMap<String, Vec<String>> {
+    summary::metric_members(app)
+}
+
+/// A release of the cockpit, for the window's progress bars.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+#[derive(Debug, Clone)]
+pub struct ReleaseView {
+    pub title: String,
+    /// Days until the due date, negative once past.
+    pub days_left: Option<i64>,
+    pub at_risk: bool,
+    pub merged: usize,
+    pub in_progress: usize,
+    pub blocked: usize,
+    pub waiting_review: usize,
+}
+
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+impl ReleaseView {
+    /// Its MRs still to merge.
+    pub fn remaining(&self) -> usize {
+        self.in_progress + self.blocked + self.waiting_review
+    }
+}
+
+/// The cockpit's headline figures, for the window's tiles.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+#[derive(Debug, Clone)]
+pub struct Headline {
+    pub open: usize,
+    pub blocked: usize,
+    pub awaiting_my_review: usize,
+    pub oldest_review_wait_days: Option<i64>,
+    pub oldest_open_days: Option<i64>,
+    pub old_open_warning_days: i64,
+    pub old_open_alert_days: i64,
+    pub releases: Vec<ReleaseView>,
+}
+
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn headline(app: &App) -> Headline {
+    let summary = DashboardSummary::from_app(app);
+    let today = Utc::now().date_naive();
+    let thresholds = &app.config.cockpit_thresholds;
+    let releases = release_summaries(app)
+        .into_iter()
+        .map(|r| ReleaseView {
+            at_risk: r.is_at_risk(today, thresholds),
+            days_left: r.due_date.map(|due| (due - today).num_days()),
+            title: r.title,
+            merged: r.merged,
+            in_progress: r.in_progress,
+            blocked: r.blocked,
+            waiting_review: r.waiting_review,
+        })
+        .collect();
+    Headline {
+        open: summary.open,
+        blocked: summary.total_blocked(),
+        awaiting_my_review: summary.awaiting_my_review,
+        oldest_review_wait_days: summary.oldest_review_wait_days,
+        oldest_open_days: summary.oldest_open_days,
+        old_open_warning_days: thresholds.old_open_warning_days,
+        old_open_alert_days: thresholds.old_open_alert_days,
+        releases,
+    }
+}
+
+/// The key of a release's row in [`metric_members`].
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn release_metric_key(release: &str, bucket: &str) -> String {
+    release_key(release, bucket)
+}
+
 pub fn render_cockpit(f: &mut Frame, app: &App, area: Rect) {
     let cards = cockpit_cards(app);
     let share = 100 / cards.len().max(1) as u16;
@@ -168,25 +256,26 @@ fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
         cockpit_metric("Open", summary.open, app.theme.fg),
         cockpit_metric("Mergeable", summary.mergeable, app.theme.accent_green),
         cockpit_metric("Draft", summary.draft, app.theme.muted_dim),
-        cockpit_metric("Merged", summary.merged, app.theme.accent_cyan),
-        cockpit_metric("Closed", summary.closed, app.theme.muted_dim),
-        cockpit_metric("Merged today", summary.merged_today, app.theme.accent_green),
-        cockpit_metric(
+        // From the stats' history, not the listed MRs: nothing to list.
+        history_metric("Merged", summary.merged, app.theme.accent_cyan),
+        history_metric("Closed", summary.closed, app.theme.muted_dim),
+        history_metric("Merged today", summary.merged_today, app.theme.accent_green),
+        history_metric(
             "Merged this week",
             summary.merged_this_week,
             app.theme.accent_green,
         ),
-        cockpit_metric(
+        history_metric(
             "Merged this month",
             summary.merged_this_month,
             app.theme.accent_green,
         ),
-        cockpit_metric(
+        history_metric(
             "Merged last 7d",
             summary.merged_last_7_days,
             app.theme.accent_green,
         ),
-        cockpit_metric(
+        history_metric(
             "Merged last 30d",
             summary.merged_last_30_days,
             app.theme.accent_green,
@@ -230,6 +319,7 @@ fn attention_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
             warning_color(summary.needs_review, app),
         ),
         cockpit_metric_optional_dynamic(
+            "To review (me)",
             tl("To review (me)").to_string(),
             // Count, then the age of the oldest request (short: narrow column).
             Some(match summary.oldest_review_wait_days {
@@ -261,6 +351,7 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow
     let thresholds = &app.config.cockpit_thresholds;
     let mut lines = vec![
         cockpit_metric_dynamic(
+            "Stale",
             tf("Stale > {n}d", &[("n", &thresholds.stale_days.to_string())]),
             summary.stale_7_days,
             warning_color(summary.stale_7_days, app),
@@ -288,6 +379,7 @@ fn delivery_health_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow
             warning_color(summary.no_milestone, app),
         ),
         cockpit_metric_dynamic(
+            "Due soon",
             tf(
                 "Due next {n}d",
                 &[("n", &thresholds.due_soon_days.to_string())],
@@ -389,28 +481,53 @@ fn quality_scope_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> 
     ]
 }
 
+/// A count of the listed MRs, keyed by its English label.
 fn cockpit_metric(label: &'static str, value: usize, color: Color) -> CockpitRow {
+    cockpit_metric_optional_dynamic(label, tl(label).to_string(), Some(value.to_string()), color)
+}
+
+#[cfg(feature = "stats")]
+fn history_metric(label: &'static str, value: usize, color: Color) -> CockpitRow {
     cockpit_metric_optional(label, Some(value.to_string()), color)
 }
 
-fn cockpit_metric_dynamic(label: String, value: usize, color: Color) -> CockpitRow {
-    cockpit_metric_optional_dynamic(label, Some(value.to_string()), color)
+fn cockpit_metric_dynamic(
+    key: &'static str,
+    label: String,
+    value: usize,
+    color: Color,
+) -> CockpitRow {
+    cockpit_metric_optional_dynamic(key, label, Some(value.to_string()), color)
 }
 
-fn release_metric_line(label: &'static str, value: usize, color: Color) -> CockpitRow {
+fn release_metric_line(
+    release: &str,
+    bucket: &'static str,
+    value: usize,
+    color: Color,
+) -> CockpitRow {
     CockpitRow::Metric {
-        label: tl(label).to_string(),
+        label: tl(bucket).to_string(),
         value: value.to_string(),
         color,
         nested: true,
+        key: Some(release_key(release, bucket)),
     }
 }
 
+/// A figure that is not a count of the listed MRs (an age, an average, n/a).
 fn cockpit_metric_optional(label: &'static str, value: Option<String>, color: Color) -> CockpitRow {
-    cockpit_metric_optional_dynamic(tl(label).to_string(), value, color)
+    CockpitRow::Metric {
+        label: tl(label).to_string(),
+        value: value.unwrap_or_else(|| "—".to_string()),
+        color,
+        nested: false,
+        key: None,
+    }
 }
 
 fn cockpit_metric_optional_dynamic(
+    key: &'static str,
     label: String,
     value: Option<String>,
     color: Color,
@@ -420,6 +537,7 @@ fn cockpit_metric_optional_dynamic(
         value: value.unwrap_or_else(|| "—".to_string()),
         color,
         nested: false,
+        key: Some(key.to_string()),
     }
 }
 

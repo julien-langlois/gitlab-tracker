@@ -13,11 +13,13 @@ mod icons;
 mod inspector;
 mod keys;
 mod markdown;
+mod palette;
 mod shell;
 mod sidebar;
 #[cfg(feature = "stats")]
 mod stats;
 mod table;
+mod toasts;
 mod tones;
 #[cfg(debug_assertions)]
 mod tour;
@@ -31,7 +33,7 @@ use anyhow::Context;
 use tokio::sync::{mpsc::UnboundedReceiver, mpsc::UnboundedSender, Semaphore};
 
 use crate::actions::{dispatch, Action, ActionContext};
-use crate::app::App;
+use crate::app::{App, Focus};
 use crate::config::AppConfig;
 use crate::i18n::{tf, tl};
 use crate::models::AppEvent;
@@ -210,6 +212,26 @@ struct GuiApp {
     /// choice being edited in the settings dialog.
     language: Option<String>,
     language_draft: Option<String>,
+    /// The ids of the listed MRs behind each cockpit counter (focus aside),
+    /// computed once per frame: the cockpit, the rail badges and the focus use it.
+    members: HashMap<String, Vec<String>>,
+    /// The counters when the list was first complete: the cockpit's trends.
+    baseline: Option<Baseline>,
+    /// The cockpit hides its counters at zero.
+    hide_zeros: bool,
+    /// How the table groups its rows, and the groups folded away.
+    group_by: table::GroupBy,
+    folded: HashSet<String>,
+    /// The tracker page shows its tickets as a board (columns by status).
+    tracker_board: bool,
+    /// Picked while drawing, applied once the frame is drawn: a focus to show
+    /// (`Some(None)` clears it) and an MR to select, by id.
+    next_focus: Option<Option<Focus>>,
+    select_id: Option<String>,
+    /// The command palette (Ctrl+K), while open.
+    palette: Option<palette::Palette>,
+    /// What changed at the last refreshes, in the window's corner.
+    toasts: toasts::Toasts,
     /// The project being loaded in the background (see [`GuiApp::switch_project`]).
     switching: Option<std::sync::mpsc::Receiver<anyhow::Result<Loaded>>>,
     #[cfg(debug_assertions)]
@@ -271,6 +293,16 @@ impl GuiApp {
             language_draft: language.clone(),
             language,
             switching: None,
+            members: HashMap::new(),
+            baseline: None,
+            hide_zeros: false,
+            group_by: table::GroupBy::None,
+            folded: HashSet::new(),
+            tracker_board: false,
+            next_focus: None,
+            select_id: None,
+            palette: None,
+            toasts: toasts::Toasts::default(),
             #[cfg(debug_assertions)]
             tour: tour::Tour::from_env(),
             #[cfg(target_os = "macos")]
@@ -396,6 +428,8 @@ impl GuiApp {
                 self.api_semaphore = api_semaphore;
                 self.last_known_branches = last_known_branches;
                 self.text_filter = (None, String::new());
+                self.baseline = None;
+                self.toasts = toasts::Toasts::default();
                 self.set_theme(self.theme.mode);
                 self.projects = projects;
                 let name = self.app.project_name.clone();
@@ -461,6 +495,86 @@ impl GuiApp {
         }
         self.page = page;
     }
+
+    /// Lists the MRs behind the cockpit counter `key` on the merge requests page.
+    fn focus_on(&mut self, key: &str, label: impl Into<String>) {
+        let ids = members_of(&self.members, key).into_iter().collect();
+        self.next_focus = Some(Some(Focus {
+            key: key.to_string(),
+            label: label.into(),
+            ids,
+        }));
+        self.open_page(Page::MergeRequests);
+    }
+
+    /// Selects the MR `id` on the merge requests page, every MR shown again.
+    fn show_mr(&mut self, id: &str) {
+        if self.app.focus.is_some() {
+            self.next_focus = Some(None);
+        }
+        self.select_id = Some(id.to_string());
+        self.open_page(Page::MergeRequests);
+    }
+
+    /// Counts the MRs behind each counter, before the frame's snapshot: the
+    /// focus aside, and on the cockpit without it. Keeps the focus up to date.
+    fn count_members(&mut self) {
+        self.app.focus_suspended = true;
+        self.members = crate::ui::cockpit::metric_members(&self.app);
+        self.app.focus_suspended = self.page() == Page::Cockpit;
+        if let Some(focus) = &mut self.app.focus {
+            focus.ids = members_of(&self.members, &focus.key).into_iter().collect();
+        }
+        let complete = self.app.pending_initial_fetches.is_empty() && !self.app.mrs.is_empty();
+        if self.baseline.is_none() && complete {
+            self.baseline = Some(Baseline {
+                counts: self
+                    .members
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.len()))
+                    .collect(),
+                at: chrono::Local::now().format("%H:%M").to_string(),
+            });
+        }
+    }
+
+    /// Applies what the frame picked: the focus, then the MR to select.
+    fn apply_picks(&mut self) {
+        if let Some(focus) = self.next_focus.take() {
+            self.app.focus_suspended = false;
+            self.app.set_focus(focus);
+        }
+        if let Some(id) = self.select_id.take() {
+            let found = self.app.visible_mrs().position(|mr| mr.id == id);
+            if let Some(index) = found {
+                self.app.table_state.select(Some(index));
+                self.app.layout.inspector.reset();
+            }
+        }
+    }
+}
+
+/// The counters when the list was first complete, and when that was.
+struct Baseline {
+    counts: HashMap<String, usize>,
+    at: String,
+}
+
+/// The MRs behind `key`: a counter of the cockpit, or `release-open:<title>`,
+/// the release's MRs still to merge.
+fn members_of(members: &HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
+    if let Some(release) = key.strip_prefix("release-open:") {
+        return ["WIP", "Blocked", "Review"]
+            .iter()
+            .flat_map(|bucket| {
+                members
+                    .get(&crate::ui::cockpit::release_metric_key(release, bucket))
+                    .cloned()
+                    .unwrap_or_default()
+            })
+            .collect();
+    }
+    members.get(key).cloned().unwrap_or_default()
 }
 
 /// Forwards the session's events to the window, waking it for each one: the
@@ -530,16 +644,22 @@ impl eframe::App for GuiApp {
         #[cfg(debug_assertions)]
         tour::drive(self, ui.ctx());
         self.dispatch_pending();
+        self.count_members();
+        self.toasts
+            .watch(&self.app, &self.theme, ui.input(|i| i.time));
 
         // Snapshot the visible list for this frame (see `App::begin_render_cache`):
         // drawing records actions instead of changing the list.
         self.app.begin_render_cache();
         shell::draw(self, ui);
         self.app.end_render_cache();
+        self.app.focus_suspended = false;
         // Last, over the window's edges: an undecorated window (GNOME) resizes from them.
         bevel_window::resize::edges(ui, &self.frame);
 
         self.dispatch_pending();
+        // After the actions: a view picked with an MR to select applies first.
+        self.apply_picks();
         self.switch_project();
 
         #[cfg(target_os = "macos")]
