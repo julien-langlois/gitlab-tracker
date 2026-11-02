@@ -714,3 +714,99 @@ date	Merged	Fusionada
 @plural	{n} merged MR|{n} merged MRs	{n} MR fusionada|{n} MR fusionadas
 @plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} MR no se pudo actualizar|{n} MR no se pudieron actualizar
 @plural	Updated {n} min ago|Updated {n} min ago	Actualizado hace {n} min|Actualizado hace {n} min
+	Projects	Proyectos
+	Each project opens in its own tab, and keeps refreshing while another one is shown.	Cada proyecto se abre en su propia pestaña y se sigue actualizando mientras se muestra otro.
+	Shown	Mostrado
+	In a tab	En una pestaña
+	New project…	Nuevo proyecto…
+	Changes	Cambios
+	Could not open {project}	No se pudo abrir {project}
+	Opened {project}	{project} abierto
+	Add a project…	Añadir un proyecto…
+	Today	Hoy
+	Promote	Promoción
+	Add a project	Añadir un proyecto
+	Tokens needed	Tokens necesarios
+	Check and add	Comprobar y añadir
+	Checking with GitLab…	Comprobando con GitLab…
+	Shown in the tab; GitLab's name when empty	Se muestra en la pestaña; vacío: el nombre de GitLab
+	Tracked branches (optional)	Ramas seguidas (opcional)
+	Comma-separated, in the table's order: main, staging, production. The default branch when empty.	Separadas por comas, en el orden de la tabla: main, staging, production. Vacío: la rama por defecto.
+	Scope read_api; saved in the OS keyring, never in a file.	Ámbito read_api; se guarda en el llavero del sistema, nunca en un archivo.
+	Redmine (optional)	Redmine (opcional)
+	Redmine URL	URL de Redmine
+	Links the MRs to their tickets; empty: no tracker	Vincula las MR con sus tickets; vacío: sin tracker
+	Redmine API key	Clave de API de Redmine
+	My account › API access key; saved in the OS keyring.	Mi cuenta › Clave de acceso a la API; se guarda en el llavero del sistema.
+	{project} has no token in the OS keyring for the instances below. Type them once: they are saved in the keyring, and every project on the same instance uses them.	{project} no tiene token en el llavero del sistema para las instancias de abajo. Escríbelos una vez: se guardan en el llavero y todos los proyectos de la misma instancia los usan.
+	GitLab token · {url}	Token de GitLab · {url}
+	Personal access token, scope read_api.	Token de acceso personal, ámbito read_api.
+	Redmine API key · {url}	Clave de API de Redmine · {url}
+	Empty: the project opens without its tickets.	Vacío: el proyecto se abre sin sus tickets.
+	Type the GitLab token: nothing can load without it.	Escribe el token de GitLab: sin él no se carga nada.
+	No token is saved for this GitLab instance yet: type one.	Todavía no hay ningún token guardado para esta instancia de GitLab: escribe uno.
+	No API key is saved for this Redmine instance yet: type one, or leave the Redmine URL empty.	Todavía no hay ninguna clave de API guardada para esta instancia de Redmine: escribe una o deja vacía la URL de Redmine.
+	The token could not be saved in the keyring: {error}	No se pudo guardar el token en el llavero: {error}
+	GitLab refused the token: it may be expired, or lack the read_api scope.	GitLab rechazó el token: puede que haya caducado o que no tenga el ámbito read_api.
+	No such project on this instance, or the token cannot see it.	Ese proyecto no existe en esta instancia, o el token no puede verlo.
+	GitLab answered {status}.	GitLab respondió {status}.
+	Could not reach GitLab: {error}	No se pudo contactar con GitLab: {error}
+	Redmine refused the API key.	Redmine rechazó la clave de API.
+	Redmine: {error}	Redmine: {error}
+	Saved — leave empty to keep it	Guardado — déjalo vacío para conservarlo
+	A token is already saved for this instance: no need to type it again.	Ya hay un token guardado para esta instancia: no hace falta volver a escribirlo.
+	Looking for a saved token…	Buscando un token guardado…
+	Close the tab	Cerrar la pestaña
+	Open or add a project (W)	Abrir o añadir un proyecto (W)
+	Open or add a project	Abrir o añadir un proyecto
+	Next / previous tab	Pestaña siguiente / anterior
+	Go to that tab (9: the last)	Ir a esa pestaña (9: la última)
+	waiting for you	esperándote
+	What waits for you, in every tab	Lo que te espera, en todas las pestañas
+	What is ready to go to the next branch	Lo que está listo para pasar a la siguiente rama
+	Show the changed files	Mostrar los archivos modificados
+	Reading the diff…	Leyendo el diff…
+	No file changed.	Ningún archivo modificado.
+	No text diff: a binary file, or too large for GitLab to show.	Sin diff de texto: un archivo binario o demasiado grande para que GitLab lo muestre.
+	in GitLab	en GitLab
+	Hide the log	Ocultar el log
+	Log	Log
+	The end of this job's log	El final del log de este job
+	Reading the log…	Leyendo el log…
+	The last {n} lines	Las últimas {n} líneas
+	Copy	Copiar
+	CI failed	CI fallida
+	Not approved	Sin aprobar
+	Partly copied	Copiada en parte
+	Still a draft	Todavía en borrador
+	Track at least two branches (in the settings) to see what is ready to go from one to the next.	Sigue al menos dos ramas (en los ajustes) para ver qué está listo para pasar de una a la siguiente.
+	{n} ready to go from {from} to {to}	{n} listas para pasar de {from} a {to}
+	Copy the checklist	Copiar la checklist
+	The ready MRs as a Markdown table, for the release ticket	Las MR listas como tabla Markdown, para el ticket de la release
+	Show in the table	Mostrar en la tabla
+	Ready to go · {n}	Listas para pasar · {n}
+	Nothing on {from} is missing from {to}.	No falta nada de {from} en {to}.
+	Not on {from} yet · {n}	Todavía no en {from} · {n}
+	Every tracked MR reached it.	Todas las MR seguidas llegaron.
+	Already on {to} · {n}	Ya en {to} · {n}
+	Show them	Mostrarlas
+	Ready for {to}	Listas para {to}
+	Not merged	Sin fusionar
+	Waiting for my review	Esperando mi revisión
+	My MRs that need me	Mis MR que me necesitan
+	Ready to merge	Listas para fusionar
+	Waiting on the others	Esperando a los demás
+	No review waits for you.	Ninguna revisión te espera.
+	None of your MRs is failing, in conflict or awaiting an answer.	Ninguna de tus MR falla, tiene conflictos o espera una respuesta.
+	None of your MRs is approved and mergeable yet.	Ninguna de tus MR está aprobada y fusionable todavía.
+	Nothing else is assigned to you.	No tienes nada más asignado.
+	None of your MRs waits on a reviewer.	Ninguna de tus MR espera a un revisor.
+	Nothing of yours merged today yet.	Hoy todavía no se fusionó nada tuyo.
+	Your GitLab username is not known yet: it is read from GitLab when a project opens.	Tu nombre de usuario de GitLab aún no se conoce: se lee de GitLab al abrir un proyecto.
+	Across {n} open projects · as {user}	En {n} proyectos abiertos · como {user}
+	Show it in its project's tab	Mostrarla en la pestaña de su proyecto
+@plural	{n} change since shown|{n} changes since shown	{n} cambio desde que se mostró|{n} cambios desde que se mostró
+@plural	{n} thread to answer|{n} threads to answer	{n} hilo por responder|{n} hilos por responder
+@plural	{n} approval|{n} approvals	{n} aprobación|{n} aprobaciones
+@plural	{n} open thread|{n} open threads	{n} hilo abierto|{n} hilos abiertos
+@plural	{n} more line|{n} more lines	{n} línea más|{n} líneas más

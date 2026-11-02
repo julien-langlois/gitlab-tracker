@@ -196,6 +196,22 @@ async fn get_json<T: serde::de::DeserializeOwned>(
         .map_err(|e| TrackerError::Other(format!("Invalid Redmine response: {e}")))
 }
 
+/// Checks `token` against the instance: `GET /users/current.json`.
+pub async fn check_token(
+    http: &reqwest::Client,
+    base_url: &str,
+    token: &str,
+) -> Result<(), TrackerError> {
+    let url = format!("{}/users/current.json", base_url.trim_end_matches('/'));
+    /// Only the envelope is read: any user will do.
+    #[derive(serde::Deserialize)]
+    struct CurrentUser {
+        #[allow(dead_code)]
+        user: serde::de::IgnoredAny,
+    }
+    get_json::<CurrentUser>(http, &url, token).await.map(|_| ())
+}
+
 /// Fetches all issue statuses configured on the Redmine instance.
 ///
 /// Calls `GET /issue_statuses.json`. The returned `(id, label)` pairs are meant to be

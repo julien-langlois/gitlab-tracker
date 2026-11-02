@@ -39,3 +39,18 @@ pub fn delete_token(redmine_url: &str) -> bool {
         .and_then(|e| e.delete_credential())
         .is_ok()
 }
+
+/// Whether a Redmine token is available for `redmine_url` without asking
+/// (`REDMINE_TOKEN` or the keyring). Blocks on the keyring.
+pub fn has_token(redmine_url: &str) -> bool {
+    gitlab_tracker_core::secrets::has_secret(
+        "REDMINE_TOKEN",
+        KEYRING_SERVICE,
+        &account_for(redmine_url),
+    )
+}
+
+/// Stores the Redmine token for `redmine_url` in the OS keyring.
+pub fn save_token(redmine_url: &str, token: &str) -> Result<(), String> {
+    gitlab_tracker_core::secrets::store_secret(KEYRING_SERVICE, &account_for(redmine_url), token)
+}

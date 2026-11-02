@@ -2,7 +2,38 @@
 //! (feature `secrets`): environment variable, then OS keyring, then a hidden
 //! interactive prompt whose answer is saved to the keyring.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use zeroize::Zeroizing;
+
+/// Whether [`resolve_secret`] may ask in the terminal. The desktop window turns it
+/// off: it has no terminal to prompt in, and asks for missing tokens itself.
+static INTERACTIVE: AtomicBool = AtomicBool::new(true);
+
+/// Lets [`resolve_secret`] prompt in the terminal (`true`, the default) or not.
+pub fn set_interactive(on: bool) {
+    INTERACTIVE.store(on, Ordering::Relaxed);
+}
+
+/// Whether a token is available without asking: in `env_var` or in the OS
+/// keyring entry. Blocks on the keyring (D-Bus): call it off the UI thread.
+pub fn has_secret(env_var: &str, keyring_service: &str, keyring_account: &str) -> bool {
+    std::env::var(env_var).is_ok_and(|v| !v.trim().is_empty())
+        || keyring::Entry::new(keyring_service, keyring_account)
+            .and_then(|e| e.get_password())
+            .is_ok_and(|v| !v.trim().is_empty())
+}
+
+/// Stores `token` (trimmed) in the OS keyring entry; the error says why not.
+pub fn store_secret(
+    keyring_service: &str,
+    keyring_account: &str,
+    token: &str,
+) -> Result<(), String> {
+    keyring::Entry::new(keyring_service, keyring_account)
+        .and_then(|e| e.set_password(token.trim()))
+        .map_err(|e| e.to_string())
+}
 
 /// Where a token comes from, and how to ask for it.
 pub struct SecretSource<'a> {
@@ -20,7 +51,8 @@ pub struct SecretSource<'a> {
 
 /// Returns the token from, in order: `env_var`, the OS keyring entry, then a hidden
 /// prompt (no echo; the answer is saved to the keyring). `None` when the prompt is
-/// left empty or cannot be read. The value is zeroized when dropped.
+/// left empty or cannot be read, or prompting is off ([`set_interactive`]). The
+/// value is zeroized when dropped.
 pub fn resolve_secret(source: &SecretSource<'_>) -> Option<Zeroizing<String>> {
     let SecretSource {
         env_var,
@@ -52,6 +84,13 @@ pub fn resolve_secret(source: &SecretSource<'_>) -> Option<Zeroizing<String>> {
         }
     }
 
+    if !INTERACTIVE.load(Ordering::Relaxed) {
+        tracing::info!(
+            account = keyring_account,
+            "No {label}, and no terminal to ask in"
+        );
+        return None;
+    }
     println!("🔑 No {label} found in {env_var} or the OS keyring.");
     if let Some(hint) = prompt_hint {
         println!("   {hint}");

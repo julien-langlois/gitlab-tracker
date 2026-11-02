@@ -1,7 +1,7 @@
 //! The window's own preferences, kept between sessions in `gui.json` next to
 //! `projects.toml`: the page, the theme, the table's grouping and density, the
-//! tracker's board, the cockpit's zeros, the inspector's folded sections and
-//! the window's size. The demo neither reads nor writes them.
+//! tracker's board, the cockpit's zeros, the inspector's folded sections, the
+//! window's size and its open tabs. The demo neither reads nor writes them.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +19,15 @@ pub struct Prefs {
     pub folded_sections: Vec<String>,
     /// Inner size in points.
     pub window: Option<[f32; 2]>,
+    /// The projects open in tabs, in order.
+    pub tabs: Vec<SavedTab>,
+}
+
+/// An open tab: its project's GitLab URL and id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedTab {
+    pub url: String,
+    pub id: String,
 }
 
 fn path() -> Option<std::path::PathBuf> {
@@ -50,6 +59,8 @@ pub fn save(prefs: &Prefs) {
 
 fn page_name(page: Page) -> &'static str {
     match page {
+        Page::Today => "today",
+        Page::Promote => "promote",
         Page::MergeRequests => "mrs",
         Page::Cockpit => "cockpit",
         Page::Tracker => "tracker",
@@ -72,6 +83,8 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     g.page = match prefs.page.as_deref() {
         Some("cockpit") => Page::Cockpit,
         Some("tracker") => Page::Tracker,
+        Some("today") => Page::Today,
+        Some("promote") => Page::Promote,
         // The stats open through their action once the window runs.
         _ => Page::MergeRequests,
     };
@@ -105,6 +118,15 @@ pub fn current(g: &GuiApp) -> Prefs {
         hide_zeros: g.hide_zeros,
         folded_sections: super::widgets::folded_sections().iter().cloned().collect(),
         window: g.window_size.map(|s| [s.x, s.y]),
+        tabs: g
+            .tabs
+            .iter()
+            .filter(|t| !matches!(t.state, super::SlotState::Closed))
+            .map(|t| SavedTab {
+                url: t.url.clone(),
+                id: t.id.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -123,11 +145,16 @@ mod tests {
             hide_zeros: true,
             folded_sections: vec!["History".into()],
             window: Some([1600.0, 1000.0]),
+            tabs: vec![SavedTab {
+                url: "https://g.io".into(),
+                id: "42".into(),
+            }],
         };
         let text = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&text).unwrap();
         assert_eq!(back.page.as_deref(), Some("cockpit"));
         assert_eq!(back.window, Some([1600.0, 1000.0]));
+        assert_eq!(back.tabs, prefs.tabs);
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());

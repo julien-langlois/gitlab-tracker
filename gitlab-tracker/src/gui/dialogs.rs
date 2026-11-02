@@ -13,10 +13,14 @@ use crate::i18n::{tf, tl};
 use crate::settings::SettingsEditorItem;
 
 pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
+    if g.wizard.is_some() {
+        wizard(g, ctx);
+        return;
+    }
     let (title, width): (&str, f32) = match g.app.input_mode {
         InputMode::Settings => (tl("Settings"), 520.0),
         InputMode::ColumnPicker => (tl("Columns"), 320.0),
-        InputMode::ProjectPicker => (tl("Switch project"), 460.0),
+        InputMode::ProjectPicker => (tl("Projects"), 480.0),
         InputMode::LogTime => (tl("Log time"), 420.0),
         InputMode::Help => (tl("Keyboard shortcuts"), 520.0),
         _ => return,
@@ -311,21 +315,70 @@ fn save_columns(g: &mut GuiApp) {
 
 // ── Project picker ───────────────────────────────────────────────────────────
 
+/// The projects of `projects.toml`: a click shows its tab, opening it when
+/// needed. "New project…" opens the project form.
 fn projects(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let mut picked = None;
-    ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
-        for (i, project) in g.app.project_picker.iter().enumerate() {
-            let current =
-                crate::storage::is_same_project(project, &g.app.base_url, &g.app.project_id);
-            let name = project.name.as_deref().unwrap_or(&project.project_id);
-            let text = RichText::new(format!("{name}   ·   {}", project.gitlab_url));
-            let response = ui.selectable_label(current, text);
-            if response.clicked() && !current {
-                picked = Some(i);
-            }
-        }
-    });
+    ui.label(muted(
+        &theme,
+        tl("Each project opens in its own tab, and keeps refreshing while another one is shown."),
+    ));
+    ui.add_space(10.0);
+    egui::ScrollArea::vertical()
+        .max_height(360.0)
+        .show(ui, |ui| {
+            ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
+                for (i, project) in g.app.project_picker.iter().enumerate() {
+                    let current = crate::storage::is_same_project(
+                        project,
+                        &g.app.base_url,
+                        &g.app.project_id,
+                    );
+                    let open = g.tab_of(&project.gitlab_url, &project.project_id).is_some();
+                    let name = project.name.as_deref().unwrap_or(&project.project_id);
+                    let response = egui::Frame::new()
+                        .fill(if current {
+                            theme.palette.content
+                        } else {
+                            theme.palette.raised
+                        })
+                        .stroke(Stroke::new(1.0, theme.palette.border))
+                        .corner_radius(CornerRadius::same(theme.radii.medium))
+                        .inner_margin(Margin::symmetric(12, 8))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(semibold(name, theme.text_size));
+                                    ui.label(muted(
+                                        &theme,
+                                        format!("{} · {}", project.gitlab_url, project.project_id),
+                                    ));
+                                });
+                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                    let state = if current {
+                                        Some(tl("Shown"))
+                                    } else if open {
+                                        Some(tl("In a tab"))
+                                    } else {
+                                        None
+                                    };
+                                    if let Some(state) = state {
+                                        super::widgets::badge(ui, &theme, state, theme.tones.green);
+                                    }
+                                });
+                            });
+                        })
+                        .response
+                        .interact(egui::Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if response.clicked() && !current {
+                        picked = Some(i);
+                    }
+                    ui.add_space(6.0);
+                }
+            });
+        });
     if g.app.project_picker.is_empty() {
         ui.label(muted(&theme, tl("No project in projects.toml.")));
     }
@@ -334,10 +387,81 @@ fn projects(g: &mut GuiApp, ui: &mut Ui) {
         g.app.input_mode = InputMode::Normal;
     }
     buttons(ui, |ui| {
-        if ui.button(tl("Cancel")).clicked() {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        if button(
+            ui,
+            &theme,
+            Some(super::icons::Icon::Plus),
+            tl("New project…"),
+            true,
+        )
+        .clicked()
+        {
+            g.app.input_mode = InputMode::Normal;
+            g.wizard = Some(super::setup::ProjectForm::new(
+                &g.ctx,
+                super::setup::Mode::New,
+            ));
+        }
+        if button(ui, &theme, None, tl("Close"), false).clicked() {
             close(g);
         }
     });
+}
+
+/// The project form, as a dialog: a new project, or the tokens of one.
+fn wizard(g: &mut GuiApp, ctx: &egui::Context) {
+    let theme = g.theme;
+    let Some(form) = g.wizard.as_mut() else {
+        return;
+    };
+    let frame = egui::Frame::new()
+        .fill(theme.palette.raised)
+        .stroke(Stroke::new(1.0, theme.palette.border))
+        .corner_radius(CornerRadius::same(theme.radii.large))
+        .inner_margin(Margin::same(20));
+    let mut outcome = super::setup::Outcome::Open;
+    let response = egui::Modal::new(egui::Id::unique("project_form"))
+        .frame(frame)
+        .show(ctx, |ui| {
+            ui.set_width(520.0);
+            ui.label(
+                RichText::new(form.title())
+                    .strong()
+                    .size(theme.text_size + 3.0),
+            );
+            ui.add_space(12.0);
+            // The new project's form is long: it scrolls in a low window. The
+            // tokens' fits as it is.
+            if form.is_tokens() {
+                outcome = form.show(ui, &theme);
+            } else {
+                let height = (ctx.content_rect().height() - 160.0).clamp(240.0, 640.0);
+                egui::ScrollArea::vertical()
+                    .max_height(height)
+                    .min_scrolled_height(height)
+                    .show(ui, |ui| outcome = form.show(ui, &theme));
+            }
+        });
+    let tokens = form.is_tokens();
+    if response.should_close() && !form.is_busy() {
+        outcome = super::setup::Outcome::Cancelled;
+    }
+    match outcome {
+        super::setup::Outcome::Open => {}
+        super::setup::Outcome::Cancelled => g.wizard = None,
+        super::setup::Outcome::Saved(entry) => {
+            g.wizard = None;
+            if tokens {
+                // Asked once: a key left empty opens the project without tickets.
+                if let Some(t) = &entry.tracker {
+                    g.skip_redmine
+                        .insert(t.url.trim_end_matches('/').to_string());
+                }
+            }
+            g.open_project(*entry);
+        }
+    }
 }
 
 // ── Log time ─────────────────────────────────────────────────────────────────
@@ -444,12 +568,20 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
+        "Projects",
+        &[
+            ("W", "Open or add a project"),
+            ("Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous tab"),
+            ("Ctrl+1 … 9", "Go to that tab (9: the last)"),
+            ("Ctrl+W  or  middle click", "Close the tab"),
+        ],
+    ),
+    (
         "Elsewhere",
         &[
             ("Ctrl+K", "Command palette: pages, views, MRs and commands"),
             ("L", "Log time on the linked ticket"),
             ("G", "Statistics (Tab: next tab, W: time window)"),
-            ("W", "Switch project"),
             (",", "Settings"),
             ("?", "This list"),
             (

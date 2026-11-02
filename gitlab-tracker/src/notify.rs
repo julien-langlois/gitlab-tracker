@@ -4,7 +4,9 @@
 //! `notify-rust`. Build with `--no-default-features` for no-op functions and no
 //! `notify-rust` (headless / CI environments).
 //!
-//! When the user clicks a notification, the MR URL is opened in the default browser.
+//! When the user clicks a notification, the MR URL is opened in the default browser,
+//! or handed to the click handler the desktop window installs ([`on_click`]): the
+//! window then shows the MR itself.
 //!
 //! The public functions never block: they only queue the notification. A single
 //! background worker thread performs the (synchronous) D-Bus calls, so a slow or
@@ -22,6 +24,19 @@ struct Toast {
     icon: &'static str,
     action_label: &'static str,
     url: String,
+}
+
+/// What a click on a notification does with its URL, when not the browser.
+type ClickHandler = Box<dyn Fn(&str) + Send + Sync>;
+
+#[cfg_attr(not(feature = "notifications"), allow(dead_code))]
+static CLICK_HANDLER: std::sync::OnceLock<ClickHandler> = std::sync::OnceLock::new();
+
+/// Hands the URL of each clicked notification to `handler` instead of opening it
+/// in the browser (the desktop window shows the MR itself). Set once.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn on_click(handler: impl Fn(&str) + Send + Sync + 'static) {
+    let _ = CLICK_HANDLER.set(Box::new(handler));
 }
 
 /// Maximum number of notifications waiting for a click at the same time. Each one
@@ -85,7 +100,12 @@ fn show(toast: Toast) {
         .spawn(move || {
             handle.wait_for_action(|action| {
                 if action == "default" {
-                    let _ = open::that(&url);
+                    match CLICK_HANDLER.get() {
+                        Some(handler) => handler(&url),
+                        None => {
+                            let _ = open::that(&url);
+                        }
+                    }
                 }
             });
             CLICK_WAITERS.fetch_sub(1, Ordering::Relaxed);

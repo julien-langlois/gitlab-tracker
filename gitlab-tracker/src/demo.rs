@@ -710,10 +710,10 @@ pub async fn demo_app(config: AppConfig) -> App {
                         status: PipelineState::Success,
                         created_at: Some("2024-11-14T10:23:05Z".into()),
                         jobs: vec![
-                            PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
-                            PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
-                            PipelineJob { name: "build".into(),          stage: "build".into(),  status: "success".into(), duration: Some(42.0) },
-                            PipelineJob { name: "deploy-staging".into(), stage: "deploy".into(), status: "success".into(), duration: Some(31.0) },
+                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
+                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
+                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "success".into(), duration: Some(42.0) },
+                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "success".into(), duration: Some(31.0) },
                         ],
                     },
                     Pipeline {
@@ -721,10 +721,10 @@ pub async fn demo_app(config: AppConfig) -> App {
                         status: PipelineState::Failed,
                         created_at: Some("2024-11-13T17:08:42Z".into()),
                         jobs: vec![
-                            PipelineJob { name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
-                            PipelineJob { name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },
-                            PipelineJob { name: "build".into(),          stage: "build".into(),  status: "skipped".into(), duration: None },
-                            PipelineJob { name: "deploy-staging".into(), stage: "deploy".into(), status: "skipped".into(), duration: None },
+                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
+                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },
+                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "skipped".into(), duration: None },
+                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "skipped".into(), duration: None },
                         ],
                     },
                 ],
@@ -1171,6 +1171,45 @@ pub async fn run_demo_mode(config: AppConfig) -> anyhow::Result<()> {
 
     // `_terminal_guard` disables mouse capture and restores the terminal on drop.
     Ok(())
+}
+
+/// The changed files the demo's inspector shows for any MR (`gui` feature).
+#[cfg(feature = "gui")]
+pub fn demo_file_diffs() -> Vec<crate::gitlab::FileDiff> {
+    let file = |path: &str, new_file: bool, diff: &str| crate::gitlab::FileDiff {
+        old_path: path.into(),
+        new_path: path.into(),
+        new_file,
+        renamed_file: false,
+        deleted_file: false,
+        diff: diff.into(),
+    };
+    vec![
+        file(
+            "src/api/graphql/schema.rs",
+            false,
+            "@@ -12,7 +12,12 @@ use crate::models::MergeRequest;\n pub struct QueryRoot;\n \n #[Object]\n impl QueryRoot {\n-    async fn merge_request(&self, iid: u64) -> Option<MergeRequest> {\n-        MergeRequest::find(iid).await\n+    /// One MR with its metadata: labels, pipelines, approvals.\n+    async fn merge_request(&self, ctx: &Context<'_>, iid: u64) -> Result<Option<MergeRequest>> {\n+        let db = ctx.data::<Db>()?;\n+        Ok(MergeRequest::find(db, iid).await?)\n+    }\n+\n+    async fn merge_requests(&self, ctx: &Context<'_>, state: Option<State>) -> Result<Vec<MergeRequest>> {\n+        Ok(MergeRequest::list(ctx.data::<Db>()?, state).await?)\n     }\n }",
+        ),
+        file(
+            "src/api/graphql/mod.rs",
+            true,
+            "@@ -0,0 +1,4 @@\n+mod schema;\n+\n+pub use schema::QueryRoot;\n+pub type Schema = async_graphql::Schema<QueryRoot, EmptyMutation, EmptySubscription>;",
+        ),
+        file(
+            "Cargo.toml",
+            false,
+            "@@ -18,6 +18,7 @@ axum = \"0.7\"\n serde = { version = \"1\", features = [\"derive\"] }\n tokio = { version = \"1\", features = [\"full\"] }\n+async-graphql = \"7\"\n tracing = \"0.1\"",
+        ),
+    ]
+}
+
+/// The end of a failed job's log, for the demo's inspector (`gui` feature).
+#[cfg(feature = "gui")]
+pub fn demo_job_log() -> String {
+    crate::gitlab::log_tail(
+        "$ cargo test --workspace\n   Compiling api v0.4.0 (/builds/shop/api)\n    Finished test profile in 41.2s\n     Running unittests src/lib.rs\n\nrunning 48 tests\ntest db::pool::tests::acquire_times_out ... ok\ntest db::pool::tests::release_under_load ... FAILED\ntest api::graphql::tests::lists_open_mrs ... ok\n\nfailures:\n\n---- db::pool::tests::release_under_load stdout ----\nthread 'db::pool::tests::release_under_load' panicked at src/db/pool.rs:212:9:\nassertion `left == right` failed: 3 connections still checked out\n  left: 3\n right: 0\n\ntest result: FAILED. 47 passed; 1 failed; 0 ignored\nerror: test failed, to rerun pass `--lib`\nERROR: Job failed: exit code 101",
+        60,
+    )
 }
 
 #[cfg(test)]

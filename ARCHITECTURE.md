@@ -121,6 +121,13 @@ no state of its own beyond what the views need (page, panels, text being edited)
   on exit); a project switch runs `build_session` in a task and swaps the session
   in when it is ready. `block_on` is kept for short local steps (small TOML
   saves in `dispatch`).
+* **Tabs.** Each open project is a `Session` of its own. The shown tab's state
+  lives in `GuiApp`'s fields (so the views read `g.app` as before); the others
+  are `Tab`s parked in `GuiApp::tabs`, swapped in by `GuiApp::activate`. Hidden
+  tabs still apply their events every frame (`Tab::run_hidden`). Tabs load in
+  the background (`load_project`); a project without its token comes back as
+  `Loaded::NeedsTokens` and opens the project form (`gui/setup.rs`) instead of
+  prompting: the window turns `secrets::set_interactive(false)` on at start.
 * **Theme.** Colours come from `bevel-theme`; `gui/tones.rs` and `gui/colors.rs`
   map the app's states and the TUI palette onto it.
 

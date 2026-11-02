@@ -18,6 +18,17 @@ use zeroize::Zeroizing;
 pub use config::RedmineConfig;
 pub use keyring::get_or_prompt_token;
 
+/// Checks a Redmine token against its instance (the window's project form), before
+/// it is saved: [`TrackerError::Auth`] when refused.
+pub async fn check_token(redmine_url: &str, token: &str) -> Result<(), TrackerError> {
+    let http = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .unwrap_or_default();
+    client::check_token(&http, redmine_url, token).await
+}
+
 /// Redmine implementation of the [`TrackerProvider`] contract.
 ///
 /// Constructed once at startup and shared via `Arc<dyn TrackerProvider>`.

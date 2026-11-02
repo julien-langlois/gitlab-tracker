@@ -65,6 +65,7 @@ fn anchors(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let mut links = vec![
         (InspectorSection::Review, tl("Review")),
+        (InspectorSection::Changes, tl("Changes")),
         (InspectorSection::Branches, tl("Branches")),
     ];
     if g.app.tracker.is_some() || mr.linked_ticket.is_some() {
@@ -446,6 +447,10 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ));
         });
     }
+    anchor(g, ui, InspectorSection::Changes);
+    section(ui, &theme, tl("Changes"), |ui| {
+        super::details::changes(&mut g.details, &g.app, ui, &theme, &mr.id, &mr.web_url);
+    });
     anchor(g, ui, InspectorSection::Branches);
     branches(g, ui, mr);
     if !mr.labels.is_empty() {
@@ -464,7 +469,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     }
     threads(ui, &theme, mr);
     anchor(g, ui, InspectorSection::Pipelines);
-    pipelines(ui, &theme, mr);
+    pipelines(g, ui, mr);
     anchor(g, ui, InspectorSection::Description);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
@@ -1019,7 +1024,11 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
 }
 
 /// The latest pipelines; the jobs of the newest one by stage.
-fn pipelines(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
+fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = &g.theme.clone();
+    let demo = g.app.read_only;
+    let can_read_logs =
+        |job: &crate::models::PipelineJob| job.status == "failed" && (job.id != 0 || demo);
     section(ui, theme, tl("Pipelines"), |ui| {
         if mr.pipelines.is_empty() {
             ui.label(muted(theme, tl("No pipeline yet.")));
@@ -1055,6 +1064,7 @@ fn pipelines(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
         for stage in stages {
             ui.label(semibold(stage, theme.text_size - 2.0).color(theme.palette.text_muted));
             for job in latest.jobs.iter().filter(|j| j.stage == stage) {
+                let mut log_open = false;
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     dot(ui, job_color(theme, &job.status), 6.0);
@@ -1068,8 +1078,21 @@ fn pipelines(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                             None => job.status.clone(),
                         };
                         ui.label(muted(theme, text));
+                        if can_read_logs(job) {
+                            // The demo's jobs have no id: one canned log for all.
+                            log_open = super::details::log_button(
+                                &mut g.details,
+                                &g.app,
+                                ui,
+                                theme,
+                                job.id,
+                            );
+                        }
                     });
                 });
+                if log_open {
+                    super::details::log(&mut g.details, ui, theme, job.id);
+                }
             }
         }
     });

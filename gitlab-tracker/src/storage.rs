@@ -600,34 +600,54 @@ pub async fn needs_first_project() -> bool {
     try_migrate_from_config_json().await.is_none()
 }
 
-/// Saves the first project to `projects.toml`, active, and its token to the OS
-/// keyring when one is given. The error says why the token could not be saved
-/// (the project is saved anyway; the token is asked again at startup).
+/// Adds `entry` to `projects.toml` (the window's project form), as the only
+/// `active` entry when `active`. An entry for the same project is replaced.
 #[cfg(feature = "gui")]
-pub async fn add_first_project(
-    entry: ProjectEntry,
-    token: Zeroizing<String>,
-) -> Result<(), String> {
-    let account = account_for(&entry.gitlab_url);
+pub async fn add_project(entry: ProjectEntry, active: bool) {
     let mut cfg = load_projects_toml().await;
-    for p in &mut cfg.projects {
-        p.active = false;
+    if active {
+        for p in &mut cfg.projects {
+            p.active = false;
+        }
     }
-    cfg.projects.push(ProjectEntry {
-        active: true,
-        ..entry
-    });
+    let entry = ProjectEntry { active, ..entry };
+    match cfg
+        .projects
+        .iter_mut()
+        .find(|p| is_same_project(p, &entry.gitlab_url, &entry.project_id))
+    {
+        Some(existing) => *existing = entry,
+        None => cfg.projects.push(entry),
+    }
     save_projects_toml(&cfg).await;
-    if token.trim().is_empty() {
-        return Ok(());
+}
+
+/// Whether a GitLab token is available for `gitlab_url` without asking
+/// (`GITLAB_TOKEN` or the keyring). Blocks on the keyring: off the UI thread.
+#[cfg(feature = "gui")]
+pub fn has_gitlab_token(gitlab_url: &str) -> bool {
+    migrate_legacy_keyring_entry(gitlab_url);
+    gitlab_tracker_core::secrets::has_secret(
+        "GITLAB_TOKEN",
+        KEYRING_SERVICE,
+        &account_for(gitlab_url),
+    )
+}
+
+/// The GitLab token for `gitlab_url` without asking, `None` when there is none.
+/// Blocks on the keyring.
+#[cfg(feature = "gui")]
+pub fn stored_gitlab_token(gitlab_url: &str) -> Option<Zeroizing<String>> {
+    if !has_gitlab_token(gitlab_url) {
+        return None;
     }
-    tokio::task::spawn_blocking(move || {
-        keyring::Entry::new(KEYRING_SERVICE, &account)
-            .and_then(|e| e.set_password(token.trim()))
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    get_or_prompt_token(gitlab_url)
+}
+
+/// Stores the GitLab token for `gitlab_url` in the OS keyring. Blocks.
+#[cfg(feature = "gui")]
+pub fn save_gitlab_token(gitlab_url: &str, token: &str) -> Result<(), String> {
+    gitlab_tracker_core::secrets::store_secret(KEYRING_SERVICE, &account_for(gitlab_url), token)
 }
 
 /// First-run onboarding: asks for the GitLab URL, project ID and an optional name.
@@ -754,6 +774,17 @@ async fn update_project_entry(
 pub async fn save_hide_merged_async(hide: bool, gitlab_url: &str, project_id: &str) {
     update_project_entry(gitlab_url, project_id, |entry| {
         entry.hide_merged = Some(hide);
+    })
+    .await;
+}
+
+/// Saves the GitLab username of the project's token owner, read from GitLab by
+/// the window, so the "me" views work in the terminal too.
+#[cfg(feature = "gui")]
+pub async fn save_gitlab_username_async(username: &str, gitlab_url: &str, project_id: &str) {
+    let username = username.to_string();
+    update_project_entry(gitlab_url, project_id, |entry| {
+        entry.gitlab_username = Some(username);
     })
     .await;
 }
@@ -1571,6 +1602,38 @@ mod tests {
         let (mrs, branches, known, discovery, dismissed) = load_state_async(URL, "1").await;
         assert!(mrs.is_empty() && branches.is_empty() && known.is_empty());
         assert!(discovery.is_none() && dismissed.is_empty());
+    }
+
+    #[cfg(feature = "gui")]
+    #[tokio::test]
+    async fn the_window_adds_projects_without_duplicates() {
+        let _dir = TempConfigDir::new("add-project");
+        write_projects(vec![project(URL, "1", true)]).await;
+        // Opened in a tab: added behind, the active one kept.
+        add_project(project(&format!("{URL}/"), "2", true), false).await;
+        // Added again (same instance and id): replaced, not doubled.
+        let renamed = ProjectEntry {
+            name: Some("Two".into()),
+            ..project(URL, "2", false)
+        };
+        add_project(renamed, false).await;
+        let cfg = load_projects_toml().await;
+        let ids: Vec<(&str, bool)> = cfg
+            .projects
+            .iter()
+            .map(|p| (p.project_id.as_str(), p.active))
+            .collect();
+        assert_eq!(ids, [("1", true), ("2", false)]);
+        assert_eq!(cfg.projects[1].name.as_deref(), Some("Two"));
+        // The first-run window's project: the only active one.
+        add_project(project(URL, "3", false), true).await;
+        let active: Vec<bool> = load_projects_toml()
+            .await
+            .projects
+            .iter()
+            .map(|p| p.active)
+            .collect();
+        assert_eq!(active, [false, false, true]);
     }
 
     #[tokio::test]

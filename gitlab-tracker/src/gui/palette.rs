@@ -48,6 +48,8 @@ enum Command {
     Theme,
     HideMerged,
     ClearFocus,
+    Tab(usize),
+    NewProject,
 }
 
 /// A result: its kind, its text, a detail on the right, and what it does.
@@ -114,6 +116,38 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
         Icon::Help,
         Command::Shortcuts,
     ));
+    if !g.app.read_only {
+        list.push(command(
+            tl("Add a project…"),
+            "W",
+            Icon::Plus,
+            Command::NewProject,
+        ));
+    }
+    for (index, tab) in g.tabs.iter().enumerate() {
+        if matches!(tab.state, super::SlotState::Active) {
+            continue;
+        }
+        let name = match &tab.state {
+            super::SlotState::Parked(t) => t
+                .app
+                .project_name
+                .clone()
+                .unwrap_or_else(|| t.app.project_id.clone()),
+            _ => tab.name.clone(),
+        };
+        list.push(Entry {
+            kind: tl("Project"),
+            icon: Icon::MergeRequests,
+            text: name,
+            detail: if index < 8 {
+                format!("Ctrl+{}", index + 1)
+            } else {
+                String::new()
+            },
+            command: Command::Tab(index),
+        });
+    }
     if let Some(focus) = &g.app.focus {
         list.push(command(
             &format!("{} · {}", tl("Show every MR again"), focus.label),
@@ -124,6 +158,8 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
     }
 
     let mut pages = vec![
+        (Page::Today, tl("Today"), Icon::Clock),
+        (Page::Promote, tl("Promote"), Icon::ArrowUp),
         (
             Page::MergeRequests,
             tl("Merge requests"),
@@ -365,6 +401,13 @@ fn execute(g: &mut GuiApp, command: Command) {
         Command::Columns => g.app.input_mode = InputMode::ColumnPicker,
         Command::HideMerged => g.pending.push(Action::ToggleHideMerged),
         Command::ClearFocus => g.next_focus = Some(None),
+        Command::Tab(index) => g.activate(index),
+        Command::NewProject => {
+            g.wizard = Some(super::setup::ProjectForm::new(
+                &g.ctx,
+                super::setup::Mode::New,
+            ));
+        }
         Command::Theme => {
             let next = match g.theme.mode {
                 bevel_theme::Mode::Dark => bevel_theme::Mode::Light,

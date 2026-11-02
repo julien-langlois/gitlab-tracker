@@ -654,7 +654,16 @@ gitlab-tracker gui            # the active project, as the TUI
 gitlab-tracker --demo gui     # demo data, read-only
 ```
 
-The window has no terminal to prompt in: store the token first (run the TUI once, or `gitlab-tracker` in a terminal), or a missing token makes the project fail to load. Switching project from the window loads it in the background; the window stays usable meanwhile.
+The window never prompts in the terminal. With no project configured it opens a setup window; a project whose token is not in the OS keyring (or `GITLAB_TOKEN` / `REDMINE_TOKEN`) asks for it in the window, then saves it to the keyring.
+
+**Projects in tabs.** Each project opens in its own title-bar tab and keeps refreshing while hidden (its notifications, state saves and automatic tracker transitions go on); a dot on a hidden tab says something changed, red when a fetch failed. `+` (or `W`) lists the projects of `projects.toml` and offers **New project…**: GitLab URL, project (id or path), optional name and branches, the token and, with Redmine, the tracker's URL and API key. When another project already uses the same GitLab (or Redmine) instance, the form says a token is saved and needs not be typed again. The project and the tokens are checked against GitLab and Redmine before anything is saved; an empty name or branch list takes GitLab's name and default branch, and your username is read from the token (`gitlab_username`). The open tabs come back at the next launch. Keys: `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+1…9`, `Ctrl+W` (or a middle click) closes a tab.
+
+**Pages besides the table, cockpit, tracker and stats:**
+
+* **Today** — across every open tab: the reviews waiting for you, your MRs that need you (CI failed, conflicts, threads to answer, changes requested), those ready to merge, those waiting on others, and what you merged today. A click shows the MR in its tab.
+* **Promote** — between two tracked branches (the last two by default, e.g. `staging → production`): what is ready to go, what is not on the first branch yet and what holds it back, and what already went. The ready list copies as a release checklist or shows in the table.
+
+The **inspector** also reads, on demand, the MR's changed files with their patches (**Changes**) and, for a failed job, the end of its log (**Log**, in Pipelines). A click on a desktop notification brings the window forward on that MR, in its tab.
 
 **Dock icon and launcher (Linux).** GNOME (Ubuntu) and KDE take the icon of a running window from a desktop entry named after its app id (`gitlab-tracker`). Install it once for the current user:
 

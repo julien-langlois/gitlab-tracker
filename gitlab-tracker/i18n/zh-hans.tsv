@@ -714,3 +714,99 @@ date	Merged	合并时间
 @plural	{n} merged MR|{n} merged MRs	{n} 个已合并的 MR
 @plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} 个 MR 无法刷新
 @plural	Updated {n} min ago|Updated {n} min ago	{n} 分钟前更新
+	Projects	项目
+	Each project opens in its own tab, and keeps refreshing while another one is shown.	每个项目在自己的标签页中打开，显示其他项目时仍会继续刷新。
+	Shown	显示中
+	In a tab	已在标签页中
+	New project…	新建项目…
+	Changes	变更
+	Could not open {project}	无法打开 {project}
+	Opened {project}	已打开 {project}
+	Add a project…	添加项目…
+	Today	今天
+	Promote	晋级
+	Add a project	添加项目
+	Tokens needed	需要令牌
+	Check and add	检查并添加
+	Checking with GitLab…	正在向 GitLab 验证…
+	Shown in the tab; GitLab's name when empty	显示在标签页中；留空则使用 GitLab 中的名称
+	Tracked branches (optional)	跟踪的分支（可选）
+	Comma-separated, in the table's order: main, staging, production. The default branch when empty.	以逗号分隔，按表格顺序：main, staging, production。留空则使用默认分支。
+	Scope read_api; saved in the OS keyring, never in a file.	权限 read_api；保存在系统密钥环中，绝不写入文件。
+	Redmine (optional)	Redmine（可选）
+	Redmine URL	Redmine 地址
+	Links the MRs to their tickets; empty: no tracker	将 MR 关联到其工单；留空则不使用跟踪器
+	Redmine API key	Redmine API 密钥
+	My account › API access key; saved in the OS keyring.	我的帐户 › API 访问密钥；保存在系统密钥环中。
+	{project} has no token in the OS keyring for the instances below. Type them once: they are saved in the keyring, and every project on the same instance uses them.	{project} 在系统密钥环中没有下列实例的令牌。只需输入一次：它们会保存在密钥环中，同一实例上的所有项目都会使用。
+	GitLab token · {url}	GitLab 令牌 · {url}
+	Personal access token, scope read_api.	个人访问令牌，权限 read_api。
+	Redmine API key · {url}	Redmine API 密钥 · {url}
+	Empty: the project opens without its tickets.	留空：项目打开时不显示其工单。
+	Type the GitLab token: nothing can load without it.	请输入 GitLab 令牌：没有它无法加载任何内容。
+	No token is saved for this GitLab instance yet: type one.	此 GitLab 实例尚未保存令牌：请输入一个。
+	No API key is saved for this Redmine instance yet: type one, or leave the Redmine URL empty.	此 Redmine 实例尚未保存 API 密钥：请输入一个，或将 Redmine 地址留空。
+	The token could not be saved in the keyring: {error}	无法将令牌保存到密钥环：{error}
+	GitLab refused the token: it may be expired, or lack the read_api scope.	GitLab 拒绝了该令牌：它可能已过期，或缺少 read_api 权限。
+	No such project on this instance, or the token cannot see it.	此实例上没有该项目，或令牌无权查看。
+	GitLab answered {status}.	GitLab 返回了 {status}。
+	Could not reach GitLab: {error}	无法连接 GitLab：{error}
+	Redmine refused the API key.	Redmine 拒绝了该 API 密钥。
+	Redmine: {error}	Redmine：{error}
+	Saved — leave empty to keep it	已保存 — 留空即保留
+	A token is already saved for this instance: no need to type it again.	此实例已保存令牌：无需再次输入。
+	Looking for a saved token…	正在查找已保存的令牌…
+	Close the tab	关闭标签页
+	Open or add a project (W)	打开或添加项目 (W)
+	Open or add a project	打开或添加项目
+	Next / previous tab	下一个 / 上一个标签页
+	Go to that tab (9: the last)	转到该标签页（9：最后一个）
+	waiting for you	等待你处理
+	What waits for you, in every tab	所有标签页中等待你处理的事项
+	What is ready to go to the next branch	可以进入下一个分支的内容
+	Show the changed files	显示变更的文件
+	Reading the diff…	正在读取差异…
+	No file changed.	没有文件变更。
+	No text diff: a binary file, or too large for GitLab to show.	无文本差异：二进制文件，或过大 GitLab 无法显示。
+	in GitLab	在 GitLab 中
+	Hide the log	隐藏日志
+	Log	日志
+	The end of this job's log	此作业日志的末尾
+	Reading the log…	正在读取日志…
+	The last {n} lines	最后 {n} 行
+	Copy	复制
+	CI failed	CI 失败
+	Not approved	未批准
+	Partly copied	部分复制
+	Still a draft	仍为草稿
+	Track at least two branches (in the settings) to see what is ready to go from one to the next.	请至少跟踪两个分支（在设置中），以查看哪些内容可以从一个分支进入下一个。
+	{n} ready to go from {from} to {to}	{n} 个可从 {from} 进入 {to}
+	Copy the checklist	复制检查清单
+	The ready MRs as a Markdown table, for the release ticket	以 Markdown 表格列出就绪的 MR，用于发布工单
+	Show in the table	在表格中显示
+	Ready to go · {n}	可以晋级 · {n}
+	Nothing on {from} is missing from {to}.	{from} 上的内容在 {to} 上都已存在。
+	Not on {from} yet · {n}	尚未进入 {from} · {n}
+	Every tracked MR reached it.	所有跟踪的 MR 都已到达。
+	Already on {to} · {n}	已在 {to} 上 · {n}
+	Show them	显示
+	Ready for {to}	可进入 {to}
+	Not merged	未合并
+	Waiting for my review	等待我审查
+	My MRs that need me	需要我处理的 MR
+	Ready to merge	可以合并
+	Waiting on the others	等待他人
+	No review waits for you.	没有等待你的审查。
+	None of your MRs is failing, in conflict or awaiting an answer.	你的 MR 都没有失败、冲突或等待回复。
+	None of your MRs is approved and mergeable yet.	你的 MR 都尚未获批且可合并。
+	Nothing else is assigned to you.	没有其他分配给你的内容。
+	None of your MRs waits on a reviewer.	你的 MR 都没有在等待审查者。
+	Nothing of yours merged today yet.	今天你还没有合并任何内容。
+	Your GitLab username is not known yet: it is read from GitLab when a project opens.	尚不知道你的 GitLab 用户名：打开项目时会从 GitLab 读取。
+	Across {n} open projects · as {user}	跨 {n} 个已打开的项目 · 身份 {user}
+	Show it in its project's tab	在其项目的标签页中显示
+@plural	{n} change since shown|{n} changes since shown	自上次显示以来有 {n} 项变化
+@plural	{n} thread to answer|{n} threads to answer	{n} 个讨论待回复
+@plural	{n} approval|{n} approvals	{n} 个批准
+@plural	{n} open thread|{n} open threads	{n} 个未解决讨论
+@plural	{n} more line|{n} more lines	还有 {n} 行

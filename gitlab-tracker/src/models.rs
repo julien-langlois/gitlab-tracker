@@ -405,7 +405,7 @@ pub struct BranchRow {
 
 /// Deserialises `null` as `T::default()`: older state files wrote `null` for fields
 /// that are no longer optional.
-fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub(crate) fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Default + Deserialize<'de>,
@@ -672,6 +672,9 @@ impl Default for DifficultyProfile {
 /// A single job within a pipeline, as returned by the GitLab API.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PipelineJob {
+    /// GitLab's job id: its log is read with it (0 in state files older than it).
+    #[serde(default)]
+    pub id: u64,
     #[serde(default)]
     pub name: String,
     #[serde(default)]

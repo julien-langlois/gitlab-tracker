@@ -13,6 +13,9 @@ pub fn handle(g: &mut GuiApp, ctx: &egui::Context) {
         super::palette::toggle(g);
         return;
     }
+    if tab_keys(g, ctx) {
+        return;
+    }
     if g.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
         return;
     }
@@ -34,6 +37,55 @@ pub fn handle(g: &mut GuiApp, ctx: &egui::Context) {
             _ => {}
         }
     }
+}
+
+/// The tabs' keys, as in a browser: Ctrl+Tab and Ctrl+Shift+Tab (or
+/// Ctrl+PageDown / PageUp) cycle, Ctrl+1…9 pick, Ctrl+W closes. `true` when one
+/// was used.
+fn tab_keys(g: &mut GuiApp, ctx: &egui::Context) -> bool {
+    let count = g.tabs.len();
+    if count == 0 || g.wizard.is_some() {
+        return false;
+    }
+    let active = g.active();
+    let ctrl_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+    let target = ctx.input_mut(|i| {
+        if i.consume_key(ctrl_shift, Key::Tab) || i.consume_key(Modifiers::COMMAND, Key::PageUp) {
+            return Some((active + count - 1) % count);
+        }
+        if i.consume_key(Modifiers::COMMAND, Key::Tab)
+            || i.consume_key(Modifiers::COMMAND, Key::PageDown)
+        {
+            return Some((active + 1) % count);
+        }
+        const DIGITS: [Key; 9] = [
+            Key::Num1,
+            Key::Num2,
+            Key::Num3,
+            Key::Num4,
+            Key::Num5,
+            Key::Num6,
+            Key::Num7,
+            Key::Num8,
+            Key::Num9,
+        ];
+        for (n, key) in DIGITS.iter().enumerate() {
+            if i.consume_key(Modifiers::COMMAND, *key) {
+                // Ctrl+9 is the last tab, as in browsers.
+                return Some(if n == 8 { count - 1 } else { n });
+            }
+        }
+        None
+    });
+    if let Some(index) = target.filter(|&i| i < count) {
+        g.activate(index);
+        return true;
+    }
+    if !g.demo && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::W)) {
+        g.close_tab(active);
+        return true;
+    }
+    false
 }
 
 fn named_key(g: &mut GuiApp, key: Key, modifiers: Modifiers) {

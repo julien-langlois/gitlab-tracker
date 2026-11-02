@@ -7,6 +7,7 @@
 
 mod cockpit;
 mod colors;
+mod details;
 mod dialogs;
 mod i18n;
 mod icons;
@@ -15,6 +16,7 @@ mod keys;
 mod markdown;
 mod palette;
 mod prefs;
+mod promote;
 mod setup;
 mod shell;
 mod sidebar;
@@ -22,6 +24,7 @@ mod sidebar;
 mod stats;
 mod table;
 mod toasts;
+mod today;
 mod tones;
 #[cfg(debug_assertions)]
 mod tour;
@@ -45,17 +48,31 @@ use crate::{build_session, Session, Shared};
 /// Environment prefix of the title-bar override: `GITLAB_TRACKER_TITLEBAR=app|system`.
 const TITLEBAR_PREFIX: bevel_window::Prefix = bevel_window::Prefix::new("GITLAB_TRACKER");
 
-/// Loads `project` like the TUI does (the token lookup may still prompt in the
-/// terminal), then opens the window and runs until it is closed.
+/// Loads `project` like the TUI does, then opens the window and runs until it is
+/// closed. The window never prompts in the terminal: a missing token is asked in
+/// a window first.
 pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Result<()> {
+    gitlab_tracker_core::secrets::set_interactive(false);
+    let probe = project.clone();
+    let missing = tokio::task::spawn_blocking(move || setup::missing_tokens(&probe))
+        .await
+        .unwrap_or(None);
+    if let Some(mode) = missing {
+        let needs_gitlab = matches!(mode, setup::Mode::Tokens { gitlab: true, .. });
+        if !setup::run(Some(mode)).await? && needs_gitlab {
+            return Ok(());
+        }
+    }
     let shared = Shared {
         palette: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
         #[cfg(feature = "stats")]
         stats_db: crate::open_stats_db().await,
     };
+    let project = with_username(project).await;
     let session = build_session(&global_config, project, &shared).await?;
     open_window(Launch {
         session,
+        more: Vec::new(),
         global_config,
         shared,
         demo: false,
@@ -65,7 +82,33 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
 /// The window on the demo project (`gitlab-tracker --demo gui`): mock data,
 /// no token, no network and no disk writes.
 pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
-    let app = crate::demo::demo_app(global_config.clone()).await;
+    let mut first = crate::demo::demo_app(global_config.clone()).await;
+    // "Me", for the Today page and the reviews waiting for me.
+    first.config.gitlab_username = Some("thomas_db".into());
+    let session = demo_session(first);
+    // A second project, in a tab of its own, to show the tabs.
+    let mut second = crate::demo::demo_app(global_config.clone()).await;
+    second.project_id = "654321".into();
+    second.project_name = Some("Mobile app".into());
+    second.mrs.truncate(5);
+    second.config.gitlab_username = Some("thomas_db".into());
+    let shared = Shared {
+        palette: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
+        #[cfg(feature = "stats")]
+        stats_db: None,
+    };
+    open_window(Launch {
+        session,
+        more: vec![demo_session(second)],
+        global_config,
+        shared,
+        demo: true,
+    })
+}
+
+/// A demo project's session: a 1 s tick, and statuses for the board's columns
+/// (moving a ticket stays refused).
+fn demo_session(mut app: App) -> Session {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let timer = tx.clone();
     tokio::spawn(async move {
@@ -77,38 +120,27 @@ pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
             }
         }
     });
-    // Statuses for the board's columns; moving a ticket stays refused.
-    let mut app = app;
     app.ticket_transitioner = Some(Arc::new(crate::demo::DemoTracker));
-    let session = Session {
+    Session {
         app,
         tx,
         rx,
         api_semaphore: Arc::new(Semaphore::new(1)),
         last_known_branches: HashMap::new(),
-    };
-    let shared = Shared {
-        palette: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
-        #[cfg(feature = "stats")]
-        stats_db: None,
-    };
-    open_window(Launch {
-        session,
-        global_config,
-        shared,
-        demo: true,
-    })
+    }
 }
 
 /// With no project configured: asks for the first one in a window. `false`
 /// when it was closed without one.
 pub async fn first_run() -> anyhow::Result<bool> {
-    setup::run().await
+    setup::run(None).await
 }
 
 /// Everything the window starts from.
 struct Launch {
     session: Session,
+    /// More projects, open in tabs behind the first (the demo's).
+    more: Vec<Session>,
     /// Kept to load another project from the project picker.
     global_config: AppConfig,
     shared: Shared,
@@ -171,8 +203,12 @@ fn window_icon() -> Arc<egui::IconData> {
 /// `InputMode::Stats`, as the TUI's stats overlay does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Page {
+    /// What waits for me, across the open tabs.
+    Today,
     MergeRequests,
     Cockpit,
+    /// What is ready to go from one tracked branch to the next.
+    Promote,
     Tracker,
     #[cfg(feature = "stats")]
     Stats,
@@ -182,6 +218,7 @@ enum Page {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InspectorSection {
     Review,
+    Changes,
     Branches,
     Pipelines,
     Ticket,
@@ -198,8 +235,14 @@ struct GuiApp {
     last_known_branches: HashMap<String, HashSet<String>>,
     global_config: AppConfig,
     shared: Shared,
-    /// The projects of `projects.toml`, shown as title-bar tabs (none in the demo).
-    projects: Vec<ProjectEntry>,
+    /// The open projects, as title-bar tabs, in order: the active one's state
+    /// lives in the fields of this struct, the others' in their [`Slot`].
+    tabs: Vec<Slot>,
+    /// The project form (`+`, or a project without its token), while open.
+    wizard: Option<setup::ProjectForm>,
+    /// Redmine instances whose key was left empty in the project form: their
+    /// projects open without tickets for the rest of the session, unasked.
+    skip_redmine: HashSet<String>,
     ctx: egui::Context,
     /// Who draws the window frame; `Frame::App` adds window buttons to the title bar.
     frame: bevel_window::Frame,
@@ -230,6 +273,8 @@ struct GuiApp {
     state_writer: StateWriter,
     /// The selected MR's description, rendered in the inspector.
     description: markdown::Description,
+    /// Diffs and job logs read on demand for the inspector.
+    details: details::Details,
     /// The `language` setting of `projects.toml` (`None`: the system's), and the
     /// choice being edited in the settings dialog.
     language: Option<String>,
@@ -244,6 +289,10 @@ struct GuiApp {
     /// How the table groups its rows, and the groups folded away.
     group_by: table::GroupBy,
     folded: HashSet<String>,
+    /// The URLs of the desktop notifications clicked: the window shows their MR.
+    clicks: std::sync::mpsc::Receiver<String>,
+    /// The branches the Promote page compares, once picked: from, to.
+    promote: Option<(String, String)>,
     /// The tracker page shows its tickets as a board (columns by status).
     tracker_board: bool,
     /// The table's compact density: one line per MR.
@@ -274,8 +323,6 @@ struct GuiApp {
         Option<std::sync::mpsc::Receiver<Vec<gitlab_tracker_core::TicketTransitionTarget>>>,
     /// Tickets being moved to another status: what to say once done.
     moves: (MoveSender, std::sync::mpsc::Receiver<MoveResult>),
-    /// The project being loaded in the background (see [`GuiApp::switch_project`]).
-    switching: Option<std::sync::mpsc::Receiver<anyhow::Result<Loaded>>>,
     #[cfg(debug_assertions)]
     tour: Option<tour::Tour>,
     #[cfg(target_os = "macos")]
@@ -286,28 +333,40 @@ impl GuiApp {
     fn new(cc: &eframe::CreationContext<'_>, launch: Launch, frame: bevel_window::Frame) -> Self {
         let Launch {
             session,
+            more,
             global_config,
             shared,
             demo,
         } = launch;
-        let Session {
-            app,
-            tx,
-            rx,
-            api_semaphore,
-            last_known_branches,
-        } = session;
-        let events = forward_events(rx, &cc.egui_ctx);
         bevel_theme::fonts::install(&cc.egui_ctx);
         let projects_config = block_on(crate::storage::load_projects_toml());
         let language = projects_config.language;
         i18n::install();
         i18n::set_language(language.as_deref());
-        let projects = if demo {
-            Vec::new()
-        } else {
-            projects_config.projects
-        };
+        let first = Slot::active(&session.app);
+        let Tab {
+            app,
+            tx,
+            events,
+            api_semaphore,
+            last_known_branches,
+            state_writer,
+            page,
+            ticket_anchor,
+            text_filter,
+            members,
+            baseline,
+            toasts,
+            last_sync,
+            was_syncing,
+            digest_closed,
+            statuses,
+            statuses_rx,
+            moves,
+            marked,
+            folded,
+            details,
+        } = Tab::new(session, &cc.egui_ctx);
 
         let mut gui = Self {
             app,
@@ -317,7 +376,9 @@ impl GuiApp {
             last_known_branches,
             global_config,
             shared,
-            projects,
+            tabs: vec![first],
+            wizard: None,
+            skip_redmine: HashSet::new(),
             ctx: cc.egui_ctx.clone(),
             frame,
             theme: bevel_theme::Theme::dark(),
@@ -325,45 +386,54 @@ impl GuiApp {
             show_views: None,
             show_inspector: None,
             views_shown: false,
-            page: Page::MergeRequests,
+            page,
             scroll_to: None,
-            ticket_anchor: None,
-            text_filter: (None, String::new()),
+            ticket_anchor,
+            text_filter,
             focus_search: false,
             pending: Vec::new(),
-            state_writer: StateWriter::default(),
+            state_writer,
             description: markdown::Description::default(),
+            details,
             language_draft: language.clone(),
             language,
-            switching: None,
-            members: HashMap::new(),
-            baseline: None,
+            members,
+            baseline,
             hide_zeros: false,
             group_by: table::GroupBy::None,
-            folded: HashSet::new(),
+            folded,
             tracker_board: false,
+            promote: None,
+            clicks: notification_clicks(&cc.egui_ctx),
             compact: false,
-            marked: HashSet::new(),
+            marked,
             bulk: None,
             window_size: None,
             next_focus: None,
             select_id: None,
             palette: None,
-            toasts: toasts::Toasts::default(),
-            last_sync: None,
-            was_syncing: false,
-            digest_closed: false,
-            statuses: None,
-            statuses_rx: None,
-            moves: std::sync::mpsc::channel(),
+            toasts,
+            last_sync,
+            was_syncing,
+            digest_closed,
+            statuses,
+            statuses_rx,
+            moves,
             #[cfg(debug_assertions)]
             tour: tour::Tour::from_env(),
             #[cfg(target_os = "macos")]
             movable: None,
         };
+        for session in more {
+            let mut slot = Slot::active(&session.app);
+            slot.state = SlotState::Parked(Box::new(Tab::new(session, &cc.egui_ctx)));
+            gui.tabs.push(slot);
+        }
         gui.set_theme(bevel_theme::Mode::Dark);
         if !gui.demo {
-            prefs::apply(&mut gui, &prefs::load());
+            let prefs = prefs::load();
+            prefs::apply(&mut gui, &prefs);
+            gui.restore_tabs(&prefs.tabs, &projects_config.projects);
         }
         gui
     }
@@ -464,17 +534,13 @@ impl GuiApp {
             }
             return;
         }
-        let mut needs_save = false;
-        while let Ok(event) = self.events.try_recv() {
-            needs_save |= self.app.apply_event(
-                event,
-                self.api_semaphore.clone(),
-                &self.tx,
-                &mut self.last_known_branches,
-            );
-        }
-        self.app.flush_pending_sort();
-        self.app.ensure_time_entries(&self.tx);
+        let needs_save = drain_events(
+            &mut self.app,
+            &self.events,
+            &self.api_semaphore,
+            &self.tx,
+            &mut self.last_known_branches,
+        );
         if needs_save {
             self.save_state();
         }
@@ -495,17 +561,7 @@ impl GuiApp {
 
     /// Saves the state in the background: the frame never waits on the disk.
     fn save_state(&self) {
-        let app = &self.app;
-        if let Some(file) = StateFile::new(
-            &app.mrs,
-            &self.last_known_branches,
-            app.discovery_started_at.as_deref(),
-            &app.dismissed_mr_ids,
-            &app.base_url,
-            &app.project_id,
-        ) {
-            self.state_writer.save(file);
-        }
+        save_state(&self.app, &self.last_known_branches, &self.state_writer);
     }
 
     fn dispatch_pending(&mut self) {
@@ -520,77 +576,288 @@ impl GuiApp {
         }
     }
 
-    /// Starts loading the project picked in the project picker, as the TUI does,
-    /// in the background: the token lookup waits on the keyring, or even on a
-    /// prompt in the terminal the window was started from. The window keeps
-    /// showing the current project until [`GuiApp::finish_switch`] swaps it.
-    fn switch_project(&mut self) {
-        let Some(next) = self.app.switch_to.take() else {
-            return;
-        };
-        if self.switching.is_some() {
-            self.app.flash(tl("Another project is still loading"), true);
+    /// Opens the project the project picker asked for (`App::switch_to`).
+    fn take_switch(&mut self) {
+        if let Some(next) = self.app.switch_to.take() {
+            self.open_project(next);
+        }
+    }
+
+    /// Shows `project`: its tab when it is open, else a new tab, loaded in the
+    /// background (the token lookup waits on the keyring) and shown once ready.
+    fn open_project(&mut self, project: ProjectEntry) {
+        if let Some(index) = self.tab_of(&project.gitlab_url, &project.project_id) {
+            match &mut self.tabs[index].state {
+                SlotState::Loading { show, .. } => *show = true,
+                _ => self.activate(index),
+            }
             return;
         }
-        self.save_state();
-        let name = next.name.clone().unwrap_or_else(|| next.project_id.clone());
+        let name = project
+            .name
+            .clone()
+            .unwrap_or_else(|| project.project_id.clone());
         self.app
             .flash(tf("Loading {project}…", &[("project", &name)]), false);
+        let slot = self.load_slot(project, true);
+        self.tabs.push(slot);
+    }
 
+    /// A tab for `project`, loading in the background.
+    fn load_slot(&self, project: ProjectEntry, show: bool) -> Slot {
         let (done, loaded) = std::sync::mpsc::channel();
-        self.switching = Some(loaded);
         let global_config = self.global_config.clone();
         let shared = self.shared.clone();
         let ctx = self.ctx.clone();
+        let skip_redmine = project
+            .tracker
+            .as_ref()
+            .is_some_and(|t| self.skip_redmine.contains(t.url.trim_end_matches('/')));
+        let slot = Slot {
+            url: project.gitlab_url.trim_end_matches('/').to_string(),
+            id: project.project_id.clone(),
+            name: project
+                .name
+                .clone()
+                .unwrap_or_else(|| project.project_id.clone()),
+            state: SlotState::Loading { rx: loaded, show },
+        };
         tokio::spawn(async move {
-            let _ = done.send(load_project(&global_config, next, &shared).await);
+            let _ = done.send(load_project(&global_config, project, &shared, skip_redmine).await);
             ctx.request_repaint();
         });
+        slot
     }
 
-    /// Swaps in the project [`GuiApp::switch_project`] loaded, once it is ready.
-    fn finish_switch(&mut self) {
-        let Some(loaded) = self.switching.as_ref().and_then(|rx| rx.try_recv().ok()) else {
+    /// Reopens the tabs open when the window was last closed, in their order, the
+    /// project the window started on among them. Projects no longer in
+    /// `projects.toml` are left out.
+    fn restore_tabs(&mut self, saved: &[prefs::SavedTab], projects: &[ProjectEntry]) {
+        let current = (self.app.base_url.clone(), self.app.project_id.clone());
+        let mut before = Vec::new();
+        let mut after = Vec::new();
+        let mut seen_current = false;
+        for tab in saved {
+            if crate::storage::is_same_project(
+                &ProjectEntry {
+                    gitlab_url: tab.url.clone(),
+                    project_id: tab.id.clone(),
+                    ..ProjectEntry::default()
+                },
+                &current.0,
+                &current.1,
+            ) {
+                seen_current = true;
+                continue;
+            }
+            let Some(entry) = projects
+                .iter()
+                .find(|p| crate::storage::is_same_project(p, &tab.url, &tab.id))
+            else {
+                continue;
+            };
+            let slot = self.load_slot(entry.clone(), false);
+            if seen_current {
+                after.push(slot);
+            } else {
+                before.push(slot);
+            }
+        }
+        let active = before.len();
+        before.append(&mut self.tabs);
+        before.append(&mut after);
+        self.tabs = before;
+        debug_assert!(matches!(self.tabs[active].state, SlotState::Active));
+    }
+
+    /// The tab of `(url, id)`, if open.
+    fn tab_of(&self, url: &str, id: &str) -> Option<usize> {
+        self.tabs
+            .iter()
+            .position(|t| t.url == url.trim_end_matches('/') && t.id == id)
+    }
+
+    /// The index of the tab shown.
+    fn active(&self) -> usize {
+        self.tabs
+            .iter()
+            .position(|t| matches!(t.state, SlotState::Active))
+            .unwrap_or(0)
+    }
+
+    /// Shows the tab `index` (a loaded one), parking the one shown.
+    fn activate(&mut self, index: usize) {
+        let current = self.active();
+        if index == current || index >= self.tabs.len() {
+            return;
+        }
+        let SlotState::Parked(mut tab) =
+            std::mem::replace(&mut self.tabs[index].state, SlotState::Active)
+        else {
+            // Still loading: shown once ready.
+            if let SlotState::Loading { show, .. } = &mut self.tabs[index].state {
+                *show = true;
+            }
             return;
         };
-        self.switching = None;
-        match loaded {
-            Ok(Loaded { session, projects }) => {
-                // The old project's events would apply to the new one: save what
-                // they changed first (`events` goes with the old session).
-                self.apply_events();
-                let Session {
-                    app,
-                    tx,
-                    rx,
-                    api_semaphore,
-                    last_known_branches,
-                } = session;
-                self.app = app;
-                self.tx = tx;
-                self.events = forward_events(rx, &self.ctx);
-                self.api_semaphore = api_semaphore;
-                self.last_known_branches = last_known_branches;
-                self.text_filter = (None, String::new());
-                self.baseline = None;
-                self.toasts = toasts::Toasts::default();
-                self.statuses = None;
-                self.statuses_rx = None;
-                self.marked.clear();
-                self.last_sync = None;
-                self.set_theme(self.theme.mode);
-                self.projects = projects;
-                let name = self.app.project_name.clone();
-                let switched = tf(
-                    "Switched to {project}",
-                    &[("project", name.as_deref().unwrap_or(&self.app.project_id))],
-                );
-                self.app.flash(format!("✔ {switched}"), false);
+        self.swap_tab(&mut tab);
+        self.tabs[current].state = SlotState::Parked(tab);
+        self.after_swap();
+    }
+
+    /// Exchanges the tab shown with `tab`.
+    fn swap_tab(&mut self, tab: &mut Tab) {
+        use std::mem::swap;
+        swap(&mut self.app, &mut tab.app);
+        swap(&mut self.tx, &mut tab.tx);
+        swap(&mut self.events, &mut tab.events);
+        swap(&mut self.api_semaphore, &mut tab.api_semaphore);
+        swap(&mut self.last_known_branches, &mut tab.last_known_branches);
+        swap(&mut self.state_writer, &mut tab.state_writer);
+        swap(&mut self.page, &mut tab.page);
+        swap(&mut self.ticket_anchor, &mut tab.ticket_anchor);
+        swap(&mut self.text_filter, &mut tab.text_filter);
+        swap(&mut self.members, &mut tab.members);
+        swap(&mut self.baseline, &mut tab.baseline);
+        swap(&mut self.toasts, &mut tab.toasts);
+        swap(&mut self.last_sync, &mut tab.last_sync);
+        swap(&mut self.was_syncing, &mut tab.was_syncing);
+        swap(&mut self.digest_closed, &mut tab.digest_closed);
+        swap(&mut self.statuses, &mut tab.statuses);
+        swap(&mut self.statuses_rx, &mut tab.statuses_rx);
+        swap(&mut self.moves, &mut tab.moves);
+        swap(&mut self.marked, &mut tab.marked);
+        swap(&mut self.folded, &mut tab.folded);
+        swap(&mut self.details, &mut tab.details);
+    }
+
+    /// Once another tab is shown: its colors, the picks of the last one dropped,
+    /// and `projects.toml` marks it active, so the terminal opens it next.
+    fn after_swap(&mut self) {
+        self.set_theme(self.theme.mode);
+        self.bulk = None;
+        self.next_focus = None;
+        self.select_id = None;
+        self.scroll_to = None;
+        if !self.demo {
+            let (url, id) = (self.app.base_url.clone(), self.app.project_id.clone());
+            tokio::spawn(async move { crate::storage::set_active_project_async(&url, &id).await });
+        }
+    }
+
+    /// Closes the tab `index`; the last one stays.
+    fn close_tab(&mut self, index: usize) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        if matches!(self.tabs[index].state, SlotState::Active) {
+            // Show the nearest loaded tab first.
+            let next = (index + 1..self.tabs.len())
+                .chain((0..index).rev())
+                .find(|&i| matches!(self.tabs[i].state, SlotState::Parked(_)));
+            let Some(next) = next else {
+                return;
+            };
+            self.activate(next);
+        }
+        let slot = self.tabs.remove(index);
+        if let (SlotState::Parked(tab), false) = (slot.state, self.demo) {
+            // Its last state on disk; its fetches stop with its channel.
+            save_state(&tab.app, &tab.last_known_branches, &tab.state_writer);
+            block_on(tab.state_writer.flush());
+        }
+    }
+
+    /// Shows the MR of each desktop notification clicked, in its tab, and brings
+    /// the window to the front; a URL no open tab knows opens in the browser.
+    fn poll_clicks(&mut self) {
+        while let Ok(url) = self.clicks.try_recv() {
+            let found = self.tabs.iter().enumerate().find_map(|(index, slot)| {
+                let app = match &slot.state {
+                    SlotState::Active => &self.app,
+                    SlotState::Parked(tab) => &tab.app,
+                    _ => return None,
+                };
+                app.mrs
+                    .iter()
+                    .find(|mr| mr.web_url == url)
+                    .map(|mr| (index, mr.id.clone()))
+            });
+            match found {
+                Some((index, id)) => {
+                    self.activate(index);
+                    self.show_mr(&id);
+                    self.ctx
+                        .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                    self.ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+                None => {
+                    let _ = open::that(&url);
+                }
             }
-            Err(e) => {
-                tracing::warn!(error = %e, "Project switch failed — staying on the current project");
-                self.app
-                    .flash(format!("✘ {}: {e:#}", tl("Project switch failed")), true);
+        }
+    }
+
+    /// Takes the tabs loaded in the background, and runs the parked ones: their
+    /// events apply (refreshes, notifications, state saves) while hidden.
+    fn poll_tabs(&mut self, now: f64) {
+        let mut show = None;
+        let mut tokens = None;
+        for index in 0..self.tabs.len() {
+            let slot = &mut self.tabs[index];
+            let SlotState::Loading { rx, show: wanted } = &slot.state else {
+                continue;
+            };
+            let wanted = *wanted;
+            let Ok(result) = rx.try_recv() else {
+                continue;
+            };
+            match result {
+                Ok(Loaded::Session(session)) => {
+                    let mut tab = Tab::new(*session, &self.ctx);
+                    tab.app.theme = self.app.theme;
+                    slot.state = SlotState::Parked(Box::new(tab));
+                    if wanted {
+                        show = Some(index);
+                    }
+                }
+                Ok(Loaded::NeedsTokens(mode)) => {
+                    slot.state = SlotState::Closed;
+                    if wanted || tokens.is_none() {
+                        tokens = Some(mode);
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Could not load a project");
+                    slot.state = SlotState::Closed;
+                    self.app.flash(
+                        format!(
+                            "✘ {}: {e:#}",
+                            tf("Could not open {project}", &[("project", &slot.name)])
+                        ),
+                        true,
+                    );
+                }
+            }
+        }
+        if let Some(mode) = tokens {
+            self.wizard = Some(setup::ProjectForm::new(&self.ctx, mode));
+        }
+        // Found again by project: a failed tab before it may have gone.
+        let show = show.map(|i| (self.tabs[i].url.clone(), self.tabs[i].id.clone()));
+        self.tabs.retain(|t| !matches!(t.state, SlotState::Closed));
+        if let Some(index) = show.and_then(|(url, id)| self.tab_of(&url, &id)) {
+            self.activate(index);
+            let name = shell::project_name(self);
+            self.app.flash(
+                format!("✔ {}", tf("Opened {project}", &[("project", &name)])),
+                false,
+            );
+        }
+        let theme = self.theme;
+        for slot in &mut self.tabs {
+            if let SlotState::Parked(tab) = &mut slot.state {
+                tab.run_hidden(&theme, now, self.demo);
             }
         }
     }
@@ -795,6 +1062,21 @@ fn members_of(app: &App, members: &HashMap<String, Vec<String>>, key: &str) -> V
     members.get(key).cloned().unwrap_or_default()
 }
 
+/// Routes the clicks on desktop notifications to the window (see
+/// [`GuiApp::poll_clicks`]), waking it for each.
+fn notification_clicks(ctx: &egui::Context) -> std::sync::mpsc::Receiver<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let tx = std::sync::Mutex::new(tx);
+    let ctx = ctx.clone();
+    crate::notify::on_click(move |url| {
+        if let Ok(tx) = tx.lock() {
+            let _ = tx.send(url.to_string());
+        }
+        ctx.request_repaint();
+    });
+    rx
+}
+
 /// Forwards the session's events to the window, waking it for each one: the
 /// window sleeps between frames otherwise.
 fn forward_events(
@@ -814,27 +1096,236 @@ fn forward_events(
     events
 }
 
-/// A project loaded by [`GuiApp::switch_project`], with `projects.toml` reread
-/// once it is marked active.
-struct Loaded {
-    session: Session,
-    projects: Vec<ProjectEntry>,
+/// What loading a project in a tab gave.
+enum Loaded {
+    Session(Box<Session>),
+    /// The tokens it lacks, asked in the project form.
+    NeedsTokens(setup::Mode),
 }
 
 async fn load_project(
     global_config: &AppConfig,
     project: ProjectEntry,
     shared: &Shared,
+    skip_redmine: bool,
 ) -> anyhow::Result<Loaded> {
+    let probe = project.clone();
+    let missing = tokio::task::spawn_blocking(move || setup::missing_tokens(&probe))
+        .await
+        .unwrap_or(None);
+    // A missing Redmine key is asked once; the project opens without its tickets
+    // when it is left empty (`skip_redmine`).
+    if let Some(mode) = missing.filter(|m| match m {
+        setup::Mode::Tokens { gitlab, .. } => *gitlab || !skip_redmine,
+        setup::Mode::New => false,
+    }) {
+        return Ok(Loaded::NeedsTokens(mode));
+    }
+    let project = with_username(project).await;
     let session = build_session(global_config, project, shared).await?;
-    crate::storage::set_active_project_async(&session.app.base_url, &session.app.project_id).await;
-    let projects = crate::storage::load_projects_toml().await.projects;
-    Ok(Loaded { session, projects })
+    Ok(Loaded::Session(Box::new(session)))
+}
+
+/// `project` with the GitLab username of its token's owner, read from GitLab and
+/// saved to `projects.toml` when it has none: the "me" views (Today, "To review
+/// (me)") need it.
+async fn with_username(mut project: ProjectEntry) -> ProjectEntry {
+    if project.gitlab_username.is_some() {
+        return project;
+    }
+    let url = project.gitlab_url.clone();
+    let token = tokio::task::spawn_blocking(move || crate::storage::stored_gitlab_token(&url))
+        .await
+        .ok()
+        .flatten();
+    let Some(token) = token else {
+        return project;
+    };
+    if let Some(username) = crate::gitlab::current_username(&project.gitlab_url, &token).await {
+        crate::storage::save_gitlab_username_async(
+            &username,
+            &project.gitlab_url,
+            &project.project_id,
+        )
+        .await;
+        project.gitlab_username = Some(username);
+    }
+    project
+}
+
+/// Applies the events received for a tab; whether its state must be saved.
+fn drain_events(
+    app: &mut App,
+    events: &std::sync::mpsc::Receiver<AppEvent>,
+    api_semaphore: &Arc<Semaphore>,
+    tx: &UnboundedSender<AppEvent>,
+    last_known_branches: &mut HashMap<String, HashSet<String>>,
+) -> bool {
+    let mut needs_save = false;
+    while let Ok(event) = events.try_recv() {
+        needs_save |= app.apply_event(event, api_semaphore.clone(), tx, last_known_branches);
+    }
+    app.flush_pending_sort();
+    app.ensure_time_entries(tx);
+    needs_save
+}
+
+/// Saves a tab's state in the background: the frame never waits on the disk.
+fn save_state(
+    app: &App,
+    last_known_branches: &HashMap<String, HashSet<String>>,
+    writer: &StateWriter,
+) {
+    if let Some(file) = StateFile::new(
+        &app.mrs,
+        last_known_branches,
+        app.discovery_started_at.as_deref(),
+        &app.dismissed_mr_ids,
+        &app.base_url,
+        &app.project_id,
+    ) {
+        writer.save(file);
+    }
+}
+
+/// A title-bar tab: an open project.
+struct Slot {
+    /// GitLab URL (no trailing `/`) and project id: what the tab is for.
+    url: String,
+    id: String,
+    /// Shown while it loads.
+    name: String,
+    state: SlotState,
+}
+
+enum SlotState {
+    /// Shown: its state is in [`GuiApp`]'s fields.
+    Active,
+    /// Open in the background.
+    Parked(Box<Tab>),
+    /// Loading; shown once ready when `show`.
+    Loading {
+        rx: std::sync::mpsc::Receiver<anyhow::Result<Loaded>>,
+        show: bool,
+    },
+    /// Failed to load: dropped at the end of the frame.
+    Closed,
+}
+
+impl Slot {
+    /// The tab of the project `app` runs, shown.
+    fn active(app: &App) -> Self {
+        Self {
+            url: app.base_url.trim_end_matches('/').to_string(),
+            id: app.project_id.clone(),
+            name: app
+                .project_name
+                .clone()
+                .unwrap_or_else(|| app.project_id.clone()),
+            state: SlotState::Active,
+        }
+    }
+}
+
+/// What a project needs while open in a tab: its session and the window's state
+/// for it. The shown tab's lives in [`GuiApp`] (see [`GuiApp::swap_tab`]).
+struct Tab {
+    app: App,
+    tx: UnboundedSender<AppEvent>,
+    events: std::sync::mpsc::Receiver<AppEvent>,
+    api_semaphore: Arc<Semaphore>,
+    last_known_branches: HashMap<String, HashSet<String>>,
+    state_writer: StateWriter,
+    page: Page,
+    ticket_anchor: Option<String>,
+    text_filter: (Option<usize>, String),
+    members: HashMap<String, Vec<String>>,
+    baseline: Option<Baseline>,
+    toasts: toasts::Toasts,
+    last_sync: Option<chrono::DateTime<chrono::Local>>,
+    was_syncing: bool,
+    digest_closed: bool,
+    statuses: Option<Vec<gitlab_tracker_core::TicketTransitionTarget>>,
+    statuses_rx:
+        Option<std::sync::mpsc::Receiver<Vec<gitlab_tracker_core::TicketTransitionTarget>>>,
+    moves: (MoveSender, std::sync::mpsc::Receiver<MoveResult>),
+    marked: HashSet<String>,
+    folded: HashSet<String>,
+    details: details::Details,
+}
+
+impl Tab {
+    fn new(session: Session, ctx: &egui::Context) -> Self {
+        let Session {
+            app,
+            tx,
+            rx,
+            api_semaphore,
+            last_known_branches,
+        } = session;
+        Self {
+            app,
+            tx,
+            events: forward_events(rx, ctx),
+            api_semaphore,
+            last_known_branches,
+            state_writer: StateWriter::default(),
+            page: Page::MergeRequests,
+            ticket_anchor: None,
+            text_filter: (None, String::new()),
+            members: HashMap::new(),
+            baseline: None,
+            toasts: toasts::Toasts::default(),
+            last_sync: None,
+            was_syncing: false,
+            digest_closed: false,
+            statuses: None,
+            statuses_rx: None,
+            moves: std::sync::mpsc::channel(),
+            marked: HashSet::new(),
+            folded: HashSet::new(),
+            details: details::Details::default(),
+        }
+    }
+
+    /// A hidden tab's frame: its events apply and its changes are noted for the
+    /// bell, as if shown.
+    fn run_hidden(&mut self, theme: &bevel_theme::Theme, now: f64, demo: bool) {
+        if demo {
+            while let Ok(event) = self.events.try_recv() {
+                crate::demo::apply_demo_event(&mut self.app, event);
+            }
+        } else if drain_events(
+            &mut self.app,
+            &self.events,
+            &self.api_semaphore,
+            &self.tx,
+            &mut self.last_known_branches,
+        ) {
+            save_state(&self.app, &self.last_known_branches, &self.state_writer);
+        }
+        self.toasts.watch(&self.app, theme, now);
+        let syncing = !self.app.pending_initial_fetches.is_empty()
+            || !self.app.pending_refresh_fetches.is_empty();
+        if !syncing && self.was_syncing {
+            self.last_sync = Some(chrono::Local::now());
+        }
+        self.was_syncing = syncing;
+    }
+
+    /// Whether a fetch of this tab failed: its tab shows a warning.
+    fn has_errors(&self) -> bool {
+        self.app
+            .mrs
+            .iter()
+            .any(|mr| matches!(mr.status, crate::models::MrStatus::Error(_)))
+    }
 }
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.finish_switch();
+        self.poll_tabs(ui.input(|i| i.time));
+        self.poll_clicks();
         self.apply_events();
         // Keys move the selection and change the list: before the frame's snapshot.
         keys::handle(self, ui.ctx());
@@ -853,6 +1344,79 @@ impl eframe::App for GuiApp {
             match std::env::var("GITLAB_TRACKER_GUI_PAGE").as_deref() {
                 Ok("cockpit") => self.open_page(Page::Cockpit),
                 Ok("tracker") => self.open_page(Page::Tracker),
+                Ok("today") => self.open_page(Page::Today),
+                Ok("promote") => self.open_page(Page::Promote),
+                // The inspector's diff (`diff`) and failed job's log (`log`).
+                Ok(which @ ("diff" | "log")) => {
+                    // The demo's failed pipeline is an older one: shown as the
+                    // latest, the only one whose jobs are listed.
+                    let failing = self.app.mrs.iter_mut().find(|mr| {
+                        mr.pipelines
+                            .iter()
+                            .any(|p| p.jobs.iter().any(|j| j.status == "failed"))
+                    });
+                    if let Some(mr) = failing {
+                        mr.pipelines
+                            .sort_by_key(|p| p.status != crate::models::PipelineState::Failed);
+                    }
+                    let failing = self.app.mrs.iter().find(|mr| {
+                        mr.pipelines
+                            .first()
+                            .is_some_and(|p| p.jobs.iter().any(|j| j.status == "failed"))
+                    });
+                    if let Some(id) = failing.map(|mr| mr.id.clone()) {
+                        self.details.show_demo(&id);
+                        if self.app.selected_mr().map(|mr| &mr.id) != Some(&id) {
+                            self.select_id = Some(id);
+                        }
+                        self.show_inspector = Some(true);
+                        self.scroll_to = Some(if which == "log" {
+                            InspectorSection::Pipelines
+                        } else {
+                            InspectorSection::Changes
+                        });
+                    }
+                }
+                // The project picker and the project form, which the read-only
+                // demo cannot open otherwise.
+                Ok("projects") => {
+                    self.app.project_picker = self
+                        .tabs
+                        .iter()
+                        .map(|t| ProjectEntry {
+                            name: Some(t.name.clone()),
+                            gitlab_url: t.url.clone(),
+                            project_id: t.id.clone(),
+                            ..ProjectEntry::default()
+                        })
+                        .chain(std::iter::once(ProjectEntry {
+                            name: Some("Billing API".into()),
+                            gitlab_url: "https://gitlab.example.com".into(),
+                            project_id: "billing/api".into(),
+                            ..ProjectEntry::default()
+                        }))
+                        .collect();
+                    self.app.input_mode = crate::app::InputMode::ProjectPicker;
+                }
+                Ok("tokens") => {
+                    let mut entry = self.app.project_settings.clone();
+                    entry.tracker = Some(crate::storage::TrackerConfig {
+                        provider: "redmine".into(),
+                        url: "https://redmine.example.com".into(),
+                        extra: toml::Table::new(),
+                    });
+                    self.wizard = Some(setup::ProjectForm::new(
+                        &self.ctx,
+                        setup::Mode::Tokens {
+                            entry: Box::new(entry),
+                            gitlab: true,
+                            redmine: true,
+                        },
+                    ));
+                }
+                Ok("wizard") => {
+                    self.wizard = Some(setup::ProjectForm::new(&self.ctx, setup::Mode::New));
+                }
                 _ => {}
             }
             if std::env::var("GITLAB_TRACKER_GUI_THEME").as_deref() == Ok("light") {
@@ -883,7 +1447,7 @@ impl eframe::App for GuiApp {
         self.dispatch_pending();
         // After the actions: a view picked with an MR to select applies first.
         self.apply_picks();
-        self.switch_project();
+        self.take_switch();
 
         #[cfg(target_os = "macos")]
         bevel_window::title_bar::sync_movable(ui.ctx(), &mut self.movable);
@@ -896,6 +1460,11 @@ impl eframe::App for GuiApp {
     /// preferences.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         block_on(self.state_writer.flush());
+        for slot in &self.tabs {
+            if let SlotState::Parked(tab) = &slot.state {
+                block_on(tab.state_writer.flush());
+            }
+        }
         if !self.demo {
             prefs::save(&prefs::current(self));
         }

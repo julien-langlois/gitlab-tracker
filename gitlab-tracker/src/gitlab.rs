@@ -34,7 +34,7 @@ const MERGEABILITY_RETRY_DELAY_SECS: u64 = 2;
 /// Process-wide HTTP client: one connection pool (keep-alive + TLS session reuse)
 /// shared by every GitLab call, with timeouts so a hung server cannot hold a
 /// semaphore permit forever.
-fn http_client() -> &'static reqwest::Client {
+pub(crate) fn http_client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -43,6 +43,210 @@ fn http_client() -> &'static reqwest::Client {
             .build()
             .unwrap_or_default()
     })
+}
+
+/// What GitLab says about a project, read when the window adds it.
+#[cfg(feature = "gui")]
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProjectInfo {
+    pub id: u64,
+    pub name: String,
+    pub path_with_namespace: String,
+    pub default_branch: Option<String>,
+}
+
+/// Why a project could not be checked.
+#[cfg(feature = "gui")]
+#[derive(Debug, thiserror::Error)]
+pub enum ProjectCheckError {
+    #[error("GitLab refused the token (it may be expired, or lack the read_api scope)")]
+    Token,
+    #[error("No such project on this instance, or the token cannot see it")]
+    NotFound,
+    #[error("GitLab answered {0}")]
+    Status(reqwest::StatusCode),
+    #[error("Could not reach GitLab: {0}")]
+    Network(String),
+}
+
+/// Reads `project` (numeric id or `group/project` path) with `token`: checks both
+/// the token and the project before the window saves them.
+#[cfg(feature = "gui")]
+pub async fn check_project(
+    base_url: &str,
+    token: &str,
+    project: &str,
+) -> Result<ProjectInfo, ProjectCheckError> {
+    let url = format!(
+        "{}/api/v4/projects/{}",
+        base_url.trim_end_matches('/'),
+        urlencoding::encode(project)
+    );
+    let res = http_client()
+        .get(&url)
+        .header("PRIVATE-TOKEN", token)
+        .send()
+        .await
+        .map_err(|e| ProjectCheckError::Network(e.without_url().to_string()))?;
+    match res.status() {
+        s if s.is_success() => res
+            .json()
+            .await
+            .map_err(|e| ProjectCheckError::Network(e.to_string())),
+        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
+            Err(ProjectCheckError::Token)
+        }
+        reqwest::StatusCode::NOT_FOUND => Err(ProjectCheckError::NotFound),
+        s => Err(ProjectCheckError::Status(s)),
+    }
+}
+
+/// The username of the token's owner (`GET /user`), `None` on any failure: it
+/// only feeds the "me" views.
+#[cfg(feature = "gui")]
+pub async fn current_username(base_url: &str, token: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct User {
+        username: String,
+    }
+    let url = format!("{}/api/v4/user", base_url.trim_end_matches('/'));
+    let res = http_client()
+        .get(&url)
+        .header("PRIVATE-TOKEN", token)
+        .send()
+        .await
+        .ok()
+        .filter(|r| r.status().is_success())?;
+    res.json::<User>().await.ok().map(|u| u.username)
+}
+
+/// One file of an MR's diff, read on demand by the window's inspector.
+#[cfg(feature = "gui")]
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct FileDiff {
+    pub old_path: String,
+    pub new_path: String,
+    #[serde(default)]
+    pub new_file: bool,
+    #[serde(default)]
+    pub renamed_file: bool,
+    #[serde(default)]
+    pub deleted_file: bool,
+    /// The unified patch; empty when GitLab left it out (too large, binary).
+    #[serde(default, deserialize_with = "crate::models::null_as_default")]
+    pub diff: String,
+}
+
+/// The files an MR changes, with their patches (`GET …/changes`). The error is
+/// the window's to show.
+#[cfg(feature = "gui")]
+pub async fn fetch_file_diffs(
+    base_url: &str,
+    token: &str,
+    project_id: &str,
+    mr_id: &str,
+) -> Result<Vec<FileDiff>, String> {
+    #[derive(serde::Deserialize)]
+    struct Body {
+        changes: Option<Vec<FileDiff>>,
+    }
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/changes",
+        base_url.trim_end_matches('/'),
+        urlencoding::encode(project_id),
+        mr_id
+    );
+    let res = http_client()
+        .get(&url)
+        .header("PRIVATE-TOKEN", token)
+        .send()
+        .await
+        .map_err(|e| e.without_url().to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("GitLab answered {}", res.status()));
+    }
+    let body: Body = res.json().await.map_err(|e| e.to_string())?;
+    body.changes
+        .ok_or_else(|| "GitLab did not list the changes: the diff is too large".to_string())
+}
+
+/// The end of a job's log (`GET /jobs/:id/trace`): its last `lines` lines, the
+/// terminal colours and GitLab's section markers removed.
+#[cfg(feature = "gui")]
+pub async fn fetch_job_log(
+    base_url: &str,
+    token: &str,
+    project_id: &str,
+    job_id: u64,
+    lines: usize,
+) -> Result<String, String> {
+    let url = format!(
+        "{}/api/v4/projects/{}/jobs/{}/trace",
+        base_url.trim_end_matches('/'),
+        urlencoding::encode(project_id),
+        job_id
+    );
+    let res = http_client()
+        .get(&url)
+        .header("PRIVATE-TOKEN", token)
+        .send()
+        .await
+        .map_err(|e| e.without_url().to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("GitLab answered {}", res.status()));
+    }
+    let text = res.text().await.map_err(|e| e.to_string())?;
+    Ok(log_tail(&text, lines))
+}
+
+/// The last `lines` lines of a job log, cleaned for reading: ANSI escapes and
+/// `section_start` / `section_end` markers dropped, carriage-return progress
+/// lines reduced to their last state.
+#[cfg(any(feature = "gui", test))]
+pub fn log_tail(text: &str, lines: usize) -> String {
+    let cleaned: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let line = line
+                .rsplit('\r')
+                .find(|part| !part.is_empty())
+                .unwrap_or("");
+            strip_ansi(line)
+        })
+        .map(|line| {
+            // `section_start:1700000000:name\r\x1b[0K` leaves `section_start:…:name`.
+            if line.starts_with("section_start:") || line.starts_with("section_end:") {
+                String::new()
+            } else {
+                line
+            }
+        })
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    let start = cleaned.len().saturating_sub(lines);
+    cleaned[start..].join("\n")
+}
+
+/// `line` without its ANSI escape sequences (`ESC [ … letter`).
+#[cfg(any(feature = "gui", test))]
+fn strip_ansi(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for c in chars.by_ref() {
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Estimated number of GitLab API HTTP calls that will be fired for a single MR fetch,
@@ -1786,6 +1990,19 @@ mod tests {
         assert_eq!(thread.excerpt, "Why this change?");
         assert_eq!((thread.notes, thread.resolved), (2, false));
         assert_eq!(thread.last_note_at, "2026-09-01T11:00:00.000Z");
+    }
+
+    #[test]
+    fn job_logs_are_cleaned_and_cut_to_their_end() {
+        let raw = "\x1b[0Ksection_start:1:step\r\x1b[0K\x1b[32;1m$ cargo test\x1b[0;m\n\
+                   Downloading 10%\rDownloading 100%\n\n\
+                   \x1b[31merror\x1b[0m: 2 tests failed\n\
+                   section_end:2:step\r\x1b[0K\n";
+        assert_eq!(
+            super::log_tail(raw, 10),
+            "$ cargo test\nDownloading 100%\nerror: 2 tests failed"
+        );
+        assert_eq!(super::log_tail(raw, 1), "error: 2 tests failed");
     }
 
     #[test]
