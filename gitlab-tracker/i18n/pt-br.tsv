@@ -554,3 +554,105 @@ date	Merged	Mesclada
 @plural	in {n} year|in {n} years	em {n} ano|em {n} anos
 @plural	{n} merge|{n} merges	{n} mesclagem|{n} mesclagens
 @plural	{n} week|{n} weeks	{n} semana|{n} semanas
+	Hide zeros	Ocultar zeros
+	Hide the counters at zero	Ocultar os contadores em zero
+	No milestone on the listed MRs	Nenhum marco nas MRs listadas
+	the oldest waits for {n}d	a mais antiga espera há {n} d
+	nothing waits for you	nada espera por você
+	of {n} open MRs	de {n} MRs abertas
+	Next release	Próxima versão
+	since its creation	desde a criação
+	Click to list these MRs	Clique para listar essas MRs
+	due today	vence hoje
+	Click to list them	Clique para listá-las
+	{delta} since {time}	{delta} desde {time}
+	Needs attention	Precisa de atenção
+	Nothing urgent: no MR is blocked, late or waiting for you.	Nada urgente: nenhuma MR está bloqueada, atrasada ou esperando por você.
+	The MRs that are blocked, late or waiting for you, the most urgent first.	As MRs bloqueadas, atrasadas ou esperando por você, as mais urgentes primeiro.
+	Open it on the merge requests page	Abrir na página de merge requests
+	Open merge requests in the list	Merge requests abertas na lista
+	Open MRs GitLab could merge now	MRs abertas que o GitLab poderia mesclar agora
+	Open MRs still marked as draft	MRs abertas ainda marcadas como rascunho
+	Conflicts, rebase needed, failing CI, open discussions or changes requested	Conflitos, rebase necessário, CI falhando, discussões abertas ou alterações solicitadas
+	Open MRs in conflict with their target branch	MRs abertas em conflito com o branch de destino
+	Open MRs GitLab asks to rebase before merging	MRs abertas que o GitLab pede para fazer rebase antes de mesclar
+	Open MRs whose last pipeline failed	MRs abertas cuja última pipeline falhou
+	Open MRs held back by unresolved discussions	MRs abertas retidas por discussões não resolvidas
+	Open MRs whose reviewers asked for changes	MRs abertas cujos revisores pediram alterações
+	Open MRs still missing their approvals	MRs abertas que ainda não têm as aprovações
+	Open MRs waiting for your review	MRs abertas esperando sua revisão
+	Open MRs nobody was asked to review	MRs abertas sem revisor solicitado
+	Open MRs assigned to nobody	MRs abertas sem responsável
+	MRs you starred	MRs que você marcou
+	Open MRs nobody touched for a while	MRs abertas que ninguém mexe há algum tempo
+	Open MRs planned in no milestone	MRs abertas sem marco planejado
+	Open MRs whose milestone is due within the next days	MRs abertas cujo marco vence nos próximos dias
+	Open MRs whose milestone is past due	MRs abertas cujo marco já venceu
+	Open MRs whose branch lags behind its target	MRs abertas cujo branch está atrás do destino
+	Open MRs with many comment threads	MRs abertas com muitos threads de comentários
+	MRs linked to a tracker ticket	MRs vinculadas a um ticket
+	MRs linked to no tracker ticket	MRs sem ticket vinculado
+	MRs whose ticket took longer than estimated	MRs cujo ticket levou mais que o estimado
+	Open MRs with a high review effort	MRs abertas com alto esforço de revisão
+	Open MRs with many changed lines	MRs abertas com muitas linhas alteradas
+	Open MRs with many commits	MRs abertas com muitos commits
+	Open MRs touching many files	MRs abertas que alteram muitos arquivos
+	Open MRs whose diff is not loaded yet	MRs abertas cujo diff ainda não foi carregado
+	Open MRs without a known pipeline	MRs abertas sem pipeline conhecida
+	Open MRs whose last pipeline was skipped	MRs abertas cuja última pipeline foi ignorada
+	MRs changed at the last refresh	MRs alteradas na última atualização
+	!{id} · pipeline failed	!{id} · pipeline falhou
+	!{id} · pipeline passed	!{id} · pipeline passou
+	!{id} · now {status}	!{id} · agora {status}
+	Show this merge request · ✕ dismisses it	Mostrar esta merge request · ✕ a dispensa
+	Command	Comando
+	Copy the release checklist	Copiar o checklist da versão
+	Columns…	Colunas…
+	Show merged MRs	Mostrar MRs mescladas
+	Switch light / dark theme	Alternar tema claro / escuro
+	Settings…	Configurações…
+	Show every MR again	Mostrar todas as MRs novamente
+	Page	Página
+	View	Visão
+	Go to a page, a view, an MR… or run a command	Ir para uma página, uma visão, uma MR… ou executar um comando
+	Nothing matches.	Nenhum resultado.
+	↑ ↓ to move · Enter to run · Esc to close	↑ ↓ para mover · Enter para executar · Esc para fechar
+	No grouping	Sem agrupamento
+	By status	Por status
+	By milestone	Por marco
+	By author	Por autor
+	Group	Agrupar
+	Group the rows under foldable headings	Agrupar as linhas em cabeçalhos recolhíveis
+	Cockpit: {name}	Cockpit: {name}
+	View: {name}	Visão: {name}
+	Search: {text}	Busca: {text}
+	Merged hidden	Mescladas ocultas
+	Showing	Exibindo
+	Clear all	Limpar tudo
+	Remove	Remover
+	No merge request tracked yet	Nenhuma merge request acompanhada ainda
+	Type an MR number in the search field and press Enter, or @ and a milestone to track all of its MRs.	Digite o número de uma MR no campo de busca e pressione Enter, ou @ e um marco para acompanhar todas as suas MRs.
+	No merge request matches	Nenhuma merge request corresponde
+	The view, the search or the cockpit selection hides every tracked MR.	A visão, a busca ou a seleção do cockpit oculta todas as MRs acompanhadas.
+	Track an MR	Acompanhar uma MR
+	Show every MR	Mostrar todas as MRs
+	Unfold	Expandir
+	Fold	Recolher
+	Not checked yet: the next refresh will tell	Ainda não verificado: a próxima atualização dirá
+	Not checked yet	Ainda não verificado
+	Board	Quadro
+	List	Lista
+	waiting for your review	aguardam sua revisão
+	blocked	bloqueadas
+	over their estimate	acima da estimativa
+	On {branch}	Em {branch}
+	Last update	Última atualização
+	Merge	Mesclagem
+	not merged yet	ainda não mesclada
+	Due soon	Vence em breve
+@plural	{n} MR to merge|{n} MRs to merge	{n} MR para mesclar|{n} MRs para mesclar
+@plural	Click to list {n} MR|Click to list {n} MRs	Clique para listar {n} MR|Clique para listar essas {n} MRs
+@plural	{n} day late|{n} days late	{n} dia de atraso|{n} dias de atraso
+	Project name	Nome do projeto
+	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	Exibido na barra de título e no seletor de projetos no lugar do id do projeto. Vazio: o id do projeto.
+	Project id	Id do projeto

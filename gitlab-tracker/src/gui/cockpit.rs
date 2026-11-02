@@ -495,9 +495,26 @@ fn release_block(ui: &mut Ui, theme: &Theme, r: &ReleaseView, counts: &Counts<'_
     ];
     stacked_bar(ui, theme, &parts);
     ui.add_space(6.0);
+    // Each entry's width (dot, name, count), to start a new line before one
+    // that would not fit: a nested `horizontal` only knows its width once drawn.
+    let entry_width = |bucket: &str, count: usize| {
+        let font = egui::FontId::proportional(theme.text_size - 1.0);
+        let text = |s: String| {
+            ui.painter()
+                .layout_no_wrap(s, font.clone(), Color32::WHITE)
+                .size()
+                .x
+        };
+        8.0 + 4.0 + text(tl(bucket).to_string()) + 4.0 + text(count.to_string()) + 2.0
+    };
+    let widths: Vec<f32> = parts.iter().map(|(b, c, _)| entry_width(b, *c)).collect();
+    let max_x = ui.max_rect().right();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
-        for (bucket, count, tone) in parts {
+        for ((bucket, count, tone), width) in parts.into_iter().zip(widths) {
+            if ui.cursor().left() + width > max_x {
+                ui.end_row();
+            }
             let key = crate::ui::cockpit::release_metric_key(&r.title, bucket);
             let clickable = counts.members.contains_key(&key);
             let color = if count == 0 {

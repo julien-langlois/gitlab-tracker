@@ -554,3 +554,105 @@ date	Merged	合并时间
 @plural	in {n} year|in {n} years	{n} 年后
 @plural	{n} merge|{n} merges	{n} 次合并
 @plural	{n} week|{n} weeks	{n} 周
+	Hide zeros	隐藏零值
+	Hide the counters at zero	隐藏为零的计数
+	No milestone on the listed MRs	列出的 MR 均无里程碑
+	the oldest waits for {n}d	最早的已等待 {n} 天
+	nothing waits for you	没有等待你的评审
+	of {n} open MRs	共 {n} 个打开的 MR
+	Next release	下一个版本
+	since its creation	自创建以来
+	Click to list these MRs	点击列出这些 MR
+	due today	今天到期
+	Click to list them	点击列出它们
+	{delta} since {time}	自 {time} 起 {delta}
+	Needs attention	需要关注
+	Nothing urgent: no MR is blocked, late or waiting for you.	没有紧急事项：没有受阻、逾期或等待你的 MR。
+	The MRs that are blocked, late or waiting for you, the most urgent first.	受阻、逾期或等待你的 MR，最紧急的排在前面。
+	Open it on the merge requests page	在合并请求页面中打开
+	Open merge requests in the list	列表中打开的合并请求
+	Open MRs GitLab could merge now	GitLab 现在即可合并的打开 MR
+	Open MRs still marked as draft	仍标记为草稿的打开 MR
+	Conflicts, rebase needed, failing CI, open discussions or changes requested	冲突、需要变基、CI 失败、未解决的讨论或要求修改
+	Open MRs in conflict with their target branch	与目标分支冲突的打开 MR
+	Open MRs GitLab asks to rebase before merging	GitLab 要求合并前变基的打开 MR
+	Open MRs whose last pipeline failed	最近一次流水线失败的打开 MR
+	Open MRs held back by unresolved discussions	被未解决讨论阻塞的打开 MR
+	Open MRs whose reviewers asked for changes	评审者要求修改的打开 MR
+	Open MRs still missing their approvals	仍缺少批准的打开 MR
+	Open MRs waiting for your review	等待你评审的打开 MR
+	Open MRs nobody was asked to review	未指定评审者的打开 MR
+	Open MRs assigned to nobody	未分配的打开 MR
+	MRs you starred	你标记的 MR
+	Open MRs nobody touched for a while	一段时间无人处理的打开 MR
+	Open MRs planned in no milestone	未规划里程碑的打开 MR
+	Open MRs whose milestone is due within the next days	里程碑将在近几天到期的打开 MR
+	Open MRs whose milestone is past due	里程碑已逾期的打开 MR
+	Open MRs whose branch lags behind its target	分支落后于目标的打开 MR
+	Open MRs with many comment threads	评论讨论较多的打开 MR
+	MRs linked to a tracker ticket	关联了工单的 MR
+	MRs linked to no tracker ticket	未关联工单的 MR
+	MRs whose ticket took longer than estimated	工单耗时超出预估的 MR
+	Open MRs with a high review effort	评审工作量较高的打开 MR
+	Open MRs with many changed lines	改动行数较多的打开 MR
+	Open MRs with many commits	提交较多的打开 MR
+	Open MRs touching many files	涉及文件较多的打开 MR
+	Open MRs whose diff is not loaded yet	差异尚未加载的打开 MR
+	Open MRs without a known pipeline	没有已知流水线的打开 MR
+	Open MRs whose last pipeline was skipped	最近一次流水线被跳过的打开 MR
+	MRs changed at the last refresh	上次刷新时有变化的 MR
+	!{id} · pipeline failed	!{id} · 流水线失败
+	!{id} · pipeline passed	!{id} · 流水线通过
+	!{id} · now {status}	!{id} · 现在为 {status}
+	Show this merge request · ✕ dismisses it	显示此合并请求 · ✕ 关闭提示
+	Command	命令
+	Copy the release checklist	复制发布检查清单
+	Columns…	列…
+	Show merged MRs	显示已合并的 MR
+	Switch light / dark theme	切换浅色 / 深色主题
+	Settings…	设置…
+	Show every MR again	重新显示所有 MR
+	Page	页面
+	View	视图
+	Go to a page, a view, an MR… or run a command	前往页面、视图、MR… 或执行命令
+	Nothing matches.	没有匹配项。
+	↑ ↓ to move · Enter to run · Esc to close	↑ ↓ 移动 · 回车执行 · Esc 关闭
+	No grouping	不分组
+	By status	按状态
+	By milestone	按里程碑
+	By author	按作者
+	Group	分组
+	Group the rows under foldable headings	将行分组到可折叠的标题下
+	Cockpit: {name}	驾驶舱：{name}
+	View: {name}	视图：{name}
+	Search: {text}	搜索：{text}
+	Merged hidden	已隐藏已合并
+	Showing	显示
+	Clear all	全部清除
+	Remove	移除
+	No merge request tracked yet	尚未跟踪任何合并请求
+	Type an MR number in the search field and press Enter, or @ and a milestone to track all of its MRs.	在搜索框中输入 MR 编号并回车，或输入 @ 和里程碑以跟踪其所有 MR。
+	No merge request matches	没有匹配的合并请求
+	The view, the search or the cockpit selection hides every tracked MR.	视图、搜索或驾驶舱筛选隐藏了所有跟踪的 MR。
+	Track an MR	跟踪 MR
+	Show every MR	显示所有 MR
+	Unfold	展开
+	Fold	折叠
+	Not checked yet: the next refresh will tell	尚未检查：下次刷新后可知
+	Not checked yet	尚未检查
+	Board	看板
+	List	列表
+	waiting for your review	等待你评审
+	blocked	受阻
+	over their estimate	超出预估
+	On {branch}	在 {branch} 上
+	Last update	最近更新
+	Merge	合并
+	not merged yet	尚未合并
+	Due soon	即将到期
+@plural	{n} MR to merge|{n} MRs to merge	{n} 个 MR 待合并
+@plural	Click to list {n} MR|Click to list {n} MRs	点击列出这 {n} 个 MR
+@plural	{n} day late|{n} days late	逾期 {n} 天
+	Project name	项目名称
+	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	显示在标题栏和项目选择器中，代替项目 ID。留空则显示项目 ID。
+	Project id	项目 ID

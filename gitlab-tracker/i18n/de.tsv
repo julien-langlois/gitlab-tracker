@@ -554,3 +554,105 @@ date	Merged	Gemergt
 @plural	in {n} year|in {n} years	in {n} Jahr|in {n} Jahren
 @plural	{n} merge|{n} merges	{n} Merge|{n} Merges
 @plural	{n} week|{n} weeks	{n} Woche|{n} Wochen
+	Hide zeros	Nullen ausblenden
+	Hide the counters at zero	Zähler mit null ausblenden
+	No milestone on the listed MRs	Kein Meilenstein bei den gelisteten MRs
+	the oldest waits for {n}d	die älteste wartet seit {n} T
+	nothing waits for you	nichts wartet auf dich
+	of {n} open MRs	von {n} offenen MRs
+	Next release	Nächstes Release
+	since its creation	seit der Erstellung
+	Click to list these MRs	Klicken, um diese MRs aufzulisten
+	due today	heute fällig
+	Click to list them	Klicken, um sie aufzulisten
+	{delta} since {time}	{delta} seit {time}
+	Needs attention	Braucht Aufmerksamkeit
+	Nothing urgent: no MR is blocked, late or waiting for you.	Nichts Dringendes: keine MR ist blockiert, verspätet oder wartet auf dich.
+	The MRs that are blocked, late or waiting for you, the most urgent first.	Die MRs, die blockiert, verspätet sind oder auf dich warten, die dringendsten zuerst.
+	Open it on the merge requests page	Auf der Seite der Merge Requests öffnen
+	Open merge requests in the list	Offene Merge Requests in der Liste
+	Open MRs GitLab could merge now	Offene MRs, die GitLab jetzt mergen könnte
+	Open MRs still marked as draft	Offene MRs, noch als Entwurf markiert
+	Conflicts, rebase needed, failing CI, open discussions or changes requested	Konflikte, Rebase nötig, fehlschlagende CI, offene Diskussionen oder angeforderte Änderungen
+	Open MRs in conflict with their target branch	Offene MRs mit Konflikten zum Zielbranch
+	Open MRs GitLab asks to rebase before merging	Offene MRs, die GitLab vor dem Merge rebasen lassen will
+	Open MRs whose last pipeline failed	Offene MRs, deren letzte Pipeline fehlgeschlagen ist
+	Open MRs held back by unresolved discussions	Offene MRs, die durch ungelöste Diskussionen aufgehalten werden
+	Open MRs whose reviewers asked for changes	Offene MRs, bei denen Reviewer Änderungen angefordert haben
+	Open MRs still missing their approvals	Offene MRs, denen noch Freigaben fehlen
+	Open MRs waiting for your review	Offene MRs, die auf dein Review warten
+	Open MRs nobody was asked to review	Offene MRs ohne angefragten Reviewer
+	Open MRs assigned to nobody	Offene MRs ohne Zuständigen
+	MRs you starred	Von dir markierte MRs
+	Open MRs nobody touched for a while	Offene MRs, die länger niemand angefasst hat
+	Open MRs planned in no milestone	Offene MRs ohne Meilenstein
+	Open MRs whose milestone is due within the next days	Offene MRs, deren Meilenstein in den nächsten Tagen fällig ist
+	Open MRs whose milestone is past due	Offene MRs, deren Meilenstein überfällig ist
+	Open MRs whose branch lags behind its target	Offene MRs, deren Branch hinter dem Ziel zurückliegt
+	Open MRs with many comment threads	Offene MRs mit vielen Kommentar-Threads
+	MRs linked to a tracker ticket	Mit einem Ticket verknüpfte MRs
+	MRs linked to no tracker ticket	Mit keinem Ticket verknüpfte MRs
+	MRs whose ticket took longer than estimated	MRs, deren Ticket länger als geschätzt gedauert hat
+	Open MRs with a high review effort	Offene MRs mit hohem Review-Aufwand
+	Open MRs with many changed lines	Offene MRs mit vielen geänderten Zeilen
+	Open MRs with many commits	Offene MRs mit vielen Commits
+	Open MRs touching many files	Offene MRs, die viele Dateien ändern
+	Open MRs whose diff is not loaded yet	Offene MRs, deren Diff noch nicht geladen ist
+	Open MRs without a known pipeline	Offene MRs ohne bekannte Pipeline
+	Open MRs whose last pipeline was skipped	Offene MRs, deren letzte Pipeline übersprungen wurde
+	MRs changed at the last refresh	Bei der letzten Aktualisierung geänderte MRs
+	!{id} · pipeline failed	!{id} · Pipeline fehlgeschlagen
+	!{id} · pipeline passed	!{id} · Pipeline erfolgreich
+	!{id} · now {status}	!{id} · jetzt {status}
+	Show this merge request · ✕ dismisses it	Diesen Merge Request anzeigen · ✕ blendet ihn aus
+	Command	Befehl
+	Copy the release checklist	Release-Checkliste kopieren
+	Columns…	Spalten…
+	Show merged MRs	Gemergte MRs anzeigen
+	Switch light / dark theme	Helles / dunkles Design wechseln
+	Settings…	Einstellungen…
+	Show every MR again	Wieder alle MRs anzeigen
+	Page	Seite
+	View	Ansicht
+	Go to a page, a view, an MR… or run a command	Zu einer Seite, Ansicht, MR wechseln… oder einen Befehl ausführen
+	Nothing matches.	Keine Treffer.
+	↑ ↓ to move · Enter to run · Esc to close	↑ ↓ zum Bewegen · Enter zum Ausführen · Esc zum Schließen
+	No grouping	Keine Gruppierung
+	By status	Nach Status
+	By milestone	Nach Meilenstein
+	By author	Nach Autor
+	Group	Gruppieren
+	Group the rows under foldable headings	Zeilen unter einklappbaren Überschriften gruppieren
+	Cockpit: {name}	Cockpit: {name}
+	View: {name}	Ansicht: {name}
+	Search: {text}	Suche: {text}
+	Merged hidden	Gemergte ausgeblendet
+	Showing	Angezeigt
+	Clear all	Alle entfernen
+	Remove	Entfernen
+	No merge request tracked yet	Noch kein Merge Request verfolgt
+	Type an MR number in the search field and press Enter, or @ and a milestone to track all of its MRs.	Gib eine MR-Nummer ins Suchfeld ein und drücke Enter, oder @ und einen Meilenstein, um alle seine MRs zu verfolgen.
+	No merge request matches	Kein Merge Request passt
+	The view, the search or the cockpit selection hides every tracked MR.	Die Ansicht, die Suche oder die Cockpit-Auswahl blendet alle verfolgten MRs aus.
+	Track an MR	MR verfolgen
+	Show every MR	Alle MRs anzeigen
+	Unfold	Ausklappen
+	Fold	Einklappen
+	Not checked yet: the next refresh will tell	Noch nicht geprüft: die nächste Aktualisierung zeigt es
+	Not checked yet	Noch nicht geprüft
+	Board	Board
+	List	Liste
+	waiting for your review	warten auf dein Review
+	blocked	blockiert
+	over their estimate	über ihrer Schätzung
+	On {branch}	Auf {branch}
+	Last update	Letzte Änderung
+	Merge	Merge
+	not merged yet	noch nicht gemergt
+	Due soon	Bald fällig
+@plural	{n} MR to merge|{n} MRs to merge	{n} MR zu mergen|{n} MRs zu mergen
+@plural	Click to list {n} MR|Click to list {n} MRs	Klicken, um {n} MR aufzulisten|Klicken, um {n} MRs aufzulisten
+@plural	{n} day late|{n} days late	{n} Tag verspätet|{n} Tage verspätet
+	Project name	Projektname
+	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	Wird in der Titelleiste und der Projektauswahl statt der Projekt-ID angezeigt. Leer: die Projekt-ID.
+	Project id	Projekt-ID

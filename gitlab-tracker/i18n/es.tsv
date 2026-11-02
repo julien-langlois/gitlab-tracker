@@ -554,3 +554,105 @@ date	Merged	Fusionada
 @plural	in {n} year|in {n} years	en {n} año|en {n} años
 @plural	{n} merge|{n} merges	{n} fusión|{n} fusiones
 @plural	{n} week|{n} weeks	{n} semana|{n} semanas
+	Hide zeros	Ocultar ceros
+	Hide the counters at zero	Ocultar los contadores en cero
+	No milestone on the listed MRs	Ningún hito en las MR listadas
+	the oldest waits for {n}d	la más antigua espera desde hace {n} d
+	nothing waits for you	nada te espera
+	of {n} open MRs	de {n} MR abiertas
+	Next release	Próxima versión
+	since its creation	desde su creación
+	Click to list these MRs	Clic para listar estas MR
+	due today	vence hoy
+	Click to list them	Clic para listarlas
+	{delta} since {time}	{delta} desde las {time}
+	Needs attention	Requiere atención
+	Nothing urgent: no MR is blocked, late or waiting for you.	Nada urgente: ninguna MR está bloqueada, retrasada o esperándote.
+	The MRs that are blocked, late or waiting for you, the most urgent first.	Las MR bloqueadas, retrasadas o que te esperan, las más urgentes primero.
+	Open it on the merge requests page	Abrirla en la página de merge requests
+	Open merge requests in the list	Merge requests abiertas en la lista
+	Open MRs GitLab could merge now	MR abiertas que GitLab podría fusionar ahora
+	Open MRs still marked as draft	MR abiertas aún marcadas como borrador
+	Conflicts, rebase needed, failing CI, open discussions or changes requested	Conflictos, rebase necesario, CI fallida, discusiones abiertas o cambios solicitados
+	Open MRs in conflict with their target branch	MR abiertas en conflicto con su rama destino
+	Open MRs GitLab asks to rebase before merging	MR abiertas que GitLab pide rebasar antes de fusionar
+	Open MRs whose last pipeline failed	MR abiertas cuya última pipeline falló
+	Open MRs held back by unresolved discussions	MR abiertas detenidas por discusiones sin resolver
+	Open MRs whose reviewers asked for changes	MR abiertas cuyos revisores pidieron cambios
+	Open MRs still missing their approvals	MR abiertas a las que aún les faltan aprobaciones
+	Open MRs waiting for your review	MR abiertas que esperan tu revisión
+	Open MRs nobody was asked to review	MR abiertas sin revisor asignado
+	Open MRs assigned to nobody	MR abiertas sin asignar
+	MRs you starred	MR que marcaste
+	Open MRs nobody touched for a while	MR abiertas que nadie tocó desde hace tiempo
+	Open MRs planned in no milestone	MR abiertas sin hito planificado
+	Open MRs whose milestone is due within the next days	MR abiertas cuyo hito vence en los próximos días
+	Open MRs whose milestone is past due	MR abiertas cuyo hito ya venció
+	Open MRs whose branch lags behind its target	MR abiertas cuya rama va por detrás de su destino
+	Open MRs with many comment threads	MR abiertas con muchos hilos de comentarios
+	MRs linked to a tracker ticket	MR vinculadas a un ticket
+	MRs linked to no tracker ticket	MR sin ticket vinculado
+	MRs whose ticket took longer than estimated	MR cuyo ticket llevó más de lo estimado
+	Open MRs with a high review effort	MR abiertas con un esfuerzo de revisión alto
+	Open MRs with many changed lines	MR abiertas con muchas líneas cambiadas
+	Open MRs with many commits	MR abiertas con muchos commits
+	Open MRs touching many files	MR abiertas que tocan muchos archivos
+	Open MRs whose diff is not loaded yet	MR abiertas cuyo diff aún no se ha cargado
+	Open MRs without a known pipeline	MR abiertas sin pipeline conocida
+	Open MRs whose last pipeline was skipped	MR abiertas cuya última pipeline se omitió
+	MRs changed at the last refresh	MR cambiadas en la última actualización
+	!{id} · pipeline failed	!{id} · pipeline fallida
+	!{id} · pipeline passed	!{id} · pipeline superada
+	!{id} · now {status}	!{id} · ahora {status}
+	Show this merge request · ✕ dismisses it	Mostrar esta merge request · ✕ la descarta
+	Command	Comando
+	Copy the release checklist	Copiar la checklist de la versión
+	Columns…	Columnas…
+	Show merged MRs	Mostrar MR fusionadas
+	Switch light / dark theme	Cambiar tema claro / oscuro
+	Settings…	Ajustes…
+	Show every MR again	Mostrar de nuevo todas las MR
+	Page	Página
+	View	Vista
+	Go to a page, a view, an MR… or run a command	Ir a una página, una vista, una MR… o ejecutar un comando
+	Nothing matches.	Sin resultados.
+	↑ ↓ to move · Enter to run · Esc to close	↑ ↓ para moverte · Intro para ejecutar · Esc para cerrar
+	No grouping	Sin agrupar
+	By status	Por estado
+	By milestone	Por hito
+	By author	Por autor
+	Group	Agrupar
+	Group the rows under foldable headings	Agrupar las filas bajo encabezados plegables
+	Cockpit: {name}	Cockpit: {name}
+	View: {name}	Vista: {name}
+	Search: {text}	Búsqueda: {text}
+	Merged hidden	Fusionadas ocultas
+	Showing	Mostrando
+	Clear all	Quitar todo
+	Remove	Quitar
+	No merge request tracked yet	Aún no se sigue ninguna merge request
+	Type an MR number in the search field and press Enter, or @ and a milestone to track all of its MRs.	Escribe un número de MR en el campo de búsqueda y pulsa Intro, o @ y un hito para seguir todas sus MR.
+	No merge request matches	Ninguna merge request coincide
+	The view, the search or the cockpit selection hides every tracked MR.	La vista, la búsqueda o la selección del cockpit oculta todas las MR seguidas.
+	Track an MR	Seguir una MR
+	Show every MR	Mostrar todas las MR
+	Unfold	Desplegar
+	Fold	Plegar
+	Not checked yet: the next refresh will tell	Aún sin comprobar: la próxima actualización lo dirá
+	Not checked yet	Aún sin comprobar
+	Board	Tablero
+	List	Lista
+	waiting for your review	esperan tu revisión
+	blocked	bloqueadas
+	over their estimate	por encima de lo estimado
+	On {branch}	En {branch}
+	Last update	Última actualización
+	Merge	Fusión
+	not merged yet	aún sin fusionar
+	Due soon	Vence pronto
+@plural	{n} MR to merge|{n} MRs to merge	{n} MR por fusionar|{n} MR por fusionar
+@plural	Click to list {n} MR|Click to list {n} MRs	Clic para listar {n} MR|Clic para listar estas {n} MR
+@plural	{n} day late|{n} days late	{n} día de retraso|{n} días de retraso
+	Project name	Nombre del proyecto
+	Shown in the title bar and the project picker instead of the project id. Empty: the project id.	Se muestra en la barra de título y el selector de proyectos en lugar del id del proyecto. Vacío: el id del proyecto.
+	Project id	Id del proyecto
