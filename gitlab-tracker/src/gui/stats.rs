@@ -356,6 +356,29 @@ fn meter(ui: &mut Ui, theme: &Theme, label: &str, value: &str, fraction: f32, co
     ui.add_space(6.0);
 }
 
+/// A list of figures: caption on the left, value pushed to the right edge, a hairline
+/// between rows, so each value reads against its caption across the card's width.
+fn stat_rows(ui: &mut Ui, theme: &Theme, rows: &[(&str, String)]) {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (i, (caption, value)) in rows.iter().enumerate() {
+            if i > 0 {
+                let x = ui.max_rect().x_range();
+                let y = ui.cursor().top();
+                ui.painter()
+                    .hline(x, y, egui::Stroke::new(1.0, theme.palette.border_soft));
+            }
+            ui.horizontal(|ui| {
+                ui.set_height(30.0);
+                ui.label(RichText::new(*caption).color(theme.palette.text_secondary));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(semibold(value, theme.text_size));
+                });
+            });
+        }
+    });
+}
+
 /// One row of a bar list: label on the left, bar in the middle, value on the right.
 fn bar_row(ui: &mut Ui, theme: &Theme, label: &str, fraction: f32, color: Color32, value: &str) {
     ui.horizontal(|ui| {
@@ -365,6 +388,8 @@ fn bar_row(ui: &mut Ui, theme: &Theme, label: &str, fraction: f32, color: Color3
             Vec2::new(label_width, 22.0),
             Layout::left_to_right(Align::Center),
             |ui| {
+                // Keeps the column's width whatever the label's: the bars of a list line up.
+                ui.set_min_width(label_width);
                 ui.add(
                     egui::Label::new(RichText::new(label).color(theme.palette.text_secondary))
                         .truncate(),
@@ -691,10 +716,12 @@ fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 14.0;
                 ui.allocate_ui_with_layout(
-                    Vec2::new(100.0, 22.0),
+                    Vec2::new(120.0, 22.0),
                     Layout::left_to_right(Align::Center),
                     |ui| {
-                        ui.label(mono(&p.branch, theme.text_size - 0.5));
+                        // Same as `bar_row`: the bars line up whatever the branch's name.
+                        ui.set_min_width(120.0);
+                        ui.add(egui::Label::new(mono(&p.branch, theme.text_size - 0.5)).truncate());
                     },
                 );
                 let width = (ui.available_width() - 190.0).max(60.0);
@@ -840,40 +867,43 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
     };
     let review = |ui: &mut Ui| {
         card(ui, theme, tl("Review signals"), |ui| {
-            super::widgets::key_values(ui, theme, |rows| {
-                rows.row(tl("Average diff"), |ui| {
-                    ui.label(tf(
-                        "{n} lines",
-                        &[("n", &format!("{:.0}", a.avg_diff_size))],
-                    ));
-                });
-                rows.row(tl("Comments"), |ui| {
-                    ui.label(tf(
-                        "{n} per MR",
-                        &[("n", &format!("{:.1}", a.avg_comments))],
-                    ));
-                });
-                rows.row(tl("Density"), |ui| {
-                    ui.label(a.avg_comment_density.map_or("—".into(), |d| {
-                        tf("{n} per 100 lines", &[("n", &format!("{d:.1}"))])
-                    }));
-                });
-                rows.row(tl("Pipelines"), |ui| {
-                    ui.label(tf(
-                        "{percent} failing",
-                        &[("percent", &percent(a.avg_pipeline_failure_rate))],
-                    ));
-                });
-                rows.row(tl("Abandoned"), |ui| {
-                    ui.label(tf(
-                        "{percent} ({n} closed)",
-                        &[
-                            ("percent", &percent(a.abandon_rate)),
-                            ("n", &a.closed_count.to_string()),
-                        ],
-                    ));
-                });
-            });
+            stat_rows(
+                ui,
+                theme,
+                &[
+                    (
+                        tl("Average diff"),
+                        tf("{n} lines", &[("n", &format!("{:.0}", a.avg_diff_size))]),
+                    ),
+                    (
+                        tl("Comments"),
+                        tf("{n} per MR", &[("n", &format!("{:.1}", a.avg_comments))]),
+                    ),
+                    (
+                        tl("Density"),
+                        a.avg_comment_density.map_or("—".into(), |d| {
+                            tf("{n} per 100 lines", &[("n", &format!("{d:.1}"))])
+                        }),
+                    ),
+                    (
+                        tl("Pipelines"),
+                        tf(
+                            "{percent} failing",
+                            &[("percent", &percent(a.avg_pipeline_failure_rate))],
+                        ),
+                    ),
+                    (
+                        tl("Abandoned"),
+                        tf(
+                            "{percent} ({n} closed)",
+                            &[
+                                ("percent", &percent(a.abandon_rate)),
+                                ("n", &a.closed_count.to_string()),
+                            ],
+                        ),
+                    ),
+                ],
+            );
         });
     };
     if side_by_side {
@@ -1065,29 +1095,24 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
             };
             badge(ui, theme, label, tone);
             ui.add_space(6.0);
-            super::widgets::key_values(ui, theme, |rows| {
-                let rate = |v: Option<f64>| v.map_or("—".into(), per_week);
-                rows.row(tl("Arrivals"), |ui| {
-                    ui.label(rate(q.arrival_rate_per_week));
-                });
-                rows.row(tl("Service"), |ui| {
-                    ui.label(rate(q.service_rate_per_week));
-                });
-                rows.row(tl("Load"), |ui| {
-                    ui.label(
-                        q.traffic_intensity
-                            .map_or("—".into(), |r| format!("{:.0}%", r * 100.0)),
-                    );
-                });
-                rows.row(tl("In the queue"), |ui| {
-                    ui.label(q.expected_mrs_in_system.map_or("—".into(), |l| {
+            let rate = |v: Option<f64>| v.map_or("—".to_string(), per_week);
+            let rows = [
+                (tl("Arrivals"), rate(q.arrival_rate_per_week)),
+                (tl("Service"), rate(q.service_rate_per_week)),
+                (
+                    tl("Load"),
+                    q.traffic_intensity
+                        .map_or("—".into(), |r| format!("{:.0}%", r * 100.0)),
+                ),
+                (
+                    tl("In the queue"),
+                    q.expected_mrs_in_system.map_or("—".into(), |l| {
                         tf("{n} MRs", &[("n", &format!("{l:.1}"))])
-                    }));
-                });
-                rows.row(tl("Expected wait"), |ui| {
-                    ui.label(hours(q.expected_wait_hours));
-                });
-            });
+                    }),
+                ),
+                (tl("Expected wait"), hours(q.expected_wait_hours)),
+            ];
+            stat_rows(ui, theme, &rows);
         });
     };
     if side_by_side {
