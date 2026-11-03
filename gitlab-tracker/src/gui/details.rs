@@ -45,6 +45,9 @@ pub struct Details {
     diffs: HashMap<String, Fetch<Vec<FileDiff>>>,
     /// By job id.
     logs: HashMap<u64, Fetch<String>>,
+    /// What the MR page read, by MR id and `updated_at` (read again once the MR
+    /// changes).
+    pages: HashMap<(String, String), Fetch<crate::gitlab_detail::PageData>>,
     /// Files unfolded, by MR id and path; logs shown, by job id.
     open_files: HashSet<(String, String)>,
     open_logs: HashSet<u64>,
@@ -62,6 +65,71 @@ impl Details {
             ctx.request_repaint();
         });
         Fetch::Loading(rx)
+    }
+
+    /// The MR page's data for `mr`: read once per version of the MR, in the
+    /// background (`None` while it loads). Its diff is read along, for the threads'
+    /// code and the Changes tab.
+    pub fn page(
+        &mut self,
+        app: &App,
+        mr: &crate::models::TrackedMr,
+        ctx: &egui::Context,
+    ) -> Option<&crate::gitlab_detail::PageData> {
+        let key = (mr.id.clone(), mr.updated_at.clone().unwrap_or_default());
+        if !self.pages.contains_key(&key) {
+            self.pages.retain(|(id, _), _| id != &mr.id);
+            let fetch = if app.read_only {
+                Fetch::Ready(crate::demo::demo_page_data(mr))
+            } else {
+                let target = crate::gitlab_detail::Target {
+                    base_url: app.base_url.clone(),
+                    token: app.token.clone(),
+                    project_id: app.project_id.clone(),
+                    mr_id: mr.id.clone(),
+                    sha: mr.sha.clone(),
+                };
+                let branches = app.branches.clone();
+                Self::fetch(ctx, async move {
+                    Ok(crate::gitlab_detail::fetch(target, branches).await)
+                })
+            };
+            self.pages.insert(key.clone(), fetch);
+            if !self.diffs.contains_key(&mr.id) {
+                self.load_diff(app, &mr.id, ctx);
+            }
+        }
+        let fetch = self.pages.get_mut(&key)?;
+        fetch.poll();
+        match fetch {
+            Fetch::Ready(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// Unfolds the first file of the MR's diff when none is (the MR page shows
+    /// a patch at once).
+    pub fn open_first_file(&mut self, mr_id: &str) {
+        if self.open_files.iter().any(|(id, _)| id == mr_id) {
+            return;
+        }
+        let first = self
+            .diff(mr_id)
+            .and_then(|files| files.first())
+            .map(|f| f.new_path.clone());
+        if let Some(path) = first {
+            self.open_files.insert((mr_id.to_string(), path));
+        }
+    }
+
+    /// The MR's diff once read.
+    pub fn diff(&mut self, mr_id: &str) -> Option<&[FileDiff]> {
+        let fetch = self.diffs.get_mut(mr_id)?;
+        fetch.poll();
+        match fetch {
+            Fetch::Ready(files) => Some(files),
+            _ => None,
+        }
     }
 
     fn load_diff(&mut self, app: &App, mr_id: &str, ctx: &egui::Context) {
@@ -293,8 +361,80 @@ fn patch(ui: &mut Ui, theme: &Theme, diff: &str, web_url: &str) {
     ui.add_space(4.0);
 }
 
+/// The lines of `diff` up to the new file's line `line`, at most `before` of them
+/// before it: the code a thread on that line is about. Empty when the line is not
+/// in the patch.
+pub fn snippet(diff: &str, line: u32, before: usize) -> Vec<&str> {
+    let mut numbered: Vec<(Option<u32>, &str)> = Vec::new();
+    let mut new = 0u32;
+    for text in diff.lines() {
+        if let Some(rest) = text.strip_prefix("@@") {
+            // `@@ -a,b +c,d @@`: the hunk's new lines start at c.
+            new = rest
+                .split_whitespace()
+                .find_map(|part| part.strip_prefix('+'))
+                .and_then(|range| range.split(',').next())
+                .and_then(|n| n.parse().ok())
+                .unwrap_or(0);
+            numbered.push((None, text));
+        } else if text.starts_with('-') {
+            numbered.push((None, text));
+        } else {
+            numbered.push((Some(new), text));
+            new += 1;
+        }
+    }
+    let Some(at) = numbered.iter().position(|(n, _)| *n == Some(line)) else {
+        return Vec::new();
+    };
+    numbered[at.saturating_sub(before)..=at]
+        .iter()
+        .map(|(_, text)| *text)
+        .collect()
+}
+
+/// Code lines coloured as in GitLab, the last one marked when `mark_last`.
+pub fn code(ui: &mut Ui, theme: &Theme, lines: &[&str], mark_last: bool) {
+    let size = theme.text_size - 2.5;
+    egui::Frame::new()
+        .fill(theme.palette.chrome)
+        .inner_margin(Margin::symmetric(0, 4))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for (i, line) in lines.iter().enumerate() {
+                let (fill, color) = match line.chars().next() {
+                    Some('+') => (theme.tones.green.bg, theme.tones.green.fg),
+                    Some('-') => (theme.tones.red.bg, theme.tones.red.fg),
+                    Some('@') => (Color32::TRANSPARENT, theme.tones.blue.fg),
+                    _ => (Color32::TRANSPARENT, theme.palette.text_secondary),
+                };
+                let marked = mark_last && i + 1 == lines.len();
+                let response = egui::Frame::new()
+                    .fill(fill)
+                    .inner_margin(Margin::symmetric(10, 0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.add(
+                            egui::Label::new(mono(line.replace('\t', "    "), size).color(color))
+                                .truncate(),
+                        );
+                    })
+                    .response;
+                if marked {
+                    let r = response.rect;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(r.min, Vec2::new(3.0, r.height())),
+                        0.0,
+                        theme.palette.accent,
+                    );
+                }
+            }
+        });
+}
+
 /// Lines added and removed by a patch.
-fn count(diff: &str) -> (usize, usize) {
+pub fn count(diff: &str) -> (usize, usize) {
     diff.lines().fold((0, 0), |(a, d), line| {
         if line.starts_with('+') && !line.starts_with("+++") {
             (a + 1, d)
@@ -419,5 +559,19 @@ mod tests {
         assert!(is_failure("error[E0308]: mismatched types"));
         assert!(is_failure("test result: FAILED. 1 passed; 2 failed"));
         assert!(!is_failure("Compiling gitlab-tracker v0.1.0"));
+    }
+}
+
+#[cfg(test)]
+mod snippet_tests {
+    use super::snippet;
+
+    #[test]
+    fn a_thread_finds_its_line_in_the_patch() {
+        let diff = "@@ -10,3 +10,4 @@ fn a()\n ctx\n-old\n+new\n+more\n tail";
+        // New lines: 10 ctx, 11 new, 12 more, 13 tail.
+        assert_eq!(snippet(diff, 12, 2), ["-old", "+new", "+more"]);
+        assert_eq!(snippet(diff, 10, 3), ["@@ -10,3 +10,4 @@ fn a()", " ctx"]);
+        assert!(snippet(diff, 40, 2).is_empty());
     }
 }

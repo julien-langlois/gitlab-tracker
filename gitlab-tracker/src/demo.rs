@@ -1212,6 +1212,103 @@ pub fn demo_job_log() -> String {
     )
 }
 
+/// What the demo's MR page reads "from GitLab" when it opens (`gui` feature):
+/// merge checks, approval rules, threads and deployments, the same for any MR.
+#[cfg(feature = "gui")]
+pub fn demo_page_data(mr: &crate::models::TrackedMr) -> crate::gitlab_detail::PageData {
+    use crate::gitlab_detail::{Deployment, Note, Overview, PageData, Rule, Thread, User};
+    let user = |name: &str, username: &str| User {
+        name: name.into(),
+        username: username.into(),
+    };
+    let note = |author: &str, username: &str, body: &str, at: &str| Note {
+        author: author.into(),
+        username: username.into(),
+        body: body.into(),
+        created_at: at.into(),
+    };
+    let open = mr.state == GitlabMrState::Opened;
+    let conflict = mr.mergeability == MergeabilityStatus::Conflict;
+    let file = demo_file_diffs()
+        .first()
+        .map(|f| f.new_path.clone())
+        .unwrap_or_default();
+    PageData {
+        overview: Some(Overview {
+            detailed_merge_status: if !open {
+                "not_open".into()
+            } else if conflict {
+                "conflict".into()
+            } else {
+                "not_approved".into()
+            },
+            has_conflicts: conflict,
+            blocking_discussions_resolved: mr.user_notes_count == 0,
+            draft: mr.mergeability == MergeabilityStatus::Draft,
+            diverged_commits_count: Some(4),
+            force_remove_source_branch: Some(true),
+        }),
+        rules: Some(vec![
+            Rule {
+                name: "Backend maintainers".into(),
+                approvals_required: 1,
+                approved: !open,
+                approved_by: if open { Vec::new() } else { vec![user("Alex Devries", "alex_dev")] },
+                eligible_approvers: vec![user("Alex Devries", "alex_dev"), user("Marina Graphetti", "marina_g")],
+            },
+            Rule {
+                name: "DBA".into(),
+                approvals_required: 1,
+                approved: !open,
+                approved_by: Vec::new(),
+                eligible_approvers: vec![user("Sarah Coste", "sarah_c")],
+            },
+        ]),
+        threads: Ok(vec![
+            Thread {
+                resolved: false,
+                path: Some(file.clone()),
+                line: Some(16),
+                notes: vec![
+                    note("Alex Devries", "alex_dev", "If the context has no `Db`, this now returns an error instead of panicking: can we cover that case with a test?", "2024-11-12T09:14:00Z"),
+                    note("Marina Graphetti", "marina_g", "+1, and the error message should name the missing data.", "2024-11-13T10:02:00Z"),
+                ],
+            },
+            Thread {
+                resolved: false,
+                path: None,
+                line: None,
+                notes: vec![note("Sarah Coste", "sarah_c", "Needs a rebase on main before I review again.", "2024-11-14T08:40:00Z")],
+            },
+            Thread {
+                resolved: true,
+                path: Some("Cargo.toml".into()),
+                line: Some(21),
+                notes: vec![
+                    note("Alex Devries", "alex_dev", "Pin async-graphql to a minor version?", "2024-11-11T16:20:00Z"),
+                    note("Thomas Dubosc", "thomas_db", "Done in the last push.", "2024-11-11T17:05:00Z"),
+                ],
+            },
+        ]),
+        deployments: vec![
+            Deployment {
+                environment: "staging".into(),
+                reference: "staging".into(),
+                sha: "5e1c0a97".into(),
+                created_at: "2024-11-14T12:30:00Z".into(),
+                includes: Some(!open),
+            },
+            Deployment {
+                environment: "production".into(),
+                reference: "production".into(),
+                sha: "0b7d2f44".into(),
+                created_at: "2024-11-12T18:00:00Z".into(),
+                includes: Some(false),
+            },
+        ],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,6 +8,8 @@ mod events;
 mod filters_core;
 mod gitlab;
 #[cfg(feature = "gui")]
+mod gitlab_detail;
+#[cfg(feature = "gui")]
 mod gui;
 mod i18n;
 mod models;

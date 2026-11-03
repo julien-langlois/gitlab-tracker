@@ -23,7 +23,16 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     }
     title_bar(g, ui, &sizes, page);
     status_bar(g, ui);
-    rail(g, ui, page);
+    // The MR page belongs to the merge requests.
+    rail(
+        g,
+        ui,
+        if page == Page::Mr {
+            Page::MergeRequests
+        } else {
+            page
+        },
+    );
 
     let content = g.theme.content_frame();
     match page {
@@ -38,6 +47,11 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
             egui::CentralPanel::default()
                 .frame(content.inner_margin(Margin::symmetric(24, 20)))
                 .show(ui, |ui| super::promote::page(g, ui));
+        }
+        Page::Mr => {
+            egui::CentralPanel::default()
+                .frame(content.inner_margin(Margin::symmetric(24, 16)))
+                .show(ui, |ui| super::mr_page::page(g, ui));
         }
         Page::Today => {
             egui::CentralPanel::default()
@@ -180,10 +194,19 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
 }
 
 /// The bell: the session's toasts, the unread ones counted on it.
+/// The bell: the unread notifications of every tab counted on it, the panel
+/// under it ([`super::toasts::panel`]).
 fn bell(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let response = bar_button(ui, &theme, 44.0, tl("Notifications"), Icon::Bell);
-    let unread = g.toasts.unread;
+    let unread = g.toasts.unread()
+        + g.tabs
+            .iter()
+            .filter_map(|slot| match &slot.state {
+                super::SlotState::Parked(t) => Some(t.toasts.unread()),
+                _ => None,
+            })
+            .sum::<usize>();
     if unread > 0 {
         let center = egui::pos2(
             response.rect.center().x + 7.0,
@@ -204,59 +227,7 @@ fn bell(g: &mut GuiApp, ui: &mut Ui) {
             theme.palette.chrome,
         );
     }
-    let mut picked = None;
-    let mut clear = false;
-    egui::Popup::menu(&response)
-        .align(egui::RectAlign::BOTTOM_END)
-        .show(|ui| {
-            g.toasts.unread = 0;
-            ui.set_width(320.0);
-            ui.horizontal(|ui| {
-                ui.label(fonts_label(&theme, tl("Notifications")));
-                if !g.toasts.history.is_empty() {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui.small_button(tl("Clear")).clicked() {
-                            clear = true;
-                        }
-                    });
-                }
-            });
-            ui.separator();
-            if g.toasts.history.is_empty() {
-                ui.label(muted(
-                    &theme,
-                    tl("Nothing yet: merges, status changes and pipelines show up here."),
-                ));
-            }
-            egui::ScrollArea::vertical()
-                .max_height(360.0)
-                .show(ui, |ui| {
-                    for past in g.toasts.history.iter().rev() {
-                        let response = ui
-                            .horizontal(|ui| {
-                                dot(ui, past.tone.fg, 7.0);
-                                ui.label(muted(&theme, &past.at));
-                                ui.label(&past.text);
-                            })
-                            .response
-                            .interact(Sense::click())
-                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if response.clicked() {
-                            picked = Some(past.id.clone());
-                        }
-                    }
-                });
-        });
-    if clear {
-        g.toasts.history.clear();
-    }
-    if let Some(id) = picked {
-        g.show_mr(&id);
-    }
-}
-
-fn fonts_label(theme: &Theme, text: &str) -> RichText {
-    RichText::new(text).font(fonts::semibold(theme.text_size))
+    super::toasts::panel(g, &response);
 }
 
 /// A banner over the table when MRs could not be refreshed: how many, the first
@@ -371,7 +342,7 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                 ),
                 active: false,
                 loading: !tab.app.pending_initial_fetches.is_empty(),
-                unread: tab.toasts.unread,
+                unread: tab.toasts.unread(),
                 errors: tab.has_errors(),
             },
             super::SlotState::Loading { .. } | super::SlotState::Closed => TabView {

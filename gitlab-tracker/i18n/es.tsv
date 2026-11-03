@@ -810,3 +810,105 @@ date	Merged	Fusionada
 @plural	{n} approval|{n} approvals	{n} aprobación|{n} aprobaciones
 @plural	{n} open thread|{n} open threads	{n} hilo abierto|{n} hilos abiertos
 @plural	{n} more line|{n} more lines	{n} línea más|{n} líneas más
+	Open the MR's page (Enter, or a double click on its row)	Abrir la página de la MR (Intro, o doble clic en su fila)
+	Open the selected MR's page	Abrir la página de la MR seleccionada
+	Enter  or  double click	Intro  o  doble clic
+	Open the MR's page (Esc: back to the list)	Abrir la página de la MR (Esc: volver a la lista)
+	back	volver
+	opened {when}	abierta {when}
+	Copy git clone	Copiar git clone
+	git clone -b <source branch> <ssh url>	git clone -b <rama origen> <url ssh>
+	All resolved	Todas resueltas
+	rules met	reglas cumplidas
+	approvals	aprobaciones
+	Approvals	Aprobaciones
+	Mark it as ready in GitLab once it is.	Márcala como lista en GitLab cuando lo esté.
+	Conflicts with {target}	Conflictos con {target}
+	Rebase {source} on {target}, or merge {target} into it, and resolve them.	Haz rebase de {source} sobre {target}, o fusiona {target} en ella, y resuélvelos.
+	Changes requested	Cambios solicitados
+	A reviewer asked for changes: their review must be withdrawn or redone.	Un revisor pidió cambios: su revisión debe retirarse o rehacerse.
+	Pipeline #{id}.	Pipeline #{id}.
+	Pipeline #{id}: {jobs}. Its log is in the Pipelines tab.	Pipeline #{id}: {jobs}. Su log está en la pestaña Pipelines.
+	Pipeline failed	Pipeline fallida
+	Pipeline still running	Pipeline todavía en curso
+	Pipeline passed	Pipeline correcta
+	The project requires every thread resolved before merging.	El proyecto exige resolver todos los hilos antes de fusionar.
+	They do not block the merge here.	Aquí no bloquean la fusión.
+	Every thread resolved	Todos los hilos resueltos
+	Every approval rule met	Todas las reglas de aprobación cumplidas
+	Approvals: {met} of {total} rules met	Aprobaciones: {met} de {total} reglas cumplidas
+	Approved by {who}	Aprobada por {who}
+	Not approved yet	Todavía sin aprobar
+	The project merges fast-forward only: rebase first.	El proyecto solo fusiona en fast-forward: haz rebase primero.
+	It merges anyway; a rebase tests it against the latest code.	Se fusiona igualmente; un rebase la prueba contra el código más reciente.
+	Not a draft	No es borrador
+	The source branch is deleted after the merge	La rama origen se borra tras la fusión
+	Why it can't merge	Por qué no se puede fusionar
+	Nothing blocks the merge	Nada bloquea la fusión
+	Asking GitLab…	Consultando a GitLab…
+	Commits	Commits
+	Reading the threads…	Leyendo los hilos…
+	{open} open · {resolved} resolved	{open} abiertos · {resolved} resueltos
+	Show resolved	Mostrar resueltos
+	No review thread on this MR.	Ningún hilo de revisión en esta MR.
+	Resolved	Resuelto
+	Unresolved	Sin resolver
+	line {n}	línea {n}
+	waiting for you · {when}	esperándote · {when}
+	The commits are read with the next refresh.	Los commits se leen en la próxima actualización.
+	Authored	Escrito
+	● same SHA · ◆ cherry-picked with -x · ≈ copied (same author, date and title) · ○ absent	● mismo SHA · ◆ cherry-pick con -x · ≈ copiado (mismo autor, fecha y título) · ○ ausente
+	Timeline	Cronología
+	Deployments	Despliegues
+	includes it	la incluye
+	not yet	todavía no
+	unknown	desconocido
+	Review requested from {who}	Revisión pedida a {who}
+	First review	Primera revisión
+	Last push	Último push
+	Approved	Aprobada
+	Pipeline #{id} · {status}	Pipeline #{id} · {status}
+	Merged by {who}	Fusionada por {who}
+	Approval rules	Reglas de aprobación
+	met	cumplida
+	{who} approved	{who} aprobó
+	same ticket #{id}	mismo ticket #{id}
+	same branch, into {target}	misma rama, hacia {target}
+	mentions {mr}	menciona {mr}
+	Related MRs	MR relacionadas
+	Wait for first review	Espera de la primera revisión
+	median {v}	mediana {v}
+	Cycle time	Tiempo de ciclo
+	Open so far	Abierta desde hace
+	median cycle {v}	ciclo mediano {v}
+	larger than {p} %	mayor que el {p} %
+	Compared to the tracked MRs	Comparada con las MR seguidas
+@plural	{n} open|{n} open	{n} abierto|{n} abiertos
+@plural	{n} unresolved thread|{n} unresolved threads	{n} hilo sin resolver|{n} hilos sin resolver
+@plural	{n} commit behind {target}|{n} commits behind {target}	{n} commit por detrás de {target}|{n} commits por detrás de {target}
+@plural	needs {n}|needs {n}	necesita {n}|necesita {n}
+@plural	{n} line|{n} lines	{n} línea|{n} líneas
+@plural	{n} thread in all|{n} threads in all	{n} hilo en total|{n} hilos en total
+	Where it is	Dónde está
+	{n} missing	faltan {n}
+	deployed on {env}	desplegada en {env}
+	not yet on {env}	todavía no en {env}
+	Last deployment of {env}: {sha}, {when}	Último despliegue de {env}: {sha}, {when}
+	No ticket linked: name it in the MR's title or description, e.g. #1234.	Ningún ticket vinculado: menciónalo en el título o la descripción de la MR, p. ej. #1234.
+	{spent} spent of {estimate}	{spent} de {estimate} dedicadas
+	{spent} spent, no estimate	{spent} dedicadas, sin estimación
+	No time logged yet	Aún no hay tiempo registrado
+@plural	+{n} more branch|+{n} more branches	+{n} rama más|+{n} ramas más
+	Approved by	Aprobada por
+	!{id} is not in the list: merged MRs may be hidden (M)	!{id} no está en la lista: puede que las MR fusionadas estén ocultas (M)
+	Open this MR's page · ✕ dismisses it	Abrir la página de esta MR · ✕ la descarta
+	Mark all read	Marcar todo como leído
+	Failures	Fallos
+	Merges	Fusiones
+	Click an entry to open its MR page	Haz clic en una entrada para abrir la página de su MR
+	Yesterday	Ayer
+	Open its MR page	Abrir la página de la MR
+	You're all caught up	Estás al día
+	Nothing of this kind	Nada de este tipo
+	Merges, status changes and pipelines of every open project show up here.	Aquí aparecen las fusiones, cambios de estado y pipelines de todos los proyectos abiertos.
+@plural	{n} new|{n} new	{n} nueva|{n} nuevas

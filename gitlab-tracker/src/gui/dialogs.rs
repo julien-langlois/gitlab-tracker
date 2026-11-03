@@ -543,6 +543,10 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
         "Merge requests",
         &[
             ("↑ / ↓  or  k / j", "Select the previous / next MR"),
+            (
+                "Enter  or  double click",
+                "Open the MR's page (Esc: back to the list)",
+            ),
             ("O", "Open the selected MR in the browser"),
             ("Space", "Flag / unflag the selected MR"),
             ("Y", "Copy the git clone command"),

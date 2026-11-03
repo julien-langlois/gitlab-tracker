@@ -61,10 +61,22 @@ const STEPS: &[fn(&mut GuiApp)] = &[
         g.palette = None;
         let now = g.ctx.input(|i| i.time);
         let tones = g.theme.tones;
-        g.toasts
-            .push("106", "!106 · pipeline failed".into(), tones.red, now);
-        g.toasts
-            .push("104", "!104 · now MERGED".into(), tones.purple, now);
+        g.toasts.push(
+            "106",
+            "chore(deps): Bump tokio",
+            super::toasts::Kind::PipelineFailed,
+            "!106 · pipeline failed".into(),
+            tones.red,
+            now,
+        );
+        g.toasts.push(
+            "104",
+            "feat(api): Introduce GraphQL endpoint",
+            super::toasts::Kind::Merged,
+            "!104 · now MERGED".into(),
+            tones.purple,
+            now,
+        );
     },
     |g| {
         g.set_theme(bevel_theme::Mode::Light);

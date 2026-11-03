@@ -810,3 +810,105 @@ date	Merged	合并时间
 @plural	{n} approval|{n} approvals	{n} 个批准
 @plural	{n} open thread|{n} open threads	{n} 个未解决讨论
 @plural	{n} more line|{n} more lines	还有 {n} 行
+	Open the MR's page (Enter, or a double click on its row)	打开 MR 页面（回车，或双击其所在行）
+	Open the selected MR's page	打开所选 MR 的页面
+	Enter  or  double click	回车  或  双击
+	Open the MR's page (Esc: back to the list)	打开 MR 页面（Esc：返回列表）
+	back	返回
+	opened {when}	创建于 {when}
+	Copy git clone	复制 git clone
+	git clone -b <source branch> <ssh url>	git clone -b <源分支> <ssh 地址>
+	All resolved	全部已解决
+	rules met	条规则已满足
+	approvals	个批准
+	Approvals	批准
+	Mark it as ready in GitLab once it is.	准备好后在 GitLab 中将其标记为就绪。
+	Conflicts with {target}	与 {target} 冲突
+	Rebase {source} on {target}, or merge {target} into it, and resolve them.	将 {source} 变基到 {target}，或将 {target} 合并进来，然后解决冲突。
+	Changes requested	已请求修改
+	A reviewer asked for changes: their review must be withdrawn or redone.	有审查者请求了修改：其审查需撤回或重新进行。
+	Pipeline #{id}.	流水线 #{id}。
+	Pipeline #{id}: {jobs}. Its log is in the Pipelines tab.	流水线 #{id}：{jobs}。日志见“流水线”标签页。
+	Pipeline failed	流水线失败
+	Pipeline still running	流水线仍在运行
+	Pipeline passed	流水线通过
+	The project requires every thread resolved before merging.	项目要求合并前解决所有讨论。
+	They do not block the merge here.	在此项目中它们不阻止合并。
+	Every thread resolved	所有讨论已解决
+	Every approval rule met	所有批准规则已满足
+	Approvals: {met} of {total} rules met	批准：{total} 条规则中已满足 {met} 条
+	Approved by {who}	已由 {who} 批准
+	Not approved yet	尚未批准
+	The project merges fast-forward only: rebase first.	项目仅允许快进合并：请先变基。
+	It merges anyway; a rebase tests it against the latest code.	仍可合并；变基可基于最新代码进行测试。
+	Not a draft	不是草稿
+	The source branch is deleted after the merge	合并后删除源分支
+	Why it can't merge	为何无法合并
+	Nothing blocks the merge	没有阻止合并的因素
+	Asking GitLab…	正在询问 GitLab…
+	Commits	提交
+	Reading the threads…	正在读取讨论…
+	{open} open · {resolved} resolved	{open} 个未解决 · {resolved} 个已解决
+	Show resolved	显示已解决
+	No review thread on this MR.	此 MR 没有审查讨论。
+	Resolved	已解决
+	Unresolved	未解决
+	line {n}	第 {n} 行
+	waiting for you · {when}	等待你处理 · {when}
+	The commits are read with the next refresh.	提交将在下次刷新时读取。
+	Authored	编写于
+	● same SHA · ◆ cherry-picked with -x · ≈ copied (same author, date and title) · ○ absent	● 相同 SHA · ◆ 使用 -x 的 cherry-pick · ≈ 复制（作者、日期和标题相同）· ○ 不存在
+	Timeline	时间线
+	Deployments	部署
+	includes it	已包含
+	not yet	尚未
+	unknown	未知
+	Review requested from {who}	已请求 {who} 审查
+	First review	首次审查
+	Last push	最近推送
+	Approved	已批准
+	Pipeline #{id} · {status}	流水线 #{id} · {status}
+	Merged by {who}	由 {who} 合并
+	Approval rules	批准规则
+	met	已满足
+	{who} approved	{who} 已批准
+	same ticket #{id}	同一工单 #{id}
+	same branch, into {target}	同一分支，合入 {target}
+	mentions {mr}	提及 {mr}
+	Related MRs	相关 MR
+	Wait for first review	等待首次审查
+	median {v}	中位数 {v}
+	Cycle time	周期时间
+	Open so far	已开启
+	median cycle {v}	周期中位数 {v}
+	larger than {p} %	大于 {p}% 的 MR
+	Compared to the tracked MRs	与跟踪的 MR 相比
+@plural	{n} open|{n} open	{n} 个未解决
+@plural	{n} unresolved thread|{n} unresolved threads	{n} 个未解决讨论
+@plural	{n} commit behind {target}|{n} commits behind {target}	落后 {target} {n} 个提交
+@plural	needs {n}|needs {n}	还需 {n} 个
+@plural	{n} line|{n} lines	{n} 行
+@plural	{n} thread in all|{n} threads in all	共 {n} 个讨论
+	Where it is	所在位置
+	{n} missing	缺少 {n} 个
+	deployed on {env}	已部署到 {env}
+	not yet on {env}	尚未部署到 {env}
+	Last deployment of {env}: {sha}, {when}	{env} 最近一次部署：{sha}，{when}
+	No ticket linked: name it in the MR's title or description, e.g. #1234.	未关联工单：在 MR 标题或描述中提及，例如 #1234。
+	{spent} spent of {estimate}	已用 {spent} / 预计 {estimate}
+	{spent} spent, no estimate	已用 {spent}，无预估
+	No time logged yet	尚未记录工时
+@plural	+{n} more branch|+{n} more branches	还有 {n} 个分支
+	Approved by	批准人
+	!{id} is not in the list: merged MRs may be hidden (M)	!{id} 不在列表中：已合并的 MR 可能被隐藏了 (M)
+	Open this MR's page · ✕ dismisses it	打开此 MR 页面 · ✕ 关闭
+	Mark all read	全部标为已读
+	Failures	失败
+	Merges	合并
+	Click an entry to open its MR page	点击条目打开其 MR 页面
+	Yesterday	昨天
+	Open its MR page	打开 MR 页面
+	You're all caught up	已全部查看
+	Nothing of this kind	没有此类通知
+	Merges, status changes and pipelines of every open project show up here.	所有已打开项目的合并、状态变化和流水线都会显示在这里。
+@plural	{n} new|{n} new	{n} 条新通知

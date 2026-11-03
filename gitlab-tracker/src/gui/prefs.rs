@@ -61,7 +61,7 @@ fn page_name(page: Page) -> &'static str {
     match page {
         Page::Today => "today",
         Page::Promote => "promote",
-        Page::MergeRequests => "mrs",
+        Page::MergeRequests | Page::Mr => "mrs",
         Page::Cockpit => "cockpit",
         Page::Tracker => "tracker",
         #[cfg(feature = "stats")]

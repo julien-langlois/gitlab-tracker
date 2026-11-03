@@ -128,6 +128,11 @@ no state of its own beyond what the views need (page, panels, text being edited)
   the background (`load_project`); a project without its token comes back as
   `Loaded::NeedsTokens` and opens the project form (`gui/setup.rs`) instead of
   prompting: the window turns `secrets::set_interactive(false)` on at start.
+* **On-demand reads.** What the refresh cycle does not keep is read when a view
+  asks for it and cached per tab in `gui/details.rs`: an MR's diff, a job's log,
+  and the MR page's data (`gitlab_detail.rs`: merge checks, approval rules, full
+  threads, deployments), keyed by the MR's `updated_at` so a change reads it
+  again. The demo serves canned answers (`demo::demo_*`).
 * **Theme.** Colours come from `bevel-theme`; `gui/tones.rs` and `gui/colors.rs`
   map the app's states and the TUI palette onto it.
 

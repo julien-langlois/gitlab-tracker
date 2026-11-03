@@ -17,7 +17,7 @@ use super::widgets::{
     activity, avatar, badge, button, field, icon_button, icon_toggle, label_tone, mono, muted,
     semibold, split_person, FieldLook,
 };
-use super::{tones, GuiApp};
+use super::{tones, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::{App, InputMode, SortColumn, SortOrder};
 use crate::i18n::{tf, tl, tn};
@@ -968,6 +968,8 @@ enum RowAction {
     /// Shift + click: pick every MR from the selected one to this one.
     Range(usize),
     Then(usize, Action),
+    /// Double click: the MR's page.
+    Open(usize),
 }
 
 fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
@@ -1149,6 +1151,10 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
         Some(RowAction::Then(index, action)) => {
             select(g, index);
             g.pending.push(action);
+        }
+        Some(RowAction::Open(index)) => {
+            select(g, index);
+            g.open_page(Page::Mr);
         }
         None => {}
     }
@@ -1403,7 +1409,7 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
 
     let modifiers = ui.input(|i| i.modifiers);
     if response.double_clicked() {
-        action = Some(RowAction::Then(r.index, Action::OpenSelectedMr));
+        action = Some(RowAction::Open(r.index));
     } else if response.clicked() && modifiers.command {
         action.get_or_insert(RowAction::Toggle(r.index));
     } else if response.clicked() && modifiers.shift {

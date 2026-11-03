@@ -97,7 +97,15 @@ fn named_key(g: &mut GuiApp, key: Key, modifiers: Modifiers) {
     if g.app.input_mode != InputMode::Normal {
         return;
     }
+    let on_mr = g.page() == Page::Mr;
     match key {
+        // Enter opens the selected MR's page, Esc goes back to the list.
+        Key::Enter
+            if !on_mr && g.page() == Page::MergeRequests && g.app.selected_mr().is_some() =>
+        {
+            g.open_page(Page::Mr)
+        }
+        Key::Escape if on_mr => g.open_page(Page::MergeRequests),
         Key::ArrowDown => g.app.next_row(),
         Key::ArrowUp => g.app.prev_row(),
         Key::Delete => g.pending.push(Action::RemoveSelected),

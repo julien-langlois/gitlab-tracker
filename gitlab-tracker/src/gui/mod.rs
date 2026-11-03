@@ -14,6 +14,7 @@ mod icons;
 mod inspector;
 mod keys;
 mod markdown;
+mod mr_page;
 mod palette;
 mod prefs;
 mod promote;
@@ -206,6 +207,8 @@ enum Page {
     /// What waits for me, across the open tabs.
     Today,
     MergeRequests,
+    /// The selected MR on a page of its own (double click, Enter).
+    Mr,
     Cockpit,
     /// What is ready to go from one tracked branch to the next.
     Promote,
@@ -289,6 +292,13 @@ struct GuiApp {
     /// How the table groups its rows, and the groups folded away.
     group_by: table::GroupBy,
     folded: HashSet<String>,
+    /// The MR page's tab, and whether it lists the resolved threads.
+    mr_tab: mr_page::Tab,
+    show_resolved: bool,
+    /// The bell panel's filter, and whether it was open at the last frame (its
+    /// notifications count as read once it closes).
+    bell_filter: toasts::Filter,
+    bell_open: bool,
     /// The URLs of the desktop notifications clicked: the window shows their MR.
     clicks: std::sync::mpsc::Receiver<String>,
     /// The branches the Promote page compares, once picked: from, to.
@@ -404,7 +414,11 @@ impl GuiApp {
             folded,
             tracker_board: false,
             promote: None,
+            mr_tab: mr_page::Tab::Discussions,
+            show_resolved: false,
             clicks: notification_clicks(&cc.egui_ctx),
+            bell_filter: toasts::Filter::All,
+            bell_open: false,
             compact: false,
             marked,
             bulk: None,
@@ -785,8 +799,7 @@ impl GuiApp {
             });
             match found {
                 Some((index, id)) => {
-                    self.activate(index);
-                    self.show_mr(&id);
+                    self.open_link(index, &id);
                     self.ctx
                         .send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                     self.ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -889,6 +902,7 @@ impl GuiApp {
         }
         match self.page {
             Page::Tracker if self.app.tracker.is_none() => Page::MergeRequests,
+            Page::Mr if self.app.selected_mr().is_none() => Page::MergeRequests,
             page => page,
         }
     }
@@ -922,6 +936,30 @@ impl GuiApp {
             ids,
         }));
         self.open_page(Page::MergeRequests);
+    }
+
+    /// Deep link: the MR `id`'s page, out of the view or search that hides it
+    /// (merged MRs hidden by `M` stay hidden: [`GuiApp::apply_picks`] says so).
+    fn open_mr(&mut self, id: &str) {
+        let visible = self.app.visible_mrs().any(|mr| mr.id == id);
+        if !visible {
+            if self.app.focus.is_some() {
+                self.next_focus = Some(None);
+            }
+            self.pending.push(Action::SetFilter {
+                index: 0,
+                query: String::new(),
+            });
+            self.app.input.clear();
+        }
+        self.select_id = Some(id.to_string());
+        self.open_page(Page::Mr);
+    }
+
+    /// Deep link across tabs: the MR `id` of the tab `tab`, on its page.
+    fn open_link(&mut self, tab: usize, id: &str) {
+        self.activate(tab);
+        self.open_mr(id);
     }
 
     /// Selects the MR `id` on the merge requests page, every MR shown again.
@@ -1012,6 +1050,17 @@ impl GuiApp {
             if let Some(index) = found {
                 self.app.table_state.select(Some(index));
                 self.app.layout.inspector.reset();
+            } else if self.page == Page::Mr {
+                // Not in the list (merged MRs hidden, or no longer tracked): not
+                // another MR's page instead.
+                self.page = Page::MergeRequests;
+                self.app.flash(
+                    tf(
+                        "!{id} is not in the list: merged MRs may be hidden (M)",
+                        &[("id", &id)],
+                    ),
+                    true,
+                );
             }
         }
     }
@@ -1346,6 +1395,93 @@ impl eframe::App for GuiApp {
                 Ok("tracker") => self.open_page(Page::Tracker),
                 Ok("today") => self.open_page(Page::Today),
                 Ok("promote") => self.open_page(Page::Promote),
+                // The bell's panel, with notifications in both tabs.
+                Ok("bell") => {
+                    use toasts::Kind;
+                    let now = self.ctx.input(|i| i.time);
+                    let t = self.theme.tones;
+                    let items = [
+                        (
+                            "106",
+                            "chore(deps): Bump tokio to 1.37 and update async ecosystem",
+                            Kind::PipelineFailed,
+                            "!106 · pipeline failed",
+                            t.red,
+                        ),
+                        (
+                            "104",
+                            "feat(api): Introduce GraphQL endpoint for MR metadata",
+                            Kind::Merged,
+                            "!104 · now MERGED",
+                            t.purple,
+                        ),
+                        (
+                            "102",
+                            "fix(db): Resolve connection pool deadlocks under heavy load",
+                            Kind::Status,
+                            "!102 · now CONFLICT",
+                            t.red,
+                        ),
+                        (
+                            "101",
+                            "feat(auth): Add OAuth2 PKCE flow for mobile clients",
+                            Kind::PipelinePassed,
+                            "!101 · pipeline passed",
+                            t.green,
+                        ),
+                    ];
+                    for (id, title, kind, text, tone) in items {
+                        self.toasts.push(id, title, kind, text.into(), tone, now);
+                    }
+                    // Seen earlier: read.
+                    if let Some(first) = self.toasts.history.first_mut() {
+                        first.read = true;
+                        first.when -= chrono::Duration::minutes(48);
+                    }
+                    if let Some(second) = self.toasts.history.get_mut(1) {
+                        second.read = true;
+                        second.when -= chrono::Duration::minutes(12);
+                    }
+                    for slot in &mut self.tabs {
+                        if let SlotState::Parked(tab) = &mut slot.state {
+                            tab.toasts.push(
+                                "103",
+                                "refactor(ui): Optimize Ratatui render loop",
+                                Kind::Status,
+                                "!103 · now APPROVED".into(),
+                                t.green,
+                                now,
+                            );
+                            if let Some(p) = tab.toasts.history.last_mut() {
+                                p.when -= chrono::Duration::days(1);
+                            }
+                        }
+                    }
+                }
+                Ok("mr") => {
+                    // The demo's MR with the most to show: open, a conflict, threads.
+                    let id = self
+                        .app
+                        .mrs
+                        .iter()
+                        .find(|mr| {
+                            mr.mergeability == gitlab_tracker_core::MergeabilityStatus::Conflict
+                        })
+                        .map(|mr| mr.id.clone());
+                    let id = std::env::var("GITLAB_TRACKER_GUI_MR").ok().or(id);
+                    if let Some(id) = id {
+                        self.select_id = Some(id);
+                    }
+                    self.open_page(Page::Mr);
+                    if let Ok(tab) = std::env::var("GITLAB_TRACKER_GUI_MR_TAB") {
+                        self.mr_tab = match tab.as_str() {
+                            "changes" => mr_page::Tab::Changes,
+                            "commits" => mr_page::Tab::Commits,
+                            "pipelines" => mr_page::Tab::Pipelines,
+                            _ => mr_page::Tab::Discussions,
+                        };
+                    }
+                }
                 // The inspector's diff (`diff`) and failed job's log (`log`).
                 Ok(which @ ("diff" | "log")) => {
                     // The demo's failed pipeline is an older one: shown as the

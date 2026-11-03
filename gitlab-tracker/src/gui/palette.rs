@@ -116,6 +116,14 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
         Icon::Help,
         Command::Shortcuts,
     ));
+    if g.app.selected_mr().is_some() && g.page() != Page::Mr {
+        list.push(command(
+            tl("Open the selected MR's page"),
+            "Enter",
+            Icon::Maximize,
+            Command::Page(Page::Mr),
+        ));
+    }
     if !g.app.read_only {
         list.push(command(
             tl("Add a project…"),

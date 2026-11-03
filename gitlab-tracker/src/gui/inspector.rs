@@ -186,6 +186,19 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     {
                         g.pending.push(Action::YankCloneCommand);
                     }
+                    // Its page, where the inspector is too narrow (not on the page itself).
+                    if g.page() != Page::Mr
+                        && icon_button(
+                            ui,
+                            tl("Open the MR's page (Enter, or a double click on its row)"),
+                            Icon::Maximize,
+                            &outlined,
+                            height,
+                        )
+                        .clicked()
+                    {
+                        g.open_page(Page::Mr);
+                    }
                     ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
                         let response = full_width_button(ui, &theme, tl("Open in GitLab"));
                         if response
@@ -469,7 +482,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     }
     threads(ui, &theme, mr);
     anchor(g, ui, InspectorSection::Pipelines);
-    pipelines(g, ui, mr);
+    pipelines(g, ui, mr, true);
     anchor(g, ui, InspectorSection::Description);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
@@ -643,7 +656,7 @@ const BRANCH_CHIP_GAP: f32 = 16.0;
 /// Kept for the presence chip when a branch's name is long.
 const BRANCH_CHIP_ROOM: f32 = 90.0;
 
-fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let rows = g.app.branch_rows(mr);
     let failed = matches!(mr.status, MrStatus::Error(_));
@@ -731,7 +744,7 @@ fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     });
 }
 
-fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+pub(super) fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let provider = g.app.tracker.as_ref().map(|t| t.name());
     super::widgets::rule(ui, &theme);
@@ -1024,12 +1037,13 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
 }
 
 /// The latest pipelines; the jobs of the newest one by stage.
-fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+/// The pipelines, as an inspector section (`framed`) or bare, in the MR page's tab.
+pub(super) fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, framed: bool) {
     let theme = &g.theme.clone();
     let demo = g.app.read_only;
     let can_read_logs =
         |job: &crate::models::PipelineJob| job.status == "failed" && (job.id != 0 || demo);
-    section(ui, theme, tl("Pipelines"), |ui| {
+    let mut body = |ui: &mut Ui| {
         if mr.pipelines.is_empty() {
             ui.label(muted(theme, tl("No pipeline yet.")));
             return;
@@ -1095,7 +1109,12 @@ fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 }
             }
         }
-    });
+    };
+    if framed {
+        section(ui, theme, tl("Pipelines"), body);
+    } else {
+        body(ui);
+    }
 }
 
 fn job_color(theme: &Theme, status: &str) -> egui::Color32 {
@@ -1109,7 +1128,7 @@ fn job_color(theme: &Theme, status: &str) -> egui::Color32 {
     }
 }
 
-fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+pub(super) fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let me = g.app.config.gitlab_username.clone();
     // An initials avatar and the name, the handle on hover; me stands out, as
@@ -1163,9 +1182,14 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     });
 }
 
-fn planning(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
+pub(super) fn planning(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
+    section(ui, theme, tl("Planning"), |ui| planning_body(ui, theme, mr));
+}
+
+/// The milestone, its due date and description.
+pub(super) fn planning_body(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
     let tones = &theme.tones;
-    section(ui, theme, tl("Planning"), |ui| {
+    {
         key_values(ui, theme, |rows| {
             rows.row(tl("Milestone"), |ui| match &mr.milestone {
                 Some(milestone) => {
@@ -1204,7 +1228,7 @@ fn planning(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
         {
             ui.label(muted(theme, description));
         }
-    });
+    }
 }
 
 /// "date time (relative)" for an ISO timestamp.
@@ -1220,12 +1244,12 @@ fn when(iso: Option<&str>) -> String {
 }
 
 /// One step of the history timeline.
-struct Step {
-    title: String,
-    detail: Option<String>,
-    color: egui::Color32,
+pub(super) struct Step {
+    pub title: String,
+    pub detail: Option<String>,
+    pub color: egui::Color32,
     /// Not reached yet: a hollow node, muted text.
-    pending: bool,
+    pub pending: bool,
 }
 
 fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
@@ -1302,7 +1326,7 @@ fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 }
 
 /// The steps down a line: a node per step, its title and detail beside it.
-fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
+pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
     ui.spacing_mut().item_spacing.y = 0.0;
     let mut nodes = Vec::new();
     for step in steps {
