@@ -10,6 +10,7 @@ use super::widgets::{
     activity, avatar, badge, bar, button, dot, icon_button, key_values, label_chip, mono, muted,
     section, semibold, spinner, split_person,
 };
+use super::mr_page::display_of;
 use super::{tones, GuiApp, InspectorSection, Page};
 use crate::actions::Action;
 use crate::app::{TimeLogState, TrackerView};
@@ -524,12 +525,7 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                             .color(tones.amber.fg),
                     );
                 } else if !mr.approved_by.is_empty() {
-                    let names: Vec<String> =
-                        mr.approved_by.iter().map(|u| format!("@{u}")).collect();
-                    ui.label(
-                        RichText::new(tf("Approved by {names}", &[("names", &names.join(", "))]))
-                            .color(tones.green.fg),
-                    );
+                    ui.label(RichText::new(tl("Approved")).color(tones.green.fg));
                 } else if mr.reviewers.is_empty() {
                     ui.label(muted(&theme, tl("No reviewer")));
                 } else {
@@ -540,6 +536,16 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     ));
                 }
             });
+            if !mr.approved_by.is_empty() {
+                rows.row(tl("Approved by"), |ui| {
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        for login in &mr.approved_by {
+                            person(ui, &theme, me.as_deref(), &display_of(mr, None, login));
+                        }
+                    });
+                });
+            }
             rows.row(tl("Pipeline"), |ui| match mr.pipelines.first() {
                 Some(pipeline) => {
                     let (label, tone) = tones::pipeline(pipeline.status, tones);
@@ -1128,35 +1134,35 @@ fn job_color(theme: &Theme, status: &str) -> egui::Color32 {
     }
 }
 
+/// An initials avatar and the name, the handle on hover; me stands out, as in
+/// the TUI.
+fn person(ui: &mut Ui, theme: &Theme, me: Option<&str>, display: &str) {
+    let is_me = me.is_some_and(|username| matches_gitlab_username(display, username));
+    let (name, handle) = split_person(display);
+    // `horizontal` is at least `interact_size.y` tall (the theme's 28-point
+    // control height): keep it to the avatar's, as the text rows around.
+    ui.spacing_mut().interact_size.y = 18.0;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        let response = avatar(ui, theme, name, 18.0);
+        let mut text = RichText::new(name).font(fonts::medium(theme.text_size - 0.5));
+        if is_me {
+            text = text.color(theme.tones.blue.fg);
+        }
+        let response = response | ui.label(text);
+        if is_me {
+            ui.add(Chip::new(tl("you"), theme.tones.blue).pill());
+        }
+        if let Some(handle) = handle {
+            response.on_hover_text(format!("@{handle}"));
+        }
+    });
+}
+
 pub(super) fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let me = g.app.config.gitlab_username.clone();
-    // An initials avatar and the name, the handle on hover; me stands out, as
-    // in the TUI.
-    let person = |ui: &mut Ui, display: &str| {
-        let is_me = me
-            .as_deref()
-            .is_some_and(|username| matches_gitlab_username(display, username));
-        let (name, handle) = split_person(display);
-        // `horizontal` is at least `interact_size.y` tall (the theme's 28-point
-        // control height): keep it to the avatar's, as the text rows around.
-        ui.spacing_mut().interact_size.y = 18.0;
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            let response = avatar(ui, &theme, name, 18.0);
-            let mut text = RichText::new(name).font(fonts::medium(theme.text_size - 0.5));
-            if is_me {
-                text = text.color(theme.tones.blue.fg);
-            }
-            let response = response | ui.label(text);
-            if is_me {
-                ui.add(Chip::new(tl("you"), theme.tones.blue).pill());
-            }
-            if let Some(handle) = handle {
-                response.on_hover_text(format!("@{handle}"));
-            }
-        });
-    };
+    let person = |ui: &mut Ui, display: &str| person(ui, &theme, me.as_deref(), display);
     section(ui, &theme, tl("People"), |ui| {
         key_values(ui, &theme, |rows| {
             rows.row(tl("Author"), |ui| person(ui, &mr.author));

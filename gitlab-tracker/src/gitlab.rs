@@ -388,6 +388,7 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
             threads: mr.threads.clone(),
             review: mr.review.clone(),
             approved_by: mr.approved_by.clone(),
+            approvers: mr.approvers.clone(),
         }
     }
 }
@@ -544,6 +545,7 @@ pub struct CachedMrData {
     pub threads: Vec<MrThread>,
     pub review: Option<ReviewActivity>,
     pub approved_by: Vec<String>,
+    pub approvers: Vec<String>,
 }
 
 /// Controls which cached fields are bypassed during a fetch cycle.
@@ -784,8 +786,11 @@ struct Approver {
     user: crate::models::GitLabUser,
 }
 
-/// Usernames of the MR's current approvers (`None` on any error).
-async fn fetch_approved_by(ctx: &FetchContext, mr_id: &str) -> Option<Vec<String>> {
+/// The MR's current approvers (`None` on any error).
+async fn fetch_approved_by(
+    ctx: &FetchContext,
+    mr_id: &str,
+) -> Option<Vec<crate::models::GitLabUser>> {
     let url = format!(
         "{}/api/v4/projects/{}/merge_requests/{}/approvals",
         ctx.base_url, ctx.project_id, mr_id
@@ -802,7 +807,7 @@ async fn fetch_approved_by(ctx: &FetchContext, mr_id: &str) -> Option<Vec<String
         approvals
             .approved_by
             .into_iter()
-            .map(|a| a.user.username)
+            .map(|a| a.user)
             .collect(),
     )
 }
@@ -1525,12 +1530,24 @@ pub async fn fetch_gitlab_data(
     };
     // Approvers change while the MR is open (approvals, resets on push): refetched
     // then, frozen afterwards.
-    let approved_by = if state == GitlabMrState::Opened {
-        fetch_approved_by(ctx, mr_id)
-            .await
-            .unwrap_or_else(|| cached.approved_by.clone())
+    let fetched = if state == GitlabMrState::Opened {
+        fetch_approved_by(ctx, mr_id).await
     } else {
-        cached.approved_by.clone()
+        None
+    };
+    let (approved_by, approvers) = match fetched {
+        Some(users) => users
+            .into_iter()
+            .map(|u| {
+                let display = if u.name.trim().is_empty() {
+                    u.username.clone()
+                } else {
+                    format!("{} (@{})", u.name, u.username)
+                };
+                (u.username, display)
+            })
+            .unzip(),
+        None => (cached.approved_by.clone(), cached.approvers.clone()),
     };
 
     // Resolve mergeability with the following priority:
@@ -1892,6 +1909,7 @@ pub async fn fetch_gitlab_data(
             threads,
             review,
             approved_by,
+            approvers,
         },
     })
 }

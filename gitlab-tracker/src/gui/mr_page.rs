@@ -1132,7 +1132,7 @@ fn tiles(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>, w
                 ui.set_height(tile_height - 20.0);
                 match index {
                     0 => where_it_is(g, ui, mr, data),
-                    1 => people(g, ui, mr),
+                    1 => people(g, ui, mr, data),
                     _ => {
                         if let Some(action) = ticket(g, ui, mr) {
                             pick = Some(action);
@@ -1231,10 +1231,12 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
     }
 }
 
-/// Author, assignee and reviewers, me marked.
-fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+/// Author, assignee, reviewers and approvers, me marked.
+fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     tile_title(ui, &theme, tl("People"));
+    // Four rows in the tile: each as tall as its avatar, not a control.
+    ui.spacing_mut().interact_size.y = 20.0;
     let me = g.app.config.gitlab_username.clone();
     let person = |ui: &mut Ui, display: &str| {
         let (name, handle) = split_person(display);
@@ -1251,7 +1253,7 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             response.on_hover_text(format!("@{handle}"));
         }
     };
-    let caption_width = [tl("Author"), tl("Assignee"), tl("Reviewers")]
+    let caption_width = [tl("Author"), tl("Assignee"), tl("Reviewers"), tl("Approved by")]
         .iter()
         .map(|c| text_width(ui, c, egui::FontId::proportional(theme.text_size)))
         .fold(0.0, f32::max);
@@ -1295,6 +1297,42 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     name.to_string()
                 };
                 avatar(ui, &theme, name, 20.0).on_hover_text(hover);
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        caption(ui, tl("Approved by"));
+        let approvers: Vec<String> = mr
+            .approved_by
+            .iter()
+            .map(|login| display_of(mr, data, login))
+            .collect();
+        match approvers.as_slice() {
+            [] => {
+                ui.label(muted(&theme, tl("None")));
+            }
+            [one] => person(ui, one),
+            several => {
+                // Every avatar, then the names as far as they fit, all on hover.
+                ui.spacing_mut().item_spacing.x = 4.0;
+                let names: Vec<&str> = several.iter().map(|d| split_person(d).0).collect();
+                let mut response = None::<egui::Response>;
+                for name in &names {
+                    let r = avatar(ui, &theme, name, 18.0);
+                    response = Some(match response {
+                        Some(prev) => prev | r,
+                        None => r,
+                    });
+                }
+                ui.add_space(2.0);
+                let label = ui.add(
+                    egui::Label::new(
+                        RichText::new(names.join(", ")).font(fonts::medium(theme.text_size - 0.5)),
+                    )
+                    .truncate(),
+                );
+                let response = response.map_or(label.clone(), |r| r | label);
+                response.on_hover_text(several.join("\n"));
             }
         }
     });
@@ -1612,7 +1650,10 @@ fn approvals(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
 /// when nobody says.
 pub fn display_of(mr: &TrackedMr, data: Option<&PageData>, login: &str) -> String {
     let tag = format!("(@{login})");
-    let known = std::iter::once(&mr.author)
+    let known = mr
+        .approvers
+        .iter()
+        .chain(std::iter::once(&mr.author))
         .chain(mr.assignee.iter())
         .chain(mr.reviewers.iter())
         .find(|display| display.ends_with(&tag));

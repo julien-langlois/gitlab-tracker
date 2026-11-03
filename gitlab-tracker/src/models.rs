@@ -241,6 +241,9 @@ pub struct MrData {
     /// Usernames of the current approvers (`/approvals`, refreshed while open).
     #[serde(default)]
     pub approved_by: Vec<String>,
+    /// The same approvers as "Full Name (@login)", to show them by name.
+    #[serde(default)]
+    pub approvers: Vec<String>,
 }
 
 /// A resolvable discussion thread of an MR.
