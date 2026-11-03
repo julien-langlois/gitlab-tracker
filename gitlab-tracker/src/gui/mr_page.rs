@@ -388,12 +388,28 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                                 ui.label(
                                     muted(&theme, name.to_uppercase()).size(theme.text_size - 2.5),
                                 );
-                                let color = tone.map_or(theme.palette.text, |t| t.fg);
-                                ui.label(
-                                    RichText::new(value)
-                                        .font(fonts::semibold(theme.text_size + 2.0))
-                                        .color(color),
-                                );
+                                let font = fonts::semibold(theme.text_size + 2.0);
+                                match mr.diff_stats.as_ref().filter(|_| *name == tl("Size")) {
+                                    // The lines added in green, the lines removed in red.
+                                    Some(stats) => {
+                                        let mut job = egui::text::LayoutJob::default();
+                                        job.append(
+                                            &format!("+{}", stats.additions),
+                                            0.0,
+                                            egui::TextFormat::simple(font.clone(), t.green.fg),
+                                        );
+                                        job.append(
+                                            &format!("−{}", stats.deletions),
+                                            6.0,
+                                            egui::TextFormat::simple(font, t.red.fg),
+                                        );
+                                        ui.label(job);
+                                    }
+                                    None => {
+                                        let color = tone.map_or(theme.palette.text, |t| t.fg);
+                                        ui.label(RichText::new(value).font(font).color(color));
+                                    }
+                                }
                                 ui.add(
                                     egui::Label::new(
                                         muted(&theme, caption).size(theme.text_size - 1.5),
