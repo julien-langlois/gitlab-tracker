@@ -343,10 +343,19 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         .and_then(|o| o.diverged_commits_count)
         .or(mr.diff_stats.as_ref().and_then(|s| s.commits_behind));
     if let (Some(n), GitlabMrState::Opened) = (behind, mr.state) {
+        let up_to_date = n == 0 && mr.mergeability == MergeabilityStatus::Mergeable;
         list.push((
             tl("Behind target"),
-            tn(n as u64, "{n} commit", "{n} commits"),
-            (n > 0).then_some(t.amber),
+            if up_to_date {
+                tl("Up to date").to_string()
+            } else {
+                tn(n as u64, "{n} commit", "{n} commits")
+            },
+            if up_to_date {
+                Some(t.green)
+            } else {
+                (n > 0).then_some(t.amber)
+            },
             mr.target_branch.clone(),
         ));
     }
