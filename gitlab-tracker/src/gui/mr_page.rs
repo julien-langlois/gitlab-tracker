@@ -777,7 +777,7 @@ fn conflict_files(
                         // Rows as tall as their text, not as a control.
                         ui.spacing_mut().interact_size.y = 0.0;
                         let tree = Folder::of(clashes.iter().map(|f| f.path.as_str()));
-                        picked = tree_rows(ui, theme, &tree, 0);
+                        picked = tree_rows(ui, theme, mr_id, &tree, "", 0);
                     });
             });
     }
@@ -846,10 +846,17 @@ impl<'a> Folder<'a> {
 /// Indentation of one tree level.
 const TREE_INDENT: f32 = 16.0;
 
-/// The rows of `folder` at `depth`: each sub-folder (a chain of folders that
-/// hold only one folder on one row, as `src/api/handlers`), its content under
-/// it, then the files. Returns the file clicked.
-fn tree_rows(ui: &mut Ui, theme: &Theme, folder: &Folder, depth: usize) -> Option<String> {
+/// The rows of `folder` (at `path`, `depth` deep): each sub-folder (a chain of
+/// folders that hold only one folder on one row, as `src/api/handlers`), its
+/// content under it unless folded, then the files. Returns the file clicked.
+fn tree_rows(
+    ui: &mut Ui,
+    theme: &Theme,
+    mr_id: &str,
+    folder: &Folder,
+    path: &str,
+    depth: usize,
+) -> Option<String> {
     let mut picked = None;
     for (name, mut sub) in &folder.folders {
         let mut label = (*name).to_string();
@@ -858,14 +865,24 @@ fn tree_rows(ui: &mut Ui, theme: &Theme, folder: &Folder, depth: usize) -> Optio
             label = format!("{label}/{next}");
             sub = deeper;
         }
-        tree_row(
+        let full = format!("{path}{label}/");
+        let id = egui::Id::unique(("mr page conflict folder", mr_id, &full));
+        let folded = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+        let chevron = if folded { "▸" } else { "▾" };
+        let response = tree_row(
             ui,
             theme,
             depth,
-            &format!("{label}/"),
+            &format!("{chevron} {label}/"),
             theme.palette.text_muted,
-        );
-        picked = tree_rows(ui, theme, sub, depth + 1).or(picked);
+        )
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+        if response.clicked() {
+            ui.data_mut(|d| d.insert_temp(id, !folded));
+        }
+        if !folded {
+            picked = tree_rows(ui, theme, mr_id, sub, &full, depth + 1).or(picked);
+        }
     }
     for path in &folder.files {
         let response = tree_row(ui, theme, depth, file_name(path), theme.tones.red.fg)

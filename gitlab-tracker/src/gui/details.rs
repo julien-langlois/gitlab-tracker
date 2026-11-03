@@ -51,6 +51,8 @@ pub struct Details {
     /// Files unfolded, by MR id and path; logs shown, by job id.
     open_files: HashSet<(String, String)>,
     open_logs: HashSet<u64>,
+    /// The file to bring into view once the Changes tab shows it.
+    scroll_to: Option<(String, String)>,
 }
 
 impl Details {
@@ -124,10 +126,11 @@ impl Details {
         }
     }
 
-    /// Unfolds `path` in the MR's Changes tab.
+    /// Unfolds `path` in the MR's Changes tab and scrolls to it.
     pub fn open_file(&mut self, mr_id: &str, path: &str) {
-        self.open_files
-            .insert((mr_id.to_string(), path.to_string()));
+        let key = (mr_id.to_string(), path.to_string());
+        self.open_files.insert(key.clone());
+        self.scroll_to = Some(key);
     }
 
     /// The MR's diff once read.
@@ -227,15 +230,31 @@ pub fn changes(
                 return;
             }
             let mut toggle = None;
+            let mut target = None;
+            let scroll_to = details
+                .scroll_to
+                .take_if(|(id, _)| id == mr_id)
+                .map(|(_, path)| path);
             for file in files {
                 let key = (mr_id.to_string(), file.new_path.clone());
                 let open = details.open_files.contains(&key);
+                let top = ui.cursor().min;
                 if file_row(ui, theme, file, open) {
                     toggle = Some(key.clone());
+                }
+                if scroll_to.as_deref() == Some(file.new_path.as_str()) {
+                    target = Some(egui::Rect::from_min_max(
+                        top,
+                        egui::pos2(ui.max_rect().right(), ui.cursor().min.y),
+                    ));
                 }
                 if open {
                     patch(ui, theme, &file.diff, web_url);
                 }
+            }
+            // The file's row at the top of the page (as far as the page goes).
+            if let Some(row) = target {
+                ui.scroll_to_rect(row, Some(Align::TOP));
             }
             if let Some(key) = toggle {
                 if !details.open_files.remove(&key) {
