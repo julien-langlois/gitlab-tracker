@@ -6,11 +6,11 @@ use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, Margin, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::icons::{self, Icon};
+use super::mr_page::display_of;
 use super::widgets::{
     activity, avatar, badge, bar, button, dot, icon_button, key_values, label_chip, mono, muted,
     section, semibold, spinner, split_person,
 };
-use super::mr_page::display_of;
 use super::{tones, GuiApp, InspectorSection, Page};
 use crate::actions::Action;
 use crate::app::{TimeLogState, TrackerView};

@@ -912,3 +912,7 @@ date	Merged	Mesclada
 	Nothing of this kind	Nada deste tipo
 	Merges, status changes and pipelines of every open project show up here.	Mesclagens, mudanças de status e pipelines de todos os projetos abertos aparecem aqui.
 @plural	{n} new|{n} new	{n} nova|{n} novas
+@plural	{n} file in conflict|{n} files in conflict	{n} arquivo em conflito|{n} arquivos em conflito
+	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	Deduzido do que cada lado mudou desde que se separaram: as mesmas linhas ou linhas vizinhas. O GitLab dá a lista exata ao resolver os conflitos.
+@plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	Também alterado nos dois lados, provavelmente mescla sozinho ({n}):|Também alterados nos dois lados, provavelmente mesclam sozinhos ({n}):
+	Show it in Changes	Ver em Alterações

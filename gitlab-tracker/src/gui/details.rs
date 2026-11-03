@@ -87,6 +87,8 @@ impl Details {
                     token: app.token.clone(),
                     project_id: app.project_id.clone(),
                     mr_id: mr.id.clone(),
+                    source_branch: mr.source_branch.clone(),
+                    target_branch: mr.target_branch.clone(),
                     sha: mr.sha.clone(),
                 };
                 let branches = app.branches.clone();
@@ -120,6 +122,12 @@ impl Details {
         if let Some(path) = first {
             self.open_files.insert((mr_id.to_string(), path));
         }
+    }
+
+    /// Unfolds `path` in the MR's Changes tab.
+    pub fn open_file(&mut self, mr_id: &str, path: &str) {
+        self.open_files
+            .insert((mr_id.to_string(), path.to_string()));
     }
 
     /// The MR's diff once read.

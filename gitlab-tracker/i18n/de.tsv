@@ -912,3 +912,7 @@ date	Merged	Gemergt
 	Nothing of this kind	Nichts dieser Art
 	Merges, status changes and pipelines of every open project show up here.	Merges, Statusänderungen und Pipelines aller offenen Projekte erscheinen hier.
 @plural	{n} new|{n} new	{n} neu|{n} neu
+@plural	{n} file in conflict|{n} files in conflict	{n} Datei im Konflikt|{n} Dateien im Konflikt
+	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	Ermittelt aus dem, was jede Seite seit der Abzweigung geändert hat: dieselben oder benachbarte Zeilen. GitLab listet sie genau auf, wenn Sie die Konflikte lösen.
+@plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	Auch auf beiden Seiten geändert, lässt sich wohl von selbst zusammenführen ({n}):|Auch auf beiden Seiten geändert, lassen sich wohl von selbst zusammenführen ({n}):
+	Show it in Changes	In Änderungen zeigen

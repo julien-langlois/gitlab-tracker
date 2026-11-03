@@ -18,7 +18,7 @@ use super::widgets::{
 use super::{details, tones, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::App;
-use crate::gitlab_detail::{Overview, PageData, Rule, Thread};
+use crate::gitlab_detail::{ConflictFile, Overview, PageData, Rule, Thread};
 use crate::i18n::{tf, tl, tn};
 use crate::models::{BranchPresence, Effort, GitlabMrState, MrStatus, PipelineState, TrackedMr};
 use crate::utils::{format_relative_date, matches_gitlab_username};
@@ -432,6 +432,8 @@ pub struct Check {
     pub why: String,
     /// GitLab logins shown after `what`, by name with their avatar.
     pub who: Vec<String>,
+    /// The files in conflict, under the conflict.
+    pub files: Vec<ConflictFile>,
 }
 
 /// What stands between the MR and its merge, worst first, then what is met.
@@ -440,6 +442,7 @@ pub fn checks(
     overview: Option<&Overview>,
     rules: Option<&[Rule]>,
     threads: Option<&[Thread]>,
+    conflicts: Option<&[ConflictFile]>,
 ) -> Vec<Check> {
     let status = overview.map_or("", |o| o.detailed_merge_status.as_str());
     let mut list = Vec::new();
@@ -449,6 +452,7 @@ pub fn checks(
             what,
             why,
             who: Vec::new(),
+            files: Vec::new(),
         })
     };
 
@@ -462,10 +466,11 @@ pub fn checks(
     }
     let conflict = overview.is_some_and(|o| o.has_conflicts)
         || mr.mergeability == MergeabilityStatus::Conflict;
+    let conflict_title = tf("Conflicts with {target}", &[("target", &mr.target_branch)]);
     if conflict {
         push(
             Verdict::Blocks,
-            tf("Conflicts with {target}", &[("target", &mr.target_branch)]),
+            conflict_title.clone(),
             tf(
                 "Rebase {source} on {target}, or merge {target} into it, and resolve them.",
                 &[("source", &mr.source_branch), ("target", &mr.target_branch)],
@@ -622,6 +627,9 @@ pub fn checks(
             String::new(),
         );
     }
+    if let Some(check) = list.iter_mut().find(|c| c.what == conflict_title) {
+        check.files = conflicts.unwrap_or_default().to_vec();
+    }
     // The approvers by name, next to "Approved by".
     if let Some(check) = list.iter_mut().find(|c| c.what == tl("Approved by")) {
         check.who = mr.approved_by.clone();
@@ -634,14 +642,17 @@ pub fn checks(
     list
 }
 
-fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
+/// The checks, worst first; the file in conflict picked, to show in Changes.
+fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Option<String> {
     let theme = g.theme;
     let list = checks(
         mr,
         data.and_then(|d| d.overview.as_ref()),
         data.and_then(|d| d.rules.as_deref()),
         data.and_then(|d| d.threads.as_deref().ok()),
+        data.and_then(|d| d.conflicts.as_deref()),
     );
+    let mut picked = None;
     let ready = !list.iter().any(|c| c.verdict != Verdict::Met);
     let title = if ready {
         tl("Nothing blocks the merge")
@@ -704,10 +715,201 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                         if !check.why.is_empty() {
                             ui.label(muted(&theme, &check.why));
                         }
+                        if !check.files.is_empty() {
+                            picked = conflict_files(ui, &theme, &mr.id, &check.files);
+                        }
                     });
                 });
             }
         });
+    picked
+}
+
+/// How many files in conflict show at once; the box scrolls past them.
+const CONFLICTS_SHOWN: usize = 10;
+
+/// The files in conflict, all of them, in a box that scrolls past
+/// [`CONFLICTS_SHOWN`]; the files changed on both sides that merge anyway, on
+/// one line. Returns the file clicked.
+fn conflict_files(
+    ui: &mut Ui,
+    theme: &Theme,
+    mr_id: &str,
+    files: &[ConflictFile],
+) -> Option<String> {
+    let (clashes, others): (Vec<&ConflictFile>, Vec<&ConflictFile>) =
+        files.iter().partition(|f| f.clash);
+    let mut picked = None;
+    ui.add_space(6.0);
+    if !clashes.is_empty() {
+        ui.label(
+            RichText::new(tn(
+                clashes.len() as u64,
+                "{n} file in conflict",
+                "{n} files in conflict",
+            ))
+            .font(fonts::medium(theme.text_size - 1.0))
+            .color(theme.palette.text_secondary),
+        )
+        .on_hover_text(tl(
+            "Worked out from what each side changed since they parted: the same or \
+             adjacent lines. GitLab lists them exactly when you resolve the conflicts.",
+        ));
+        ui.add_space(2.0);
+        let row = ui
+            .painter()
+            .layout_no_wrap("x".into(), conflict_font(theme), egui::Color32::WHITE)
+            .size()
+            .y
+            + ui.spacing().item_spacing.y;
+        egui::Frame::new()
+            .fill(theme.palette.raised)
+            .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
+            .corner_radius(CornerRadius::same(theme.radii.small))
+            .inner_margin(Margin::symmetric(10, 6))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                egui::ScrollArea::vertical()
+                    .id_salt(("mr page conflicts", mr_id))
+                    .max_height(CONFLICTS_SHOWN as f32 * row - ui.spacing().item_spacing.y)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        // Rows as tall as their text, not as a control.
+                        ui.spacing_mut().interact_size.y = 0.0;
+                        let tree = Folder::of(clashes.iter().map(|f| f.path.as_str()));
+                        picked = tree_rows(ui, theme, &tree, 0);
+                    });
+            });
+    }
+    if !others.is_empty() {
+        ui.add_space(4.0);
+        let names: Vec<&str> = others.iter().map(|f| file_name(&f.path)).collect();
+        ui.add(
+            egui::Label::new(muted(
+                theme,
+                format!(
+                    "{} {}",
+                    tn(
+                        others.len() as u64,
+                        "Also changed on both sides, likely merging on its own ({n}):",
+                        "Also changed on both sides, likely merging on their own ({n}):",
+                    ),
+                    names.join(", ")
+                ),
+            ))
+            .truncate(),
+        )
+        .on_hover_text(
+            others
+                .iter()
+                .map(|f| f.path.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+    }
+    picked
+}
+
+fn conflict_font(theme: &Theme) -> egui::FontId {
+    egui::FontId::monospace(theme.text_size - 1.5)
+}
+
+/// A file's last path segment.
+fn file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// The files in conflict as a tree: sub-folders, then files, each sorted.
+#[derive(Default)]
+struct Folder<'a> {
+    folders: std::collections::BTreeMap<&'a str, Folder<'a>>,
+    /// Full paths.
+    files: Vec<&'a str>,
+}
+
+impl<'a> Folder<'a> {
+    fn of(paths: impl Iterator<Item = &'a str>) -> Self {
+        let mut root = Folder::default();
+        for path in paths {
+            let mut folder = &mut root;
+            let mut parts: Vec<&str> = path.split('/').collect();
+            parts.pop();
+            for part in parts {
+                folder = folder.folders.entry(part).or_default();
+            }
+            folder.files.push(path);
+        }
+        root
+    }
+}
+
+/// Indentation of one tree level.
+const TREE_INDENT: f32 = 16.0;
+
+/// The rows of `folder` at `depth`: each sub-folder (a chain of folders that
+/// hold only one folder on one row, as `src/api/handlers`), its content under
+/// it, then the files. Returns the file clicked.
+fn tree_rows(ui: &mut Ui, theme: &Theme, folder: &Folder, depth: usize) -> Option<String> {
+    let mut picked = None;
+    for (name, mut sub) in &folder.folders {
+        let mut label = (*name).to_string();
+        while sub.files.is_empty() && sub.folders.len() == 1 {
+            let (next, deeper) = sub.folders.iter().next().expect("one folder");
+            label = format!("{label}/{next}");
+            sub = deeper;
+        }
+        tree_row(
+            ui,
+            theme,
+            depth,
+            &format!("{label}/"),
+            theme.palette.text_muted,
+        );
+        picked = tree_rows(ui, theme, sub, depth + 1).or(picked);
+    }
+    for path in &folder.files {
+        let response = tree_row(ui, theme, depth, file_name(path), theme.tones.red.fg)
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(format!("{path}\n{}", tl("Show it in Changes")));
+        if response.clicked() {
+            picked = Some((*path).to_string());
+        }
+    }
+    picked
+}
+
+/// One row of the tree, indented, with a guide for each level above it.
+fn tree_row(
+    ui: &mut Ui,
+    theme: &Theme,
+    depth: usize,
+    text: &str,
+    color: egui::Color32,
+) -> egui::Response {
+    let indent = depth as f32 * TREE_INDENT;
+    let mut job = egui::text::LayoutJob::single_section(
+        text.to_string(),
+        egui::TextFormat::simple(conflict_font(theme), color),
+    );
+    job.wrap = egui::text::TextWrapping::truncate_at_width(ui.available_width() - indent);
+    let response = ui
+        .horizontal(|ui| {
+            ui.add_space(indent);
+            ui.add(egui::Label::new(job).sense(Sense::click()))
+        })
+        .inner;
+    // The guides, through the item spacing so that they join from row to row.
+    let gap = ui.spacing().item_spacing.y;
+    let y = egui::Rangef::new(
+        response.rect.top() - gap / 2.0,
+        response.rect.bottom() + gap / 2.0,
+    );
+    for level in 0..depth {
+        let x = response.rect.left() - indent + level as f32 * TREE_INDENT + 4.0;
+        ui.painter()
+            .vline(x, y, egui::Stroke::new(1.0, theme.palette.border));
+    }
+    response
 }
 
 // ── Left: the work ───────────────────────────────────────────────────────────
@@ -715,7 +917,10 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
 fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     if mr.state == GitlabMrState::Opened {
-        blockers(g, ui, mr, data);
+        if let Some(path) = blockers(g, ui, mr, data) {
+            g.mr_tab = Tab::Changes;
+            g.details.open_file(&mr.id, &path);
+        }
         ui.add_space(16.0);
     }
     let threads = data.and_then(|d| d.threads.as_ref().ok());
@@ -1262,10 +1467,15 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
             response.on_hover_text(format!("@{handle}"));
         }
     };
-    let caption_width = [tl("Author"), tl("Assignee"), tl("Reviewers"), tl("Approved by")]
-        .iter()
-        .map(|c| text_width(ui, c, egui::FontId::proportional(theme.text_size)))
-        .fold(0.0, f32::max);
+    let caption_width = [
+        tl("Author"),
+        tl("Assignee"),
+        tl("Reviewers"),
+        tl("Approved by"),
+    ]
+    .iter()
+    .map(|c| text_width(ui, c, egui::FontId::proportional(theme.text_size)))
+    .fold(0.0, f32::max);
     let caption = |ui: &mut Ui, text: &str| {
         fixed(ui, caption_width, |ui| {
             ui.label(muted(&theme, text));
@@ -1900,6 +2110,7 @@ mod tests {
             data.overview.as_ref(),
             data.rules.as_deref(),
             data.threads.as_deref().ok(),
+            data.conflicts.as_deref(),
         );
         assert_eq!(list.first().map(|c| c.verdict), Some(Verdict::Blocks));
         assert!(list.iter().any(|c| c.what.contains("Conflicts")));

@@ -1243,7 +1243,36 @@ pub fn demo_page_data(mr: &crate::models::TrackedMr) -> crate::gitlab_detail::Pa
         .first()
         .map(|f| f.new_path.clone())
         .unwrap_or_default();
+    // A long list on purpose: the page must keep it short.
+    let conflicts = conflict.then(|| {
+        [
+            ("src/db/pool.rs", true),
+            ("src/db/pool/config.rs", true),
+            ("src/db/pool/health.rs", true),
+            ("src/db/migrations/2024_05_02_pool_settings.sql", true),
+            ("src/api/handlers/merge_requests.rs", true),
+            ("src/api/handlers/pipelines.rs", true),
+            ("src/config/defaults.toml", true),
+            ("tests/integration/pool_deadlock.rs", true),
+            ("Cargo.lock", true),
+            ("src/db/pool/metrics.rs", true),
+            ("src/db/pool/retry.rs", true),
+            ("src/api/middleware/timeout.rs", true),
+            ("tests/integration/pool_saturation.rs", true),
+            ("Cargo.toml", false),
+            ("src/db/mod.rs", false),
+            ("src/main.rs", false),
+            ("docs/operations/database.md", false),
+        ]
+        .into_iter()
+        .map(|(path, clash)| crate::gitlab_detail::ConflictFile {
+            path: path.into(),
+            clash,
+        })
+        .collect()
+    });
     PageData {
+        conflicts,
         overview: Some(Overview {
             detailed_merge_status: if !open {
                 "not_open".into()

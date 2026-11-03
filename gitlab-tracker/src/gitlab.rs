@@ -803,13 +803,7 @@ async fn fetch_approved_by(
         .ok()
         .filter(|r| r.status().is_success())?;
     let approvals: Approvals = res.json().await.ok()?;
-    Some(
-        approvals
-            .approved_by
-            .into_iter()
-            .map(|a| a.user)
-            .collect(),
-    )
+    Some(approvals.approved_by.into_iter().map(|a| a.user).collect())
 }
 
 /// Fetches the number of commits the source branch is behind the target branch.

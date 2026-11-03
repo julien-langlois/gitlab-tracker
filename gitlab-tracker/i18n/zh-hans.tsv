@@ -912,3 +912,7 @@ date	Merged	合并时间
 	Nothing of this kind	没有此类通知
 	Merges, status changes and pipelines of every open project show up here.	所有已打开项目的合并、状态变化和流水线都会显示在这里。
 @plural	{n} new|{n} new	{n} 条新通知
+@plural	{n} file in conflict|{n} files in conflict	{n} 个文件有冲突
+	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	根据双方分叉以来各自的改动推断：改动了相同或相邻的行。在 GitLab 中解决冲突时会给出确切列表。
+@plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	双方都改动过、但可能可以自动合并的文件（{n}）：
+	Show it in Changes	在“变更”中查看
