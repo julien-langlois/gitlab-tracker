@@ -756,6 +756,8 @@ fn folder_row(
             )
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // The row takes the click: its texts, selectable, would take it over them.
+    row.style_mut().interaction.selectable_labels = false;
     row.spacing_mut().item_spacing.x = 6.0;
     row.label(muted(theme, if folded { "▸" } else { "▾" }));
     let (inside, added, deleted) = folder_totals(folder, files);
@@ -837,6 +839,8 @@ fn file_row(
             )
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // The row takes the click: its texts, selectable, would take it over them.
+    row.style_mut().interaction.selectable_labels = false;
     row.spacing_mut().item_spacing.x = 6.0;
     if !columns {
         row.label(muted(theme, if open { "▾" } else { "▸" }));
@@ -851,44 +855,52 @@ fn file_row(
         ("M", theme.tones.amber.fg)
     };
     row.label(mono(mark, theme.text_size - 1.5).color(color));
-    row.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(mono(format!("−{deleted}"), theme.text_size - 2.0).color(theme.tones.red.fg));
-        ui.label(mono(format!("+{added}"), theme.text_size - 2.0).color(theme.tones.green.fg));
-        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            let path = if file.renamed_file {
-                format!("{} → {}", file.old_path, file.new_path)
-            } else {
-                file.new_path.clone()
-            };
-            // The file name stands out from its folder (given by the tree).
-            let (dir, name) = match path.rsplit_once('/') {
-                Some(_) if name_only => {
-                    let name = file.new_path.rsplit('/').next().unwrap_or(&file.new_path);
-                    (String::new(), name.to_string())
-                }
-                Some((dir, name)) => (format!("{dir}/"), name.to_string()),
-                None => (String::new(), path.clone()),
-            };
-            let mut job = egui::text::LayoutJob::default();
-            job.append(
-                &dir,
-                0.0,
-                egui::TextFormat::simple(
-                    egui::FontId::proportional(theme.text_size - 1.5),
-                    theme.palette.text_secondary,
-                ),
-            );
-            job.append(
-                &name,
-                0.0,
-                egui::TextFormat::simple(fonts::medium(theme.text_size - 1.0), theme.palette.text),
-            );
-            ui.add(egui::Label::new(job).truncate()).on_hover_text(path);
-        });
-    });
+    let path = row
+        .with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.label(mono(format!("−{deleted}"), theme.text_size - 2.0).color(theme.tones.red.fg));
+            ui.label(mono(format!("+{added}"), theme.text_size - 2.0).color(theme.tones.green.fg));
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                let path = if file.renamed_file {
+                    format!("{} → {}", file.old_path, file.new_path)
+                } else {
+                    file.new_path.clone()
+                };
+                // The file name stands out from its folder (given by the tree).
+                let (dir, name) = match path.rsplit_once('/') {
+                    Some(_) if name_only => {
+                        let name = file.new_path.rsplit('/').next().unwrap_or(&file.new_path);
+                        (String::new(), name.to_string())
+                    }
+                    Some((dir, name)) => (format!("{dir}/"), name.to_string()),
+                    None => (String::new(), path.clone()),
+                };
+                let mut job = egui::text::LayoutJob::default();
+                job.append(
+                    &dir,
+                    0.0,
+                    egui::TextFormat::simple(
+                        egui::FontId::proportional(theme.text_size - 1.5),
+                        theme.palette.text_secondary,
+                    ),
+                );
+                job.append(
+                    &name,
+                    0.0,
+                    egui::TextFormat::simple(
+                        fonts::medium(theme.text_size - 1.0),
+                        theme.palette.text,
+                    ),
+                );
+                ui.add(egui::Label::new(job).truncate());
+                path
+            })
+            .inner
+        })
+        .inner;
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(path)
         .clicked()
 }
 
@@ -1170,6 +1182,67 @@ mod snippet_tests {
 #[cfg(test)]
 mod split_tests {
     use super::*;
+
+    /// Whether a click at `x` from the left, mid-height, reaches a file's row.
+    fn row_clicked_at(x: f32) -> bool {
+        let theme = Theme::dark();
+        let ctx = egui::Context::default();
+        ctx.global_style_mut(|style| theme.apply_to_style(style));
+        let file = FileDiff {
+            old_path: "src/db/pool.rs".into(),
+            new_path: "src/db/pool.rs".into(),
+            new_file: false,
+            renamed_file: false,
+            deleted_file: false,
+            diff: "@@ -1 +1 @@\n-a\n+b\n".into(),
+        };
+        let mut row = egui::Rect::NOTHING;
+        let mut clicked = false;
+        let at = std::cell::Cell::new(egui::Pos2::ZERO);
+        for frame in 0..4 {
+            let pos = at.get();
+            let events = match frame {
+                1 => vec![egui::Event::PointerMoved(pos)],
+                2 => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                3 => vec![egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                _ => vec![],
+            };
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    Vec2::new(280.0, 200.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                let top = ui.cursor().min;
+                clicked |= file_row(ui, &theme, &file, false, 1, true, true);
+                row = egui::Rect::from_min_max(top, egui::pos2(top.x + 280.0, ui.cursor().min.y));
+            });
+            output.textures_delta.clear();
+            at.set(egui::pos2(row.left() + x, row.center().y));
+        }
+        clicked
+    }
+
+    #[test]
+    fn a_click_on_a_files_name_selects_it() {
+        // On the name, on the counts, and on the blank between them.
+        for x in [60.0, 255.0, 160.0] {
+            assert!(row_clicked_at(x), "click at {x} missed");
+        }
+    }
 
     #[test]
     fn split_rows_face_removed_lines_with_added_ones() {
