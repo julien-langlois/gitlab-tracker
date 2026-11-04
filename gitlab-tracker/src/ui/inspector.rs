@@ -415,11 +415,11 @@ pub fn render_safe_inspector_text(
 
     // Build the state badge using the same colour coding as the table column.
     // badge_label() centers the text to BADGE_WIDTH chars — no manual padding needed.
-    let (state_text, state_fg, state_bg) = match mr.state {
-        GitlabMrState::Opened => ("OPEN", Color::Black, Color::Green),
-        GitlabMrState::Merged => ("MERGED", Color::Black, Color::Magenta),
-        GitlabMrState::Closed => ("CLOSED", Color::Black, Color::Red),
-    };
+    let (state_text, state_fg, state_bg) = crate::ui::table::status_badge(match mr.state {
+        GitlabMrState::Opened => crate::status::StatusKind::Open,
+        GitlabMrState::Merged => crate::status::StatusKind::Merged,
+        GitlabMrState::Closed => crate::status::StatusKind::Closed,
+    });
     let state_label = badge_label(state_text);
 
     // Build the git clone command for the source branch — used in the [Y]ank hint.

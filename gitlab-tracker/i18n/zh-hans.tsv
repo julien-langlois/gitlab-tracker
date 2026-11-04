@@ -927,3 +927,17 @@ date	Merged	合并时间
 @plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	GitLab 中还有 {n} 个更早的流水线
 @plural	{n} failed|{n} failed	{n} 个失败
 @plural	{n} job|{n} jobs	{n} 个作业
+	CI running	CI 运行中
+	Retrying	重试中
+	CI must pass	CI 必须通过
+	Open threads	未解决的讨论
+	Conflict	冲突
+	Sync failed	同步失败
+	Not open	已不再打开
+	NOT OPEN	未打开
+	Click it again to show them all	再次点击显示全部
+	Click to show them all	点击显示全部
+	Click to show only these	点击仅显示这些
+	Status: {name}	状态：{name}
+@plural	{n} MR in the list|{n} MRs in the list	列表中有 {n} 个 MR
+@plural	{n} MR|{n} MRs	{n} 个 MR

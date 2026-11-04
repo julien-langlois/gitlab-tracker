@@ -43,23 +43,17 @@ pub fn badge_label(text: &str) -> String {
 /// the inspector so both always agree. `Unknown` (not fetched yet, e.g. right after
 /// startup) reads as a plain "OPEN" to avoid a wall of grey badges.
 pub fn mergeability_badge(mergeability: &MergeabilityStatus) -> (&'static str, Color, Color) {
-    match mergeability {
-        MergeabilityStatus::Mergeable => ("MERGEABLE", Color::Black, Color::LightGreen),
-        MergeabilityStatus::Conflict => ("CONFLICT", Color::White, Color::Red),
-        MergeabilityStatus::NeedsRebase => ("REBASE", Color::Black, Color::Yellow),
-        MergeabilityStatus::NotOpen => ("CLOSED", Color::Black, Color::Red),
-        MergeabilityStatus::Draft => ("DRAFT", Color::White, Color::Rgb(80, 80, 80)),
-        MergeabilityStatus::DiscussionsNotResolved => {
-            ("DISCUSSIONS", Color::Black, Color::LightMagenta)
-        }
-        MergeabilityStatus::CiMustPass => ("CI MUST PASS", Color::Black, Color::LightYellow),
-        MergeabilityStatus::CiStillRunning => ("CI STILL RUNNING", Color::Black, Color::Yellow),
-        MergeabilityStatus::NotApproved => ("NOT APPROVED", Color::Black, Color::LightRed),
-        MergeabilityStatus::RequestedChanges => ("REQUESTED CHANGES", Color::White, Color::Red),
-        MergeabilityStatus::Retrying => ("RETRYING", Color::Black, Color::Cyan),
-        MergeabilityStatus::SyncFailed => ("SYNC FAILED", Color::White, Color::Red),
-        MergeabilityStatus::Unknown => ("OPEN", Color::Black, Color::Green),
-    }
+    status_badge(crate::status::StatusKind::of(
+        GitlabMrState::Opened,
+        mergeability,
+    ))
+}
+
+/// Text, foreground and background of a status badge: black on the status's
+/// own color (see [`crate::status::StatusKind::rgb`]).
+pub fn status_badge(kind: crate::status::StatusKind) -> (&'static str, Color, Color) {
+    let (r, g, b) = kind.rgb();
+    (kind.badge(), Color::Black, Color::Rgb(r, g, b))
 }
 
 /// How far an open MR is behind its target branch — shared by the table column and
@@ -113,11 +107,7 @@ fn state_badge(
 ) -> Cell<'static> {
     // For non-open states the badge is static — mergeability is not meaningful.
     if *state != GitlabMrState::Opened {
-        let (text, fg, bg) = match state {
-            GitlabMrState::Merged => ("MERGED", Color::Black, Color::Magenta),
-            GitlabMrState::Closed => ("CLOSED", Color::Black, Color::Red),
-            GitlabMrState::Opened => unreachable!(),
-        };
+        let (text, fg, bg) = status_badge(crate::status::StatusKind::of(*state, mergeability));
         return Cell::from(Line::from(Span::styled(
             badge_label(text),
             Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
@@ -131,13 +121,10 @@ fn state_badge(
 
     // tick % 3 == 0: always show the base "OPEN" badge.
     if tick.is_multiple_of(3) {
-        return Cell::from(Line::from(Span::styled(
-            badge_label("OPEN"),
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )));
+        return Cell::from(Line::from(Span::styled(badge_label("OPEN"), {
+            let (_, fg, bg) = status_badge(crate::status::StatusKind::Open);
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)
+        })));
     }
 
     // tick % 3 == 2 and CI is running: show animated CI badge.
@@ -148,13 +135,10 @@ fn state_badge(
         } else {
             "CI PENDING"
         };
-        return Cell::from(Line::from(Span::styled(
-            badge_label(label),
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Rgb(180, 120, 0))
-                .add_modifier(Modifier::BOLD),
-        )));
+        return Cell::from(Line::from(Span::styled(badge_label(label), {
+            let (_, fg, bg) = status_badge(crate::status::StatusKind::CiRunning);
+            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)
+        })));
     }
 
     // tick % 3 == 1, or tick % 3 == 2 with no active CI: show the mergeability badge.

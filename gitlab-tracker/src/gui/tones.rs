@@ -1,9 +1,11 @@
 //! Which theme tone and label each MR state, branch cell and effort gets.
 
 use bevel_theme::{Tone, Tones};
+use egui::Color32;
 
 use crate::i18n::tl;
 use crate::models::{BranchPresence, Effort, GitlabMrState, MergeabilityStatus, PipelineState};
+use crate::status::StatusKind;
 
 /// Label and tone of the status badge. Open MRs show their mergeability, as the
 /// TUI badge does once its animation settles.
@@ -12,31 +14,42 @@ pub fn status(
     mergeability: &MergeabilityStatus,
     tones: &Tones,
 ) -> (&'static str, Tone) {
-    match state {
-        GitlabMrState::Merged => (tl("MERGED"), tones.purple),
-        GitlabMrState::Closed => (tl("CLOSED"), tones.gray),
-        GitlabMrState::Opened => {
-            let label = match mergeability {
-                // Shorter than the TUI badges, to fit the column.
-                MergeabilityStatus::RequestedChanges => "CHANGES REQ.",
-                MergeabilityStatus::CiStillRunning => "CI RUNNING",
-                _ => crate::ui::table::mergeability_badge(mergeability).0,
-            };
-            let tone = match mergeability {
-                MergeabilityStatus::Mergeable | MergeabilityStatus::Unknown => tones.green,
-                MergeabilityStatus::Conflict
-                | MergeabilityStatus::RequestedChanges
-                | MergeabilityStatus::SyncFailed
-                | MergeabilityStatus::NotOpen => tones.red,
-                MergeabilityStatus::NeedsRebase
-                | MergeabilityStatus::NotApproved
-                | MergeabilityStatus::CiMustPass => tones.amber,
-                MergeabilityStatus::CiStillRunning => tones.orange,
-                MergeabilityStatus::DiscussionsNotResolved => tones.blue,
-                MergeabilityStatus::Retrying => tones.teal,
-                MergeabilityStatus::Draft => tones.gray,
-            };
-            (tl(label), tone)
+    let kind = StatusKind::of(state, mergeability);
+    (tl(kind.short_badge()), status_tone(kind, tones))
+}
+
+/// The color of a status's swatch (its segment of the status bar, its dot):
+/// its own hue, a little deeper on a light background.
+pub fn status_swatch(kind: StatusKind, tones: &Tones) -> Color32 {
+    let (r, g, b) = kind.rgb();
+    let deeper = |c: u8| {
+        if tones.gray.bg.a() == 255 {
+            (c as f32 * 0.8) as u8
+        } else {
+            c
+        }
+    };
+    Color32::from_rgb(deeper(r), deeper(g), deeper(b))
+}
+
+/// The tone of a status: its own hue (see [`StatusKind::rgb`]), as the theme's
+/// tones are made: a tint of it under it on a dark background; on a light one,
+/// darkened over a pale tint.
+pub fn status_tone(kind: StatusKind, tones: &Tones) -> Tone {
+    // The light theme's tones are opaque, the dark one's tints.
+    let light = tones.gray.bg.a() == 255;
+    let (r, g, b) = kind.rgb();
+    if light {
+        let (fr, fg, fb) = kind.rgb_on_light();
+        let pale = |c: u8| (255.0 - (255.0 - c as f32) * 0.2) as u8;
+        Tone {
+            bg: Color32::from_rgb(pale(r), pale(g), pale(b)),
+            fg: Color32::from_rgb(fr, fg, fb),
+        }
+    } else {
+        Tone {
+            bg: Color32::from_rgba_unmultiplied(r, g, b, 41),
+            fg: Color32::from_rgb(r, g, b),
         }
     }
 }

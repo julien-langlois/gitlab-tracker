@@ -927,3 +927,17 @@ date	Merged	Fusionada
 @plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	{n} pipeline más antiguo en GitLab|{n} pipelines más antiguos en GitLab
 @plural	{n} failed|{n} failed	{n} fallido|{n} fallidos
 @plural	{n} job|{n} jobs	{n} job|{n} jobs
+	CI running	CI en curso
+	Retrying	Reintentando
+	CI must pass	CI obligatoria
+	Open threads	Hilos abiertos
+	Conflict	Conflicto
+	Sync failed	Sync fallida
+	Not open	Ya no abierta
+	NOT OPEN	NO ABIERTA
+	Click it again to show them all	Clic de nuevo para mostrar todas
+	Click to show them all	Clic para mostrar todas
+	Click to show only these	Clic para mostrar solo estas
+	Status: {name}	Estado: {name}
+@plural	{n} MR in the list|{n} MRs in the list	{n} MR en la lista|{n} MR en la lista
+@plural	{n} MR|{n} MRs	{n} MR|{n} MR

@@ -17,6 +17,7 @@ mod notify;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
+mod status;
 mod storage;
 mod ui;
 mod utils;

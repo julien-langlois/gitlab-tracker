@@ -955,6 +955,9 @@ impl GuiApp {
         }
         self.app.input.clear();
         self.app.milestone_suggestions.clear();
+        if self.app.status_pick.is_some() {
+            self.pending.push(Action::SetStatusPick(None));
+        }
         self.pending.push(Action::SetFilter {
             index,
             query: label.to_string(),
@@ -974,6 +977,9 @@ impl GuiApp {
                 index: 0,
                 query: String::new(),
             });
+            if self.app.status_pick.is_some() {
+                self.pending.push(Action::SetStatusPick(None));
+            }
             self.app.input.clear();
         }
         self.select_id = Some(id.to_string());

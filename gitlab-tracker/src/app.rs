@@ -379,6 +379,8 @@ pub struct App {
     pub focus: Option<Focus>,
     /// Set while the cockpit counts the MRs: they ignore `focus`.
     pub focus_suspended: bool,
+    /// The one status the list shows, picked on the status bar (window only).
+    pub status_pick: Option<crate::status::StatusKind>,
     /// State of the filter picker popup (cursor position + text input).
     /// Reset each time the popup is opened.
     pub filter_picker: FilterPickerState,
@@ -588,6 +590,7 @@ impl App {
             active_filter: ActiveFilter::default(),
             focus: None,
             focus_suspended: false,
+            status_pick: None,
             filter_picker: FilterPickerState::default(),
             filter_defs: collect_all_filters(),
             column_defs,
@@ -775,6 +778,64 @@ impl App {
         self.layout.inspector.reset();
     }
 
+    /// Shows only the MRs with the status `pick` (or all of them again with
+    /// `None`), on top of the filter, the focus and the search; selects the first.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub fn set_status_pick(&mut self, pick: Option<crate::status::StatusKind>) {
+        self.status_pick = pick;
+        self.visible_cache = None;
+        let any = self.visible_mrs().next().is_some();
+        self.table_state.select(any.then_some(0));
+        self.layout.inspector.reset();
+    }
+
+    /// How many MRs of the list have each status, in the status bar's order,
+    /// the statuses no MR has left out. Counted on the list as the filter, the
+    /// focus and the search leave it, whatever status is picked.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub fn status_counts(&self) -> Vec<(crate::status::StatusKind, usize)> {
+        let mut counts = std::collections::BTreeMap::new();
+        for mr in self.mrs.iter().filter(|mr| self.list_score(mr).is_some()) {
+            *counts
+                .entry(crate::status::StatusKind::of(mr.state, &mr.mergeability))
+                .or_insert(0) += 1;
+        }
+        counts.into_iter().collect()
+    }
+
+    /// The MR's search relevance when it passes the filter, the focus and the
+    /// search (not the status picked); `None` when it does not.
+    fn list_score(&self, mr: &TrackedMr) -> Option<f64> {
+        let in_focus = match &self.focus {
+            Some(focus) if !self.focus_suspended => focus.ids.contains(&mr.id),
+            _ => true,
+        };
+        if !in_focus || !self.filter_passes(mr) {
+            return None;
+        }
+        self.search_score(mr)
+    }
+
+    /// The MR's fuzzy relevance to the search typed (`Some(0.0)` with no search,
+    /// `None` when it does not match).
+    fn search_score(&self, mr: &TrackedMr) -> Option<f64> {
+        use crate::utils::fuzzy_score;
+        if self.input.is_empty() || self.input.starts_with('@') {
+            return Some(0.0);
+        }
+        let q = &self.input;
+        // Score against the most user-visible fields — highest wins.
+        [
+            fuzzy_score(q, &mr.title),
+            fuzzy_score(q, &mr.author),
+            mr.assignee.as_deref().and_then(|a| fuzzy_score(q, a)),
+            fuzzy_score(q, &mr.id),
+        ]
+        .into_iter()
+        .flatten()
+        .reduce(f64::max)
+    }
+
     /// Shows only the MRs of `focus` (or every MR again with `None`), on top of
     /// the active filter, and selects the first one.
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
@@ -828,50 +889,19 @@ impl App {
     /// Indices into `self.mrs` of the MRs that pass the active filter, fuzzy-ranked
     /// when a search query is active (see [`App::visible_mrs`]).
     fn compute_visible_indices(&self) -> Vec<usize> {
-        use crate::utils::fuzzy_score;
-
-        // Only apply fuzzy ranking when the user has typed a plain search query
+        // Only rank by relevance when the user has typed a plain search query
         // (not a `@milestone` autocomplete prefix).
-        let query = if !self.input.is_empty() && !self.input.starts_with('@') {
-            Some(self.input.clone())
-        } else {
-            None
-        };
-
-        // Collect filtered MRs with their fuzzy score so we can sort them.
-        // When no query is active we skip scoring entirely for efficiency.
+        let query = (!self.input.is_empty() && !self.input.starts_with('@')).then_some(());
         let mut scored: Vec<(f64, usize)> = self
             .mrs
             .iter()
             .enumerate()
-            .filter(|(_, mr)| self.filter_passes(mr))
-            .filter(|(_, mr)| match &self.focus {
-                Some(focus) if !self.focus_suspended => focus.ids.contains(&mr.id),
-                _ => true,
+            .filter(|(_, mr)| {
+                self.status_pick.is_none_or(|pick| {
+                    crate::status::StatusKind::of(mr.state, &mr.mergeability) == pick
+                })
             })
-            .filter_map(|(i, mr)| {
-                if let Some(ref q) = query {
-                    // Score against the most user-visible fields — highest wins.
-                    let best = [
-                        fuzzy_score(q, &mr.title),
-                        fuzzy_score(q, &mr.author),
-                        mr.assignee.as_deref().and_then(|a| fuzzy_score(q, a)),
-                        fuzzy_score(q, &mr.id),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .fold(f64::NEG_INFINITY, f64::max);
-
-                    if best == f64::NEG_INFINITY {
-                        None // No match on any field → exclude.
-                    } else {
-                        Some((best, i))
-                    }
-                } else {
-                    // No query — include all, preserve order (score unused).
-                    Some((0.0, i))
-                }
-            })
+            .filter_map(|(i, mr)| self.list_score(mr).map(|score| (score, i)))
             .collect();
 
         // Sort by descending relevance only when a query is active.
@@ -2414,6 +2444,29 @@ pub(crate) mod tests {
             mr.milestone = Some(*milestone).filter(|m| *m != "None").map(Into::into);
         }
         app
+    }
+
+    #[tokio::test]
+    async fn the_status_bar_counts_the_list_whatever_status_is_picked() {
+        use crate::status::StatusKind;
+        let mut app =
+            app_with_mrs(&[("fix a", "None"), ("fix b", "None"), ("feat c", "None")]).await;
+        app.mrs[0].mergeability = MergeabilityStatus::Conflict;
+        app.mrs[1].mergeability = MergeabilityStatus::Conflict;
+        app.mrs[2].mergeability = MergeabilityStatus::Mergeable;
+
+        app.set_status_pick(Some(StatusKind::Conflict));
+        assert_eq!(app.visible_mrs().count(), 2);
+        // The picked status narrows the list, not the counts.
+        assert_eq!(
+            app.status_counts(),
+            [(StatusKind::Mergeable, 1), (StatusKind::Conflict, 2)]
+        );
+
+        // The search narrows both.
+        app.input = "feat".into();
+        assert_eq!(app.status_counts(), [(StatusKind::Mergeable, 1)]);
+        assert_eq!(app.visible_mrs().count(), 0);
     }
 
     fn ids(app: &App) -> Vec<&str> {

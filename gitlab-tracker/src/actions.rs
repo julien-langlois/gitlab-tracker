@@ -50,6 +50,9 @@ pub enum Action {
         index: usize,
         query: String,
     },
+    /// Shows only the MRs of one status (or all again), from the status bar.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    SetStatusPick(Option<crate::status::StatusKind>),
     CycleSortColumn,
     /// Sorts by this column, or reverses the order when it is the current one.
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
@@ -178,6 +181,7 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
         }
 
         Action::SetFilter { index, query } => app.set_filter(index, query),
+        Action::SetStatusPick(pick) => app.set_status_pick(pick),
         Action::CycleSortColumn => app.cycle_sort_column(),
         Action::SortBy(column) => app.sort_by(column),
         Action::ToggleSortOrder => app.toggle_sort_order(),

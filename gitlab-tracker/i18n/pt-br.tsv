@@ -927,3 +927,17 @@ date	Merged	Mesclada
 @plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	{n} pipeline mais antigo no GitLab|{n} pipelines mais antigos no GitLab
 @plural	{n} failed|{n} failed	{n} com falha|{n} com falha
 @plural	{n} job|{n} jobs	{n} job|{n} jobs
+	CI running	CI em execução
+	Retrying	Tentando de novo
+	CI must pass	CI obrigatória
+	Open threads	Threads abertos
+	Conflict	Conflito
+	Sync failed	Sync falhou
+	Not open	Não mais aberta
+	NOT OPEN	NÃO ABERTA
+	Click it again to show them all	Clique de novo para mostrar todas
+	Click to show them all	Clique para mostrar todas
+	Click to show only these	Clique para mostrar só estas
+	Status: {name}	Status: {name}
+@plural	{n} MR in the list|{n} MRs in the list	{n} MR na lista|{n} MRs na lista
+@plural	{n} MR|{n} MRs	{n} MR|{n} MRs

@@ -927,3 +927,17 @@ date	Merged	Gemergt
 @plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	{n} ältere Pipeline in GitLab|{n} ältere Pipelines in GitLab
 @plural	{n} failed|{n} failed	{n} fehlgeschlagen|{n} fehlgeschlagen
 @plural	{n} job|{n} jobs	{n} Job|{n} Jobs
+	CI running	CI läuft
+	Retrying	Erneuter Versuch
+	CI must pass	CI muss bestehen
+	Open threads	Offene Threads
+	Conflict	Konflikt
+	Sync failed	Sync fehlgeschlagen
+	Not open	Nicht mehr offen
+	NOT OPEN	NICHT OFFEN
+	Click it again to show them all	Erneut klicken, um alle zu zeigen
+	Click to show them all	Klicken, um alle zu zeigen
+	Click to show only these	Klicken, um nur diese zu zeigen
+	Status: {name}	Status: {name}
+@plural	{n} MR in the list|{n} MRs in the list	{n} MR in der Liste|{n} MRs in der Liste
+@plural	{n} MR|{n} MRs	{n} MR|{n} MRs
