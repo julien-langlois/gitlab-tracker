@@ -172,6 +172,7 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let me = g.app.config.gitlab_username.clone();
     let mut pick = None;
+    let mut label_clicked = None;
     ui.horizontal_top(|ui| {
         let actions_width = 360.0_f32.min(ui.available_width() * 0.4);
         ui.allocate_ui_with_layout(
@@ -215,7 +216,9 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     ui.label(muted(&theme, "→"));
                     branch_chip(ui, &theme, &mr.target_branch, true);
                     for label in &mr.labels {
-                        label_chip(ui, &g.app, label, &theme);
+                        if label_chip(ui, &g.app, label, &theme).clicked() {
+                            label_clicked = Some(label.clone());
+                        }
                     }
                 });
             },
@@ -245,6 +248,9 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     });
     if let Some(action) = pick {
         g.pending.push(action);
+    }
+    if let Some(label) = label_clicked {
+        g.filter_by_label(&label);
     }
 }
 

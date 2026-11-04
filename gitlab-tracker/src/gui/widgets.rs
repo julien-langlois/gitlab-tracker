@@ -501,12 +501,18 @@ pub fn label_tone(app: &App, label: &str, theme: &Theme) -> Tone {
     super::tones::label(label, &theme.tones)
 }
 
-/// A label chip in its GitLab or configured colors, in monospace as in GitLab.
+/// A label chip in its GitLab or configured colors, in monospace as in GitLab;
+/// clickable: a click lists the MRs carrying that label.
 pub fn label_chip(ui: &mut Ui, app: &App, label: &str, theme: &Theme) -> egui::Response {
-    ui.add(
-        Chip::new(label, label_tone(app, label, theme))
-            .font(FontId::monospace(theme.text_size - 2.5)),
-    )
+    toned_label_chip(ui, theme, label, label_tone(app, label, theme))
+}
+
+/// [`label_chip`] in a tone already worked out.
+pub fn toned_label_chip(ui: &mut Ui, theme: &Theme, label: &str, tone: Tone) -> egui::Response {
+    ui.add(Chip::new(label, tone).font(FontId::monospace(theme.text_size - 2.5)))
+        .interact(egui::Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(crate::i18n::tl("Show only the MRs with this label"))
 }
 
 /// The activity badge of an MR (`Active`, `Slowing`, `Stale`), from the project's

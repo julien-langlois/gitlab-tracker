@@ -468,14 +468,20 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     anchor(g, ui, InspectorSection::Branches);
     branches(g, ui, mr);
     if !mr.labels.is_empty() {
+        let mut clicked = None;
         section(ui, &theme, tl("Labels"), |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::splat(6.0);
                 for label in &mr.labels {
-                    label_chip(ui, &g.app, label, &theme);
+                    if label_chip(ui, &g.app, label, &theme).clicked() {
+                        clicked = Some(label.clone());
+                    }
                 }
             });
         });
+        if let Some(label) = clicked {
+            g.filter_by_label(&label);
+        }
     }
     if g.app.tracker.is_some() || mr.linked_ticket.is_some() {
         anchor(g, ui, InspectorSection::Ticket);
@@ -1232,6 +1238,8 @@ pub(super) fn planning_body(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
             .as_deref()
             .filter(|d| !d.is_empty())
         {
+            // A blank line between the dates and the description.
+            ui.add_space(theme.text_size);
             ui.label(muted(theme, description));
         }
     }

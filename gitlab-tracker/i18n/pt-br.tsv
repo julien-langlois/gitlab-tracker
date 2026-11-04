@@ -916,3 +916,4 @@ date	Merged	Mesclada
 	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	Deduzido do que cada lado mudou desde que se separaram: as mesmas linhas ou linhas vizinhas. O GitLab dá a lista exata ao resolver os conflitos.
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	Também alterado nos dois lados, provavelmente mescla sozinho ({n}):|Também alterados nos dois lados, provavelmente mesclam sozinhos ({n}):
 	Show it in Changes	Ver em Alterações
+	Show only the MRs with this label	Mostrar só os MRs com este rótulo

@@ -7,7 +7,7 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use bevel_widgets::buttons::IconButton;
 use egui::{
-    Align, Color32, CornerRadius, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Ui,
+    Align, Color32, CornerRadius, Layout, Margin, Rect, RichText, Sense, Stroke, Ui,
     UiBuilder, Vec2,
 };
 
@@ -15,7 +15,7 @@ use super::icons::{self, Icon};
 use super::shell::Sizes;
 use super::widgets::{
     activity, avatar, badge, button, field, icon_button, icon_toggle, label_tone, mono, muted,
-    semibold, split_person, FieldLook,
+    semibold, split_person, toned_label_chip, FieldLook,
 };
 use super::{tones, GuiApp, Page};
 use crate::actions::Action;
@@ -970,6 +970,8 @@ enum RowAction {
     Then(usize, Action),
     /// Double click: the MR's page.
     Open(usize),
+    /// A click on a label chip: the MRs carrying that label alone.
+    Label(String),
 }
 
 fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
@@ -1156,6 +1158,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
             select(g, index);
             g.open_page(Page::Mr);
         }
+        Some(RowAction::Label(label)) => g.filter_by_label(&label),
         None => {}
     }
 }
@@ -1394,11 +1397,19 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
                 };
                 ui.label(mono(format!("!{}", r.id), theme.text_size - 1.0).color(color));
             }
-            Cell::Title => title_cell(&mut ui, theme, r, grid),
+            Cell::Title => {
+                if let Some(label) = title_cell(&mut ui, theme, r, grid) {
+                    action = Some(RowAction::Label(label));
+                }
+            }
             Cell::Status => {
                 badge(&mut ui, theme, r.status.0, r.status.1);
             }
-            Cell::Optional(col) => cell_content(&mut ui, theme, r, col),
+            Cell::Optional(col) => {
+                if let Some(label) = cell_content(&mut ui, theme, r, col) {
+                    action = Some(RowAction::Label(label));
+                }
+            }
             Cell::Branch(i) => {
                 if let Some(cell) = r.branches.get(i) {
                     branch_cell(&mut ui, theme, *cell);
@@ -1553,8 +1564,8 @@ fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
 }
 
 /// The title over "@author · when" and the scoped labels (unless they have
-/// their own column).
-fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) {
+/// their own column); returns the label clicked, if any.
+fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) -> Option<String> {
     if grid.row_height < ROW_HEIGHT {
         // Compact: the title alone, who and when on hover.
         let (name, _) = split_person(&r.author);
@@ -1568,8 +1579,9 @@ fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) {
                 .truncate(),
         )
         .on_hover_text(hint);
-        return;
+        return None;
     }
+    let mut clicked = None;
     let labels_column = grid
         .cells
         .iter()
@@ -1593,11 +1605,14 @@ fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) {
             if !labels_column {
                 ui.add_space(3.0);
                 for (label, tone) in r.labels.iter().filter(|(l, _)| l.contains("::")) {
-                    ui.add(Chip::new(label, *tone).font(FontId::monospace(theme.text_size - 2.5)));
+                    if toned_label_chip(ui, theme, label, *tone).clicked() {
+                        clicked = Some(label.clone());
+                    }
                 }
             }
         });
     });
+    clicked
 }
 
 /// Who last touched the MR and when: an initials avatar, the author's name (the
@@ -1638,7 +1653,9 @@ fn select(g: &mut GuiApp, index: usize) {
     }
 }
 
-fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) {
+/// One optional cell; returns the label clicked in the Labels one, if any.
+fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) -> Option<String> {
+    let mut clicked = None;
     match col {
         Col::Effort => match r.effort {
             Some((label, tone)) => {
@@ -1667,7 +1684,9 @@ fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) {
                 ui.label(muted(theme, "—"));
             }
             for (label, tone) in &r.labels {
-                ui.add(Chip::new(label, *tone).font(FontId::monospace(theme.text_size - 2.5)));
+                if toned_label_chip(ui, theme, label, *tone).clicked() {
+                    clicked = Some(label.clone());
+                }
             }
         }
         Col::Milestone => {
@@ -1703,6 +1722,7 @@ fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) {
             }
         },
     }
+    clicked
 }
 
 /// The right-click menu of a row; returns the action picked.

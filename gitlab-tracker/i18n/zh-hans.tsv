@@ -916,3 +916,4 @@ date	Merged	合并时间
 	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	根据双方分叉以来各自的改动推断：改动了相同或相邻的行。在 GitLab 中解决冲突时会给出确切列表。
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	双方都改动过、但可能可以自动合并的文件（{n}）：
 	Show it in Changes	在“变更”中查看
+	Show only the MRs with this label	仅显示带有此标签的 MR

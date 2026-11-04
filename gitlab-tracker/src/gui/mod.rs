@@ -938,6 +938,24 @@ impl GuiApp {
         self.open_page(Page::MergeRequests);
     }
 
+    /// Lists the MRs carrying `label` alone, on the merge requests page: the
+    /// label view on it (one label at a time), no cockpit focus, no search.
+    fn filter_by_label(&mut self, label: &str) {
+        let Some(index) = self.app.filter_defs.iter().position(|def| def.id == "label") else {
+            return;
+        };
+        if self.app.focus.is_some() {
+            self.next_focus = Some(None);
+        }
+        self.app.input.clear();
+        self.app.milestone_suggestions.clear();
+        self.pending.push(Action::SetFilter {
+            index,
+            query: label.to_string(),
+        });
+        self.open_page(Page::MergeRequests);
+    }
+
     /// Deep link: the MR `id`'s page, out of the view or search that hides it
     /// (merged MRs hidden by `M` stay hidden: [`GuiApp::apply_picks`] says so).
     fn open_mr(&mut self, id: &str) {

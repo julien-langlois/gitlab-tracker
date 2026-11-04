@@ -916,3 +916,4 @@ date	Merged	Fusionada
 	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	Deducido de lo que cada lado cambió desde que se separaron: las mismas líneas o líneas contiguas. GitLab da la lista exacta al resolver los conflictos.
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	También cambiado en ambos lados, probablemente se fusiona solo ({n}):|También cambiados en ambos lados, probablemente se fusionan solos ({n}):
 	Show it in Changes	Verlo en Cambios
+	Show only the MRs with this label	Mostrar solo las MR con esta etiqueta

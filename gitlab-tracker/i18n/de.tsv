@@ -916,3 +916,4 @@ date	Merged	Gemergt
 	Worked out from what each side changed since they parted: the same or adjacent lines. GitLab lists them exactly when you resolve the conflicts.	Ermittelt aus dem, was jede Seite seit der Abzweigung geändert hat: dieselben oder benachbarte Zeilen. GitLab listet sie genau auf, wenn Sie die Konflikte lösen.
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	Auch auf beiden Seiten geändert, lässt sich wohl von selbst zusammenführen ({n}):|Auch auf beiden Seiten geändert, lassen sich wohl von selbst zusammenführen ({n}):
 	Show it in Changes	In Änderungen zeigen
+	Show only the MRs with this label	Nur die MRs mit diesem Label anzeigen
