@@ -77,6 +77,10 @@ pub struct Details {
     open_logs: HashSet<u64>,
     /// The file to bring into view once the Changes tab shows it.
     scroll_to: Option<(String, String)>,
+    /// The file whose patch the MR page shows beside its tree, by MR id.
+    selected: HashMap<String, String>,
+    /// The MR page's patches with the old file beside the new one, not unified.
+    side_by_side: bool,
 }
 
 impl Details {
@@ -154,6 +158,7 @@ impl Details {
     pub fn open_file(&mut self, mr_id: &str, path: &str) {
         let key = (mr_id.to_string(), path.to_string());
         self.open_files.insert(key.clone());
+        self.selected.insert(mr_id.to_string(), path.to_string());
         self.scroll_to = Some(key);
     }
 
@@ -246,8 +251,9 @@ impl Details {
     }
 }
 
-/// The "Changes" section's body: a button until loaded, then the files (as a
-/// tree of folders when `tree`, as in GitLab), each unfolding to its patch.
+/// The "Changes" section's body: a button until loaded, then the files, each
+/// unfolding to its patch; or, when `tree`, as in GitLab, the files as a tree of
+/// folders on the left and the patch of the one selected on the right.
 pub fn changes(
     details: &mut Details,
     app: &App,
@@ -289,6 +295,72 @@ pub fn changes(
                 .scroll_to
                 .take_if(|(id, _)| id == mr_id)
                 .map(|(_, path)| path);
+            if tree {
+                let by_path: HashMap<&str, &FileDiff> =
+                    files.iter().map(|f| (f.new_path.as_str(), f)).collect();
+                let root = Folder::of(files.iter().map(|f| f.new_path.as_str()));
+                // The file selected, else the tree's first.
+                let selected = details
+                    .selected
+                    .get(mr_id)
+                    .map(String::as_str)
+                    .filter(|path| by_path.contains_key(path))
+                    .or_else(|| first_file(&root));
+                let shown = selected.and_then(|path| by_path.get(path).copied());
+                let top = ui.cursor().min;
+                let open: HashSet<(String, String)> = selected
+                    .map(|path| (mr_id.to_string(), path.to_string()))
+                    .into_iter()
+                    .collect();
+                let mut list = FileList {
+                    mr_id,
+                    web_url,
+                    open_files: &open,
+                    scroll_to: None,
+                    toggle: &mut toggle,
+                    target: &mut target,
+                    columns: true,
+                };
+                let width = ui.available_width();
+                let left = (width * 0.28).clamp(200.0, 300.0);
+                if let Some(side_by_side) = changes_header(ui, theme, files, details.side_by_side) {
+                    details.side_by_side = side_by_side;
+                }
+                let side_by_side = details.side_by_side;
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = 14.0;
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(left, 0.0),
+                        Layout::top_down(Align::Min),
+                        |ui| {
+                            ui.set_width(left);
+                            ui.spacing_mut().item_spacing.y = 2.0;
+                            list.folder(ui, theme, &root, &by_path, "", 0);
+                        },
+                    );
+                    ui.vertical(|ui| {
+                        ui.set_width(ui.available_width());
+                        match shown {
+                            Some(file) if side_by_side => {
+                                split_patch(ui, theme, &file.diff, web_url)
+                            }
+                            Some(file) => patch(ui, theme, &file.diff, web_url),
+                            None => {}
+                        }
+                    });
+                });
+                // A file asked from elsewhere: the two columns at the top of the page.
+                if scroll_to.is_some() {
+                    ui.scroll_to_rect(
+                        egui::Rect::from_min_max(top, egui::pos2(top.x + width, top.y + 40.0)),
+                        Some(Align::TOP),
+                    );
+                }
+                if let Some((_, path)) = toggle {
+                    details.selected.insert(mr_id.to_string(), path);
+                }
+                return;
+            }
             let mut list = FileList {
                 mr_id,
                 web_url,
@@ -296,17 +368,10 @@ pub fn changes(
                 scroll_to: scroll_to.as_deref(),
                 toggle: &mut toggle,
                 target: &mut target,
+                columns: false,
             };
-            if tree {
-                let by_path: HashMap<&str, &FileDiff> =
-                    files.iter().map(|f| (f.new_path.as_str(), f)).collect();
-                let root = Folder::of(files.iter().map(|f| f.new_path.as_str()));
-                ui.spacing_mut().item_spacing.y = 2.0;
-                list.folder(ui, theme, &root, &by_path, "", 0);
-            } else {
-                for file in files {
-                    list.file(ui, theme, file, 0, false);
-                }
+            for file in files {
+                list.file(ui, theme, file, 0, false);
             }
             // The file's row at the top of the page (as far as the page goes).
             if let Some(row) = target {
@@ -321,6 +386,256 @@ pub fn changes(
     }
 }
 
+/// Over the tree and its patch: how many files and lines changed, then the
+/// choice between the unified patch and the side-by-side one (`Some` when
+/// another is clicked).
+fn changes_header(
+    ui: &mut Ui,
+    theme: &Theme,
+    files: &[FileDiff],
+    side_by_side: bool,
+) -> Option<bool> {
+    let (added, deleted) = files.iter().fold((0, 0), |(a, d), file| {
+        let (fa, fd) = count(&file.diff);
+        (a + fa, d + fd)
+    });
+    let mut chosen = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.label(muted(
+            theme,
+            tn(files.len() as u64, "{n} file", "{n} files"),
+        ));
+        ui.label(muted(theme, "·"));
+        ui.label(mono(format!("+{added}"), theme.text_size - 2.0).color(theme.tones.green.fg));
+        ui.label(mono(format!("−{deleted}"), theme.text_size - 2.0).color(theme.tones.red.fg));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            // Right to left: the last first.
+            for (mode, label) in [(true, tl("Side by side")), (false, tl("Unified"))] {
+                let on = mode == side_by_side;
+                let text = if on {
+                    RichText::new(label)
+                        .font(fonts::medium(theme.text_size - 1.0))
+                        .color(theme.palette.text)
+                } else {
+                    RichText::new(label)
+                        .size(theme.text_size - 1.0)
+                        .color(theme.palette.text_muted)
+                };
+                let response = ui.add(egui::Label::new(text).sense(Sense::click()));
+                if !on {
+                    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if response.clicked() {
+                        chosen = Some(mode);
+                    }
+                }
+                if mode {
+                    ui.label(muted(theme, "·"));
+                }
+            }
+        });
+    });
+    ui.add_space(6.0);
+    chosen
+}
+
+/// A row of a side-by-side patch: a hunk's header across both sides, or a line
+/// of the old file (number and text) beside one of the new file, either missing.
+enum SplitRow<'a> {
+    Hunk(&'a str),
+    Lines(Option<(u32, &'a str)>, Option<(u32, &'a str)>),
+}
+
+/// The rows of a side-by-side patch: unchanged lines face themselves; the lines
+/// removed face the lines added in their place, one for one.
+fn split_rows(diff: &str) -> Vec<SplitRow<'_>> {
+    let mut rows = Vec::new();
+    let (mut old, mut new) = (0u32, 0u32);
+    let mut removed: Vec<(u32, &str)> = Vec::new();
+    let mut added: Vec<(u32, &str)> = Vec::new();
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("@@") {
+            flush_split(&mut rows, &mut removed, &mut added);
+            // `@@ -a,b +c,d @@`: the hunk's old lines start at a, its new at c.
+            let start = |sign: char| {
+                rest.split_whitespace()
+                    .find_map(|part| part.strip_prefix(sign))
+                    .and_then(|range| range.split(',').next())
+                    .and_then(|n| n.parse().ok())
+                    .unwrap_or(0)
+            };
+            old = start('-');
+            new = start('+');
+            rows.push(SplitRow::Hunk(line));
+        } else if line.starts_with("---") || line.starts_with("+++") || line.starts_with('\\') {
+            continue;
+        } else if let Some(text) = line.strip_prefix('-') {
+            removed.push((old, text));
+            old += 1;
+        } else if let Some(text) = line.strip_prefix('+') {
+            added.push((new, text));
+            new += 1;
+        } else {
+            flush_split(&mut rows, &mut removed, &mut added);
+            let text = line.strip_prefix(' ').unwrap_or(line);
+            rows.push(SplitRow::Lines(Some((old, text)), Some((new, text))));
+            old += 1;
+            new += 1;
+        }
+    }
+    flush_split(&mut rows, &mut removed, &mut added);
+    rows
+}
+
+/// The lines removed facing the lines added in their place, one for one.
+fn flush_split<'a>(
+    rows: &mut Vec<SplitRow<'a>>,
+    removed: &mut Vec<(u32, &'a str)>,
+    added: &mut Vec<(u32, &'a str)>,
+) {
+    for i in 0..removed.len().max(added.len()) {
+        rows.push(SplitRow::Lines(
+            removed.get(i).copied(),
+            added.get(i).copied(),
+        ));
+    }
+    removed.clear();
+    added.clear();
+}
+
+/// A patch with the old file on the left and the new one on the right, their
+/// lines numbered, coloured as in GitLab.
+fn split_patch(ui: &mut Ui, theme: &Theme, diff: &str, web_url: &str) {
+    if diff.trim().is_empty() {
+        ui.label(muted(
+            theme,
+            tl("No text diff: a binary file, or too large for GitLab to show."),
+        ));
+        return;
+    }
+    let rows = split_rows(diff);
+    let font = egui::FontId::monospace(theme.text_size - 2.5);
+    let (height, digit) = ui.fonts_mut(|f| (f.row_height(&font) + 2.0, f.glyph_width(&font, '0')));
+    let widest = rows
+        .iter()
+        .filter_map(|row| match row {
+            SplitRow::Lines(a, b) => Some(a.map_or(0, |l| l.0).max(b.map_or(0, |l| l.0))),
+            SplitRow::Hunk(_) => None,
+        })
+        .max()
+        .unwrap_or(0);
+    let gutter = (widest.to_string().len() as f32 + 1.5) * digit;
+    let green = theme.tones.green;
+    let red = theme.tones.red;
+    let missing = theme.palette.text_muted.gamma_multiply(0.06);
+    egui::Frame::new()
+        .fill(theme.palette.chrome)
+        .corner_radius(CornerRadius::same(theme.radii.medium))
+        .inner_margin(Margin::symmetric(0, 4))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let width = ui.available_width();
+            let half = (width / 2.0).floor();
+            for row in rows.iter().take(PATCH_LINES) {
+                let (rect, response) =
+                    ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+                let painter = ui.painter_at(rect);
+                let y = rect.center().y;
+                match row {
+                    SplitRow::Hunk(text) => {
+                        painter.text(
+                            egui::pos2(rect.left() + 8.0, y),
+                            egui::Align2::LEFT_CENTER,
+                            text.replace('\t', "    "),
+                            font.clone(),
+                            theme.tones.blue.fg,
+                        );
+                    }
+                    SplitRow::Lines(left, right) => {
+                        // Changed on a side when the other does not hold it alike.
+                        let changed = left.map(|l| l.1) != right.map(|r| r.1);
+                        let mut full = String::new();
+                        for (side, line, tone, sign) in
+                            [(0.0, left, red, '-'), (half, right, green, '+')]
+                        {
+                            let cell = egui::Rect::from_min_size(
+                                egui::pos2(rect.left() + side, rect.top()),
+                                Vec2::new(if side == 0.0 { half } else { width - half }, height),
+                            );
+                            let Some((number, text)) = line else {
+                                painter.rect_filled(cell, 0.0, missing);
+                                continue;
+                            };
+                            let color = if changed {
+                                painter.rect_filled(cell, 0.0, tone.bg);
+                                tone.fg
+                            } else {
+                                theme.palette.text_secondary
+                            };
+                            painter.text(
+                                egui::pos2(cell.left() + gutter, y),
+                                egui::Align2::RIGHT_CENTER,
+                                number.to_string(),
+                                font.clone(),
+                                theme.palette.text_muted,
+                            );
+                            let text = text.replace('\t', "    ");
+                            let marked = if changed { sign } else { ' ' };
+                            ui.painter_at(cell.with_min_x(cell.left() + gutter + 6.0))
+                                .text(
+                                    egui::pos2(cell.left() + gutter + 8.0, y),
+                                    egui::Align2::LEFT_CENTER,
+                                    format!("{marked} {text}"),
+                                    font.clone(),
+                                    color,
+                                );
+                            if !full.is_empty() {
+                                full.push('\n');
+                            }
+                            full.push_str(&format!("{marked}{number:>5}  {text}"));
+                        }
+                        // The line in full, should it be cut.
+                        if response.hovered() && !full.is_empty() {
+                            response.on_hover_text(egui::RichText::new(full).font(font.clone()));
+                        }
+                    }
+                }
+            }
+            // The line between both sides.
+            let frame = ui.min_rect();
+            ui.painter().vline(
+                frame.left() + half,
+                frame.y_range(),
+                egui::Stroke::new(1.0, theme.palette.border),
+            );
+        });
+    if rows.len() > PATCH_LINES {
+        ui.horizontal(|ui| {
+            ui.label(muted(
+                theme,
+                tn(
+                    (rows.len() - PATCH_LINES) as u64,
+                    "{n} more line",
+                    "{n} more lines",
+                ),
+            ));
+            ui.hyperlink_to(tl("in GitLab"), format!("{web_url}/diffs"));
+        });
+    }
+    ui.add_space(4.0);
+}
+
+/// The tree's first file, in the order it is drawn.
+fn first_file<'a>(folder: &Folder<'a>) -> Option<&'a str> {
+    folder
+        .folders
+        .values()
+        .find_map(first_file)
+        .or_else(|| folder.files.first().copied())
+}
+
 /// Indentation of one level of the Changes tree.
 const TREE_INDENT: f32 = 18.0;
 
@@ -333,15 +648,18 @@ struct FileList<'a> {
     scroll_to: Option<&'a str>,
     toggle: &'a mut Option<(String, String)>,
     target: &'a mut Option<egui::Rect>,
+    /// The tree beside the patch: a file is selected (`open_files`), not unfolded.
+    columns: bool,
 }
 
 impl FileList<'_> {
-    /// A file's row, `depth` deep, and its patch when unfolded.
+    /// A file's row, `depth` deep, and its patch when unfolded (beside the tree,
+    /// in columns).
     fn file(&mut self, ui: &mut Ui, theme: &Theme, file: &FileDiff, depth: usize, name_only: bool) {
         let key = (self.mr_id.to_string(), file.new_path.clone());
         let open = self.open_files.contains(&key);
         let top = ui.cursor().min;
-        if file_row(ui, theme, file, open, depth, name_only) {
+        if file_row(ui, theme, file, open, depth, name_only, self.columns) {
             *self.toggle = Some(key);
         }
         if self.scroll_to == Some(file.new_path.as_str()) {
@@ -350,7 +668,7 @@ impl FileList<'_> {
                 egui::pos2(ui.max_rect().right(), ui.cursor().min.y),
             ));
         }
-        if open {
+        if open && !self.columns {
             let indent = depth as f32 * TREE_INDENT;
             let top = ui.cursor().min.y;
             ui.horizontal_top(|ui| {
@@ -485,7 +803,7 @@ fn folder_totals(folder: &Folder, files: &HashMap<&str, &FileDiff>) -> (usize, u
 }
 
 /// A file: its state, its path (its name alone in the tree) and its counts;
-/// `true` when clicked.
+/// `true` when clicked. In `columns`, `open` is the file selected (no chevron).
 fn file_row(
     ui: &mut Ui,
     theme: &Theme,
@@ -493,13 +811,21 @@ fn file_row(
     open: bool,
     depth: usize,
     name_only: bool,
+    columns: bool,
 ) -> bool {
     let (added, deleted) = count(&file.diff);
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 24.0), Sense::click());
-    if response.hovered() {
+    if columns && open {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(4), theme.palette.raised);
+    } else if response.hovered() {
+        let fill = if columns {
+            theme.palette.raised.gamma_multiply(0.6)
+        } else {
+            theme.palette.raised
+        };
+        ui.painter().rect_filled(rect, CornerRadius::same(4), fill);
     }
     guides(ui, theme, depth, rect.top() - 1.0, rect.bottom() + 1.0);
     let indent = depth as f32 * TREE_INDENT;
@@ -512,7 +838,9 @@ fn file_row(
             .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = 6.0;
-    row.label(muted(theme, if open { "▾" } else { "▸" }));
+    if !columns {
+        row.label(muted(theme, if open { "▾" } else { "▸" }));
+    }
     let (mark, color) = if file.new_file {
         ("A", theme.tones.green.fg)
     } else if file.deleted_file {
@@ -836,5 +1164,32 @@ mod snippet_tests {
         assert_eq!(snippet(diff, 12, 2), ["-old", "+new", "+more"]);
         assert_eq!(snippet(diff, 10, 3), ["@@ -10,3 +10,4 @@ fn a()", " ctx"]);
         assert!(snippet(diff, 40, 2).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod split_tests {
+    use super::*;
+
+    #[test]
+    fn split_rows_face_removed_lines_with_added_ones() {
+        let diff = "@@ -10,3 +10,4 @@ fn f\n a\n-b\n+B\n+C\n c\n";
+        let rows: Vec<_> = split_rows(diff)
+            .into_iter()
+            .map(|row| match row {
+                SplitRow::Hunk(_) => None,
+                SplitRow::Lines(old, new) => Some((old, new)),
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            vec![
+                None,
+                Some((Some((10, "a")), Some((10, "a")))),
+                Some((Some((11, "b")), Some((11, "B")))),
+                Some((None, Some((12, "C")))),
+                Some((Some((12, "c")), Some((13, "c")))),
+            ]
+        );
     }
 }

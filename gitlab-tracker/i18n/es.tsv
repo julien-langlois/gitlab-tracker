@@ -767,6 +767,8 @@ date	Merged	Fusionada
 	Show the changed files	Mostrar los archivos modificados
 	Reading the diff…	Leyendo el diff…
 	No file changed.	Ningún archivo modificado.
+	Unified	Unificado
+	Side by side	Lado a lado
 	No text diff: a binary file, or too large for GitLab to show.	Sin diff de texto: un archivo binario o demasiado grande para que GitLab lo muestre.
 	in GitLab	en GitLab
 	Hide the log	Ocultar el log

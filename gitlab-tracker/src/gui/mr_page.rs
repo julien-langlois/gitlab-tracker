@@ -940,6 +940,7 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         ui.add_space(16.0);
     }
     let threads = data.and_then(|d| d.threads.as_ref().ok());
+    let changed_files = g.details.diff(&mr.id).map(<[_]>::len);
     let tabs = [
         (
             Tab::Discussions,
@@ -949,9 +950,12 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         (
             Tab::Changes,
             tl("Changes"),
-            mr.diff_stats
-                .as_ref()
-                .map_or(0, |s| s.files_changed as usize),
+            // The diff read, else GitLab's count (the demo has none).
+            changed_files.unwrap_or_else(|| {
+                mr.diff_stats
+                    .as_ref()
+                    .map_or(0, |s| s.files_changed as usize)
+            }),
         ),
         (Tab::Commits, tl("Commits"), mr.commits.len()),
         (Tab::Pipelines, tl("Pipelines"), mr.pipelines.len()),

@@ -767,6 +767,8 @@ date	Merged	Gemergt
 	Show the changed files	Geänderte Dateien anzeigen
 	Reading the diff…	Diff wird gelesen…
 	No file changed.	Keine Datei geändert.
+	Unified	Einheitlich
+	Side by side	Nebeneinander
 	No text diff: a binary file, or too large for GitLab to show.	Kein Text-Diff: eine Binärdatei oder zu groß für GitLab.
 	in GitLab	in GitLab
 	Hide the log	Log ausblenden

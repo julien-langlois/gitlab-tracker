@@ -767,6 +767,8 @@ date	Merged	Mesclada
 	Show the changed files	Mostrar os arquivos alterados
 	Reading the diff…	Lendo o diff…
 	No file changed.	Nenhum arquivo alterado.
+	Unified	Unificado
+	Side by side	Lado a lado
 	No text diff: a binary file, or too large for GitLab to show.	Sem diff de texto: um arquivo binário ou grande demais para o GitLab mostrar.
 	in GitLab	no GitLab
 	Hide the log	Ocultar o log

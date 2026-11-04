@@ -767,6 +767,8 @@ date	Merged	合并时间
 	Show the changed files	显示变更的文件
 	Reading the diff…	正在读取差异…
 	No file changed.	没有文件变更。
+	Unified	合并视图
+	Side by side	并排视图
 	No text diff: a binary file, or too large for GitLab to show.	无文本差异：二进制文件，或过大 GitLab 无法显示。
 	in GitLab	在 GitLab 中
 	Hide the log	隐藏日志
