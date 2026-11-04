@@ -322,33 +322,65 @@ pub fn changes(
                     columns: true,
                 };
                 let width = ui.available_width();
-                let left = (width * 0.28).clamp(200.0, 300.0);
+                // As wide as the widest row (long paths, as Drupal's), within
+                // reason: the patch keeps most of the width.
+                let left = tree_width(ui, theme, &root, &by_path, 0).clamp(
+                    TREE_MIN_WIDTH,
+                    (width * 0.42).clamp(TREE_MIN_WIDTH, TREE_MAX_WIDTH),
+                );
                 if let Some(side_by_side) = changes_header(ui, theme, files, details.side_by_side) {
                     details.side_by_side = side_by_side;
                 }
                 let side_by_side = details.side_by_side;
-                ui.horizontal_top(|ui| {
-                    ui.spacing_mut().item_spacing.x = 14.0;
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(left, 0.0),
-                        Layout::top_down(Align::Min),
-                        |ui| {
-                            ui.set_width(left);
-                            ui.spacing_mut().item_spacing.y = 2.0;
-                            list.folder(ui, theme, &root, &by_path, "", 0);
-                        },
-                    );
-                    ui.vertical(|ui| {
-                        ui.set_width(ui.available_width());
-                        match shown {
-                            Some(file) if side_by_side => {
-                                split_patch(ui, theme, &file.diff, web_url)
-                            }
-                            Some(file) => patch(ui, theme, &file.diff, web_url),
-                            None => {}
-                        }
-                    });
-                });
+                let origin = ui.cursor().min;
+                let mut tree_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(egui::Rect::from_min_size(
+                            origin,
+                            Vec2::new(left, f32::INFINITY),
+                        ))
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                tree_ui.set_width(left);
+                tree_ui.spacing_mut().item_spacing.y = 2.0;
+                list.folder(&mut tree_ui, theme, &root, &by_path, "", 0);
+                let tree_height = tree_ui.min_rect().height();
+                // The patch sticks to the top of the view while the tree scrolls
+                // by, as far as the tree goes: a file picked low in a long tree
+                // shows at once. Placed with its height of the last frame.
+                let height_id = egui::Id::unique(("changes patch height", mr_id));
+                let last_height = ui.data(|d| d.get_temp::<f32>(height_id)).unwrap_or(0.0);
+                let offset = (ui.clip_rect().top() + STICKY_GAP - origin.y)
+                    .clamp(0.0, (tree_height - last_height).max(0.0));
+                let patch_left = origin.x + left + COLUMN_GAP;
+                let mut patch_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(egui::Rect::from_min_size(
+                            egui::pos2(patch_left, origin.y + offset),
+                            Vec2::new(width - left - COLUMN_GAP, f32::INFINITY),
+                        ))
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                patch_ui.set_width(width - left - COLUMN_GAP);
+                match shown {
+                    Some(file) if side_by_side => {
+                        split_patch(&mut patch_ui, theme, &file.diff, web_url)
+                    }
+                    Some(file) => patch(&mut patch_ui, theme, &file.diff, web_url),
+                    None => {}
+                }
+                let patch_height = patch_ui.min_rect().height();
+                if (patch_height - last_height).abs() > 0.5 {
+                    ui.data_mut(|d| d.insert_temp(height_id, patch_height));
+                    ui.ctx().request_repaint();
+                }
+                ui.allocate_rect(
+                    egui::Rect::from_min_size(
+                        origin,
+                        Vec2::new(width, tree_height.max(offset + patch_height)),
+                    ),
+                    Sense::hover(),
+                );
                 // A file asked from elsewhere: the two columns at the top of the page.
                 if scroll_to.is_some() {
                     ui.scroll_to_rect(
@@ -625,6 +657,63 @@ fn split_patch(ui: &mut Ui, theme: &Theme, diff: &str, web_url: &str) {
         });
     }
     ui.add_space(4.0);
+}
+
+/// Narrowest and widest the Changes tree goes beside its patch.
+const TREE_MIN_WIDTH: f32 = 240.0;
+const TREE_MAX_WIDTH: f32 = 520.0;
+/// Between the tree and its patch.
+const COLUMN_GAP: f32 = 14.0;
+/// Between the top of the view and the patch stuck to it.
+const STICKY_GAP: f32 = 8.0;
+
+/// The width the rows of `folder` (`depth` deep) take untruncated, as
+/// [`FileList::folder`] draws them.
+fn tree_width(
+    ui: &Ui,
+    theme: &Theme,
+    folder: &Folder,
+    files: &HashMap<&str, &FileDiff>,
+    depth: usize,
+) -> f32 {
+    let text = |text: String, font: egui::FontId| {
+        ui.fonts_mut(|f| f.layout_no_wrap(text, font, Color32::WHITE).size().x)
+    };
+    // The row's margins and the spaces between its parts.
+    let indent = depth as f32 * TREE_INDENT + 8.0;
+    let mut widest: f32 = 0.0;
+    for (name, mut sub) in &folder.folders {
+        let mut label = (*name).to_string();
+        while sub.files.is_empty() && sub.folders.len() == 1 {
+            let (next, deeper) = sub.folders.iter().next().expect("one folder");
+            label = format!("{label}/{next}");
+            sub = deeper;
+        }
+        let chevron = text("▾".into(), egui::FontId::proportional(theme.text_size)) + 6.0;
+        let row =
+            indent + chevron + text(format!("{label}/"), fonts::medium(theme.text_size - 1.0));
+        widest = widest
+            .max(row)
+            .max(tree_width(ui, theme, sub, files, depth + 1));
+    }
+    for path in &folder.files {
+        let Some(file) = files.get(path) else {
+            continue;
+        };
+        let (added, deleted) = count(&file.diff);
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let counts = egui::FontId::monospace(theme.text_size - 2.0);
+        let row = indent
+            + text("M".into(), egui::FontId::monospace(theme.text_size - 1.5))
+            + 6.0
+            + text(name.to_string(), fonts::medium(theme.text_size - 1.0))
+            + 10.0
+            + text(format!("+{added}"), counts.clone())
+            + 4.0
+            + text(format!("−{deleted}"), counts);
+        widest = widest.max(row);
+    }
+    widest
 }
 
 /// The tree's first file, in the order it is drawn.
