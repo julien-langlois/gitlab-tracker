@@ -917,3 +917,13 @@ date	Merged	合并时间
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	双方都改动过、但可能可以自动合并的文件（{n}）：
 	Show it in Changes	在“变更”中查看
 	Show only the MRs with this label	仅显示带有此标签的 MR
+	GitLab listed no job for it.	GitLab 未列出任何作业。
+	Full log	完整日志
+	The whole log, in GitLab	在 GitLab 中查看完整日志
+	Click to read its log	点击查看其日志
+	Manual	手动
+	Scheduled	已计划
+	The last {n} lines, read once from GitLab for this session	最后 {n} 行，本次会话从 GitLab 读取一次
+@plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	GitLab 中还有 {n} 个更早的流水线
+@plural	{n} failed|{n} failed	{n} 个失败
+@plural	{n} job|{n} jobs	{n} 个作业

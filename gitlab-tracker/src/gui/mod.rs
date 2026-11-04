@@ -15,6 +15,7 @@ mod inspector;
 mod keys;
 mod markdown;
 mod mr_page;
+mod mr_pipelines;
 mod palette;
 mod prefs;
 mod promote;
@@ -941,7 +942,12 @@ impl GuiApp {
     /// Lists the MRs carrying `label` alone, on the merge requests page: the
     /// label view on it (one label at a time), no cockpit focus, no search.
     fn filter_by_label(&mut self, label: &str) {
-        let Some(index) = self.app.filter_defs.iter().position(|def| def.id == "label") else {
+        let Some(index) = self
+            .app
+            .filter_defs
+            .iter()
+            .position(|def| def.id == "label")
+        else {
             return;
         };
         if self.app.focus.is_some() {

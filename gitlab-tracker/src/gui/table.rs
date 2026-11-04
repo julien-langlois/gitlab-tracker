@@ -7,8 +7,8 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use bevel_widgets::buttons::IconButton;
 use egui::{
-    Align, Color32, CornerRadius, Layout, Margin, Rect, RichText, Sense, Stroke, Ui,
-    UiBuilder, Vec2,
+    Align, Color32, CornerRadius, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder,
+    Vec2,
 };
 
 use super::icons::{self, Icon};

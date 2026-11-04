@@ -10,6 +10,7 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Ui, Vec2};
 
+use super::details::Folder;
 use super::icons::Icon;
 use super::inspector::{self, Step};
 use super::widgets::{
@@ -841,30 +842,6 @@ fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// The files in conflict as a tree: sub-folders, then files, each sorted.
-#[derive(Default)]
-struct Folder<'a> {
-    folders: std::collections::BTreeMap<&'a str, Folder<'a>>,
-    /// Full paths.
-    files: Vec<&'a str>,
-}
-
-impl<'a> Folder<'a> {
-    fn of(paths: impl Iterator<Item = &'a str>) -> Self {
-        let mut root = Folder::default();
-        for path in paths {
-            let mut folder = &mut root;
-            let mut parts: Vec<&str> = path.split('/').collect();
-            parts.pop();
-            for part in parts {
-                folder = folder.folders.entry(part).or_default();
-            }
-            folder.files.push(path);
-        }
-        root
-    }
-}
-
 /// Indentation of one tree level.
 const TREE_INDENT: f32 = 16.0;
 
@@ -1020,10 +997,18 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
             Tab::Discussions => discussions(g, ui, mr, data),
             Tab::Changes => {
                 g.details.open_first_file(&mr.id);
-                details::changes(&mut g.details, &g.app, ui, &theme, &mr.id, &mr.web_url)
+                details::changes(
+                    &mut g.details,
+                    &g.app,
+                    ui,
+                    &theme,
+                    &mr.id,
+                    &mr.web_url,
+                    true,
+                )
             }
             Tab::Commits => commits(g, ui, mr),
-            Tab::Pipelines => inspector::pipelines(g, ui, mr, false),
+            Tab::Pipelines => super::mr_pipelines::tab(g, ui, mr),
         }
     });
 }

@@ -14,9 +14,33 @@ use crate::gitlab::FileDiff;
 use crate::i18n::{tf, tl, tn};
 
 /// Lines of a job's log kept.
-const LOG_LINES: usize = 60;
+const LOG_LINES: usize = 200;
 /// Lines of a file's patch drawn; the rest is one click away in GitLab.
 const PATCH_LINES: usize = 400;
+
+/// Files as a tree (the conflicts', the changes'): sub-folders, then files, each sorted.
+#[derive(Default)]
+pub struct Folder<'a> {
+    pub folders: std::collections::BTreeMap<&'a str, Folder<'a>>,
+    /// Full paths.
+    pub files: Vec<&'a str>,
+}
+
+impl<'a> Folder<'a> {
+    pub fn of(paths: impl Iterator<Item = &'a str>) -> Self {
+        let mut root = Folder::default();
+        for path in paths {
+            let mut folder = &mut root;
+            let mut parts: Vec<&str> = path.split('/').collect();
+            parts.pop();
+            for part in parts {
+                folder = folder.folders.entry(part).or_default();
+            }
+            folder.files.push(path);
+        }
+        root
+    }
+}
 
 /// A fetch: running, done, or failed with its message.
 pub enum Fetch<T> {
@@ -177,6 +201,35 @@ impl Details {
     }
 }
 
+/// A job's log as [`Details::job_log`] gives it.
+pub enum LogView<'a> {
+    Loading,
+    Ready(&'a str),
+    Failed(&'a str),
+}
+
+impl Details {
+    /// Reads the job's log once (again after a failure, at most once a frame).
+    pub fn ensure_log(&mut self, app: &App, job_id: u64, ctx: &egui::Context) {
+        if !self.logs.contains_key(&job_id) {
+            self.load_log(app, job_id, ctx);
+        }
+    }
+
+    /// The job's log, once [`Details::ensure_log`] asked for it.
+    pub fn job_log(&mut self, job_id: u64) -> LogView<'_> {
+        let Some(fetch) = self.logs.get_mut(&job_id) else {
+            return LogView::Loading;
+        };
+        fetch.poll();
+        match fetch {
+            Fetch::Loading(_) => LogView::Loading,
+            Fetch::Ready(text) => LogView::Ready(text),
+            Fetch::Failed(error) => LogView::Failed(error),
+        }
+    }
+}
+
 impl Details {
     /// Development aid (debug builds): the demo's diff and log, unfolded.
     #[cfg(debug_assertions)]
@@ -193,8 +246,8 @@ impl Details {
     }
 }
 
-/// The "Changes" section's body: a button until loaded, then the files, each
-/// unfolding to its patch.
+/// The "Changes" section's body: a button until loaded, then the files (as a
+/// tree of folders when `tree`, as in GitLab), each unfolding to its patch.
 pub fn changes(
     details: &mut Details,
     app: &App,
@@ -202,6 +255,7 @@ pub fn changes(
     theme: &Theme,
     mr_id: &str,
     web_url: &str,
+    tree: bool,
 ) {
     if let Some(fetch) = details.diffs.get_mut(mr_id) {
         fetch.poll();
@@ -235,21 +289,23 @@ pub fn changes(
                 .scroll_to
                 .take_if(|(id, _)| id == mr_id)
                 .map(|(_, path)| path);
-            for file in files {
-                let key = (mr_id.to_string(), file.new_path.clone());
-                let open = details.open_files.contains(&key);
-                let top = ui.cursor().min;
-                if file_row(ui, theme, file, open) {
-                    toggle = Some(key.clone());
-                }
-                if scroll_to.as_deref() == Some(file.new_path.as_str()) {
-                    target = Some(egui::Rect::from_min_max(
-                        top,
-                        egui::pos2(ui.max_rect().right(), ui.cursor().min.y),
-                    ));
-                }
-                if open {
-                    patch(ui, theme, &file.diff, web_url);
+            let mut list = FileList {
+                mr_id,
+                web_url,
+                open_files: &details.open_files,
+                scroll_to: scroll_to.as_deref(),
+                toggle: &mut toggle,
+                target: &mut target,
+            };
+            if tree {
+                let by_path: HashMap<&str, &FileDiff> =
+                    files.iter().map(|f| (f.new_path.as_str(), f)).collect();
+                let root = Folder::of(files.iter().map(|f| f.new_path.as_str()));
+                ui.spacing_mut().item_spacing.y = 2.0;
+                list.folder(ui, theme, &root, &by_path, "", 0);
+            } else {
+                for file in files {
+                    list.file(ui, theme, file, 0, false);
                 }
             }
             // The file's row at the top of the page (as far as the page goes).
@@ -265,8 +321,179 @@ pub fn changes(
     }
 }
 
-/// A file: its state, its path and its counts; `true` when clicked.
-fn file_row(ui: &mut Ui, theme: &Theme, file: &FileDiff, open: bool) -> bool {
+/// Indentation of one level of the Changes tree.
+const TREE_INDENT: f32 = 18.0;
+
+/// What drawing the Changes files needs and gives back: the files unfolded, the
+/// one to scroll to; the one clicked and where the scrolled-to one is.
+struct FileList<'a> {
+    mr_id: &'a str,
+    web_url: &'a str,
+    open_files: &'a HashSet<(String, String)>,
+    scroll_to: Option<&'a str>,
+    toggle: &'a mut Option<(String, String)>,
+    target: &'a mut Option<egui::Rect>,
+}
+
+impl FileList<'_> {
+    /// A file's row, `depth` deep, and its patch when unfolded.
+    fn file(&mut self, ui: &mut Ui, theme: &Theme, file: &FileDiff, depth: usize, name_only: bool) {
+        let key = (self.mr_id.to_string(), file.new_path.clone());
+        let open = self.open_files.contains(&key);
+        let top = ui.cursor().min;
+        if file_row(ui, theme, file, open, depth, name_only) {
+            *self.toggle = Some(key);
+        }
+        if self.scroll_to == Some(file.new_path.as_str()) {
+            *self.target = Some(egui::Rect::from_min_max(
+                top,
+                egui::pos2(ui.max_rect().right(), ui.cursor().min.y),
+            ));
+        }
+        if open {
+            let indent = depth as f32 * TREE_INDENT;
+            let top = ui.cursor().min.y;
+            ui.horizontal_top(|ui| {
+                ui.add_space(indent);
+                ui.vertical(|ui| patch(ui, theme, &file.diff, self.web_url));
+            });
+            guides(ui, theme, depth, top, ui.cursor().min.y);
+        }
+    }
+
+    /// The rows of `folder` (at `path`, `depth` deep): each sub-folder (a chain
+    /// of folders holding only one folder on one row, as `src/api/graphql`),
+    /// foldable, its content under it; then its files.
+    fn folder(
+        &mut self,
+        ui: &mut Ui,
+        theme: &Theme,
+        folder: &Folder,
+        files: &HashMap<&str, &FileDiff>,
+        path: &str,
+        depth: usize,
+    ) {
+        for (name, mut sub) in &folder.folders {
+            let mut label = (*name).to_string();
+            while sub.files.is_empty() && sub.folders.len() == 1 {
+                let (next, deeper) = sub.folders.iter().next().expect("one folder");
+                label = format!("{label}/{next}");
+                sub = deeper;
+            }
+            let full = format!("{path}{label}/");
+            let id = egui::Id::unique(("changes folder", self.mr_id, &full));
+            let folded = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+            if folder_row(ui, theme, &label, folded, depth, sub, files) {
+                ui.data_mut(|d| d.insert_temp(id, !folded));
+            }
+            if !folded {
+                self.folder(ui, theme, sub, files, &full, depth + 1);
+            }
+        }
+        for path in &folder.files {
+            if let Some(file) = files.get(path) {
+                self.file(ui, theme, file, depth, true);
+            }
+        }
+    }
+}
+
+/// The tree's guides, one per level above `depth`, from `top` to `bottom`.
+fn guides(ui: &Ui, theme: &Theme, depth: usize, top: f32, bottom: f32) {
+    let left = ui.max_rect().left();
+    for level in 0..depth {
+        let x = left + level as f32 * TREE_INDENT + 10.0;
+        ui.painter().vline(
+            x,
+            egui::Rangef::new(top, bottom),
+            egui::Stroke::new(1.0, theme.palette.text_muted.gamma_multiply(0.45)),
+        );
+    }
+}
+
+/// A folder of the tree: its chevron, its name, what changed under it; `true`
+/// when clicked.
+fn folder_row(
+    ui: &mut Ui,
+    theme: &Theme,
+    label: &str,
+    folded: bool,
+    depth: usize,
+    folder: &Folder,
+    files: &HashMap<&str, &FileDiff>,
+) -> bool {
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 24.0), Sense::click());
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(4), theme.palette.raised);
+    }
+    guides(ui, theme, depth, rect.top() - 1.0, rect.bottom() + 1.0);
+    let indent = depth as f32 * TREE_INDENT;
+    let mut row = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(
+                rect.shrink2(Vec2::new(4.0, 0.0))
+                    .with_min_x(rect.left() + 4.0 + indent),
+            )
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    row.spacing_mut().item_spacing.x = 6.0;
+    row.label(muted(theme, if folded { "▸" } else { "▾" }));
+    let (inside, added, deleted) = folder_totals(folder, files);
+    row.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        if folded {
+            ui.label(mono(format!("−{deleted}"), theme.text_size - 2.0).color(theme.tones.red.fg));
+            ui.label(mono(format!("+{added}"), theme.text_size - 2.0).color(theme.tones.green.fg));
+        }
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.add(
+                egui::Label::new(
+                    RichText::new(format!("{label}/"))
+                        .font(fonts::medium(theme.text_size - 1.0))
+                        .color(theme.palette.text_secondary),
+                )
+                .truncate(),
+            );
+            if folded {
+                ui.label(muted(theme, tn(inside as u64, "{n} file", "{n} files")));
+            }
+        });
+    });
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl(if folded { "Unfold" } else { "Fold" }))
+        .clicked()
+}
+
+/// Files under `folder`, at any depth, and the lines they add and remove.
+fn folder_totals(folder: &Folder, files: &HashMap<&str, &FileDiff>) -> (usize, usize, usize) {
+    let mut totals = (0, 0, 0);
+    for path in &folder.files {
+        if let Some(file) = files.get(path) {
+            let (a, d) = count(&file.diff);
+            totals = (totals.0 + 1, totals.1 + a, totals.2 + d);
+        }
+    }
+    for sub in folder.folders.values() {
+        let (n, a, d) = folder_totals(sub, files);
+        totals = (totals.0 + n, totals.1 + a, totals.2 + d);
+    }
+    totals
+}
+
+/// A file: its state, its path (its name alone in the tree) and its counts;
+/// `true` when clicked.
+fn file_row(
+    ui: &mut Ui,
+    theme: &Theme,
+    file: &FileDiff,
+    open: bool,
+    depth: usize,
+    name_only: bool,
+) -> bool {
     let (added, deleted) = count(&file.diff);
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 24.0), Sense::click());
@@ -274,9 +501,14 @@ fn file_row(ui: &mut Ui, theme: &Theme, file: &FileDiff, open: bool) -> bool {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(4), theme.palette.raised);
     }
+    guides(ui, theme, depth, rect.top() - 1.0, rect.bottom() + 1.0);
+    let indent = depth as f32 * TREE_INDENT;
     let mut row = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(rect.shrink2(Vec2::new(4.0, 0.0)))
+            .max_rect(
+                rect.shrink2(Vec2::new(4.0, 0.0))
+                    .with_min_x(rect.left() + 4.0 + indent),
+            )
             .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = 6.0;
@@ -301,8 +533,12 @@ fn file_row(ui: &mut Ui, theme: &Theme, file: &FileDiff, open: bool) -> bool {
             } else {
                 file.new_path.clone()
             };
-            // The file name stands out from its folder.
+            // The file name stands out from its folder (given by the tree).
             let (dir, name) = match path.rsplit_once('/') {
+                Some(_) if name_only => {
+                    let name = file.new_path.rsplit('/').next().unwrap_or(&file.new_path);
+                    (String::new(), name.to_string())
+                }
                 Some((dir, name)) => (format!("{dir}/"), name.to_string()),
                 None => (String::new(), path.clone()),
             };
@@ -556,7 +792,7 @@ pub fn log(details: &mut Details, ui: &mut Ui, theme: &Theme, job_id: u64) {
 }
 
 /// Whether a log line tells what failed.
-fn is_failure(line: &str) -> bool {
+pub fn is_failure(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
     [
         "error",

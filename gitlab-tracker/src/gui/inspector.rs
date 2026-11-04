@@ -463,7 +463,15 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     }
     anchor(g, ui, InspectorSection::Changes);
     section(ui, &theme, tl("Changes"), |ui| {
-        super::details::changes(&mut g.details, &g.app, ui, &theme, &mr.id, &mr.web_url);
+        super::details::changes(
+            &mut g.details,
+            &g.app,
+            ui,
+            &theme,
+            &mr.id,
+            &mr.web_url,
+            false,
+        );
     });
     anchor(g, ui, InspectorSection::Branches);
     branches(g, ui, mr);
@@ -489,7 +497,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     }
     threads(ui, &theme, mr);
     anchor(g, ui, InspectorSection::Pipelines);
-    pipelines(g, ui, mr, true);
+    pipelines(g, ui, mr);
     anchor(g, ui, InspectorSection::Description);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
@@ -1050,12 +1058,12 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
 
 /// The latest pipelines; the jobs of the newest one by stage.
 /// The pipelines, as an inspector section (`framed`) or bare, in the MR page's tab.
-pub(super) fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, framed: bool) {
+fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = &g.theme.clone();
     let demo = g.app.read_only;
     let can_read_logs =
         |job: &crate::models::PipelineJob| job.status == "failed" && (job.id != 0 || demo);
-    let mut body = |ui: &mut Ui| {
+    let body = |ui: &mut Ui| {
         if mr.pipelines.is_empty() {
             ui.label(muted(theme, tl("No pipeline yet.")));
             return;
@@ -1122,11 +1130,7 @@ pub(super) fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, framed: boo
             }
         }
     };
-    if framed {
-        section(ui, theme, tl("Pipelines"), body);
-    } else {
-        body(ui);
-    }
+    section(ui, theme, tl("Pipelines"), body);
 }
 
 fn job_color(theme: &Theme, status: &str) -> egui::Color32 {

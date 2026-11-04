@@ -917,3 +917,13 @@ date	Merged	Fusionnée
 @plural	Also changed on both sides, likely merging on its own ({n}):|Also changed on both sides, likely merging on their own ({n}):	Aussi modifié des deux côtés, devrait fusionner sans conflit ({n}) :|Aussi modifiés des deux côtés, devraient fusionner sans conflit ({n}) :
 	Show it in Changes	L'afficher dans Modifications
 	Show only the MRs with this label	N'afficher que les MR avec ce label
+	GitLab listed no job for it.	GitLab n'y liste aucun job.
+	Full log	Log complet
+	The whole log, in GitLab	Le log entier, dans GitLab
+	Click to read its log	Cliquer pour lire son log
+	Manual	Manuel
+	Scheduled	Programmé
+	The last {n} lines, read once from GitLab for this session	Les {n} dernières lignes, lues une fois sur GitLab pour cette session
+@plural	{n} older pipeline in GitLab|{n} older pipelines in GitLab	{n} pipeline plus ancien dans GitLab|{n} pipelines plus anciens dans GitLab
+@plural	{n} failed|{n} failed	{n} en échec|{n} en échec
+@plural	{n} job|{n} jobs	{n} job|{n} jobs
