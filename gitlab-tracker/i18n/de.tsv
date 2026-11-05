@@ -931,7 +931,6 @@ date	Merged	Gemergt
 	Not on {from} yet · {n}	Noch nicht auf {from} · {n}
 	Every tracked MR reached it.	Alle verfolgten MRs sind dort angekommen.
 	Already on {to} · {n}	Bereits auf {to} · {n}
-	Show them	Anzeigen
 	Ready for {to}	Bereit für {to}
 	Not merged	Nicht gemergt
 	Waiting for my review	Warten auf mein Review
@@ -1115,6 +1114,8 @@ date	Merged	Gemergt
 	Each merge once: the commits it brought are counted, not listed.	Jeder Merge einmal: seine Commits werden gezählt, nicht aufgelistet.
 	merged by {who} {when}, not tracked	gemergt von {who} {when}, nicht verfolgt
 	pushed by {who} {when}	gepusht von {who} {when}
+	Show fewer	Weniger anzeigen
+	Nothing reached {to} yet.	Noch nichts hat {to} erreicht.
 @plural	{n} commit behind|{n} commits behind	{n} Commit zurück|{n} Commits zurück
 @plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	Rebasen: {n} Commit hinter dem Ziel|Rebasen: {n} Commits hinter dem Ziel
 @plural	Answer {n} thread|Answer {n} threads	{n} Thread beantworten|{n} Threads beantworten
@@ -1127,3 +1128,4 @@ date	Merged	Gemergt
 @plural	No data over the last {n} week|No data over the last {n} weeks	Keine Daten in der letzten {n} Woche|Keine Daten in den letzten {n} Wochen
 @plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	{n} MR von {from} nach {to} bringen|{n} MRs von {from} nach {to} bringen
 @plural	To ship the {n} selected MR|To ship the {n} selected MRs	Den {n} ausgewählten MR ausliefern|Die {n} ausgewählten MRs ausliefern
+@plural	Show {n} more|Show {n} more	{n} weitere anzeigen|{n} weitere anzeigen

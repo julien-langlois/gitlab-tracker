@@ -45,6 +45,8 @@ pub struct Row {
     /// Since when it is on `from`: its arrival there, else its merge when
     /// `from` is its target.
     pub on_from_since: Option<chrono::DateTime<chrono::Utc>>,
+    /// Since when it is on `to`, when known.
+    pub on_to_since: Option<chrono::DateTime<chrono::Utc>>,
     /// Its ticket: id and status.
     pub ticket: Option<(String, String)>,
     pub effort: Option<crate::models::Effort>,
@@ -109,6 +111,15 @@ pub fn rows(app: &App, from: &str, to: &str) -> Vec<Row> {
                     .then(|| mr.merged_at.as_deref().and_then(parse))
                     .flatten()
             });
+        let on_to_since = app
+            .branch_arrivals
+            .get(&(mr.id.clone(), to.to_string()))
+            .copied()
+            .or_else(|| {
+                (mr.target_branch == to)
+                    .then(|| mr.merged_at.as_deref().and_then(parse))
+                    .flatten()
+            });
         rows.push(Row {
             id: mr.id.clone(),
             title: mr.title.clone(),
@@ -121,6 +132,7 @@ pub fn rows(app: &App, from: &str, to: &str) -> Vec<Row> {
             mergeability: mr.mergeability,
             merged_at: mr.merged_at.clone(),
             on_from_since,
+            on_to_since,
             ticket: mr
                 .linked_ticket
                 .as_ref()
@@ -218,7 +230,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         .copied()
         .filter(|r| r.state != GitlabMrState::Merged)
         .collect();
-    let done: Vec<&Row> = all.iter().filter(|r| r.stage == Stage::Done).collect();
+    let mut done: Vec<&Row> = all.iter().filter(|r| r.stage == Stage::Done).collect();
+    // The latest arrivals first: what just went out.
+    done.sort_by_key(|r| std::cmp::Reverse(r.on_to_since));
     // The ready MRs ticked for the release (all unless unticked).
     let picked: Vec<&Row> = ready
         .iter()
@@ -344,7 +358,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
 
             // The commands on the left, what is not ready on the right.
             let wide = ui.available_width() >= 900.0;
-            let side = 340.0;
+            // The side cards take a good share: they list many MRs.
+            let side = (ui.available_width() * 0.4).clamp(380.0, 560.0);
             let commands_card = |ui: &mut Ui, copied: &mut Option<Copied>, action: &mut Option<Action>| {
                 let commands = commands(&picked, &from, &to);
                 theme.card_frame().show(ui, |ui| {
@@ -430,7 +445,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         ui.label(muted(&theme, tl("Every merged MR reached it.")));
                     }
                     for r in &merged_upstream {
-                        if compact_row(ui, &theme, r, r.merged_at.as_deref().map(|at| {
+                        if side_row(ui, &theme, r, None, r.merged_at.as_deref().map(|at| {
                             tf("merged {when}", &[("when", &crate::utils::format_relative_date(at))])
                         })) {
                             *show = Some(r.id.clone());
@@ -453,45 +468,47 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     if open_upstream.is_empty() {
                         ui.label(muted(&theme, tl("Every tracked MR reached it.")));
                     }
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(4.0, 4.0);
-                        for (i, r) in open_upstream.iter().enumerate() {
-                            if i > 0 {
-                                ui.label(muted(&theme, "·"));
-                            }
-                            let (status, _) =
-                                tones::status(r.state, &r.mergeability, &theme.tones);
-                            // The main blocker: a failed pipeline, else the status.
-                            let ci = tl("CI failed");
-                            let why = if r.blockers.iter().any(|b| b == ci) {
-                                ci.to_lowercase()
-                            } else {
-                                status.to_lowercase()
-                            };
-                            let response = ui
-                                .add(
-                                    egui::Label::new(
-                                        RichText::new(format!("!{} {why}", r.id))
-                                            .color(theme.palette.text_secondary),
-                                    )
-                                    .sense(Sense::click()),
-                                )
-                                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                .on_hover_text(format!(
-                                    "{}\n{}",
-                                    r.title,
-                                    r.blockers
-                                        .iter()
-                                        .cloned()
-                                        .chain(std::iter::once(status.to_string()))
-                                        .collect::<Vec<_>>()
-                                        .join(" · ")
-                                ));
-                            if response.clicked() {
-                                *show = Some(r.id.clone());
-                            }
-                        }
-                    });
+                    let groups = open_groups(&open_upstream, &theme);
+                    if !groups.is_empty() {
+                        share_bar(ui, &groups);
+                        ui.add_space(2.0);
+                    }
+                    // A line per group: what holds them on the left, their ids
+                    // on the right, wrapped.
+                    const LABEL: f32 = 136.0;
+                    for (label, tone, rows) in &groups {
+                        ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(LABEL, 22.0),
+                                Layout::left_to_right(Align::Center),
+                                |ui| {
+                                    ui.set_min_size(Vec2::new(LABEL, 22.0));
+                                    let (dot, _) =
+                                        ui.allocate_exact_size(Vec2::splat(8.0), Sense::hover());
+                                    ui.painter().circle_filled(dot.center(), 3.5, tone.fg);
+                                    ui.label(
+                                        RichText::new(sentence_case(label))
+                                            .font(fonts::medium(theme.text_size - 1.0))
+                                            .color(theme.palette.text),
+                                    );
+                                    ui.label(
+                                        muted(&theme, rows.len().to_string())
+                                            .size(theme.text_size - 1.5),
+                                    );
+                                },
+                            );
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(5.0, 5.0);
+                                for r in rows {
+                                    if id_pill(ui, &theme, r, *tone).clicked() {
+                                        *show = Some(r.id.clone());
+                                    }
+                                }
+                            });
+                        });
+                    }
+                    ui.add_space(2.0);
                     if !open_upstream.is_empty()
                         && link(ui, &theme, tl("Show in the table")).clicked()
                     {
@@ -508,17 +525,41 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         ),
                         theme.text_size,
                     ));
-                    egui::CollapsingHeader::new(muted(&theme, tl("Show them")))
-                        .id_salt("promote_done")
-                        .show(ui, |ui| {
-                            for r in &done {
-                                // How it reached it: merged, picked, copied.
-                                let how = tones::presence(r.on_to, false, &theme.tones).1;
-                                if compact_row(ui, &theme, r, Some(how.to_lowercase())) {
-                                    *show = Some(r.id.clone());
-                                }
-                            }
-                        });
+                    if done.is_empty() {
+                        ui.label(muted(&theme, tf("Nothing reached {to} yet.", &[("to", &to)])));
+                        return;
+                    }
+                    // The latest few, the rest on demand.
+                    const FIRST: usize = 5;
+                    let all_id = ui.make_persistent_id("promote_done_all");
+                    let all = ui.data(|d| d.get_temp::<bool>(all_id)).unwrap_or(false);
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    let shown = if all { done.len() } else { done.len().min(FIRST) };
+                    for r in &done[..shown] {
+                        // How it reached it: merged, picked, copied; and when.
+                        let (_, how, tone) = tones::presence(r.on_to, false, &theme.tones);
+                        let when = r
+                            .on_to_since
+                            .map(|t| crate::utils::format_relative_date(&t.to_rfc3339()));
+                        if side_row(ui, &theme, r, Some((how, tone)), when) {
+                            *show = Some(r.id.clone());
+                        }
+                    }
+                    if done.len() > FIRST {
+                        ui.add_space(6.0);
+                        let text = if all {
+                            tl("Show fewer").to_string()
+                        } else {
+                            tn(
+                                (done.len() - FIRST) as u64,
+                                "Show {n} more",
+                                "Show {n} more",
+                            )
+                        };
+                        if link(ui, &theme, &text).clicked() {
+                            ui.data_mut(|d| d.insert_temp(all_id, !all));
+                        }
+                    }
                 });
             };
             if wide {
@@ -630,13 +671,20 @@ fn link(ui: &mut Ui, theme: &Theme, text: &str) -> egui::Response {
     .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// A line of a side card: the id, the title, a note on the right.
-fn compact_row(ui: &mut Ui, theme: &Theme, r: &Row, note: Option<String>) -> bool {
+/// A line of a side card: the id, the title, then on the right a chip (how
+/// it got there) and a note (when).
+fn side_row(
+    ui: &mut Ui,
+    theme: &Theme,
+    r: &Row,
+    chip: Option<(&str, bevel_theme::Tone)>,
+    note: Option<String>,
+) -> bool {
     let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 24.0), Sense::click());
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::click());
     if response.hovered() {
         ui.painter().rect_filled(
-            rect.expand2(Vec2::new(4.0, 0.0)),
+            rect.expand2(Vec2::new(6.0, 0.0)),
             CornerRadius::same(theme.radii.medium),
             theme.palette.raised,
         );
@@ -647,16 +695,27 @@ fn compact_row(ui: &mut Ui, theme: &Theme, r: &Row, note: Option<String>) -> boo
             .layout(Layout::left_to_right(Align::Center)),
     );
     line.style_mut().interaction.selectable_labels = false;
-    line.spacing_mut().item_spacing.x = 8.0;
-    line.label(
-        mono(format!("!{}", r.id), theme.text_size - 1.0).color(theme.palette.text_secondary),
+    line.spacing_mut().item_spacing.x = 10.0;
+    line.add_sized(
+        Vec2::new(46.0, rect.height()),
+        egui::Label::new(
+            mono(format!("!{}", r.id), theme.text_size - 1.5).color(theme.palette.text_muted),
+        ),
     );
     line.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
         if let Some(note) = &note {
-            ui.label(muted(theme, note).size(theme.text_size - 1.5));
+            ui.label(muted(theme, note).size(theme.text_size - 2.0));
+        }
+        if let Some((label, tone)) = chip {
+            ui.add(
+                Chip::new(&label.to_lowercase(), tone).font(fonts::medium(theme.text_size - 3.0)),
+            );
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            ui.add(egui::Label::new(RichText::new(&r.title)).truncate());
+            ui.add(
+                egui::Label::new(RichText::new(&r.title).size(theme.text_size - 0.5)).truncate(),
+            );
         });
     });
     response
@@ -665,12 +724,98 @@ fn compact_row(ui: &mut Ui, theme: &Theme, r: &Row, note: Option<String>) -> boo
         .clicked()
 }
 
+/// The open MRs not on `from` yet, by what holds each back most (a failed
+/// pipeline, else its status), the largest group first.
+fn open_groups<'a>(
+    rows: &[&'a Row],
+    theme: &Theme,
+) -> Vec<(&'static str, bevel_theme::Tone, Vec<&'a Row>)> {
+    let mut groups: Vec<(&'static str, bevel_theme::Tone, Vec<&'a Row>)> = Vec::new();
+    let ci = tl("CI failed");
+    for r in rows {
+        let (label, tone) = if r.blockers.iter().any(|b| b == ci) {
+            (ci, theme.tones.red)
+        } else {
+            tones::status(r.state, &r.mergeability, &theme.tones)
+        };
+        match groups.iter_mut().find(|g| g.0 == label) {
+            Some(group) => group.2.push(r),
+            None => groups.push((label, tone, vec![r])),
+        }
+    }
+    groups.sort_by_key(|g| std::cmp::Reverse(g.2.len()));
+    groups
+}
+
+/// "CHANGES REQ." as "Changes req.": the status labels are written for chips.
+fn sentence_case(label: &str) -> String {
+    let lower = label.to_lowercase();
+    let mut chars = lower.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// A thin bar split by group, each segment as wide as its share.
+fn share_bar(ui: &mut Ui, groups: &[(&'static str, bevel_theme::Tone, Vec<&Row>)]) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 6.0), Sense::hover());
+    let total: usize = groups.iter().map(|g| g.2.len()).sum();
+    let gap = 3.0;
+    let room = rect.width() - gap * (groups.len() as f32 - 1.0);
+    let mut x = rect.left();
+    for (_, tone, rows) in groups {
+        let w = (room * rows.len() as f32 / total as f32).max(4.0);
+        let seg = egui::Rect::from_min_size(egui::pos2(x, rect.top()), Vec2::new(w, rect.height()));
+        ui.painter()
+            .rect_filled(seg, CornerRadius::same(3), tone.fg);
+        x += w + gap;
+    }
+}
+
+/// An MR id as a small pill in its group's tone, its title and what holds it
+/// back on hover.
+fn id_pill(ui: &mut Ui, theme: &Theme, r: &Row, tone: bevel_theme::Tone) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(
+        format!("!{}", r.id),
+        egui::FontId::monospace(theme.text_size - 2.0),
+        tone.fg,
+    );
+    let size = Vec2::new(galley.size().x + 14.0, 22.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let stroke = if response.hovered() {
+        egui::Stroke::new(1.0, tone.fg)
+    } else {
+        egui::Stroke::NONE
+    };
+    ui.painter().rect(
+        rect,
+        CornerRadius::same(theme.radii.medium),
+        tone.bg,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+    ui.painter()
+        .galley(rect.center() - galley.size() / 2.0, galley, tone.fg);
+    let (status, _) = tones::status(r.state, &r.mergeability, &theme.tones);
+    let why = r
+        .blockers
+        .iter()
+        .cloned()
+        .chain(std::iter::once(status.to_string()))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(format!("{}\n{why}", r.title))
+}
+
 /// The ready table's columns, from the row's left edge: the box, the MR, the
 /// title (the rest), then fixed ones.
 const COL_BOX: f32 = 28.0;
 const COL_MR: f32 = 56.0;
 const COL_SINCE: f32 = 140.0;
-const COL_TICKET: f32 = 150.0;
+const COL_TICKET: f32 = 240.0;
 const COL_EFFORT: f32 = 90.0;
 const COL_HOW: f32 = 110.0;
 const COL_PAD: f32 = 16.0;
@@ -818,14 +963,19 @@ fn ready_row(
     .on_hover_text(tl(
         "How long it has been tested there: under a day, in amber",
     ));
-    let mut c = child(ui, cell(4, COL_TICKET));
+    let ticket_cell = cell(4, COL_TICKET);
+    let mut c = child(ui, ticket_cell);
+    // Kept to its column: a long status is cut, in full on hover.
+    c.set_clip_rect(ticket_cell.intersect(c.clip_rect()));
+    c.spacing_mut().item_spacing.x = 6.0;
     match &r.ticket {
         Some((id, status)) => {
             c.add(
-                Chip::new(&format!("#{id} {status}"), theme.tones.blue)
+                Chip::new(&format!("#{id}"), theme.tones.blue)
                     .font(fonts::medium(theme.text_size - 2.5)),
-            )
-            .on_hover_text(tl("The linked ticket and its status"));
+            );
+            c.add(egui::Label::new(muted(theme, status).size(theme.text_size - 2.0)).truncate())
+                .on_hover_text(format!("#{id} {status}"));
         }
         None => {
             c.label(muted(theme, "—"));

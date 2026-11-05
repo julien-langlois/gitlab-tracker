@@ -931,7 +931,6 @@ date	Merged	合并时间
 	Not on {from} yet · {n}	尚未进入 {from} · {n}
 	Every tracked MR reached it.	所有跟踪的 MR 都已到达。
 	Already on {to} · {n}	已在 {to} 上 · {n}
-	Show them	显示
 	Ready for {to}	可进入 {to}
 	Not merged	未合并
 	Waiting for my review	等待我审查
@@ -1115,6 +1114,8 @@ date	Merged	合并时间
 	Each merge once: the commits it brought are counted, not listed.	每次合并只列一次：其带入的提交计入数量，但不逐一列出。
 	merged by {who} {when}, not tracked	由 {who} 于 {when} 合并，未跟踪
 	pushed by {who} {when}	由 {who} 于 {when} 推送
+	Show fewer	收起
+	Nothing reached {to} yet.	尚无内容到达 {to}。
 @plural	{n} commit behind|{n} commits behind	落后 {n} 个提交
 @plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	变基：落后目标 {n} 个提交
 @plural	Answer {n} thread|Answer {n} threads	回复 {n} 个讨论
@@ -1127,3 +1128,4 @@ date	Merged	合并时间
 @plural	No data over the last {n} week|No data over the last {n} weeks	最近 {n} 周无数据
 @plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	将 {n} 个 MR 从 {from} 带到 {to}
 @plural	To ship the {n} selected MR|To ship the {n} selected MRs	交付选中的 {n} 个 MR
+@plural	Show {n} more|Show {n} more	再显示 {n} 个

@@ -931,7 +931,6 @@ date	Merged	Mesclada
 	Not on {from} yet · {n}	Ainda não em {from} · {n}
 	Every tracked MR reached it.	Todas as MRs acompanhadas chegaram lá.
 	Already on {to} · {n}	Já em {to} · {n}
-	Show them	Mostrá-las
 	Ready for {to}	Prontas para {to}
 	Not merged	Não mesclada
 	Waiting for my review	Aguardando minha revisão
@@ -1115,6 +1114,8 @@ date	Merged	Mesclada
 	Each merge once: the commits it brought are counted, not listed.	Cada merge uma vez: os commits que trouxe são contados, não listados.
 	merged by {who} {when}, not tracked	mesclada por {who} {when}, não acompanhada
 	pushed by {who} {when}	enviado por {who} {when}
+	Show fewer	Mostrar menos
+	Nothing reached {to} yet.	Nada chegou a {to} ainda.
 @plural	{n} commit behind|{n} commits behind	{n} commit atrás|{n} commits atrás
 @plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	Rebase: {n} commit atrás do destino|Rebase: {n} commits atrás do destino
 @plural	Answer {n} thread|Answer {n} threads	Responder {n} thread|Responder {n} threads
@@ -1127,3 +1128,4 @@ date	Merged	Mesclada
 @plural	No data over the last {n} week|No data over the last {n} weeks	Sem dados na última {n} semana|Sem dados nas últimas {n} semanas
 @plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	Levar {n} MR de {from} para {to}|Levar {n} MRs de {from} para {to}
 @plural	To ship the {n} selected MR|To ship the {n} selected MRs	Para entregar o {n} MR selecionado|Para entregar os {n} MRs selecionados
+@plural	Show {n} more|Show {n} more	Mostrar mais {n}|Mostrar mais {n}
