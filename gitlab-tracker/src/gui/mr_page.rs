@@ -1449,7 +1449,7 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     // Fixed columns, the title taking the rest (never under TITLE_MIN: the
     // table scrolls sideways instead).
     const SHA: f32 = 76.0;
-    const DATE: f32 = 104.0;
+    const DATE_MIN: f32 = 104.0;
     const GAP: f32 = 16.0;
     const TITLE_MIN: f32 = 220.0;
     const ROW: f32 = 32.0;
@@ -1458,8 +1458,24 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         .iter()
         .map(|b| text_width(ui, b, branch_font.clone()).max(36.0))
         .collect();
+    // The dates as shown: the column is as wide as the longest ("about a month
+    // ago"), so that it never pushes the branches' columns of its row.
+    let dates: Vec<String> = mr
+        .commits
+        .iter()
+        .map(|commit| {
+            chrono::DateTime::from_timestamp(commit.fingerprint.authored_at, 0)
+                .map(|d| format_relative_date(&d.to_rfc3339()))
+                .unwrap_or_default()
+        })
+        .collect();
+    let date_font = egui::FontId::proportional(theme.text_size - 1.0);
+    let date_width = dates
+        .iter()
+        .map(|d| text_width(ui, d, date_font.clone()).ceil() + 2.0)
+        .fold(DATE_MIN, f32::max);
     let fixed_width =
-        SHA + DATE + branch_widths.iter().sum::<f32>() + GAP * (2 + branches.len()) as f32;
+        SHA + date_width + branch_widths.iter().sum::<f32>() + GAP * (2 + branches.len()) as f32;
     let title = (ui.available_width() - fixed_width).max(TITLE_MIN);
     let total = fixed_width + title;
 
@@ -1478,7 +1494,7 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 };
                 head(ui, SHA, "SHA");
                 head(ui, title, tl("Title"));
-                head(ui, DATE, tl("Authored"));
+                head(ui, date_width, tl("Authored"));
                 for (b, w) in branches.iter().zip(&branch_widths) {
                     centered(ui, *w, |ui| {
                         ui.label(
@@ -1490,7 +1506,7 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 }
             });
             super::widgets::rule(ui, &theme);
-            for commit in &mr.commits {
+            for (commit, date) in mr.commits.iter().zip(&dates) {
                 let (rect, response) =
                     ui.allocate_exact_size(Vec2::new(total, ROW), Sense::hover());
                 if response.hovered() {
@@ -1519,11 +1535,8 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                             commit.fingerprint.title, commit.fingerprint.author_email
                         ));
                 });
-                fixed(&mut row, DATE, |ui| {
-                    let date = chrono::DateTime::from_timestamp(commit.fingerprint.authored_at, 0)
-                        .map(|d| format_relative_date(&d.to_rfc3339()))
-                        .unwrap_or_default();
-                    ui.label(muted(&theme, date));
+                fixed(&mut row, date_width, |ui| {
+                    ui.label(muted(&theme, date.as_str()));
                 });
                 for (b, w) in branches.iter().zip(&branch_widths) {
                     let presence = commit_presence(&g.app, mr, b, commit);
