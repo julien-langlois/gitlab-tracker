@@ -41,16 +41,18 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                 ui.vertical_centered(|ui| ui.label(muted(&theme, tl("Select a merge request"))));
                 return;
             };
-            header(g, ui, &mr);
-            next_card(g, ui, &mr);
-            anchors(g, ui, &mr);
             // The tracker page brings each MR it opens to its ticket, then leaves the
             // scrolling to the user. It scrolls on its own, away from the other pages.
             let on_tracker = g.page() == Page::Tracker;
             if on_tracker && g.ticket_anchor.as_deref() != Some(mr.id.as_str()) {
                 g.ticket_anchor = Some(mr.id.clone());
                 g.scroll_to = Some(InspectorSection::Ticket);
+                // The tabs say where it went.
+                g.inspector_tab = InspectorSection::Ticket;
             }
+            header(g, ui, &mr);
+            next_card(g, ui, &mr);
+            anchors(g, ui, &mr);
             egui::ScrollArea::vertical()
                 .id_salt(on_tracker)
                 .auto_shrink(false)
@@ -120,37 +122,90 @@ fn anchors(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 .inner_margin(Margin::same(3))
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
-                        for (section, name) in links {
-                            let on = current == section;
+                    ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
+                    let gap = 2.0;
+                    let width = ui.available_width();
+                    let items: Vec<_> = links
+                        .into_iter()
+                        .map(|(section, name)| {
                             let galley = ui.painter().layout_no_wrap(
-                                name.clone(),
+                                name,
                                 fonts::medium(theme.text_size - 1.5),
                                 theme.palette.text_secondary,
                             );
-                            let size = galley.size() + Vec2::new(18.0, 12.0);
-                            let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-                            let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-                            let radius = egui::CornerRadius::same(theme.radii.medium);
-                            let color = if on {
-                                ui.painter()
-                                    .rect_filled(rect, radius, theme.palette.selection);
-                                theme.palette.text
-                            } else if response.hovered() {
-                                ui.painter().rect_filled(rect, radius, theme.palette.raised);
-                                theme.palette.text
-                            } else {
-                                theme.palette.text_secondary
-                            };
-                            ui.painter()
-                                .galley(rect.center() - galley.size() / 2.0, galley, color);
-                            if response.clicked() {
-                                g.scroll_to = Some(section);
-                                g.inspector_tab = section;
-                            }
+                            let w = galley.size().x + 18.0;
+                            (section, galley, w)
+                        })
+                        .collect();
+                    // Into lines that fit, each stretched to the full width: no
+                    // gap left at the end of the bar.
+                    let mut lines: Vec<Vec<usize>> = vec![Vec::new()];
+                    let mut used = 0.0;
+                    for (i, (_, _, w)) in items.iter().enumerate() {
+                        let line = lines.last_mut().expect("one line at least");
+                        let need = if line.is_empty() { *w } else { used + gap + w };
+                        if !line.is_empty() && need > width {
+                            lines.push(vec![i]);
+                            used = *w;
+                        } else {
+                            line.push(i);
+                            used = need;
                         }
-                    });
+                    }
+                    // As many tabs on each line when they fit that way: 3 and 3
+                    // rather than 4 and 2 stretched wide.
+                    if lines.len() > 1 {
+                        let per = items.len().div_ceil(lines.len());
+                        let even: Vec<Vec<usize>> = (0..items.len())
+                            .collect::<Vec<_>>()
+                            .chunks(per)
+                            .map(<[usize]>::to_vec)
+                            .collect();
+                        let fits = |line: &Vec<usize>| {
+                            line.iter().map(|&i| items[i].2).sum::<f32>()
+                                + gap * (line.len() as f32 - 1.0)
+                                <= width
+                        };
+                        if even.len() == lines.len() && even.iter().all(fits) {
+                            lines = even;
+                        }
+                    }
+                    for line in lines {
+                        let natural: f32 = line.iter().map(|&i| items[i].2).sum::<f32>()
+                            + gap * (line.len() as f32 - 1.0);
+                        // Half a point short: rounded over, it would widen the panel.
+                        let extra = ((width - natural - 0.5) / line.len() as f32).max(0.0);
+                        ui.horizontal(|ui| {
+                            for &i in &line {
+                                let (section, galley, w) = &items[i];
+                                let size = Vec2::new(w + extra, galley.size().y + 12.0);
+                                let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+                                let response =
+                                    response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                                let radius = egui::CornerRadius::same(theme.radii.medium);
+                                let on = current == *section;
+                                let color = if on {
+                                    ui.painter()
+                                        .rect_filled(rect, radius, theme.palette.selection);
+                                    theme.palette.text
+                                } else if response.hovered() {
+                                    ui.painter().rect_filled(rect, radius, theme.palette.raised);
+                                    theme.palette.text
+                                } else {
+                                    theme.palette.text_secondary
+                                };
+                                ui.painter().galley(
+                                    rect.center() - galley.size() / 2.0,
+                                    galley.clone(),
+                                    color,
+                                );
+                                if response.clicked() {
+                                    g.scroll_to = Some(*section);
+                                    g.inspector_tab = *section;
+                                }
+                            }
+                        });
+                    }
                 });
         });
     super::widgets::rule(ui, &theme);
