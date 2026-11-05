@@ -38,6 +38,18 @@ pub enum Icon {
     List,
     /// The notifications.
     Bell,
+    /// Two people: the team page.
+    People,
+    /// A clock with a back arrow: the journal.
+    History,
+    /// Stacked layers: the environments.
+    Layers,
+    /// A heartbeat line: the CI.
+    Pulse,
+    /// A flag: the milestones.
+    Flag,
+    /// Two overlapping squares: the overlaps.
+    Overlap,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -330,6 +342,100 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 stroke,
             ));
         }
+        Icon::People => {
+            circle(p(9.0, 8.0), 3.5);
+            painter.add(Shape::line(
+                arc(p(9.0, 20.5), 6.5, 6.5, 180.0, 360.0, scale),
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![
+                    p(15.5, 4.8),
+                    p(17.6, 5.6),
+                    p(18.5, 8.0),
+                    p(17.6, 10.4),
+                    p(15.5, 11.2),
+                ],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(17.5, 14.5), p(20.0, 16.0), p(21.5, 19.0), p(21.5, 20.5)],
+                stroke,
+            ));
+        }
+        Icon::History => {
+            painter.add(Shape::line(
+                arc(p(12.0, 12.0), 8.5, 8.5, 200.0, 520.0, scale),
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(2.5, 5.5), p(3.6, 9.2), p(7.2, 8.2)],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(12.0, 7.5), p(12.0, 12.0), p(15.0, 14.0)],
+                stroke,
+            ));
+        }
+        Icon::Layers => {
+            painter.add(Shape::closed_line(
+                vec![p(12.0, 3.5), p(21.0, 8.5), p(12.0, 13.5), p(3.0, 8.5)],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(3.0, 12.5), p(12.0, 17.5), p(21.0, 12.5)],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(3.0, 16.5), p(12.0, 21.5), p(21.0, 16.5)],
+                stroke,
+            ));
+        }
+        Icon::Pulse => {
+            painter.add(Shape::line(
+                vec![
+                    p(2.5, 12.0),
+                    p(7.0, 12.0),
+                    p(9.5, 5.0),
+                    p(14.0, 19.0),
+                    p(16.5, 12.0),
+                    p(21.5, 12.0),
+                ],
+                stroke,
+            ));
+        }
+        Icon::Flag => {
+            line(p(5.0, 21.0), p(5.0, 3.5));
+            painter.add(Shape::line(
+                vec![
+                    p(5.0, 4.0),
+                    p(18.5, 4.0),
+                    p(15.5, 8.5),
+                    p(18.5, 13.0),
+                    p(5.0, 13.0),
+                ],
+                stroke,
+            ));
+        }
+        Icon::Overlap => {
+            painter.rect_stroke(
+                Rect::from_min_max(p(3.5, 3.5), p(14.5, 14.5)),
+                2.0 * scale,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+            painter.rect_stroke(
+                Rect::from_min_max(p(9.5, 9.5), p(20.5, 20.5)),
+                2.0 * scale,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(p(9.5, 9.5), p(14.5, 14.5)),
+                1.0 * scale,
+                color.gamma_multiply(0.45),
+            );
+        }
         Icon::ArrowDown | Icon::ArrowUp => {
             let (from, to, wing) = if icon == Icon::ArrowDown {
                 (5.0, 19.0, 13.0)
@@ -343,6 +449,20 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             ));
         }
     }
+}
+
+/// Points along an ellipse arc around `center` (radii in grid units), from
+/// `from` to `to` degrees (0 = right, clockwise as the y axis points down).
+fn arc(center: Pos2, rx: f32, ry: f32, from: f32, to: f32, scale: f32) -> Vec<Pos2> {
+    (0..=24)
+        .map(|i| {
+            let a = (from + (to - from) * i as f32 / 24.0).to_radians();
+            pos2(
+                center.x + a.cos() * rx * scale,
+                center.y + a.sin() * ry * scale,
+            )
+        })
+        .collect()
 }
 
 /// The ten corners of a five-pointed star, outer and inner alternating.

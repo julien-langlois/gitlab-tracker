@@ -180,6 +180,14 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
     }
     #[cfg(feature = "stats")]
     pages.push((Page::Stats, tl("Statistics"), Icon::Stats));
+    pages.extend([
+        (Page::Team, tl("Team"), Icon::People),
+        (Page::Journal, tl("Journal"), Icon::History),
+        (Page::Environments, tl("Environments"), Icon::Layers),
+        (Page::Ci, tl("CI / Pipelines"), Icon::Pulse),
+        (Page::Milestones, tl("Milestones"), Icon::Flag),
+        (Page::Overlaps, tl("Overlaps"), Icon::Overlap),
+    ]);
     for (page, name, icon) in pages {
         list.push(Entry {
             kind: tl("Page"),

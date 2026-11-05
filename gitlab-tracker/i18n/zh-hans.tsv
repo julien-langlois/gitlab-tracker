@@ -1129,3 +1129,365 @@ date	Merged	合并时间
 @plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	将 {n} 个 MR 从 {from} 带到 {to}
 @plural	To ship the {n} selected MR|To ship the {n} selected MRs	交付选中的 {n} 个 MR
 @plural	Show {n} more|Show {n} more	再显示 {n} 个
+
+# Project pages: team, journal, environments, CI, milestones, overlaps
+	!{a} and !{b} change the same files:	!{a} 和 !{b} 修改了相同的文件：
+	!{id} has waited for {name}'s review for {time}, past the reminder delay.	!{id} 等待 {name} 的评审已有 {time}，超过了提醒时限。
+	#{id} · failed: {jobs}	#{id} · 失败：{jobs}
+	+{n} pts on the period before	较上一周期 +{n} 个百分点
+	/ {h} estimated	/ 预计 {h}
+	14 d	14 天
+	24 h	24 小时
+	7 d	7 天
+	8 weeks	8 周
+	8 weeks ago	8 周前
+	A click on a gap picks the pair of branches; Promote has the details and the commands.	点击某个差异即可选中这对分支；“推进”页面提供详情和命令。
+	Already seen below	以下为已查看
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}.	按过去四周的速度（每周 {pace} 个），全部内容约在 {eta} 上线生产。
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}: in time.	按过去四周的速度（每周 {pace} 个），全部内容约在 {eta} 上线生产：能按时完成。
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}: {n} after its date.	按过去四周的速度（每周 {pace} 个），全部内容约在 {eta} 上线生产：比截止日期晚 {n}。
+	Available	空闲
+	Back on their author	退回作者
+	Bot	机器人
+	Branch arrivals	到达分支
+	Burn-up	燃起图
+	Busy	繁忙
+	CI / Pipelines	CI / 流水线
+	CI / Pipelines: what breaks, what slows down	CI / 流水线：哪里出错，哪里变慢
+	Click: pick the pair · double click: show the MR	单击：选中这对分支 · 双击：显示该 MR
+	Close lines	相近行
+	Copy a message	复制消息
+	Copy the release notes	复制发布说明
+	Copy the report	复制报告
+	Copy the state	复制状态
+	Copy the summary	复制摘要
+	Copy who waits on whom, to paste in a chat	复制谁在等谁，便于粘贴到聊天中
+	Delivered	已交付
+	Delivered milestones	已交付的里程碑
+	Delivered: on {branch}, the last branch of the flow. The pace is the MRs delivered over the last four weeks.	已交付：位于流程的最后一个分支 {branch}。速度为过去四周交付的 MR 数量。
+	Deployed	已部署
+	Double click: show the MR	双击：显示该 MR
+	Drafts	草稿
+	Due date	截止日期
+	End of the flow	流程终点
+	Environments	环境
+	Environments: what is where, from feature to production	环境：从功能分支到生产，各内容所在位置
+	Envs	环境
+	Every branch has what the one before it has.	每个分支都已包含上一个分支的内容。
+	Every folder	全部文件夹
+	Every job	全部作业
+	Everyone	所有人
+	Failed deployments	失败的部署
+	Failed on	失败于
+	Failing jobs	失败的作业
+	Failures by stage	按阶段的失败次数
+	Fewer than two open MRs with their files known: nothing can overlap.	已知文件的开放 MR 少于两个：不会有重叠。
+	File	文件
+	Flaky	不稳定
+	Flaky jobs	不稳定的作业
+	Flaky: a job that fails, then passes on the same commit without a change. From the last pipelines of each tracked MR.	不稳定：作业先失败，之后在同一提交上无改动地通过。基于每个跟踪 MR 的最近流水线。
+	Folders	文件夹
+	From the feature branches to production: what is where, and what waits	从功能分支到生产：各内容所在位置及等待项
+	Gaps between branches	分支间差异
+	GitLab lists no deployment for this project: the branches show without their environments.	GitLab 未列出该项目的任何部署：分支将不显示其环境。
+	GitLab lists no deployment of the tracked branches.	GitLab 未列出跟踪分支的任何部署。
+	Give the MRs a milestone in GitLab: this page follows each one to production.	在 GitLab 中为 MR 设置里程碑：本页会跟踪每个里程碑直至上线生产。
+	Held back by the CI	被 CI 阻塞
+	Hi {name}, nothing waits on you right now.	{name} 你好，目前没有待你处理的事项。
+	Hi {name}, these reviews are waiting on you:	{name} 你好，以下评审正在等待你：
+	Hide the bots	隐藏机器人
+	Hot spots	热点
+	In progress	进行中
+	In review	评审中
+	In sync with {branch}	与 {branch} 同步
+	In this period	本周期内
+	Include bots	包含机器人
+	Include drafts	包含草稿
+	Job	作业
+	Job picked	选中的作业
+	Jobs	作业
+	Journal	日志
+	Last 7 days	最近 7 天
+	Last asked {when}	上次请求于 {when}
+	Last deployment of {env}: {when}	{env} 的最近一次部署：{when}
+	Last failure	最近一次失败
+	Leave out lock files	忽略锁文件
+	Lines	行
+	Load: the reviews waiting on someone, heavier as they wait, plus the effort of their open MRs and the threads they have to answer, against the most loaded person.	负载：等待某人的评审（等待越久权重越高），加上其开放 MR 的工作量和需回复的讨论，相对于负载最高的人。
+	MR × MR	MR × MR
+	MR, person, branch…	MR、人员、分支…
+	MRs held back by the CI	被 CI 阻塞的 MR
+	MRs in 30 days	30 天内的 MR
+	Mark all as read	全部标为已读
+	Median duration	中位时长
+	Merge !{first} first: {why}. !{second} will then need a rebase on its target, where the files meet.	先合并 !{first}：{why}。之后 !{second} 需要在其目标分支上 rebase，处理文件交汇处。
+	Merged, not on {branch} yet	已合并，尚未进入 {branch}
+	Merges and closes	合并与关闭
+	Message copied	消息已复制
+	Milestone {name}	里程碑 {name}
+	Milestones	里程碑
+	Milestones: progress, and whether they make their date	里程碑：进度以及能否按期完成
+	Most active	最活跃
+	My MRs	我的 MR
+	Name	姓名
+	Never deployed	从未部署
+	Newer commits not deployed	有较新的提交未部署
+	No MR reached production in the last four weeks: no pace to project from.	过去四周没有 MR 上线生产：无法据此预测。
+	No answer in the period	本周期内无回复
+	No environment	无环境
+	No environment deployed from it	没有从该分支部署的环境
+	No failed job in the period.	本周期内没有失败的作业。
+	No file changed by several recent MRs.	没有被多个近期 MR 修改的文件。
+	No file changed by two open MRs here.	此处没有被两个开放 MR 同时修改的文件。
+	No finished pipeline in the period.	本周期内没有已完成的流水线。
+	No job in this view for the period.	本周期内此视图中没有作业。
+	No milestone on the tracked MRs	跟踪的 MR 没有里程碑
+	No milestone on the tracked MRs.	跟踪的 MR 没有里程碑。
+	No open MR has its latest pipeline failed.	没有开放 MR 的最新流水线失败。
+	No open MR.	没有开放的 MR。
+	No pair of open MRs in this view.	此视图中没有开放 MR 的配对。
+	No request from {author} to {reviewer}	{author} 未向 {reviewer} 发起请求
+	No request in the period	本周期内无请求
+	No review request in the period.	本周期内没有评审请求。
+	No review waiting on them.	没有等待其处理的评审。
+	No tracked MR in this milestone yet.	该里程碑中暂无跟踪的 MR。
+	No tracked branch: add some in the project's settings.	没有跟踪的分支：请在项目设置中添加。
+	No two open MRs change the same file.	没有两个开放 MR 修改同一文件。
+	No two open MRs change the same file: nothing to pick.	没有两个开放 MR 修改同一文件：无可选项。
+	Nobody in this view.	此视图中没有人。
+	None past the reminder delay	无超过提醒时限的评审
+	Normal	正常
+	Nothing happened in this period with these filters.	在此周期和这些筛选条件下没有发生任何事。
+	Nothing stands out: the reviews flow.	一切正常：评审进展顺畅。
+	Nothing to compare with yet	暂无可比较的数据
+	Nothing yet.	暂无内容。
+	On the way	进行中
+	Only what concerns me	仅与我相关
+	Open MRs that change the same files	修改相同文件的开放 MR
+	Open MRs that change the same files, before they step on each other	修改相同文件的开放 MR，避免相互冲突
+	Open in Promote	在“推进”中打开
+	Open its pipelines	打开其流水线
+	Opened and pushed	创建与推送
+	Overlaps	重叠
+	Overlaps between open MRs	开放 MR 之间的重叠
+	Overloaded	过载
+	P90 {d}	P90 {d}
+	Pair picked	选中的配对
+	Pairs at risk	有风险的配对
+	Pairs in the same files	相同文件中的配对
+	Pairs on the same lines	相同行上的配对
+	Person	人员
+	Pick a milestone.	请选择一个里程碑。
+	Pick someone in the list to see what waits on them.	在列表中选择一个人，查看等待其处理的事项。
+	Pipeline durations	流水线时长
+	Pipelines passing	通过的流水线
+	Plan	计划
+	Read from the changes the app already fetches for the review effort: no request of its own.	读取自应用为评审工作量已获取的改动：无需额外请求。
+	Reading the branches' pipelines…	正在读取分支流水线…
+	Reading the deployments and the branches' pipelines from GitLab…	正在从 GitLab 读取部署和分支流水线…
+	Reading the deployments…	正在读取部署…
+	Rebuilt from what the MRs carry: their dates, reviews, threads, pipelines and branch arrivals. Nothing is fetched for it.	根据 MR 自带的信息重建：日期、评审、讨论、流水线和分支到达。无需额外获取。
+	Report copied	报告已复制
+	Response	响应
+	Review balance	评审均衡度
+	Review response	评审响应
+	Reviews	评审
+	Reviews and threads	评审与讨论
+	Reviews waiting	待处理评审
+	Reviews waiting on them	等待其处理的评审
+	Rhythm of {env}	{env} 的节奏
+	Risk	风险
+	Runs	运行次数
+	Same file	同一文件
+	Same lines	相同行
+	Scope	范围
+	See the changes	查看改动
+	Selected	已选
+	Shared files	共享文件
+	Show it on the merge requests page	在合并请求页面中显示
+	Show the MR	显示该 MR
+	Show the blocked MRs	显示被阻塞的 MR
+	Show their MRs	显示其 MR
+	Show these MRs	显示这些 MR
+	Show what this branch has that the next one lacks	显示该分支有而下一个分支缺少的内容
+	Stage	阶段
+	Stages	阶段
+	State of the environments copied	环境状态已复制
+	Succeeded	成功
+	Suggestion	建议
+	Suggestion: merge !{first} first, then rebase !{second}.	建议：先合并 !{first}，再对 !{second} 执行 rebase。
+	Summary copied	摘要已复制
+	Tabs	标签页
+	Team	团队
+	The {n} latest events: narrow the period or the types to see older ones.	最近 {n} 个事件：缩小周期或类型以查看更早的事件。
+	Their MRs	其 MR
+	Their open MRs	其开放的 MR
+	Threads to answer	待回复的讨论
+	Tickets	工单
+	Track at least two branches to compare them.	至少跟踪两个分支才能进行比较。
+	Trend	趋势
+	Types	类型
+	Wait	等待时间
+	Waited on for a review	被等待评审
+	Waiting on them	等待其处理
+	Waiting the longest	等待最久
+	What breaks, what slows down, and what it holds back	哪里出错、哪里变慢，以及因此受阻的内容
+	What happened, in the order it happened	按发生顺序列出的事件
+	What moved, in the order it happened	按发生顺序列出的变动
+	What {from} has that {to} lacks	{from} 有而 {to} 缺少的内容
+	Where they meet	交汇之处
+	Where they stand	当前状态
+	Who reviews whom	谁评审谁
+	Who waits on what, and who can take the next review	谁在等什么，以及谁能接下一个评审
+	Who waits on whom, and who can take the next review	谁在等谁，以及谁能接下一个评审
+	already approved	已获批准
+	and {n} more	以及另外 {n} 个
+	approved	已批准
+	as before	与之前持平
+	asked {time} ago	{time}前请求
+	between two deployments	两次部署之间
+	branches: {list}	分支：{list}
+	by {names}	由 {names}
+	by {name}	由 {name}
+	cherry-picked with its trailer	带标记的 cherry-pick
+	close lines, or apart	相近或相距较远的行
+	closed without merging	未合并即关闭
+	copied without trailer: inferred from the author, date and title	无标记复制：根据作者、日期和标题推断
+	delivered	已交付
+	delivered against the scope	已交付与范围对比
+	delivered · {done} of {total} on {branch}	已交付 · {total} 个中有 {done} 个在 {branch}
+	deployed {when}	部署于 {when}
+	deployments in 30 days	30 天内的部署次数
+	files in common	共同文件
+	flaky	不稳定
+	for {time}	已持续 {time}
+	git will stop on them	git 会在此停下
+	in merge order	按合并顺序
+	in review or work	评审中或进行中
+	into {target}	合入 {target}
+	its own commits	其自身的提交
+	last {n} days	最近 {n} 天
+	latest pipeline	最新流水线
+	median {d}	中位数 {d}
+	merged by {name}	由 {name} 合并
+	new commits pushed	推送了新的提交
+	no finished pipeline	无已完成的流水线
+	no pipeline	无流水线
+	no review lately	近期无评审
+	none	无
+	not approved	未批准
+	nothing to compare with	无可比较数据
+	of the requests go to {name}	的请求发给了 {name}
+	of {n} changed	共 {n} 个已修改
+	on a branch, not on the next one	在某分支上，但不在下一个分支上
+	on the row, not on the column	在行分支上，不在列分支上
+	only some of its commits	仅部分提交
+	opened by {name}	由 {name} 创建
+	passed on a rerun	重跑后通过
+	pipeline passed	流水线通过
+	pipeline started	流水线已启动
+	pts	个百分点
+	rerun?	重跑？
+	review asked of {name}	已请求 {name} 评审
+	stable	稳定
+	the closest to merging	最接近合并
+	the most failing first	失败最多的在前
+	the oldest for {time}	最早的已持续 {time}
+	the riskiest first	风险最高的在前
+	the smaller one	改动较小的
+	this week: {n}	本周：{n}
+	thread opened by {name}	由 {name} 发起讨论
+	to bring back	需回补
+	to promote	待推进
+	today	今天
+	{done} / {n}	{done} / {n}
+	{done} / {total} delivered	已交付 {done} / {total}
+	{d} faster than before	比之前快 {d}
+	{d} faster than the period before	比上一周期快 {d}
+	{d} slower than before	比之前慢 {d}
+	{d} slower than the period before	比上一周期慢 {d}
+	{env} was never deployed	{env} 从未部署
+	{events} · {tabs}	{events} · {tabs}
+	{job} failed on them	{job} 在这些 MR 上失败
+	{job} makes {share} of the failures of the {stage} stage.	{job} 占 {stage} 阶段失败次数的 {share}。
+	{left} · back on their author, the first to unblock: {ids}	{left} · 已退回作者，需优先解除阻塞：{ids}
+	{m} min {s}	{m} 分 {s} 秒
+	{name} answers a review request in {time}, the slowest of the team.	{name} 回应评审请求需 {time}，为团队中最慢。
+	{name} gets {share} of the review requests.	{name} 收到了 {share} 的评审请求。
+	{name} has no review waiting: they can take the next one.	{name} 没有待处理的评审：可以接下一个。
+	{name}: their MRs and reviews	{name}：其 MR 与评审
+	{n} latest runs	最近 {n} 次运行
+	{n} min	{n} 分钟
+	{n} mo	{n} 个月
+	{n} not on {from} yet	{n} 个尚未进入 {from}
+	{n} on {from}, not on {to}	{n} 个在 {from} 上，不在 {to} 上
+	{n} pts on the period before	较上一周期 {n} 个百分点
+	{n} s	{n} 秒
+	{n} y	{n} 年
+	{period} · rows: authors, columns: reviewers	{period} · 行：作者，列：评审人
+	{source} → {target}	{source} → {target}
+	{time} ago	{time}前
+	{to} has everything {from} has.	{to} 已包含 {from} 的全部内容。
+	{weekday} {day} {month}	{month}{day}日 {weekday}
+date	April	4月
+date	August	8月
+date	December	12月
+date	February	2月
+date	Fri	周五
+date	Friday	星期五
+date	January	1月
+date	July	7月
+date	June	6月
+date	March	3月
+date	May	5月
+date	Mon	周一
+date	Monday	星期一
+date	November	11月
+date	October	10月
+date	Sat	周六
+date	Saturday	星期六
+date	September	9月
+date	Sun	周日
+date	Sunday	星期日
+date	Thu	周四
+date	Thursday	星期四
+date	Tue	周二
+date	Tuesday	星期二
+date	Wed	周三
+date	Wednesday	星期三
+@plural	#{id} · {n} job|#{id} · {n} jobs	#{id} · {n} 个作业
+@plural	Read from the changes the app already fetches. {n} open MR is not read yet: its files show after the next refresh.|Read from the changes the app already fetches. {n} open MRs are not read yet: their files show after the next refresh.	读取自应用已获取的改动。还有 {n} 个开放 MR 尚未读取：其文件将在下次刷新后显示。
+@plural	on {n} MR|on {n} MRs	涉及 {n} 个 MR
+@plural	{author} asked {reviewer} for {n} review|{author} asked {reviewer} for {n} reviews	{author} 向 {reviewer} 请求了 {n} 次评审
+@plural	{n} MR ahead of {to}|{n} MRs ahead of {to}	领先 {to} {n} 个 MR
+@plural	{n} MR left|{n} MRs left	剩余 {n} 个 MR
+@plural	{n} MR left to deliver.|{n} MRs left to deliver.	还有 {n} 个 MR 待交付。
+@plural	{n} MR to bring back to {to}|{n} MRs to bring back to {to}	{n} 个 MR 需回补到 {to}
+@plural	{n} change further down the flow is missing upstream: bring it back.|{n} changes further down the flow are missing upstream: bring them back.	流程下游有 {n} 处改动在上游缺失：请回补。
+@plural	{n} day|{n} days	{n} 天
+@plural	{n} environment|{n} environments	{n} 个环境
+@plural	{n} event|{n} events	{n} 个事件
+@plural	{n} failure a rerun fixed|{n} failures a rerun fixed	{n} 次失败经重跑解决
+@plural	{n} linked|{n} linked	{n} 个已关联
+@plural	{n} milestone in progress|{n} milestones in progress	{n} 个进行中的里程碑
+@plural	{n} open MR|{n} open MRs	{n} 个开放的 MR
+@plural	{n} partly there|{n} partly there	{n} 个部分到达
+@plural	{n} past the reminder delay|{n} past the reminder delay	{n} 个超过提醒时限
+@plural	{n} person|{n} people	{n} 人
+@plural	{n} pipeline|{n} pipelines	{n} 条流水线
+@plural	{n} ready|{n} ready	{n} 个就绪
+@plural	{n} rerun fixed it|{n} reruns fixed it	重跑 {n} 次后解决
+@plural	{n} review|{n} reviews	{n} 次评审
+@plural	{n} tab|{n} tabs	{n} 个标签页
+@plural	{n} to promote|{n} to promote	{n} 个待推进
+@plural	{n} tracked branch|{n} tracked branches	{n} 个跟踪的分支
+	Period	周期
+rail	Overlaps	重叠
+	The files where they change the most lines in common first.	共同修改行数最多的文件在前。
+	A few lines apart: git may stop.	相距仅几行：git 可能会停下。
+	Far apart: it most likely merges on its own.	相距较远：大概率可以自动合并。
+	lines {from}–{to}	第 {from}–{to} 行
+	Changed by both: {ranges}	双方都修改了：{ranges}
+@plural	{n} on the same lines|{n} on the same lines	{n} 个在相同行上
+@plural	{n} on close lines|{n} on close lines	{n} 个在相近行上
+@plural	{n} only in the same file|{n} only in the same file	{n} 个仅在同一文件中

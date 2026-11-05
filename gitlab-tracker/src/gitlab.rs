@@ -339,7 +339,7 @@ fn diff_stats_cache_valid(stats: Option<&crate::models::DiffStats>, commits: &[M
         let lines_ok = s.files_changed == 0 || s.additions > 0 || s.deletions > 0;
         let commits_ok = s.commits_count > 0 || s.files_changed == 0;
         let list_ok = s.commits_count as usize == commits.len();
-        lines_ok && commits_ok && list_ok
+        lines_ok && commits_ok && list_ok && s.files_listed
     })
 }
 
@@ -868,6 +868,68 @@ struct MrChanges {
 struct MrChange {
     /// Raw unified patch of one file.
     diff: Option<String>,
+    #[serde(default)]
+    new_path: String,
+    #[serde(default)]
+    old_path: String,
+    #[serde(default)]
+    new_file: bool,
+    #[serde(default)]
+    deleted_file: bool,
+    #[serde(default)]
+    renamed_file: bool,
+}
+
+/// The files of a Changes API body, with the target's lines each hunk touches.
+fn changed_files(body: &MrChanges) -> Vec<crate::models::ChangedFile> {
+    let Some(changes) = &body.changes else {
+        return Vec::new();
+    };
+    changes
+        .iter()
+        .map(|change| {
+            let diff = change.diff.as_deref().unwrap_or("");
+            let (added, deleted) = count_diff_lines(diff);
+            let path = if change.new_path.is_empty() {
+                change.old_path.clone()
+            } else {
+                change.new_path.clone()
+            };
+            crate::models::ChangedFile {
+                path,
+                old_path: change
+                    .renamed_file
+                    .then(|| change.old_path.clone())
+                    .filter(|p| !p.is_empty()),
+                added,
+                deleted,
+                hunks: hunk_ranges(diff),
+                new_file: change.new_file,
+                deleted_file: change.deleted_file,
+            }
+        })
+        .collect()
+}
+
+/// The lines of the old file (first, last) each `@@ -a,b +c,d @@` hunk of a
+/// unified patch replaces. A pure insertion (`b == 0`) covers line `a`, the
+/// one it comes after.
+fn hunk_ranges(diff: &str) -> Vec<(u32, u32)> {
+    diff.lines()
+        .filter_map(|line| {
+            let rest = line.strip_prefix("@@ -")?;
+            let old = rest.split_whitespace().next()?;
+            let (start, count) = match old.split_once(',') {
+                Some((start, count)) => (start.parse::<u32>().ok()?, count.parse::<u32>().ok()?),
+                None => (old.parse::<u32>().ok()?, 1),
+            };
+            Some(if count == 0 {
+                (start.max(1), start.max(1))
+            } else {
+                (start.max(1), start + count - 1)
+            })
+        })
+        .collect()
 }
 
 /// `(files_changed, additions, deletions)` of a Changes API body.
@@ -945,6 +1007,8 @@ async fn fetch_diff_stats(
         deletions,
         commits_count,
         commits_behind: None,
+        files: changed_files(&body),
+        files_listed: true,
     })
 }
 
@@ -2048,6 +2112,7 @@ mod tests {
             files_changed,
             additions,
             commits_count,
+            files_listed: true,
             ..DiffStats::default()
         };
         let commit = |sha: &str| MrCommit {
@@ -2065,6 +2130,27 @@ mod tests {
         assert!(!diff_stats_cache_valid(Some(&stats(3, 0, 2)), &two)); // old line fields
         assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 0)), &[])); // before commits_count
         assert!(!diff_stats_cache_valid(Some(&stats(3, 10, 2)), &[])); // before the commit list
+        let before_files = DiffStats {
+            files_listed: false,
+            ..stats(3, 10, 2)
+        };
+        assert!(!diff_stats_cache_valid(Some(&before_files), &two)); // before the files
+    }
+
+    #[test]
+    fn hunks_give_the_old_lines_they_replace() {
+        let patch = "@@ -10,3 +10,4 @@ fn a()\n a\n-b\n+c\n+d\n@@ -40,0 +42,2 @@\n+e\n+f\n@@ -7 +9 @@\n-x\n+y";
+        assert_eq!(hunk_ranges(patch), vec![(10, 12), (40, 40), (7, 7)]);
+        let body: MrChanges = serde_json::from_str(
+            r#"{"changes": [{"diff": "@@ -1,2 +1,2 @@\n-a\n+b", "new_path": "src/a.rs", "old_path": "src/old.rs", "renamed_file": true}]}"#,
+        )
+        .unwrap();
+        let files = changed_files(&body);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "src/a.rs");
+        assert_eq!(files[0].old_path.as_deref(), Some("src/old.rs"));
+        assert_eq!(files[0].hunks, vec![(1, 2)]);
+        assert_eq!((files[0].added, files[0].deleted), (1, 1));
     }
 
     #[test]

@@ -551,6 +551,181 @@ async fn contains(target: &Target, commit: &str, head: &str) -> Option<bool> {
     Some(base.id == commit)
 }
 
+// ── The project's environments and branch pipelines ─────────────────────────
+
+/// A deployment of an environment, as the environments page lists them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeploymentRecord {
+    pub environment: String,
+    /// The branch (or tag) deployed.
+    pub reference: String,
+    pub sha: String,
+    pub created_at: String,
+    /// `success`, `failed`, `running`, `canceled`…
+    pub status: String,
+    /// Who started it, by name.
+    pub user: String,
+}
+
+/// The latest pipeline of a tracked branch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BranchPipeline {
+    pub branch: String,
+    pub id: u64,
+    /// The commit it ran on: the branch's head when it started.
+    pub sha: String,
+    pub status: crate::models::PipelineState,
+    pub created_at: String,
+    pub updated_at: String,
+    pub web_url: String,
+    /// The jobs that failed in it, by name.
+    pub failed_jobs: Vec<String>,
+}
+
+/// What the environments and CI pages read about the project itself.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ProjectOverview {
+    /// Newest first.
+    pub deployments: Vec<DeploymentRecord>,
+    /// One per tracked branch that has a pipeline.
+    pub pipelines: Vec<BranchPipeline>,
+}
+
+/// Where to read a project-level overview.
+#[derive(Clone)]
+pub struct ProjectTarget {
+    pub base_url: String,
+    pub token: crate::gitlab::ApiToken,
+    pub project_id: String,
+}
+
+impl ProjectTarget {
+    fn as_target(&self) -> Target {
+        Target {
+            base_url: self.base_url.clone(),
+            token: self.token.clone(),
+            project_id: self.project_id.clone(),
+            mr_id: String::new(),
+            source_branch: String::new(),
+            target_branch: String::new(),
+            sha: None,
+        }
+    }
+}
+
+/// Reads the project's latest deployments (100 at most) and the latest
+/// pipeline of each of `branches`, with the jobs that failed in it. A part that
+/// cannot be read is left empty.
+pub async fn fetch_project(target: ProjectTarget, branches: Vec<String>) -> ProjectOverview {
+    let target = target.as_target();
+    let deployments = project_deployments(&target);
+    let pipelines = futures::future::join_all(
+        branches
+            .iter()
+            .map(|branch| branch_pipeline(&target, branch)),
+    );
+    let (deployments, pipelines) = tokio::join!(deployments, pipelines);
+    ProjectOverview {
+        deployments,
+        pipelines: pipelines.into_iter().flatten().collect(),
+    }
+}
+
+async fn project_deployments(target: &Target) -> Vec<DeploymentRecord> {
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        #[serde(rename = "ref", default)]
+        reference: String,
+        #[serde(default)]
+        sha: String,
+        #[serde(default)]
+        created_at: String,
+        #[serde(default)]
+        status: String,
+        environment: Option<Env>,
+        user: Option<User>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Env {
+        name: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct User {
+        #[serde(default)]
+        name: String,
+    }
+    let Ok(raw) = target
+        .get::<Vec<Raw>>("deployments?order_by=created_at&sort=desc&per_page=100")
+        .await
+    else {
+        return Vec::new();
+    };
+    raw.into_iter()
+        .filter_map(|d| {
+            Some(DeploymentRecord {
+                environment: d.environment?.name,
+                reference: d.reference,
+                sha: d.sha,
+                created_at: d.created_at,
+                status: d.status,
+                user: d.user.map(|u| u.name).unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+async fn branch_pipeline(target: &Target, branch: &str) -> Option<BranchPipeline> {
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        id: u64,
+        #[serde(default)]
+        sha: String,
+        #[serde(default)]
+        status: crate::models::PipelineState,
+        #[serde(default)]
+        created_at: String,
+        #[serde(default)]
+        updated_at: String,
+        #[serde(default)]
+        web_url: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Job {
+        #[serde(default)]
+        name: String,
+    }
+    let list: Vec<Raw> = target
+        .get(&format!(
+            "pipelines?ref={}&per_page=1&order_by=id&sort=desc",
+            urlencoding::encode(branch)
+        ))
+        .await
+        .ok()?;
+    let raw = list.into_iter().next()?;
+    let failed_jobs = if raw.status == crate::models::PipelineState::Failed {
+        target
+            .get::<Vec<Job>>(&format!(
+                "pipelines/{}/jobs?scope[]=failed&per_page=50",
+                raw.id
+            ))
+            .await
+            .map(|jobs| jobs.into_iter().map(|j| j.name).collect())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    Some(BranchPipeline {
+        branch: branch.to_string(),
+        id: raw.id,
+        sha: raw.sha,
+        status: raw.status,
+        created_at: raw.created_at,
+        updated_at: raw.updated_at,
+        web_url: raw.web_url,
+        failed_jobs,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

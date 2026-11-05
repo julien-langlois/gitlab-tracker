@@ -5,20 +5,26 @@
 //! keys into [`Action`]s handled by [`dispatch`]. Popups follow `App::input_mode`,
 //! as in the TUI. Only the drawing lives here.
 
+mod board;
+mod ci;
 mod cockpit;
 mod colors;
 mod details;
 mod dialogs;
+mod environments;
 mod flow;
 mod history;
 mod i18n;
 mod icons;
 mod inspector;
+mod journal;
 mod keys;
 mod markdown;
+mod milestones;
 mod mr_page;
 mod mr_pipelines;
 mod next;
+mod overlaps;
 mod palette;
 mod prefs;
 mod promote;
@@ -28,6 +34,7 @@ mod sidebar;
 #[cfg(feature = "stats")]
 mod stats;
 mod table;
+mod team;
 mod toasts;
 mod today;
 mod tones;
@@ -88,6 +95,7 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
 /// no token, no network and no disk writes.
 pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
     let mut first = crate::demo::demo_app(global_config.clone()).await;
+    crate::demo::enrich_for_window(&mut first);
     // "Me", for the Today page and the reviews waiting for me.
     first.config.gitlab_username = Some("thomas_db".into());
     let session = demo_session(first);
@@ -95,6 +103,7 @@ pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
     let mut second = crate::demo::demo_app(global_config.clone()).await;
     second.project_id = "654321".into();
     second.project_name = Some("Mobile app".into());
+    crate::demo::enrich_for_window(&mut second);
     second.mrs.truncate(5);
     second.config.gitlab_username = Some("thomas_db".into());
     let shared = Shared {
@@ -219,6 +228,18 @@ enum Page {
     Tracker,
     #[cfg(feature = "stats")]
     Stats,
+    /// Who waits on whom: reviews, load, who reviews whom.
+    Team,
+    /// What happened, in order, across the open tabs.
+    Journal,
+    /// The tracked branches from feature to production, and their deployments.
+    Environments,
+    /// The pipelines: failing and flaky jobs, durations, blocked MRs.
+    Ci,
+    /// Progress of each milestone, and whether it will make its date.
+    Milestones,
+    /// Open MRs that change the same files.
+    Overlaps,
 }
 
 /// An inspector section a shortcut brings into view.
@@ -346,6 +367,13 @@ struct GuiApp {
     was_syncing: bool,
     /// The "since your last session" card was closed.
     digest_closed: bool,
+    /// The project pages' choices.
+    team: team::State,
+    journal: journal::State,
+    environments: environments::State,
+    ci: ci::State,
+    milestones: milestones::State,
+    overlaps: overlaps::State,
     /// The tracker's statuses (the board's columns), once fetched, and the
     /// fetch in flight.
     statuses: Option<Vec<gitlab_tracker_core::TicketTransitionTarget>>,
@@ -458,6 +486,12 @@ impl GuiApp {
             last_sync,
             was_syncing,
             digest_closed,
+            team: team::State::default(),
+            journal: journal::State::default(),
+            environments: environments::State::default(),
+            ci: ci::State::default(),
+            milestones: milestones::State::default(),
+            overlaps: overlaps::State::default(),
             statuses,
             statuses_rx,
             moves,
@@ -1477,6 +1511,12 @@ impl eframe::App for GuiApp {
                 Ok("tracker") => self.open_page(Page::Tracker),
                 Ok("today") => self.open_page(Page::Today),
                 Ok("promote") => self.open_page(Page::Promote),
+                Ok("team") => self.open_page(Page::Team),
+                Ok("journal") => self.open_page(Page::Journal),
+                Ok("environments") => self.open_page(Page::Environments),
+                Ok("ci") => self.open_page(Page::Ci),
+                Ok("milestones") => self.open_page(Page::Milestones),
+                Ok("overlaps") => self.open_page(Page::Overlaps),
                 // The bell's panel, with notifications in both tabs.
                 Ok("bell") => {
                     use toasts::Kind;

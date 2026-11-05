@@ -70,6 +70,12 @@ fn page_name(page: Page) -> &'static str {
         Page::Tracker => "tracker",
         #[cfg(feature = "stats")]
         Page::Stats => "stats",
+        Page::Team => "team",
+        Page::Journal => "journal",
+        Page::Environments => "environments",
+        Page::Ci => "ci",
+        Page::Milestones => "milestones",
+        Page::Overlaps => "overlaps",
     }
 }
 
@@ -90,6 +96,12 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
         Some("tracker") => Page::Tracker,
         Some("today") => Page::Today,
         Some("promote") => Page::Promote,
+        Some("team") => Page::Team,
+        Some("journal") => Page::Journal,
+        Some("environments") => Page::Environments,
+        Some("ci") => Page::Ci,
+        Some("milestones") => Page::Milestones,
+        Some("overlaps") => Page::Overlaps,
         // The stats open through their action once the window runs.
         _ => Page::MergeRequests,
     };

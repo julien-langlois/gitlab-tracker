@@ -58,6 +58,12 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
                 .frame(content.inner_margin(Margin::symmetric(24, 20)))
                 .show(ui, |ui| super::today::page(g, ui));
         }
+        Page::Team => super::team::screen(g, ui, &sizes),
+        Page::Journal => super::journal::screen(g, ui, &sizes),
+        Page::Environments => super::environments::screen(g, ui, &sizes),
+        Page::Ci => super::ci::screen(g, ui, &sizes),
+        Page::Milestones => super::milestones::screen(g, ui, &sizes),
+        Page::Overlaps => super::overlaps::screen(g, ui, &sizes),
         Page::MergeRequests | Page::Tracker => {
             if let (Page::MergeRequests, Some(width)) = (page, sizes.views) {
                 sidebar::panel(g, ui, width);
@@ -806,16 +812,83 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                 }
                 #[cfg(feature = "stats")]
                 items.push((Page::Stats, Icon::Stats, tl("Stats"), tl("Statistics (G)")));
-                for (target, icon, label, hint) in items {
+                // The pages that look at the project from one angle, under a rule.
+                let first_extra = items.len();
+                items.extend([
+                    (
+                        Page::Team,
+                        Icon::People,
+                        tl("Team"),
+                        tl("Who waits on whom, and who can take the next review"),
+                    ),
+                    (
+                        Page::Journal,
+                        Icon::History,
+                        tl("Journal"),
+                        tl("What happened, in the order it happened"),
+                    ),
+                    (
+                        Page::Environments,
+                        Icon::Layers,
+                        tl("Envs"),
+                        tl("Environments: what is where, from feature to production"),
+                    ),
+                    (
+                        Page::Ci,
+                        Icon::Pulse,
+                        tl("CI"),
+                        tl("CI / Pipelines: what breaks, what slows down"),
+                    ),
+                    (
+                        Page::Milestones,
+                        Icon::Flag,
+                        tl("Plan"),
+                        tl("Milestones: progress, and whether they make their date"),
+                    ),
+                    (
+                        Page::Overlaps,
+                        Icon::Overlap,
+                        // A shorter word than the page's title where it is long.
+                        crate::i18n::tc("rail", "Overlaps"),
+                        tl("Open MRs that change the same files"),
+                    ),
+                ]);
+                // Captions while every entry fits with them, else icons alone,
+                // smaller still on a short window.
+                let room = ui.available_height() - 2.0 * (34.0 + 6.0) - 16.0;
+                let needed = |height: f32| items.len() as f32 * (height + 6.0) + 9.0;
+                let size = if needed(46.0) <= room {
+                    RailSize::Labeled
+                } else if needed(34.0) <= room {
+                    RailSize::Icon
+                } else {
+                    RailSize::Small
+                };
+                for (index, (target, icon, label, hint)) in items.into_iter().enumerate() {
+                    if index == first_extra {
+                        let (rect, _) =
+                            ui.allocate_exact_size(Vec2::new(28.0, 3.0), Sense::hover());
+                        ui.painter().hline(
+                            rect.x_range(),
+                            rect.center().y,
+                            Stroke::new(1.0, theme.palette.border),
+                        );
+                    }
+                    let label = (size == RailSize::Labeled).then_some(label);
+                    let hint = match label {
+                        Some(_) => hint.to_string(),
+                        None => format!("{label_text} · {hint}", label_text = items_label(target)),
+                    };
                     let badge = badges
                         .iter()
                         .find(|b| b.0 == target && b.1 > 0)
                         .map(|b| (b.1, b.2));
                     let hint = match badges.iter().find(|b| b.0 == target && b.1 > 0) {
                         Some((_, n, _, what)) => format!("{hint} · {n} {what}"),
-                        None => hint.to_string(),
+                        None => hint,
                     };
-                    let response = rail_item(ui, &theme, icon, Some(label), page == target);
+                    let response =
+                        rail_item(ui, &theme, icon, label, size.height(), page == target);
                     if let Some((n, tone)) = badge {
                         rail_badge(ui, &theme, response.rect, n, tone);
                     }
@@ -824,13 +897,13 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     }
                 }
                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
-                    if rail_item(ui, &theme, Icon::Settings, None, false)
+                    if rail_item(ui, &theme, Icon::Settings, None, 34.0, false)
                         .on_hover_text(tl("Settings (,)"))
                         .clicked()
                     {
                         g.pending.push(Action::OpenSettings);
                     }
-                    if rail_item(ui, &theme, Icon::Help, None, false)
+                    if rail_item(ui, &theme, Icon::Help, None, 34.0, false)
                         .on_hover_text(tl("Keyboard shortcuts (?)"))
                         .clicked()
                     {
@@ -869,15 +942,55 @@ fn rail_badge(ui: &Ui, theme: &Theme, item: Rect, n: usize, tone: bevel_theme::T
         .galley(rect.center() - galley.size() / 2.0, galley, text_color);
 }
 
+/// How the rail's entries fit the window's height.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RailSize {
+    /// An icon over its caption.
+    Labeled,
+    /// The icon alone.
+    Icon,
+    /// The icon alone, packed tighter: a short window.
+    Small,
+}
+
+impl RailSize {
+    fn height(self) -> f32 {
+        match self {
+            RailSize::Labeled => 46.0,
+            RailSize::Icon => 34.0,
+            RailSize::Small => 28.0,
+        }
+    }
+}
+
+/// The name of a page, for the rail's tooltip when its caption is hidden.
+fn items_label(page: Page) -> &'static str {
+    match page {
+        Page::Today => tl("Today"),
+        Page::MergeRequests | Page::Mr => tl("Merge requests"),
+        Page::Cockpit => tl("Cockpit"),
+        Page::Promote => tl("Promote"),
+        Page::Tracker => tl("Linked tickets"),
+        #[cfg(feature = "stats")]
+        Page::Stats => tl("Statistics"),
+        Page::Team => tl("Team"),
+        Page::Journal => tl("Journal"),
+        Page::Environments => tl("Environments"),
+        Page::Ci => tl("CI / Pipelines"),
+        Page::Milestones => tl("Milestones"),
+        Page::Overlaps => tl("Overlaps"),
+    }
+}
+
 /// A rail entry: an icon over a short caption, highlighted when `active`.
 fn rail_item(
     ui: &mut Ui,
     theme: &Theme,
     icon: Icon,
     label: Option<&str>,
+    height: f32,
     active: bool,
 ) -> egui::Response {
-    let height = if label.is_some() { 46.0 } else { 34.0 };
     let (rect, response) = ui.allocate_exact_size(Vec2::new(40.0, height), Sense::click());
     let p = &theme.palette;
     let (fill, color) = if active {
@@ -899,16 +1012,33 @@ fn rail_item(
         color,
     );
     if let Some(label) = label {
-        let font = if active {
-            fonts::medium(10.0)
-        } else {
-            egui::FontId::proportional(10.0)
+        // The caption fits the rail: a smaller size for a long word, cut short
+        // below 8.5 points.
+        let room = RAIL_WIDTH - 6.0;
+        let font = |size: f32| {
+            if active {
+                fonts::medium(size)
+            } else {
+                egui::FontId::proportional(size)
+            }
         };
-        ui.painter().text(
-            egui::pos2(rect.center().x, rect.bottom() - 10.0),
-            egui::Align2::CENTER_CENTER,
-            label,
-            font,
+        let natural = ui
+            .painter()
+            .layout_no_wrap(label.to_owned(), font(10.0), color)
+            .size()
+            .x;
+        let size = if natural > room {
+            (10.0 * room / natural).max(8.5)
+        } else {
+            10.0
+        };
+        let galley = super::board::one_line(ui, label, font(size), color, room);
+        ui.painter().galley(
+            egui::pos2(
+                rect.center().x - galley.size().x / 2.0,
+                rect.bottom() - 10.0 - galley.size().y / 2.0,
+            ),
+            galley,
             color,
         );
     }

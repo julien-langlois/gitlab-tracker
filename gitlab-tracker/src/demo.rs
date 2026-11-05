@@ -860,6 +860,8 @@ pub async fn demo_app(config: AppConfig) -> App {
                         id: 9981,
                         status: PipelineState::Success,
                         created_at: Some("2024-11-14T10:23:05Z".into()),
+                        updated_at: Some("2024-11-14T10:35:40Z".into()),
+                        sha: Some("c9d0e1f2".into()),
                         jobs: vec![
                             PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
                             PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
@@ -871,6 +873,8 @@ pub async fn demo_app(config: AppConfig) -> App {
                         id: 9942,
                         status: PipelineState::Failed,
                         created_at: Some("2024-11-13T17:08:42Z".into()),
+                        updated_at: Some("2024-11-13T17:19:02Z".into()),
+                        sha: Some("b81f2a07".into()),
                         jobs: vec![
                             PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
                             PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },
@@ -958,7 +962,7 @@ pub async fn demo_app(config: AppConfig) -> App {
                 merged_at: Some("2024-05-06T09:00:00.000Z".into()),
                 // Demo: simulate a MR with several comments awaiting review.
                 user_notes_count: 5,
-                diff_stats: Some(crate::models::DiffStats { files_changed: 12, additions: 487, deletions: 53, commits_count: 8, commits_behind: Some(3) }),
+                diff_stats: Some(crate::models::DiffStats { files_changed: 12, additions: 487, deletions: 53, commits_count: 8, commits_behind: Some(3), ..Default::default() }),
                 created_at: Some("2024-04-20T08:00:00Z".into()),
             },
         },
@@ -999,7 +1003,7 @@ pub async fn demo_app(config: AppConfig) -> App {
                 merged_at: Some("2024-05-01T09:45:00.000Z".into()),
                 pipelines: vec![],
                 user_notes_count: 0,
-                diff_stats: Some(crate::models::DiffStats { files_changed: 4, additions: 89, deletions: 12, commits_count: 3, commits_behind: None }),
+                diff_stats: Some(crate::models::DiffStats { files_changed: 4, additions: 89, deletions: 12, commits_count: 3, commits_behind: None, ..Default::default() }),
                 created_at: Some("2024-04-25T10:00:00Z".into()),
             },
         },
@@ -1055,7 +1059,7 @@ pub async fn demo_app(config: AppConfig) -> App {
                 pipelines: vec![],
                 // Demo: simulate a MR with unread comments from reviewers.
                 user_notes_count: 3,
-                diff_stats: Some(crate::models::DiffStats { files_changed: 6, additions: 231, deletions: 18, commits_count: 5, commits_behind: Some(7) }),
+                diff_stats: Some(crate::models::DiffStats { files_changed: 6, additions: 231, deletions: 18, commits_count: 5, commits_behind: Some(7), ..Default::default() }),
                 created_at: Some("2024-04-28T14:30:00Z".into()),
             },
         },
@@ -1130,7 +1134,7 @@ pub async fn demo_app(config: AppConfig) -> App {
                 merged_at: None,
                 pipelines: vec![],
                 user_notes_count: 6,
-                diff_stats: Some(crate::models::DiffStats { files_changed: 2, additions: 34, deletions: 8, commits_count: 1, commits_behind: Some(0) }),
+                diff_stats: Some(crate::models::DiffStats { files_changed: 2, additions: 34, deletions: 8, commits_count: 1, commits_behind: Some(0), ..Default::default() }),
                 created_at: Some("2024-04-10T09:15:00Z".into()),
             },
         },
@@ -1169,7 +1173,7 @@ pub async fn demo_app(config: AppConfig) -> App {
                 merged_at: None,
                 pipelines: vec![],
                 user_notes_count: 0,
-                diff_stats: Some(crate::models::DiffStats { files_changed: 1, additions: 12, deletions: 12, commits_count: 2, commits_behind: Some(2) }),
+                diff_stats: Some(crate::models::DiffStats { files_changed: 1, additions: 12, deletions: 12, commits_count: 2, commits_behind: Some(2), ..Default::default() }),
                 created_at: Some("2024-04-22T11:00:00Z".into()),
             },
         },
@@ -1371,6 +1375,358 @@ pub fn demo_job_log() -> String {
         "$ cargo test --workspace\n   Compiling api v0.4.0 (/builds/shop/api)\n    Finished test profile in 41.2s\n     Running unittests src/lib.rs\n\nrunning 48 tests\ntest db::pool::tests::acquire_times_out ... ok\ntest db::pool::tests::release_under_load ... FAILED\ntest api::graphql::tests::lists_open_mrs ... ok\n\nfailures:\n\n---- db::pool::tests::release_under_load stdout ----\nthread 'db::pool::tests::release_under_load' panicked at src/db/pool.rs:212:9:\nassertion `left == right` failed: 3 connections still checked out\n  left: 3\n right: 0\n\ntest result: FAILED. 47 passed; 1 failed; 0 ignored\nerror: test failed, to rerun pass `--lib`\nERROR: Job failed: exit code 101",
         60,
     )
+}
+
+/// What the demo's environments and CI pages read "from GitLab" (`gui`
+/// feature): two weeks of deployments of an environment per tracked branch, and
+/// each branch's latest pipeline, dated from now.
+#[cfg(feature = "gui")]
+pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview {
+    use crate::gitlab_detail::{BranchPipeline, DeploymentRecord, ProjectOverview};
+    let now = chrono::Utc::now();
+    let at = |hours: f64| {
+        (now - chrono::Duration::minutes((hours * 60.0) as i64))
+            .format("%Y-%m-%dT%H:%M:%S.000Z")
+            .to_string()
+    };
+    let flow = app.branch_flow();
+    let ordered: Vec<String> = flow.in_order().iter().map(|b| b.name.clone()).collect();
+    let last = ordered.len().saturating_sub(1);
+    let mut deployments = Vec::new();
+    let mut pipelines = Vec::new();
+    let people = [
+        "Alex Devries",
+        "Thomas Dubosc",
+        "Sarah Codewyn",
+        "GitLab CI",
+    ];
+    for (index, branch) in ordered.iter().enumerate() {
+        let environment = match crate::branch_flow::short_name(branch).as_str() {
+            "prod" => "prod".to_string(),
+            "staging" => "recette".to_string(),
+            "main" => "dev".to_string(),
+            other => other.to_string(),
+        };
+        // The closer to production, the rarer: dev twice a day, staging every
+        // other day, production twice in two weeks.
+        let every = match last - index {
+            0 => 150.0,
+            1 => 44.0,
+            _ => 11.0,
+        };
+        let mut hours = 0.7 + index as f64 * 6.0;
+        let mut n = 0;
+        while hours < 14.0 * 24.0 {
+            let status = if n % 9 == 4 { "failed" } else { "success" };
+            deployments.push(DeploymentRecord {
+                environment: environment.clone(),
+                reference: branch.clone(),
+                sha: format!("{:07x}", 0x3a91c0e + (index * 977 + n * 131) as u64),
+                created_at: at(hours),
+                status: status.into(),
+                user: people[(index + n) % people.len()].into(),
+            });
+            hours += every * (0.8 + 0.4 * ((n * 7 % 5) as f64 / 4.0));
+            n += 1;
+        }
+        let failed = index + 1 == last && last > 0;
+        pipelines.push(BranchPipeline {
+            branch: branch.clone(),
+            id: 9990 - index as u64 * 4,
+            sha: if failed {
+                "7c19f03".into()
+            } else {
+                format!("{:07x}", 0x3a91c0e + (index * 977) as u64)
+            },
+            status: if failed {
+                PipelineState::Failed
+            } else {
+                PipelineState::Success
+            },
+            created_at: at(0.9 + index as f64 * 30.0),
+            updated_at: at(0.7 + index as f64 * 30.0),
+            web_url: String::new(),
+            failed_jobs: if failed {
+                vec!["deploy-staging".into()]
+            } else {
+                Vec::new()
+            },
+        });
+    }
+    deployments.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    ProjectOverview {
+        deployments,
+        pipelines,
+    }
+}
+
+/// What the window's demo adds to [`demo_app`] for its project pages (`gui`
+/// feature): two weeks of pipelines per MR, with a flaky job, the files each MR
+/// changes (two open MRs on the same lines, others on the same files), and
+/// answered review requests. Dated from now; the TUI demo and the tests keep
+/// [`demo_app`] as it is.
+#[cfg(feature = "gui")]
+pub fn enrich_for_window(app: &mut App) {
+    use crate::models::{ChangedFile, ReviewActivity};
+    let now = chrono::Utc::now();
+    let at = |hours: f64| {
+        (now - chrono::Duration::minutes((hours * 60.0) as i64))
+            .format("%Y-%m-%dT%H:%M:%S.000Z")
+            .to_string()
+    };
+    // name, stage, usual seconds
+    const JOBS: [(&str, &str, f64); 6] = [
+        ("lint", "test", 46.0),
+        ("unit-tests", "test", 252.0),
+        ("integration-tests", "test", 305.0),
+        ("e2e-cypress", "test", 460.0),
+        ("build-image", "build", 198.0),
+        ("deploy-staging", "deploy", 151.0),
+    ];
+    // Per MR: pipelines (hours ago, failing jobs), newest first; same sha twice
+    // with a failure then a pass is a flaky run.
+    // (hours ago, failing jobs, revision of the source branch)
+    type Run = (f64, &'static [&'static str], u32);
+    let plan: &[(&str, &[Run])] = &[
+        (
+            "107",
+            &[
+                (5.0, &["unit-tests"], 7),
+                (30.0, &["unit-tests"], 6),
+                (52.0, &[], 5),
+                (98.0, &["e2e-cypress"], 5),
+                (170.0, &[], 4),
+            ],
+        ),
+        (
+            "102",
+            &[
+                (9.0, &[], 3),
+                (11.0, &["e2e-cypress"], 3),
+                (75.0, &["integration-tests"], 2),
+                (77.0, &[], 2),
+                (200.0, &["lint"], 1),
+            ],
+        ),
+        (
+            "103",
+            &[
+                (20.0, &[], 4),
+                (23.0, &["e2e-cypress"], 4),
+                (130.0, &[], 3),
+                (220.0, &["e2e-cypress"], 2),
+            ],
+        ),
+        (
+            "106",
+            &[
+                (40.0, &[], 2),
+                (150.0, &["deploy-staging"], 1),
+                (152.0, &[], 1),
+            ],
+        ),
+        (
+            "101",
+            &[
+                (150.0, &[], 3),
+                (190.0, &["e2e-cypress"], 2),
+                (192.0, &[], 2),
+                (260.0, &["unit-tests"], 1),
+            ],
+        ),
+        (
+            "105",
+            &[
+                (280.0, &["integration-tests"], 2),
+                (300.0, &["integration-tests", "e2e-cypress"], 1),
+            ],
+        ),
+    ];
+    for mr in &mut app.mrs {
+        let Some((_, runs)) = plan.iter().find(|(id, _)| *id == mr.id) else {
+            continue;
+        };
+        if !mr.pipelines.is_empty() {
+            continue;
+        }
+        let base: u64 = mr.id.parse().unwrap_or(1) * 97;
+        mr.pipelines = runs
+            .iter()
+            .enumerate()
+            .map(|(k, (hours, failing, rev))| {
+                let jitter = |j: usize| 0.82 + ((base as usize + k * 7 + j * 3) % 9) as f64 * 0.045;
+                let mut stop = false;
+                let jobs: Vec<PipelineJob> = JOBS
+                    .iter()
+                    .enumerate()
+                    .map(|(j, (name, stage, secs))| {
+                        let failed = failing.contains(name);
+                        let status = if stop {
+                            "skipped"
+                        } else if failed {
+                            "failed"
+                        } else {
+                            "success"
+                        };
+                        // Nothing deploys after a failed stage.
+                        if failed && *stage != "deploy" {
+                            stop = *stage == "build";
+                        }
+                        PipelineJob {
+                            id: 70_000 + base * 10 + (k * 10 + j) as u64,
+                            name: (*name).into(),
+                            stage: (*stage).into(),
+                            status: status.into(),
+                            duration: (status != "skipped").then(|| (secs * jitter(j)).round()),
+                        }
+                    })
+                    .collect();
+                // Wall time: the jobs of a stage run side by side, some runners are slower.
+                let spread = 0.38 + 0.07 * ((k * 5 + base as usize) % 7) as f64;
+                let total: f64 = jobs.iter().filter_map(|j| j.duration).sum::<f64>() * spread;
+                Pipeline {
+                    id: 9_700 + base / 3 + (runs.len() - k) as u64 * 7,
+                    status: if failing.is_empty() {
+                        PipelineState::Success
+                    } else {
+                        PipelineState::Failed
+                    },
+                    created_at: Some(at(*hours)),
+                    updated_at: Some(at(hours - total / 3600.0)),
+                    sha: Some(format!(
+                        "{:08x}",
+                        0x5e1a_0000_u64 + base * 16 + u64::from(*rev)
+                    )),
+                    jobs,
+                }
+            })
+            .collect();
+    }
+
+    // The files each MR changes.
+    let file = |path: &str, hunks: &[(u32, u32)], added: u32, deleted: u32| ChangedFile {
+        path: path.into(),
+        added,
+        deleted,
+        hunks: hunks.to_vec(),
+        ..ChangedFile::default()
+    };
+    for mr in &mut app.mrs {
+        let files = match mr.id.as_str() {
+            "103" => vec![
+                file("src/ui/render.rs", &[(12, 90)], 141, 62),
+                file("src/ui/table.rs", &[(300, 340)], 38, 21),
+                file("src/app.rs", &[(1200, 1262)], 44, 30),
+                file("src/api/graphql/schema.rs", &[(118, 131)], 9, 4),
+            ],
+            "107" => vec![
+                file("src/notify.rs", &[(1, 212)], 188, 12),
+                file("src/app.rs", &[(1240, 1290)], 52, 8),
+                file("config/default.toml", &[(30, 34)], 6, 0),
+                file("src/api/graphql/schema.rs", &[(124, 129)], 11, 2),
+            ],
+            "102" => vec![
+                file("src/db/pool.rs", &[(180, 240)], 61, 39),
+                file("src/app.rs", &[(400, 410)], 7, 3),
+                ChangedFile {
+                    new_file: true,
+                    ..file("migrations/0042_pool_index.sql", &[(1, 1)], 12, 0)
+                },
+            ],
+            "106" => vec![
+                file("Cargo.toml", &[(20, 48)], 14, 14),
+                file("Cargo.lock", &[(1, 900)], 310, 286),
+                file("src/db/pool.rs", &[(247, 251)], 3, 3),
+            ],
+            "101" => vec![
+                file("src/auth/oauth.rs", &[(1, 160)], 151, 20),
+                file("config/default.toml", &[(12, 18)], 7, 1),
+                file("src/app.rs", &[(880, 905)], 22, 4),
+            ],
+            "104" => vec![
+                file("src/api/graphql/schema.rs", &[(1, 140)], 230, 10),
+                file("src/app.rs", &[(1210, 1230)], 18, 6),
+                file("src/db/pool.rs", &[(60, 75)], 9, 2),
+            ],
+            _ => continue,
+        };
+        if let Some(stats) = &mut mr.diff_stats {
+            stats.files = files;
+            stats.files_listed = true;
+        } else {
+            mr.diff_stats = Some(crate::models::DiffStats {
+                files_changed: files.len() as u32,
+                additions: files.iter().map(|f| f.added).sum(),
+                deletions: files.iter().map(|f| f.deleted).sum(),
+                commits_count: 1,
+                files,
+                files_listed: true,
+                ..Default::default()
+            });
+        }
+    }
+
+    // Milestones due soon, so that the page has one to make and one to watch.
+    let due = |days: i64| {
+        (now + chrono::Duration::days(days))
+            .format("%Y-%m-%d")
+            .to_string()
+    };
+    app.milestones = vec![
+        crate::models::GitLabMilestone {
+            title: "v2.4.0".into(),
+            due_date: Some(due(6)),
+            description: Some("November release train.".into()),
+        },
+        crate::models::GitLabMilestone {
+            title: "v2.5.0".into(),
+            due_date: Some(due(27)),
+            description: Some("Mobile clients and notifications.".into()),
+        },
+    ];
+    for mr in &mut app.mrs {
+        match mr.milestone.as_deref() {
+            Some("v2.4.0") => mr.milestone_due_date = Some(due(6)),
+            Some("v2.5.0") => mr.milestone_due_date = Some(due(27)),
+            _ => {}
+        }
+    }
+
+    // A recent arrival on production, for the milestones' pace.
+    if app.mrs.iter().any(|mr| mr.id == "104") {
+        if let Some(last) = app.branches.last().cloned() {
+            app.branch_arrivals
+                .insert(("104".into(), last), now - chrono::Duration::days(9));
+        }
+    }
+
+    // Answered review requests, for the response times.
+    for mr in &mut app.mrs {
+        let id = mr.id.clone();
+        let review = mr.review.get_or_insert_with(ReviewActivity::default);
+        let mut ask = |who: &str, asked: f64, answered: Option<f64>| {
+            review
+                .review_requested_at
+                .entry(who.to_string())
+                .or_insert_with(|| at(asked));
+            if let Some(answered) = answered {
+                review
+                    .last_activity_by
+                    .entry(who.to_string())
+                    .or_insert_with(|| at(answered));
+            }
+        };
+        match id.as_str() {
+            "101" => {
+                ask("thomas_db", 220.0, Some(214.0));
+                ask("sarah_code", 220.0, Some(196.0));
+            }
+            "103" => ask("marina_gql", 60.0, Some(49.0)),
+            "106" => ask("julien_m", 46.0, Some(44.5)),
+            "102" => ask("alex_dev", 30.0, Some(21.0)),
+            _ => {}
+        }
+    }
 }
 
 /// What the demo's MR page reads "from GitLab" when it opens (`gui` feature):

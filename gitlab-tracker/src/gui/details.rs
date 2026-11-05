@@ -80,6 +80,13 @@ pub struct Details {
     selected: HashMap<String, String>,
     /// The MR page's patches with the old file beside the new one, not unified.
     side_by_side: bool,
+    /// The project's deployments and branch pipelines, and when they were asked.
+    project: Option<(
+        std::time::Instant,
+        Fetch<crate::gitlab_detail::ProjectOverview>,
+    )>,
+    /// A newer overview on its way, while the last one shows.
+    project_next: Option<Receiver<Result<crate::gitlab_detail::ProjectOverview, String>>>,
 }
 
 impl Details {
@@ -142,6 +149,60 @@ impl Details {
             self.pages.insert(key.clone(), fetch);
         }
         let fetch = self.pages.get_mut(&key)?;
+        fetch.poll();
+        match fetch {
+            Fetch::Ready(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// The project's deployments and the latest pipeline of each tracked
+    /// branch: read in the background when first asked, again once older than
+    /// the refresh interval; the last result shows meanwhile. `None` until the
+    /// first read is done.
+    pub fn project(
+        &mut self,
+        app: &App,
+        ctx: &egui::Context,
+    ) -> Option<&crate::gitlab_detail::ProjectOverview> {
+        let max_age = std::time::Duration::from_secs(app.refresh_interval_secs.max(60));
+        let stale = match &self.project {
+            None => true,
+            Some((at, Fetch::Ready(_) | Fetch::Failed(_))) => at.elapsed() >= max_age,
+            Some((_, Fetch::Loading(_))) => false,
+        };
+        if stale {
+            let fetch = if app.read_only {
+                Fetch::Ready(crate::demo::demo_project_overview(app))
+            } else {
+                let target = crate::gitlab_detail::ProjectTarget {
+                    base_url: app.base_url.clone(),
+                    token: app.token.clone(),
+                    project_id: app.project_id.clone(),
+                };
+                let branches = app.branches.clone();
+                Self::fetch(ctx, async move {
+                    Ok(crate::gitlab_detail::fetch_project(target, branches).await)
+                })
+            };
+            // Keep showing the previous overview while the new one loads.
+            match (&mut self.project, fetch) {
+                (Some((at, Fetch::Ready(_))), Fetch::Loading(rx)) => {
+                    *at = std::time::Instant::now();
+                    self.project_next = Some(rx);
+                }
+                (slot, fetch) => *slot = Some((std::time::Instant::now(), fetch)),
+            }
+        }
+        if let Some(rx) = &self.project_next {
+            if let Ok(result) = rx.try_recv() {
+                self.project_next = None;
+                if let Ok(value) = result {
+                    self.project = Some((std::time::Instant::now(), Fetch::Ready(value)));
+                }
+            }
+        }
+        let (_, fetch) = self.project.as_mut()?;
         fetch.poll();
         match fetch {
             Fetch::Ready(data) => Some(data),

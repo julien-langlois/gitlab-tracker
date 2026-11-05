@@ -25,15 +25,15 @@ stats = ["dep:gitlab-tracker-stats"]
 # Needs Rust 1.95 (bevel); bevel is a local path dependency for now, so this
 # feature is not publishable yet.
 gui = [
-    "dep:eframe",
-    "dep:egui",
-    "dep:egui_commonmark",
-    "dep:egui_extras",
-    "dep:pulldown-cmark",
-    "dep:bevel-i18n",
-    "dep:bevel-theme",
-    "dep:bevel-widgets",
-    "dep:bevel-window",
+  "dep:eframe",
+  "dep:egui",
+  "dep:egui_commonmark",
+  "dep:egui_extras",
+  "dep:pulldown-cmark",
+  "dep:bevel-i18n",
+  "dep:bevel-theme",
+  "dep:bevel-widgets",
+  "dep:bevel-window",
 ]
 
 [dependencies]
@@ -46,7 +46,13 @@ inventory.workspace = true
 ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 crossterm = { version = "0.29", features = ["event-stream"] }
 terminal-colorsaurus = "1.0.3"
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+  "fs",
+] }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -70,16 +76,31 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zeroize.workspace = true
 # GUI (feature `gui`).
-eframe = { version = "0.37", optional = true, default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "system_fonts", "wayland", "x11"] }
+eframe = { version = "0.37", optional = true, default-features = false, features = [
+  "accesskit",
+  "clipboard",
+  "default_fonts",
+  "glow",
+  "links",
+  "system_fonts",
+  "wayland",
+  "x11",
+] }
 egui = { version = "0.37", optional = true }
-egui_commonmark = { version = "0.26", optional = true, default-features = false, features = ["pulldown_cmark"] }
+egui_commonmark = { version = "0.26", optional = true, default-features = false, features = [
+  "pulldown_cmark",
+] }
 egui_extras = { version = "0.37", optional = true, default-features = false }
 # Same version as egui_commonmark: the description is rewritten before it is shown.
 pulldown-cmark = { version = "0.13", optional = true, default-features = false }
 bevel-i18n = { path = "../../bevel/bevel-i18n", optional = true }
-bevel-theme = { path = "../../bevel/bevel-theme", optional = true, features = ["fonts"] }
+bevel-theme = { path = "../../bevel/bevel-theme", optional = true, features = [
+  "fonts",
+] }
 bevel-widgets = { path = "../../bevel/bevel-widgets", optional = true }
-bevel-window = { path = "../../bevel/bevel-window", optional = true, features = ["egui"] }
+bevel-window = { path = "../../bevel/bevel-window", optional = true, features = [
+  "egui",
+] }
 
 # cargo-release (declared on this package only, so it runs once per release):
 # prepends this release's section to CHANGELOG.md, with the same cliff.toml as the
@@ -87,6 +108,7 @@ bevel-window = { path = "../../bevel/bevel-window", optional = true, features = 
 # during the dry run (DRY_RUN=true): it then only prints the section.
 [package.metadata.release]
 pre-release-hook = [
-  "sh", "-c",
+  "sh",
+  "-c",
   'cd "$WORKSPACE_ROOT" && if [ "$DRY_RUN" = true ]; then git cliff --unreleased --tag "v$NEW_VERSION" --strip header; else git cliff --unreleased --tag "v$NEW_VERSION" --prepend CHANGELOG.md; fi',
 ]

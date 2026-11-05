@@ -2893,6 +2893,7 @@ pub(crate) mod tests {
             status: PipelineState::Failed,
             created_at: None,
             jobs: vec![],
+            ..Pipeline::default()
         }];
         app.mrs[2].status = MrStatus::MergedIn(HashSet::new());
 

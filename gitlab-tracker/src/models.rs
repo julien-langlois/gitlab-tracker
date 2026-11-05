@@ -591,6 +591,35 @@ pub struct DiffStats {
     /// open MRs whose mergeability is not `Mergeable`.
     #[serde(default)]
     pub commits_behind: Option<u32>,
+    /// The files changed, with the lines of the target each one touches: what
+    /// tells two open MRs that change the same code.
+    #[serde(default)]
+    pub files: Vec<ChangedFile>,
+    /// `files` was read (it can be empty: a diff too large for GitLab). `false`
+    /// in entries cached before the files were kept: they are read again.
+    #[serde(default)]
+    pub files_listed: bool,
+}
+
+/// A file an MR changes, and where.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChangedFile {
+    pub path: String,
+    /// Its path on the target, when the MR renames it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_path: Option<String>,
+    #[serde(default)]
+    pub added: u32,
+    #[serde(default)]
+    pub deleted: u32,
+    /// The lines of the file as on the target (first, last) each hunk of the
+    /// patch replaces; an insertion covers the line it comes after.
+    #[serde(default)]
+    pub hunks: Vec<(u32, u32)>,
+    #[serde(default)]
+    pub new_file: bool,
+    #[serde(default)]
+    pub deleted_file: bool,
 }
 
 impl DiffStats {
@@ -689,7 +718,7 @@ pub struct PipelineJob {
 }
 
 /// A GitLab pipeline attached to a merge request.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Pipeline {
     pub id: u64,
     #[serde(default)]
@@ -697,6 +726,12 @@ pub struct Pipeline {
     /// ISO 8601 timestamp when the pipeline was created (i.e. triggered).
     /// Populated directly from the GitLab API — `None` when not provided.
     pub created_at: Option<String>,
+    /// When GitLab last changed it: its end, once it finished.
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    /// The commit it ran on: two runs on the same commit tell a flaky job.
+    #[serde(default)]
+    pub sha: Option<String>,
     /// Jobs are fetched alongside the pipeline and persisted across restarts.
     #[serde(default)]
     pub jobs: Vec<PipelineJob>,

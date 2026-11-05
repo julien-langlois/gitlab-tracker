@@ -1129,3 +1129,365 @@ date	Merged	Mesclada
 @plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	Levar {n} MR de {from} para {to}|Levar {n} MRs de {from} para {to}
 @plural	To ship the {n} selected MR|To ship the {n} selected MRs	Para entregar o {n} MR selecionado|Para entregar os {n} MRs selecionados
 @plural	Show {n} more|Show {n} more	Mostrar mais {n}|Mostrar mais {n}
+
+# Project pages: team, journal, environments, CI, milestones, overlaps
+	!{a} and !{b} change the same files:	!{a} e !{b} alteram os mesmos arquivos:
+	!{id} has waited for {name}'s review for {time}, past the reminder delay.	!{id} espera a revisão de {name} há {time}, além do prazo de lembrete.
+	#{id} · failed: {jobs}	#{id} · falhou: {jobs}
+	+{n} pts on the period before	+{n} pts em relação ao período anterior
+	/ {h} estimated	/ {h} estimadas
+	14 d	14 d
+	24 h	24 h
+	7 d	7 d
+	8 weeks	8 semanas
+	8 weeks ago	há 8 semanas
+	A click on a gap picks the pair of branches; Promote has the details and the commands.	Um clique numa diferença escolhe o par de branches; Promoção mostra os detalhes e os comandos.
+	Already seen below	Já visto abaixo
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}.	No ritmo das últimas quatro semanas ({pace} por semana), tudo estará em produção por volta de {eta}.
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}: in time.	No ritmo das últimas quatro semanas ({pace} por semana), tudo estará em produção por volta de {eta}: no prazo.
+	At the pace of the last four weeks ({pace} a week), everything is on production around {eta}: {n} after its date.	No ritmo das últimas quatro semanas ({pace} por semana), tudo estará em produção por volta de {eta}: {n} após a data.
+	Available	Disponível
+	Back on their author	De volta ao autor
+	Bot	Bot
+	Branch arrivals	Chegadas em branches
+	Burn-up	Burn-up
+	Busy	Ocupado
+	CI / Pipelines	CI / Pipelines
+	CI / Pipelines: what breaks, what slows down	CI / Pipelines: o que quebra, o que atrasa
+	Click: pick the pair · double click: show the MR	Clique: escolher o par · clique duplo: mostrar a MR
+	Close lines	Linhas próximas
+	Copy a message	Copiar uma mensagem
+	Copy the release notes	Copiar as notas de versão
+	Copy the report	Copiar o relatório
+	Copy the state	Copiar o estado
+	Copy the summary	Copiar o resumo
+	Copy who waits on whom, to paste in a chat	Copiar quem espera quem, para colar num chat
+	Delivered	Entregues
+	Delivered milestones	Marcos entregues
+	Delivered: on {branch}, the last branch of the flow. The pace is the MRs delivered over the last four weeks.	Entregue: em {branch}, o último branch do fluxo. O ritmo são as MRs entregues nas últimas quatro semanas.
+	Deployed	Implantado
+	Double click: show the MR	Clique duplo: mostrar a MR
+	Drafts	Rascunhos
+	Due date	Prazo
+	End of the flow	Fim do fluxo
+	Environments	Ambientes
+	Environments: what is where, from feature to production	Ambientes: o que está onde, da feature à produção
+	Envs	Amb.
+	Every branch has what the one before it has.	Cada branch tem o que o anterior tem.
+	Every folder	Todas as pastas
+	Every job	Todos os jobs
+	Everyone	Todos
+	Failed deployments	Implantações com falha
+	Failed on	Falhou em
+	Failing jobs	Jobs com falha
+	Failures by stage	Falhas por estágio
+	Fewer than two open MRs with their files known: nothing can overlap.	Menos de duas MRs abertas com arquivos conhecidos: nada pode se sobrepor.
+	File	Arquivo
+	Flaky	Instável
+	Flaky jobs	Jobs instáveis
+	Flaky: a job that fails, then passes on the same commit without a change. From the last pipelines of each tracked MR.	Instável: um job que falha e depois passa no mesmo commit sem mudanças. A partir dos últimos pipelines de cada MR acompanhada.
+	Folders	Pastas
+	From the feature branches to production: what is where, and what waits	Dos branches de feature à produção: o que está onde e o que espera
+	Gaps between branches	Diferenças entre branches
+	GitLab lists no deployment for this project: the branches show without their environments.	O GitLab não lista implantações para este projeto: os branches aparecem sem seus ambientes.
+	GitLab lists no deployment of the tracked branches.	O GitLab não lista implantações dos branches acompanhados.
+	Give the MRs a milestone in GitLab: this page follows each one to production.	Atribua um marco às MRs no GitLab: esta página acompanha cada um até a produção.
+	Held back by the CI	Bloqueadas pela CI
+	Hi {name}, nothing waits on you right now.	Oi {name}, nada está esperando por você agora.
+	Hi {name}, these reviews are waiting on you:	Oi {name}, estas revisões estão esperando por você:
+	Hide the bots	Ocultar os bots
+	Hot spots	Pontos quentes
+	In progress	Em andamento
+	In review	Em revisão
+	In sync with {branch}	Em dia com {branch}
+	In this period	No período
+	Include bots	Incluir os bots
+	Include drafts	Incluir os rascunhos
+	Job	Job
+	Job picked	Job escolhido
+	Jobs	Jobs
+	Journal	Diário
+	Last 7 days	Últimos 7 dias
+	Last asked {when}	Último pedido {when}
+	Last deployment of {env}: {when}	Última implantação de {env}: {when}
+	Last failure	Última falha
+	Leave out lock files	Ignorar os lockfiles
+	Lines	Linhas
+	Load: the reviews waiting on someone, heavier as they wait, plus the effort of their open MRs and the threads they have to answer, against the most loaded person.	Carga: as revisões que esperam alguém, mais pesadas quanto mais esperam, mais o esforço das suas MRs abertas e os threads a responder, em relação à pessoa mais carregada.
+	MR × MR	MR × MR
+	MR, person, branch…	MR, pessoa, branch…
+	MRs held back by the CI	MRs bloqueadas pela CI
+	MRs in 30 days	MRs em 30 dias
+	Mark all as read	Marcar tudo como lido
+	Median duration	Duração mediana
+	Merge !{first} first: {why}. !{second} will then need a rebase on its target, where the files meet.	Faça o merge de !{first} primeiro: {why}. Depois, !{second} precisará de um rebase no destino, onde os arquivos se cruzam.
+	Merged, not on {branch} yet	Mescladas, ainda não em {branch}
+	Merges and closes	Merges e fechamentos
+	Message copied	Mensagem copiada
+	Milestone {name}	Marco {name}
+	Milestones	Marcos
+	Milestones: progress, and whether they make their date	Marcos: progresso e se cumprem a data
+	Most active	As mais ativas
+	My MRs	Minhas MRs
+	Name	Nome
+	Never deployed	Nunca implantado
+	Newer commits not deployed	Commits mais recentes não implantados
+	No MR reached production in the last four weeks: no pace to project from.	Nenhuma MR chegou à produção nas últimas quatro semanas: não há ritmo para projetar.
+	No answer in the period	Nenhuma resposta no período
+	No environment	Nenhum ambiente
+	No environment deployed from it	Nenhum ambiente é implantado a partir dele
+	No failed job in the period.	Nenhum job com falha no período.
+	No file changed by several recent MRs.	Nenhum arquivo alterado por várias MRs recentes.
+	No file changed by two open MRs here.	Aqui nenhum arquivo é alterado por duas MRs abertas.
+	No finished pipeline in the period.	Nenhum pipeline concluído no período.
+	No job in this view for the period.	Nenhum job nesta visão no período.
+	No milestone on the tracked MRs	Nenhum marco nas MRs acompanhadas
+	No milestone on the tracked MRs.	Nenhum marco nas MRs acompanhadas.
+	No open MR has its latest pipeline failed.	Nenhuma MR aberta tem o último pipeline com falha.
+	No open MR.	Nenhuma MR aberta.
+	No pair of open MRs in this view.	Nenhum par de MRs abertas nesta visão.
+	No request from {author} to {reviewer}	Nenhum pedido de {author} para {reviewer}
+	No request in the period	Nenhum pedido no período
+	No review request in the period.	Nenhum pedido de revisão no período.
+	No review waiting on them.	Nenhuma revisão está esperando por essa pessoa.
+	No tracked MR in this milestone yet.	Ainda não há MRs acompanhadas neste marco.
+	No tracked branch: add some in the project's settings.	Nenhum branch acompanhado: adicione alguns nas configurações do projeto.
+	No two open MRs change the same file.	Não há duas MRs abertas alterando o mesmo arquivo.
+	No two open MRs change the same file: nothing to pick.	Não há duas MRs abertas alterando o mesmo arquivo: nada a escolher.
+	Nobody in this view.	Ninguém nesta visão.
+	None past the reminder delay	Nenhuma além do prazo de lembrete
+	Normal	Normal
+	Nothing happened in this period with these filters.	Nada aconteceu neste período com estes filtros.
+	Nothing stands out: the reviews flow.	Nada se destaca: as revisões fluem.
+	Nothing to compare with yet	Ainda nada para comparar
+	Nothing yet.	Nada por enquanto.
+	On the way	A caminho
+	Only what concerns me	Só o que me diz respeito
+	Open MRs that change the same files	MRs abertas que alteram os mesmos arquivos
+	Open MRs that change the same files, before they step on each other	MRs abertas que alteram os mesmos arquivos, antes que uma atrapalhe a outra
+	Open in Promote	Abrir em Promoção
+	Open its pipelines	Abrir os pipelines
+	Opened and pushed	Abertas e com push
+	Overlaps	Sobreposições
+	Overlaps between open MRs	Sobreposições entre MRs abertas
+	Overloaded	Sobrecarregado
+	P90 {d}	P90 {d}
+	Pair picked	Par escolhido
+	Pairs at risk	Pares em risco
+	Pairs in the same files	Pares nos mesmos arquivos
+	Pairs on the same lines	Pares nas mesmas linhas
+	Person	Pessoa
+	Pick a milestone.	Escolha um marco.
+	Pick someone in the list to see what waits on them.	Escolha alguém na lista para ver o que espera por essa pessoa.
+	Pipeline durations	Duração dos pipelines
+	Pipelines passing	Pipelines aprovados
+	Plan	Plano
+	Read from the changes the app already fetches for the review effort: no request of its own.	Lido das alterações que o app já busca para o esforço de revisão: nenhuma requisição própria.
+	Reading the branches' pipelines…	Lendo os pipelines dos branches…
+	Reading the deployments and the branches' pipelines from GitLab…	Lendo no GitLab as implantações e os pipelines dos branches…
+	Reading the deployments…	Lendo as implantações…
+	Rebuilt from what the MRs carry: their dates, reviews, threads, pipelines and branch arrivals. Nothing is fetched for it.	Reconstruído a partir do que as MRs trazem: datas, revisões, threads, pipelines e chegadas em branches. Nada é buscado para isso.
+	Report copied	Relatório copiado
+	Response	Resposta
+	Review balance	Equilíbrio das revisões
+	Review response	Resposta às revisões
+	Reviews	Revisões
+	Reviews and threads	Revisões e threads
+	Reviews waiting	Revisões em espera
+	Reviews waiting on them	Revisões esperando por essa pessoa
+	Rhythm of {env}	Ritmo de {env}
+	Risk	Risco
+	Runs	Execuções
+	Same file	Mesmo arquivo
+	Same lines	Mesmas linhas
+	Scope	Escopo
+	See the changes	Ver as alterações
+	Selected	Seleção
+	Shared files	Arquivos compartilhados
+	Show it on the merge requests page	Mostrar na página de merge requests
+	Show the MR	Mostrar a MR
+	Show the blocked MRs	Mostrar as MRs bloqueadas
+	Show their MRs	Mostrar as MRs
+	Show these MRs	Mostrar estas MRs
+	Show what this branch has that the next one lacks	Mostrar o que este branch tem e falta no próximo
+	Stage	Estágio
+	Stages	Estágios
+	State of the environments copied	Estado dos ambientes copiado
+	Succeeded	Bem-sucedido
+	Suggestion	Sugestão
+	Suggestion: merge !{first} first, then rebase !{second}.	Sugestão: faça o merge de !{first} primeiro e depois o rebase de !{second}.
+	Summary copied	Resumo copiado
+	Tabs	Abas
+	Team	Equipe
+	The {n} latest events: narrow the period or the types to see older ones.	Os {n} eventos mais recentes: restrinja o período ou os tipos para ver os mais antigos.
+	Their MRs	MRs dessa pessoa
+	Their open MRs	MRs abertas dessa pessoa
+	Threads to answer	Threads a responder
+	Tickets	Tickets
+	Track at least two branches to compare them.	Acompanhe pelo menos dois branches para compará-los.
+	Trend	Tendência
+	Types	Tipos
+	Wait	Espera
+	Waited on for a review	Aguardados para uma revisão
+	Waiting on them	Esperando por essa pessoa
+	Waiting the longest	Esperando há mais tempo
+	What breaks, what slows down, and what it holds back	O que quebra, o que atrasa e o que bloqueia
+	What happened, in the order it happened	O que aconteceu, na ordem em que aconteceu
+	What moved, in the order it happened	O que mudou, na ordem em que aconteceu
+	What {from} has that {to} lacks	O que {from} tem e falta em {to}
+	Where they meet	Onde se cruzam
+	Where they stand	Onde estão
+	Who reviews whom	Quem revisa quem
+	Who waits on what, and who can take the next review	Quem espera o quê e quem pode pegar a próxima revisão
+	Who waits on whom, and who can take the next review	Quem espera quem e quem pode pegar a próxima revisão
+	already approved	já aprovada
+	and {n} more	e mais {n}
+	approved	aprovada
+	as before	como antes
+	asked {time} ago	pedida há {time}
+	between two deployments	entre duas implantações
+	branches: {list}	branches: {list}
+	by {names}	por {names}
+	by {name}	por {name}
+	cherry-picked with its trailer	cherry-pick com a marcação
+	close lines, or apart	linhas próximas ou distantes
+	closed without merging	fechada sem merge
+	copied without trailer: inferred from the author, date and title	copiada sem marcação: deduzido do autor, da data e do título
+	delivered	entregue
+	delivered against the scope	entregue em relação ao escopo
+	delivered · {done} of {total} on {branch}	entregues · {done} de {total} em {branch}
+	deployed {when}	implantado {when}
+	deployments in 30 days	implantações em 30 dias
+	files in common	arquivos em comum
+	flaky	instável
+	for {time}	há {time}
+	git will stop on them	o git vai parar neles
+	in merge order	na ordem de merge
+	in review or work	em revisão ou em andamento
+	into {target}	em {target}
+	its own commits	os próprios commits
+	last {n} days	últimos {n} dias
+	latest pipeline	último pipeline
+	median {d}	mediana {d}
+	merged by {name}	mesclada por {name}
+	new commits pushed	novos commits enviados
+	no finished pipeline	nenhum pipeline concluído
+	no pipeline	nenhum pipeline
+	no review lately	nenhuma revisão recentemente
+	none	nenhuma
+	not approved	não aprovada
+	nothing to compare with	nada para comparar
+	of the requests go to {name}	dos pedidos vão para {name}
+	of {n} changed	de {n} alterados
+	on a branch, not on the next one	num branch, não no próximo
+	on the row, not on the column	na linha, não na coluna
+	only some of its commits	só parte dos commits
+	opened by {name}	aberta por {name}
+	passed on a rerun	passou ao reexecutar
+	pipeline passed	pipeline aprovado
+	pipeline started	pipeline iniciado
+	pts	pts
+	rerun?	reexecutar?
+	review asked of {name}	revisão pedida a {name}
+	stable	estável
+	the closest to merging	a mais próxima do merge
+	the most failing first	as que mais falham primeiro
+	the oldest for {time}	a mais antiga há {time}
+	the riskiest first	os mais arriscados primeiro
+	the smaller one	a menor
+	this week: {n}	esta semana: {n}
+	thread opened by {name}	thread aberto por {name}
+	to bring back	a trazer de volta
+	to promote	a promover
+	today	hoje
+	{done} / {n}	{done} / {n}
+	{done} / {total} delivered	{done} / {total} entregues
+	{d} faster than before	{d} mais rápido que antes
+	{d} faster than the period before	{d} mais rápido que o período anterior
+	{d} slower than before	{d} mais lento que antes
+	{d} slower than the period before	{d} mais lento que o período anterior
+	{env} was never deployed	{env} nunca foi implantado
+	{events} · {tabs}	{events} · {tabs}
+	{job} failed on them	{job} falhou nelas
+	{job} makes {share} of the failures of the {stage} stage.	{job} representa {share} das falhas do estágio {stage}.
+	{left} · back on their author, the first to unblock: {ids}	{left} · de volta ao autor, as primeiras a desbloquear: {ids}
+	{m} min {s}	{m} min {s}
+	{name} answers a review request in {time}, the slowest of the team.	{name} responde a um pedido de revisão em {time}, o mais lento da equipe.
+	{name} gets {share} of the review requests.	{name} recebe {share} dos pedidos de revisão.
+	{name} has no review waiting: they can take the next one.	{name} não tem revisões em espera: pode pegar a próxima.
+	{name}: their MRs and reviews	{name}: MRs e revisões
+	{n} latest runs	{n} últimas execuções
+	{n} min	{n} min
+	{n} mo	{n} meses
+	{n} not on {from} yet	{n} ainda não em {from}
+	{n} on {from}, not on {to}	{n} em {from}, não em {to}
+	{n} pts on the period before	{n} pts em relação ao período anterior
+	{n} s	{n} s
+	{n} y	{n} a
+	{period} · rows: authors, columns: reviewers	{period} · linhas: autores, colunas: revisores
+	{source} → {target}	{source} → {target}
+	{time} ago	há {time}
+	{to} has everything {from} has.	{to} tem tudo o que {from} tem.
+	{weekday} {day} {month}	{weekday}, {day} de {month}
+date	April	abril
+date	August	agosto
+date	December	dezembro
+date	February	fevereiro
+date	Fri	sex
+date	Friday	sexta-feira
+date	January	janeiro
+date	July	julho
+date	June	junho
+date	March	março
+date	May	maio
+date	Mon	seg
+date	Monday	segunda-feira
+date	November	novembro
+date	October	outubro
+date	Sat	sáb
+date	Saturday	sábado
+date	September	setembro
+date	Sun	dom
+date	Sunday	domingo
+date	Thu	qui
+date	Thursday	quinta-feira
+date	Tue	ter
+date	Tuesday	terça-feira
+date	Wed	qua
+date	Wednesday	quarta-feira
+@plural	#{id} · {n} job|#{id} · {n} jobs	#{id} · {n} job|#{id} · {n} jobs
+@plural	Read from the changes the app already fetches. {n} open MR is not read yet: its files show after the next refresh.|Read from the changes the app already fetches. {n} open MRs are not read yet: their files show after the next refresh.	Lido das alterações que o app já busca. {n} MR aberta ainda não foi lida: seus arquivos aparecem após a próxima atualização.|Lido das alterações que o app já busca. {n} MRs abertas ainda não foram lidas: seus arquivos aparecem após a próxima atualização.
+@plural	on {n} MR|on {n} MRs	em {n} MR|em {n} MRs
+@plural	{author} asked {reviewer} for {n} review|{author} asked {reviewer} for {n} reviews	{author} pediu {n} revisão a {reviewer}|{author} pediu {n} revisões a {reviewer}
+@plural	{n} MR ahead of {to}|{n} MRs ahead of {to}	{n} MR à frente de {to}|{n} MRs à frente de {to}
+@plural	{n} MR left|{n} MRs left	{n} MR restante|{n} MRs restantes
+@plural	{n} MR left to deliver.|{n} MRs left to deliver.	Falta entregar {n} MR.|Faltam entregar {n} MRs.
+@plural	{n} MR to bring back to {to}|{n} MRs to bring back to {to}	{n} MR a trazer de volta para {to}|{n} MRs a trazer de volta para {to}
+@plural	{n} change further down the flow is missing upstream: bring it back.|{n} changes further down the flow are missing upstream: bring them back.	Falta no início do fluxo {n} alteração feita mais adiante: traga-a de volta.|Faltam no início do fluxo {n} alterações feitas mais adiante: traga-as de volta.
+@plural	{n} day|{n} days	{n} dia|{n} dias
+@plural	{n} environment|{n} environments	{n} ambiente|{n} ambientes
+@plural	{n} event|{n} events	{n} evento|{n} eventos
+@plural	{n} failure a rerun fixed|{n} failures a rerun fixed	{n} falha resolvida ao reexecutar|{n} falhas resolvidas ao reexecutar
+@plural	{n} linked|{n} linked	{n} vinculado|{n} vinculados
+@plural	{n} milestone in progress|{n} milestones in progress	{n} marco em andamento|{n} marcos em andamento
+@plural	{n} open MR|{n} open MRs	{n} MR aberta|{n} MRs abertas
+@plural	{n} partly there|{n} partly there	{n} em parte|{n} em parte
+@plural	{n} past the reminder delay|{n} past the reminder delay	{n} além do prazo de lembrete|{n} além do prazo de lembrete
+@plural	{n} person|{n} people	{n} pessoa|{n} pessoas
+@plural	{n} pipeline|{n} pipelines	{n} pipeline|{n} pipelines
+@plural	{n} ready|{n} ready	{n} pronta|{n} prontas
+@plural	{n} rerun fixed it|{n} reruns fixed it	{n} reexecução resolveu|{n} reexecuções resolveram
+@plural	{n} review|{n} reviews	{n} revisão|{n} revisões
+@plural	{n} tab|{n} tabs	{n} aba|{n} abas
+@plural	{n} to promote|{n} to promote	{n} a promover|{n} a promover
+@plural	{n} tracked branch|{n} tracked branches	{n} branch acompanhado|{n} branches acompanhados
+	Period	Período
+rail	Overlaps	Conflitos
+	The files where they change the most lines in common first.	Primeiro os arquivos onde alteram mais linhas em comum.
+	A few lines apart: git may stop.	A poucas linhas de distância: o git pode parar.
+	Far apart: it most likely merges on its own.	Distantes: o merge muito provavelmente passa sozinho.
+	lines {from}–{to}	linhas {from}–{to}
+	Changed by both: {ranges}	Alteradas pelas duas: {ranges}
+@plural	{n} on the same lines|{n} on the same lines	{n} nas mesmas linhas|{n} nas mesmas linhas
+@plural	{n} on close lines|{n} on close lines	{n} em linhas próximas|{n} em linhas próximas
+@plural	{n} only in the same file|{n} only in the same file	{n} só no mesmo arquivo|{n} só no mesmo arquivo
