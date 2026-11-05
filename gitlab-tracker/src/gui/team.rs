@@ -1121,6 +1121,9 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
             .max(1);
         let cell_w =
             ((room - 4.0 * (reviewers.len() as f32 - 1.0)) / reviewers.len() as f32).min(56.0);
+        // The totals' column right after the last reviewer's, not at the
+        // card's edge (the cells stop growing on a wide card).
+        let sum_right = label_w + reviewers.len() as f32 * (cell_w + 4.0) - 4.0 + 12.0 + total_w;
         let initials = |login: &str| -> String {
             let name = analysis
                 .people
@@ -1169,7 +1172,7 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
         }
         board::paint_text(
             ui,
-            egui::pos2(head.right(), head.center().y),
+            egui::pos2(head.left() + sum_right, head.center().y),
             Align2::RIGHT_CENTER,
             "Σ",
             small.clone(),
@@ -1259,7 +1262,7 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
             }
             board::paint_text(
                 ui,
-                egui::pos2(line.right(), line.center().y),
+                egui::pos2(line.left() + sum_right, line.center().y),
                 Align2::RIGHT_CENTER,
                 &total.to_string(),
                 small.clone(),
