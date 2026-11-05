@@ -106,6 +106,20 @@ impl Details {
         mr: &crate::models::TrackedMr,
         ctx: &egui::Context,
     ) -> Option<&crate::gitlab_detail::PageData> {
+        if !self.diffs.contains_key(&mr.id) {
+            self.load_diff(app, &mr.id, ctx);
+        }
+        self.page_data(app, mr, ctx)
+    }
+
+    /// [`Details::page`] without the diff: what a popup of the list needs (the
+    /// commits an MR lacks), shared with the page once it opens.
+    pub fn page_data(
+        &mut self,
+        app: &App,
+        mr: &crate::models::TrackedMr,
+        ctx: &egui::Context,
+    ) -> Option<&crate::gitlab_detail::PageData> {
         let key = (mr.id.clone(), mr.updated_at.clone().unwrap_or_default());
         if !self.pages.contains_key(&key) {
             self.pages.retain(|(id, _), _| id != &mr.id);
@@ -127,9 +141,6 @@ impl Details {
                 })
             };
             self.pages.insert(key.clone(), fetch);
-            if !self.diffs.contains_key(&mr.id) {
-                self.load_diff(app, &mr.id, ctx);
-            }
         }
         let fetch = self.pages.get_mut(&key)?;
         fetch.poll();

@@ -968,3 +968,11 @@ date	Merged	合并时间
 	Open its page	打开其页面
 	merged into {target} {when}	{when}合并到 {target}
 	partly there	部分存在
+	See what it lacks	查看缺少的内容
+	see what it lacks	查看缺少的内容
+	On the target, not in this branch yet: rebase it, or merge the target into it.	目标分支已有，本分支尚无：变基，或将目标合并进来。
+	GitLab did not list them.	GitLab 未列出它们。
+	Each merge once: the commits it brought are counted, not listed.	每次合并只列一次：其带入的提交计入数量，但不逐一列出。
+	merged by {who} {when}, not tracked	由 {who} 于 {when} 合并，未跟踪
+	pushed by {who} {when}	由 {who} 于 {when} 推送
+@plural	{n} commit behind|{n} commits behind	落后 {n} 个提交

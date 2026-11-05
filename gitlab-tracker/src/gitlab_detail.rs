@@ -106,7 +106,27 @@ pub struct PageData {
     pub rules: Option<Vec<Rule>>,
     pub threads: Result<Vec<Thread>, String>,
     pub deployments: Vec<Deployment>,
+    /// What the target branch has that the source lacks, on the target's first
+    /// parents (its merges and direct pushes), newest first; `None` when the MR
+    /// is not behind or the commits could not be read.
+    pub behind: Option<Vec<BehindCommit>>,
 }
+
+/// A commit of the target branch the source branch does not have yet.
+#[derive(Debug, Clone, Default)]
+pub struct BehindCommit {
+    pub sha: String,
+    /// The commit's title; for a merge commit, the MR's title it names.
+    pub title: String,
+    pub author: String,
+    pub created_at: String,
+    pub web_url: String,
+    /// The MR it merged (`See merge request group/project!12`), as its iid.
+    pub mr_iid: Option<String>,
+}
+
+/// How many commits the "behind" list reads at most.
+const BEHIND_READ: usize = 100;
 
 /// Where to read: the instance, the token, the project and the MR.
 #[derive(Clone)]
@@ -158,19 +178,106 @@ pub async fn fetch(target: Target, deployed_branches: Vec<String>) -> PageData {
     let (overview, rules, threads, deployments) =
         tokio::join!(overview, rules, threads, deployments);
     let overview = overview.ok();
-    // Two more reads, only for an MR in conflict.
-    let conflicts = if overview.as_ref().is_some_and(|o| o.has_conflicts) {
-        conflict_files(&target).await
-    } else {
-        None
-    };
+    // Two more reads, only for an MR in conflict; one for an MR behind.
+    let in_conflict = overview.as_ref().is_some_and(|o| o.has_conflicts);
+    let is_behind = overview
+        .as_ref()
+        .and_then(|o| o.diverged_commits_count)
+        .is_some_and(|n| n > 0);
+    let (conflicts, behind) = tokio::join!(
+        async {
+            if in_conflict {
+                conflict_files(&target).await
+            } else {
+                None
+            }
+        },
+        async {
+            if is_behind {
+                behind_commits(&target).await
+            } else {
+                None
+            }
+        }
+    );
     PageData {
         overview,
         conflicts,
         rules,
         threads,
         deployments,
+        behind,
     }
+}
+
+/// The target's commits the source lacks (`source..target`), first parents
+/// only: each merge once, not the commits of the branch it merged.
+async fn behind_commits(target: &Target) -> Option<Vec<BehindCommit>> {
+    #[derive(serde::Deserialize)]
+    struct Commit {
+        id: String,
+        #[serde(default)]
+        title: String,
+        #[serde(default)]
+        message: String,
+        #[serde(default)]
+        author_name: String,
+        #[serde(default)]
+        created_at: String,
+        #[serde(default)]
+        web_url: String,
+    }
+    let range = format!("{}..{}", target.source_branch, target.target_branch);
+    let path = format!(
+        "repository/commits?ref_name={}&first_parent=true&per_page={BEHIND_READ}",
+        urlencoding::encode(&range)
+    );
+    match target.get::<Vec<Commit>>(&path).await {
+        Ok(commits) => Some(
+            commits
+                .into_iter()
+                .map(|c| {
+                    let (title, mr_iid) = read_merge_message(&c.title, &c.message);
+                    BehindCommit {
+                        sha: c.id,
+                        title,
+                        author: c.author_name,
+                        created_at: c.created_at,
+                        web_url: c.web_url,
+                        mr_iid,
+                    }
+                })
+                .collect(),
+        ),
+        Err(e) => {
+            tracing::warn!(mr = %target.mr_id, error = %e, "Could not read the commits behind the target");
+            None
+        }
+    }
+}
+
+/// The title to show for a commit, and the MR it names. GitLab's merge commits
+/// read `Merge branch 'a' into 'b'`, the MR's title, then `See merge request
+/// group/project!12`; a squash commit may end with the same trailer.
+pub fn read_merge_message(title: &str, message: &str) -> (String, Option<String>) {
+    let mr_iid = message.lines().rev().find_map(|line| {
+        let rest = line.trim().strip_prefix("See merge request ")?;
+        let (_, iid) = rest.rsplit_once('!')?;
+        let iid = iid.trim_end_matches('.');
+        (!iid.is_empty() && iid.bytes().all(|b| b.is_ascii_digit())).then(|| iid.to_string())
+    });
+    let is_merge =
+        title.starts_with("Merge branch ") || title.starts_with("Merge remote-tracking branch ");
+    let named = is_merge
+        .then(|| {
+            message
+                .split("\n\n")
+                .nth(1)
+                .map(|p| p.lines().next().unwrap_or_default().trim())
+                .filter(|p| !p.is_empty() && !p.starts_with("See merge request "))
+        })
+        .flatten();
+    (named.unwrap_or(title).to_string(), mr_iid)
 }
 
 /// The MR's patches next to what its target changed since the merge base
@@ -458,6 +565,28 @@ mod tests {
             deleted_file: false,
             diff: diff.into(),
         }
+    }
+
+    #[test]
+    fn merge_commits_name_their_mr_and_its_title() {
+        let message = "Merge branch 'feat/login' into 'main'\n\nfeat(auth): Login with SSO\n\nCloses #12\n\nSee merge request group/sub/project!42";
+        assert_eq!(
+            read_merge_message("Merge branch 'feat/login' into 'main'", message),
+            ("feat(auth): Login with SSO".into(), Some("42".into()))
+        );
+        // A squash commit keeps its title, the trailer still names the MR.
+        assert_eq!(
+            read_merge_message(
+                "fix: Typo",
+                "fix: Typo\n\nSee merge request group/project!7"
+            ),
+            ("fix: Typo".into(), Some("7".into()))
+        );
+        // A direct push names none.
+        assert_eq!(
+            read_merge_message("docs: README", "docs: README\n"),
+            ("docs: README".into(), None)
+        );
     }
 
     #[test]

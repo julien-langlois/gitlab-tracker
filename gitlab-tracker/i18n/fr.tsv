@@ -968,3 +968,11 @@ date	Merged	Fusionnée
 	Open its page	Ouvrir sa page
 	merged into {target} {when}	fusionnée dans {target} {when}
 	partly there	en partie présente
+	See what it lacks	Voir ce qui lui manque
+	see what it lacks	voir ce qui manque
+	On the target, not in this branch yet: rebase it, or merge the target into it.	Sur la cible, pas encore sur cette branche : la rebaser, ou y fusionner la cible.
+	GitLab did not list them.	GitLab ne les a pas listés.
+	Each merge once: the commits it brought are counted, not listed.	Chaque merge une fois : les commits qu’il apporte sont comptés, pas listés.
+	merged by {who} {when}, not tracked	fusionnée par {who} {when}, non suivie
+	pushed by {who} {when}	poussé par {who} {when}
+@plural	{n} commit behind|{n} commits behind	{n} commit de retard|{n} commits de retard

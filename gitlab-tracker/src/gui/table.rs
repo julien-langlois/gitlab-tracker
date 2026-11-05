@@ -21,7 +21,7 @@ use super::{tones, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::{App, InputMode, SortColumn, SortOrder};
 use crate::i18n::{tf, tl, tn};
-use crate::models::{Effort, MrStatus};
+use crate::models::{Effort, GitlabMrState, MrStatus};
 
 pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let shown = g.app.visible_mrs().count();
@@ -1022,6 +1022,8 @@ struct RowView {
     milestone: Option<String>,
     target: String,
     behind: Option<u32>,
+    /// Still open: what it lacks can be listed.
+    opened: bool,
     ticket: Option<(String, String)>,
     has_ticket: bool,
 }
@@ -1104,6 +1106,7 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 milestone: mr.milestone.clone(),
                 target: mr.target_branch.clone(),
                 behind: mr.diff_stats.as_ref().and_then(|s| s.commits_behind),
+                opened: mr.state == GitlabMrState::Opened,
                 ticket: mr
                     .linked_ticket
                     .as_ref()
@@ -1197,6 +1200,8 @@ enum RowAction {
 
 fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     let theme = g.theme;
+    // The "Behind" counts drawn, by MR id: a click lists what the MR lacks.
+    let mut behind_cells: Vec<(String, egui::Response)> = Vec::new();
     let lines = lines(g);
     let branches = g.app.branches.clone();
     let wanted = wanted_columns(&g.app);
@@ -1284,8 +1289,12 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
                             }
                             Line::Mr(_) => {
                                 let Some(r) = views.next() else { continue };
-                                if let Some(picked) = row(ui, &theme, &grid, &r) {
+                                let (picked, behind) = row(ui, &theme, &grid, &r);
+                                if let Some(picked) = picked {
                                     action = Some(picked);
+                                }
+                                if let Some(response) = behind {
+                                    behind_cells.push((r.id.clone(), response));
                                 }
                             }
                         }
@@ -1322,6 +1331,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     if let Some(column) = sort_by {
         g.pending.push(Action::SortBy(column));
     }
+    behind_popups(g, ui, &behind_cells);
     if let Some(key) = fold {
         if !g.folded.remove(&key) {
             g.folded.insert(key);
@@ -1564,7 +1574,35 @@ fn shimmer(ui: &mut Ui, theme: &Theme, width: f32, height: f32) -> egui::Respons
 }
 
 /// Draws one row; returns what a click on it asked for.
-fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction> {
+/// The popup of each "Behind" count, the MR's page data read once one opens
+/// (see [`super::mr_page::behind_popup`]); the MR picked there opens.
+fn behind_popups(g: &mut GuiApp, ui: &Ui, cells: &[(String, egui::Response)]) {
+    let mut open = None;
+    for (id, response) in cells {
+        let popup = egui::Popup::default_response_id(response);
+        if !response.clicked() && !egui::Popup::is_id_open(ui.ctx(), popup) {
+            continue;
+        }
+        let Some(mr) = g.app.mrs.iter().find(|m| &m.id == id).cloned() else {
+            continue;
+        };
+        let data = g.details.page_data(&g.app, &mr, ui.ctx()).cloned();
+        if let Some(picked) = super::mr_page::behind_popup(g, response, &mr, data.as_ref()) {
+            open = Some(picked);
+        }
+    }
+    if let Some(id) = open {
+        g.open_mr(&id);
+    }
+}
+
+/// A row; with the "Behind" count drawn as a link when the MR lacks commits.
+fn row(
+    ui: &mut Ui,
+    theme: &Theme,
+    grid: &Grid,
+    r: &RowView,
+) -> (Option<RowAction>, Option<egui::Response>) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(grid.width, grid.row_height), Sense::hover());
     let response = ui.interact(rect, ui.scope_id().with(("row", &r.id)), Sense::click());
     let radius = CornerRadius::same(theme.radii.medium);
@@ -1595,6 +1633,7 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
         .rect_filled(stripe, CornerRadius::same(2), r.status.1.fg);
 
     let mut action = None;
+    let mut behind = None;
     for &(cell, x, w) in &grid.cells {
         let cell_rect = grid.rect(rect, x, w);
         let mut ui = ui.new_child(
@@ -1625,6 +1664,9 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
             }
             Cell::Status => {
                 badge(&mut ui, theme, r.status.0, r.status.1);
+            }
+            Cell::Optional(Col::Behind) if r.opened && r.behind.is_some_and(|n| n > 0) => {
+                behind = Some(behind_link(&mut ui, theme, r.behind.unwrap_or_default()));
             }
             Cell::Optional(col) => {
                 if let Some(label) = cell_content(&mut ui, theme, r, col) {
@@ -1664,7 +1706,29 @@ fn row(ui: &mut Ui, theme: &Theme, grid: &Grid, r: &RowView) -> Option<RowAction
             ui.close();
         }
     });
-    action
+    (action, behind)
+}
+
+/// The count of commits an MR lacks, underlined on hover: a click lists them.
+fn behind_link(ui: &mut Ui, theme: &Theme, n: u32) -> egui::Response {
+    let tone = if n >= 10 {
+        theme.tones.red
+    } else {
+        theme.tones.amber
+    };
+    let id = ui.next_auto_id();
+    let hovered = ui.ctx().read_response(id).is_some_and(|r| r.hovered());
+    let mut text = RichText::new(n.to_string()).color(tone.fg);
+    if hovered {
+        text = text.underline();
+    }
+    ui.add(
+        egui::Label::new(text)
+            .sense(Sense::click())
+            .selectable(false),
+    )
+    .on_hover_cursor(egui::CursorIcon::PointingHand)
+    .on_hover_text(tl("See what it lacks"))
 }
 
 /// A branch cell: a dot in the presence's tone with its glyph, named on hover.

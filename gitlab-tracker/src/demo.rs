@@ -1345,6 +1345,26 @@ pub fn demo_page_data(mr: &crate::models::TrackedMr) -> crate::gitlab_detail::Pa
                 includes: Some(false),
             },
         ],
+        // As many as `diverged_commits_count`: a tracked merge, a tracked
+        // squash (known by its SHA), a merge the tracking missed, a direct push.
+        behind: open.then(|| {
+            let commit = |sha: &str, title: &str, author: &str, at: &str, iid: Option<&str>| {
+                crate::gitlab_detail::BehindCommit {
+                    sha: sha.into(),
+                    title: title.into(),
+                    author: author.into(),
+                    created_at: at.into(),
+                    web_url: format!("https://gitlab.com/demo/project/-/commit/{sha}"),
+                    mr_iid: iid.map(String::from),
+                }
+            };
+            vec![
+                commit("7f3a91c0e2", "feat(api): Introduce GraphQL endpoint for MR metadata", "Marina Graphetti", "2024-11-14T09:00:00Z", Some("104")),
+                commit("e41b0d2a77", "docs: Fix the setup steps in the README", "Thomas Dubosc", "2024-11-13T15:20:00Z", None),
+                commit("3c9e5f1b08", "chore(ci): Cache cargo registry between jobs", "Sarah Coste", "2024-11-12T11:10:00Z", Some("98")),
+                commit("a1b2c3d4", "feat(auth): Add OAuth2 PKCE flow for mobile clients", "Alex Devries", "2024-11-10T09:45:00Z", None),
+            ]
+        }),
     }
 }
 

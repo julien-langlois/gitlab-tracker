@@ -968,3 +968,11 @@ date	Merged	Gemergt
 	Open its page	Seite öffnen
 	merged into {target} {when}	in {target} gemergt, {when}
 	partly there	teilweise vorhanden
+	See what it lacks	Sehen, was ihm fehlt
+	see what it lacks	sehen, was fehlt
+	On the target, not in this branch yet: rebase it, or merge the target into it.	Im Ziel, noch nicht in diesem Branch: ihn rebasen oder das Ziel hineinmergen.
+	GitLab did not list them.	GitLab hat sie nicht aufgelistet.
+	Each merge once: the commits it brought are counted, not listed.	Jeder Merge einmal: seine Commits werden gezählt, nicht aufgelistet.
+	merged by {who} {when}, not tracked	gemergt von {who} {when}, nicht verfolgt
+	pushed by {who} {when}	gepusht von {who} {when}
+@plural	{n} commit behind|{n} commits behind	{n} Commit zurück|{n} Commits zurück

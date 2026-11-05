@@ -1010,7 +1010,13 @@ fn behind(g: &GuiApp, ui: &mut Ui, branch: &str, project: Option<&str>) -> Optio
 /// One MR of the "to bring in" list: its author, `!iid` and title, where and
 /// when it was merged, and how much of it `branch` lacks. A click opens its
 /// page (returns its id); the arrow opens it on GitLab.
-fn behind_row(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, branch: &str, width: f32) -> Option<String> {
+pub(super) fn behind_row(
+    g: &GuiApp,
+    ui: &mut Ui,
+    mr: &TrackedMr,
+    branch: &str,
+    width: f32,
+) -> Option<String> {
     let theme = g.theme;
     let p = &theme.palette;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click());

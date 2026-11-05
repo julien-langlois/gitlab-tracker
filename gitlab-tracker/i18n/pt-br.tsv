@@ -968,3 +968,11 @@ date	Merged	Mesclada
 	Open its page	Abrir sua página
 	merged into {target} {when}	mesclada em {target} {when}
 	partly there	em parte presente
+	See what it lacks	Ver o que falta
+	see what it lacks	ver o que falta
+	On the target, not in this branch yet: rebase it, or merge the target into it.	No destino, ainda não neste branch: faça rebase ou mescle o destino nele.
+	GitLab did not list them.	O GitLab não os listou.
+	Each merge once: the commits it brought are counted, not listed.	Cada merge uma vez: os commits que trouxe são contados, não listados.
+	merged by {who} {when}, not tracked	mesclada por {who} {when}, não acompanhada
+	pushed by {who} {when}	enviado por {who} {when}
+@plural	{n} commit behind|{n} commits behind	{n} commit atrás|{n} commits atrás

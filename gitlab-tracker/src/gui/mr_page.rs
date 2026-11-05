@@ -54,7 +54,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     ui.add_space(10.0);
     header(g, ui, &mr);
     ui.add_space(14.0);
-    facts(g, ui, &mr, data.as_ref());
+    if let Some(id) = facts(g, ui, &mr, data.as_ref()) {
+        g.open_mr(&id);
+    }
     ui.add_space(14.0);
 
     let width = ui.available_width();
@@ -271,8 +273,9 @@ fn branch_chip(ui: &mut Ui, theme: &Theme, name: &str, target: bool) {
         });
 }
 
-/// The figures that tell where the MR stands, side by side.
-fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
+/// The figures that tell where the MR stands, side by side. "Behind target"
+/// lists, on a click, what the MR lacks; returns the MR picked there.
+fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Option<String> {
     let theme = g.theme;
     let t = &theme.tones;
     let mut list: Vec<(&str, String, Option<Tone>, String)> = Vec::new();
@@ -375,6 +378,9 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         ));
     }
 
+    let behind_name = (behind.is_some_and(|n| n > 0) && mr.state == GitlabMrState::Opened)
+        .then(|| tl("Behind target"));
+    let mut open = None;
     let columns = list.len().max(1);
     let gap = 1.0;
     let width = ((ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32).max(120.0);
@@ -385,7 +391,8 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::splat(gap);
                 for (name, value, tone, caption) in &list {
-                    egui::Frame::new()
+                    let link = behind_name == Some(*name);
+                    let frame = egui::Frame::new()
                         .fill(theme.palette.panel)
                         .inner_margin(Margin::symmetric(14, 9))
                         .show(ui, |ui| {
@@ -417,17 +424,227 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                                         ui.label(RichText::new(value).font(font).color(color));
                                     }
                                 }
+                                let caption = if link {
+                                    format!("{caption} · {}", tl("see what it lacks"))
+                                } else {
+                                    caption.clone()
+                                };
                                 ui.add(
                                     egui::Label::new(
                                         muted(&theme, caption).size(theme.text_size - 1.5),
                                     )
-                                    .truncate(),
+                                    .truncate()
+                                    .selectable(!link),
                                 );
                             });
                         });
+                    if link {
+                        let response = frame
+                            .response
+                            .interact(Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if response.hovered() {
+                            ui.painter().rect_stroke(
+                                response.rect,
+                                CornerRadius::ZERO,
+                                egui::Stroke::new(1.0, t.amber.fg.gamma_multiply(0.5)),
+                                egui::StrokeKind::Inside,
+                            );
+                        }
+                        if let Some(id) = behind_popup(g, &response, mr, data) {
+                            open = Some(id);
+                        }
+                    }
                 }
             });
         });
+    open
+}
+
+// ── Behind the target ────────────────────────────────────────────────────────
+
+/// What the target branch has that the MR lacks, in a popup under `response`
+/// (opened by a click on it): the merges and direct pushes on the target, the
+/// tracked MRs among them opening their page. Returns the MR picked.
+pub fn behind_popup(
+    g: &GuiApp,
+    response: &egui::Response,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+) -> Option<String> {
+    let theme = g.theme;
+    let mut open = None;
+    egui::Popup::menu(response).show(|ui| {
+        const WIDTH: f32 = 540.0;
+        ui.set_width(WIDTH);
+        ui.spacing_mut().item_spacing.y = 2.0;
+        let count = data
+            .and_then(|d| d.overview.as_ref())
+            .and_then(|o| o.diverged_commits_count)
+            .or(mr.diff_stats.as_ref().and_then(|s| s.commits_behind))
+            .unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label(semibold(
+                tn(
+                    count as u64,
+                    "{n} commit behind",
+                    "{n} commits behind",
+                ),
+                theme.text_size,
+            ));
+            ui.add(
+                Chip::new(&mr.target_branch, theme.tones.amber)
+                    .font(egui::FontId::monospace(theme.text_size - 2.5)),
+            );
+        });
+        ui.label(
+            muted(
+                &theme,
+                tl("On the target, not in this branch yet: rebase it, or merge the target into it."),
+            )
+            .size(theme.text_size - 1.5),
+        );
+        ui.add_space(6.0);
+        match data.map(|d| d.behind.as_deref()) {
+            None => {
+                ui.horizontal(|ui| {
+                    spinner(ui, 12.0, theme.palette.accent);
+                    ui.label(muted(&theme, tl("Asking GitLab…")));
+                });
+            }
+            Some(None) => {
+                ui.label(muted(&theme, tl("GitLab did not list them.")));
+            }
+            Some(Some(commits)) => {
+                for commit in commits {
+                    let tracked = g.app.mrs.iter().find(|other| {
+                        commit.mr_iid.as_deref() == Some(other.id.as_str())
+                            || other.sha.as_deref().is_some_and(|sha| {
+                                !sha.is_empty()
+                                    && (commit.sha.starts_with(sha) || sha.starts_with(&commit.sha))
+                            })
+                    });
+                    let picked = match tracked {
+                        Some(other) => {
+                            super::sidebar::behind_row(g, ui, other, &mr.source_branch, WIDTH)
+                        }
+                        None => {
+                            commit_row(g, ui, commit, WIDTH);
+                            None
+                        }
+                    };
+                    if let Some(id) = picked {
+                        open = Some(id);
+                        ui.close();
+                    }
+                }
+                // The first parents only: the commits a merge brought are in
+                // the count, not in the list.
+                if commits.len() < count as usize {
+                    ui.add_space(4.0);
+                    ui.label(
+                        muted(
+                            &theme,
+                            tl("Each merge once: the commits it brought are counted, not listed."),
+                        )
+                        .size(theme.text_size - 2.5),
+                    );
+                }
+            }
+        }
+        let Some(project) = mr.web_url.split_once("/-/merge_requests").map(|(p, _)| p) else {
+            return;
+        };
+        ui.add_space(6.0);
+        super::widgets::rule(ui, &theme);
+        ui.add_space(6.0);
+        let url = format!(
+            "{project}/-/compare/{}...{}",
+            mr.source_branch, mr.target_branch
+        );
+        let text = tf(
+            "Compare with {source} on GitLab",
+            &[("source", &mr.target_branch)],
+        );
+        if button(ui, &theme, Some(Icon::ExternalLink), &text, false)
+            .on_hover_text(&url)
+            .clicked()
+        {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+            ui.close();
+        }
+    });
+    open
+}
+
+/// A commit of the target the tracking does not know: its author, `!iid` (or
+/// short SHA) and title, who and when. A click opens it on GitLab.
+fn commit_row(g: &GuiApp, ui: &mut Ui, commit: &crate::gitlab_detail::BehindCommit, width: f32) {
+    let theme = g.theme;
+    let p = &theme.palette;
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click());
+    let response = response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl("Open in GitLab"));
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(theme.radii.medium), p.raised);
+    }
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect.shrink2(Vec2::new(8.0, 5.0)))
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    let ui = &mut child;
+    avatar(ui, &theme, &commit.author, 26.0);
+    ui.add_space(4.0);
+    ui.with_layout(Layout::top_down(Align::Min), |ui| {
+        ui.spacing_mut().item_spacing.y = 1.0;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let reference = match &commit.mr_iid {
+                Some(iid) => format!("!{iid}"),
+                None => commit.sha.get(..8).unwrap_or(&commit.sha).to_string(),
+            };
+            ui.label(mono(reference, theme.text_size - 1.5).color(p.text_muted));
+            ui.add(
+                egui::Label::new(
+                    RichText::new(&commit.title)
+                        .font(fonts::medium(theme.text_size - 1.0))
+                        .color(p.text),
+                )
+                .truncate()
+                .selectable(false),
+            );
+        });
+        let detail = if commit.mr_iid.is_some() {
+            tf(
+                "merged by {who} {when}, not tracked",
+                &[
+                    ("who", &commit.author),
+                    ("when", &format_relative_date(&commit.created_at)),
+                ],
+            )
+        } else {
+            tf(
+                "pushed by {who} {when}",
+                &[
+                    ("who", &commit.author),
+                    ("when", &format_relative_date(&commit.created_at)),
+                ],
+            )
+        };
+        ui.add(
+            egui::Label::new(muted(&theme, detail).size(theme.text_size - 2.5))
+                .truncate()
+                .selectable(false),
+        );
+    });
+    if response.clicked() && !commit.web_url.is_empty() {
+        ui.ctx()
+            .open_url(egui::OpenUrl::new_tab(commit.web_url.clone()));
+        ui.close();
+    }
 }
 
 /// Open threads: the page's count once read, else the list's.
@@ -457,6 +674,8 @@ pub struct Check {
     pub who: Vec<String>,
     /// The files in conflict, under the conflict.
     pub files: Vec<ConflictFile>,
+    /// "N commits behind": a click lists them.
+    pub behind: bool,
 }
 
 /// What stands between the MR and its merge, worst first, then what is met.
@@ -476,6 +695,7 @@ pub fn checks(
             why,
             who: Vec::new(),
             files: Vec::new(),
+            behind: false,
         })
     };
 
@@ -619,7 +839,15 @@ pub fn checks(
     let behind = overview
         .and_then(|o| o.diverged_commits_count)
         .or(mr.diff_stats.as_ref().and_then(|s| s.commits_behind));
+    let mut behind_title = None;
     if let Some(n) = behind.filter(|n| *n > 0) {
+        let title = tn(
+            n as u64,
+            "{n} commit behind {target}",
+            "{n} commits behind {target}",
+        )
+        .replace("{target}", &mr.target_branch);
+        behind_title = Some(title.clone());
         let rebase = status == "need_rebase" || mr.mergeability == MergeabilityStatus::NeedsRebase;
         push(
             if rebase {
@@ -627,12 +855,7 @@ pub fn checks(
             } else {
                 Verdict::Warns
             },
-            tn(
-                n as u64,
-                "{n} commit behind {target}",
-                "{n} commits behind {target}",
-            )
-            .replace("{target}", &mr.target_branch),
+            title,
             if rebase {
                 tl("The project merges fast-forward only: rebase first.").into()
             } else {
@@ -650,6 +873,12 @@ pub fn checks(
             String::new(),
         );
     }
+    if let Some(check) = list
+        .iter_mut()
+        .find(|c| Some(&c.what) == behind_title.as_ref())
+    {
+        check.behind = true;
+    }
     if let Some(check) = list.iter_mut().find(|c| c.what == conflict_title) {
         check.files = conflicts.unwrap_or_default().to_vec();
     }
@@ -665,8 +894,14 @@ pub fn checks(
     list
 }
 
-/// The checks, worst first; the file in conflict picked, to show in Changes.
-fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Option<String> {
+/// The checks, worst first; the file in conflict picked, to show in Changes,
+/// and the MR picked in the "behind" popup, to open.
+fn blockers(
+    g: &GuiApp,
+    ui: &mut Ui,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+) -> (Option<String>, Option<String>) {
     let theme = g.theme;
     let list = checks(
         mr,
@@ -676,6 +911,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
         data.and_then(|d| d.conflicts.as_deref()),
     );
     let mut picked = None;
+    let mut open = None;
     let ready = !list.iter().any(|c| c.verdict != Verdict::Met);
     let title = if ready {
         tl("Nothing blocks the merge")
@@ -722,7 +958,20 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
                         let what = RichText::new(&check.what).font(fonts::medium(theme.text_size));
-                        if check.who.is_empty() {
+                        if check.behind {
+                            // A link: the commits it lacks, in a popup.
+                            let response = ui
+                                .add(
+                                    egui::Label::new(what.underline())
+                                        .sense(Sense::click())
+                                        .selectable(false),
+                                )
+                                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                                .on_hover_text(tl("See what it lacks"));
+                            if let Some(id) = behind_popup(g, &response, mr, data) {
+                                open = Some(id);
+                            }
+                        } else if check.who.is_empty() {
                             ui.label(what);
                         } else {
                             ui.horizontal_wrapped(|ui| {
@@ -745,7 +994,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
                 });
             }
         });
-    picked
+    (picked, open)
 }
 
 /// How many files in conflict show at once; the box scrolls past them.
@@ -933,9 +1182,13 @@ fn tree_row(
 fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     if mr.state == GitlabMrState::Opened {
-        if let Some(path) = blockers(g, ui, mr, data) {
+        let (path, open) = blockers(g, ui, mr, data);
+        if let Some(path) = path {
             g.mr_tab = Tab::Changes;
             g.details.open_file(&mr.id, &path);
+        }
+        if let Some(id) = open {
+            g.open_mr(&id);
         }
         ui.add_space(16.0);
     }
@@ -1447,18 +1700,35 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
                     ),
                     None => (dep.environment.clone(), theme.palette.text_muted),
                 };
-                ui.add(
-                    egui::Label::new(RichText::new(text).size(theme.text_size - 1.5).color(color))
-                        .truncate(),
-                )
-                .on_hover_text(tf(
-                    "Last deployment of {env}: {sha}, {when}",
-                    &[
-                        ("env", &dep.environment),
-                        ("sha", dep.sha.get(..8).unwrap_or(&dep.sha)),
-                        ("when", &format_relative_date(&dep.created_at)),
-                    ],
-                ));
+                // What was deployed and when, in clear after it.
+                let mut job = egui::text::LayoutJob::default();
+                let size = theme.text_size - 1.5;
+                job.append(
+                    &text,
+                    0.0,
+                    egui::TextFormat::simple(egui::FontId::proportional(size), color),
+                );
+                job.append(
+                    dep.sha.get(..8).unwrap_or(&dep.sha),
+                    6.0,
+                    egui::TextFormat::simple(
+                        egui::FontId::monospace(size - 0.5),
+                        theme.palette.text_muted,
+                    ),
+                );
+                job.append(
+                    &format!("· {}", format_relative_date(&dep.created_at)),
+                    6.0,
+                    egui::TextFormat::simple(
+                        egui::FontId::proportional(size),
+                        theme.palette.text_muted,
+                    ),
+                );
+                job.wrap.max_rows = 1;
+                job.wrap.max_width = ui.available_width();
+                job.wrap.break_anywhere = true;
+                job.wrap.overflow_character = Some('…');
+                ui.label(job);
             }
         });
     }
