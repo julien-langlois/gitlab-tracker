@@ -11,7 +11,7 @@ use egui::{Align, Color32, CornerRadius, Layout, Margin, RichText, Sense, Ui, Ve
 use super::widgets::{button, mono, muted, spinner};
 use crate::app::App;
 use crate::gitlab::FileDiff;
-use crate::i18n::{tf, tl, tn};
+use crate::i18n::{tl, tn};
 
 /// Lines of a job's log kept.
 const LOG_LINES: usize = 200;
@@ -72,9 +72,8 @@ pub struct Details {
     /// What the MR page read, by MR id and `updated_at` (read again once the MR
     /// changes).
     pages: HashMap<(String, String), Fetch<crate::gitlab_detail::PageData>>,
-    /// Files unfolded, by MR id and path; logs shown, by job id.
+    /// Files unfolded, by MR id and path.
     open_files: HashSet<(String, String)>,
-    open_logs: HashSet<u64>,
     /// The file to bring into view once the Changes tab shows it.
     scroll_to: Option<(String, String)>,
     /// The file whose patch the MR page shows beside its tree, by MR id.
@@ -258,7 +257,6 @@ impl Details {
         self.diffs.insert(mr_id.to_string(), Fetch::Ready(files));
         self.logs
             .insert(0, Fetch::Ready(crate::demo::demo_job_log()));
-        self.open_logs.insert(0);
     }
 }
 
@@ -1147,88 +1145,6 @@ pub fn count(diff: &str) -> (usize, usize) {
             (a, d)
         }
     })
-}
-
-/// The "Log" button of a failed job; `true` when its log shows below.
-pub fn log_button(
-    details: &mut Details,
-    app: &App,
-    ui: &mut Ui,
-    theme: &Theme,
-    job_id: u64,
-) -> bool {
-    let open = details.open_logs.contains(&job_id);
-    let label = if open { tl("Hide the log") } else { tl("Log") };
-    let response = ui
-        .add(egui::Button::new(RichText::new(label).size(theme.text_size - 2.0)).small())
-        .on_hover_text(tl("The end of this job's log"));
-    if response.clicked() {
-        if open {
-            details.open_logs.remove(&job_id);
-        } else {
-            details.open_logs.insert(job_id);
-            if !matches!(
-                details.logs.get(&job_id),
-                Some(Fetch::Ready(_) | Fetch::Loading(_))
-            ) {
-                details.load_log(app, job_id, ui.ctx());
-            }
-        }
-    }
-    details.open_logs.contains(&job_id)
-}
-
-/// The end of a job's log, the lines that tell what failed in red.
-pub fn log(details: &mut Details, ui: &mut Ui, theme: &Theme, job_id: u64) {
-    let Some(fetch) = details.logs.get_mut(&job_id) else {
-        return;
-    };
-    fetch.poll();
-    match fetch {
-        Fetch::Loading(_) => {
-            ui.horizontal(|ui| {
-                spinner(ui, 12.0, theme.palette.accent);
-                ui.label(muted(theme, tl("Reading the log…")));
-            });
-        }
-        Fetch::Failed(error) => {
-            ui.label(RichText::new(format!("⚠ {error}")).color(theme.tones.red.fg));
-        }
-        Fetch::Ready(text) => {
-            let size = theme.text_size - 2.5;
-            egui::Frame::new()
-                .fill(theme.palette.chrome)
-                .corner_radius(CornerRadius::same(theme.radii.medium))
-                .inner_margin(Margin::symmetric(8, 6))
-                .show(ui, |ui| {
-                    egui::ScrollArea::both()
-                        .id_salt(("job_log", job_id))
-                        .max_height(260.0)
-                        .min_scrolled_height(220.0)
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing.y = 1.0;
-                            for line in text.lines() {
-                                let color = if is_failure(line) {
-                                    theme.tones.red.fg
-                                } else {
-                                    theme.palette.text_secondary
-                                };
-                                ui.add(egui::Label::new(mono(line, size).color(color)).extend());
-                            }
-                        });
-                });
-            ui.horizontal(|ui| {
-                ui.label(muted(
-                    theme,
-                    tf("The last {n} lines", &[("n", &LOG_LINES.to_string())]),
-                ));
-                if ui.small_button(tl("Copy")).clicked() {
-                    ui.ctx().copy_text(text.clone());
-                }
-            });
-        }
-    }
 }
 
 /// Whether a log line tells what failed.

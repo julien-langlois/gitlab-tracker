@@ -1057,92 +1057,12 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
     });
 }
 
-/// The latest pipelines; the jobs of the newest one by stage.
-/// The pipelines, as an inspector section (`framed`) or bare, in the MR page's tab.
+/// The pipelines, drawn as in the MR page's tab, narrowed to the inspector.
 fn pipelines(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
-    let theme = &g.theme.clone();
-    let demo = g.app.read_only;
-    let can_read_logs =
-        |job: &crate::models::PipelineJob| job.status == "failed" && (job.id != 0 || demo);
-    let body = |ui: &mut Ui| {
-        if mr.pipelines.is_empty() {
-            ui.label(muted(theme, tl("No pipeline yet.")));
-            return;
-        }
-        for pipeline in mr.pipelines.iter().take(5) {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                ui.label(
-                    mono(format!("#{}", pipeline.id), theme.text_size - 1.5)
-                        .color(theme.palette.text_secondary),
-                );
-                let (label, tone) = tones::pipeline(pipeline.status, &theme.tones);
-                ui.add(Chip::new(label, tone));
-                if let Some(at) = &pipeline.created_at {
-                    ui.label(muted(theme, format_relative_date(at)));
-                }
-            });
-        }
-        let Some(latest) = mr.pipelines.first() else {
-            return;
-        };
-        if latest.jobs.is_empty() {
-            return;
-        }
-        ui.add_space(4.0);
-        let mut stages: Vec<&str> = Vec::new();
-        for job in &latest.jobs {
-            if !stages.contains(&job.stage.as_str()) {
-                stages.push(&job.stage);
-            }
-        }
-        for stage in stages {
-            ui.label(semibold(stage, theme.text_size - 2.0).color(theme.palette.text_muted));
-            for job in latest.jobs.iter().filter(|j| j.stage == stage) {
-                let mut log_open = false;
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 6.0;
-                    dot(ui, job_color(theme, &job.status), 6.0);
-                    ui.add(
-                        egui::Label::new(RichText::new(&job.name).size(theme.text_size - 1.0))
-                            .truncate(),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        let text = match job.duration {
-                            Some(secs) => duration(secs.round() as u32).replace("0m", "<1m"),
-                            None => job.status.clone(),
-                        };
-                        ui.label(muted(theme, text));
-                        if can_read_logs(job) {
-                            // The demo's jobs have no id: one canned log for all.
-                            log_open = super::details::log_button(
-                                &mut g.details,
-                                &g.app,
-                                ui,
-                                theme,
-                                job.id,
-                            );
-                        }
-                    });
-                });
-                if log_open {
-                    super::details::log(&mut g.details, ui, theme, job.id);
-                }
-            }
-        }
-    };
-    section(ui, theme, tl("Pipelines"), body);
-}
-
-fn job_color(theme: &Theme, status: &str) -> egui::Color32 {
-    let t = &theme.tones;
-    match status {
-        "success" => t.green.fg,
-        "failed" => t.red.fg,
-        "running" => t.orange.fg,
-        "pending" | "created" | "manual" => t.amber.fg,
-        _ => theme.palette.text_muted,
-    }
+    let theme = g.theme;
+    section(ui, &theme, tl("Pipelines"), |ui| {
+        super::mr_pipelines::compact(g, ui, mr);
+    });
 }
 
 /// An initials avatar and the name, the handle on hover; me stands out, as in
