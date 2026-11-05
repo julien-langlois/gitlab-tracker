@@ -937,8 +937,25 @@ fn deployments_card(
             );
             return;
         }
-        let label_w = 128.0;
+        // The names' column as wide as the longest name (two fifths of the
+        // card at most), then a gap before the lanes start.
         let width = ui.available_width();
+        let label_font = FontId::proportional(theme.text_size - 1.5);
+        let gap = 18.0;
+        let longest = lanes
+            .iter()
+            .map(|(b, env)| {
+                ui.painter()
+                    .layout_no_wrap(
+                        format!("{env} · {}", b.alias),
+                        label_font.clone(),
+                        theme.palette.text_secondary,
+                    )
+                    .size()
+                    .x
+            })
+            .fold(0.0_f32, f32::max);
+        let label_w = (14.0 + longest + gap).clamp(110.0, (width * 0.4).max(110.0));
         let track_w = width - label_w - 8.0;
         for (b, env) in lanes.iter().rev() {
             let (line, _) = ui.allocate_exact_size(Vec2::new(width, 36.0), Sense::hover());
@@ -948,15 +965,29 @@ fn deployments_card(
                 4.0,
                 role_color(b.role, theme),
             );
-            board::paint_text(
+            let name = format!("{env} · {}", b.alias);
+            let galley = board::one_line(
                 ui,
-                egui::pos2(line.left() + 14.0, line.center().y),
-                Align2::LEFT_CENTER,
-                &format!("{env} · {}", b.alias),
-                FontId::proportional(theme.text_size - 1.5),
+                &name,
+                label_font.clone(),
                 theme.palette.text_secondary,
-                label_w - 18.0,
+                label_w - 14.0 - gap,
             );
+            let cut = galley.elided;
+            let name_rect = Rect::from_min_size(
+                egui::pos2(line.left() + 14.0, line.center().y - galley.size().y / 2.0),
+                galley.size(),
+            );
+            ui.painter()
+                .galley(name_rect.min, galley, theme.palette.text_secondary);
+            if cut {
+                ui.interact(
+                    name_rect,
+                    ui.scope_id().with(("lane", env.as_str())),
+                    Sense::hover(),
+                )
+                .on_hover_text(&name);
+            }
             let track = Rect::from_min_max(
                 egui::pos2(line.left() + label_w, line.top()),
                 egui::pos2(line.left() + label_w + track_w, line.bottom()),
