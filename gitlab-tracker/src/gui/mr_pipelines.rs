@@ -500,68 +500,44 @@ fn log_panel(
             egui::Frame::new()
                 .inner_margin(Margin::symmetric(12, 8))
                 .show(ui, |ui| {
+                    // The buttons first, on the right, then the job in what is
+                    // left: a long name is cut, not the panel widened.
                     ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        let (glyph, _) = ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
-                        status_glyph(ui.painter(), glyph, &job.status, color);
-                        ui.label(
-                            RichText::new(&job.name)
-                                .font(fonts::medium(theme.text_size - 0.5))
-                                .color(theme.palette.text),
-                        );
-                        if !narrow {
-                            ui.label(muted(theme, format!("· {}", job.stage)));
-                            if let Some(secs) = job.duration {
-                                ui.label(muted(theme, format!("· {}", long_duration(secs))));
-                            }
-                        }
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.spacing_mut().item_spacing.x = 6.0;
-                            if narrow {
-                                // Icons only: the inspector is too narrow for words.
-                                let style = theme.outlined_icon_button();
-                                if let Some(url) = url {
-                                    if icon_button(
-                                        ui,
-                                        tl("The whole log, in GitLab"),
-                                        Icon::ExternalLink,
-                                        &style,
-                                        24.0,
-                                    )
-                                    .clicked()
-                                    {
-                                        ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+                            log_buttons(ui, theme, &log, url, narrow);
+                            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                let (glyph, _) =
+                                    ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
+                                status_glyph(ui.painter(), glyph, &job.status, color);
+                                let mut details = String::new();
+                                if !narrow {
+                                    details = format!(" · {}", job.stage);
+                                    if let Some(secs) = job.duration {
+                                        details += &format!(" · {}", long_duration(secs));
                                     }
                                 }
-                                if let details::LogView::Ready(text) = &log {
-                                    if icon_button(ui, tl("Copy"), Icon::Copy, &style, 24.0)
-                                        .clicked()
-                                    {
-                                        ui.ctx().copy_text(text.to_string());
-                                    }
-                                }
-                                return;
-                            }
-                            if let Some(url) = url {
-                                if button(
-                                    ui,
-                                    theme,
-                                    Some(Icon::ExternalLink),
-                                    tl("Full log"),
-                                    false,
-                                )
-                                .on_hover_text(tl("The whole log, in GitLab"))
-                                .clicked()
-                                {
-                                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
-                                }
-                            }
-                            if let details::LogView::Ready(text) = &log {
-                                if button(ui, theme, Some(Icon::Copy), tl("Copy"), false).clicked()
-                                {
-                                    ui.ctx().copy_text(text.to_string());
-                                }
-                            }
+                                let mut text = egui::text::LayoutJob::default();
+                                text.append(
+                                    &job.name,
+                                    0.0,
+                                    egui::TextFormat::simple(
+                                        fonts::medium(theme.text_size - 0.5),
+                                        theme.palette.text,
+                                    ),
+                                );
+                                text.append(
+                                    &details,
+                                    0.0,
+                                    egui::TextFormat::simple(
+                                        egui::FontId::proportional(theme.text_size - 1.0),
+                                        theme.palette.text_muted,
+                                    ),
+                                );
+                                ui.add(egui::Label::new(text).truncate())
+                                    .on_hover_text(&job.name);
+                            });
                         });
                     });
                 });
@@ -585,8 +561,12 @@ fn log_panel(
                         details::LogView::Failed(error) => {
                             ui.horizontal(|ui| {
                                 ui.add_space(12.0);
-                                ui.label(
-                                    RichText::new(format!("⚠ {error}")).color(theme.tones.red.fg),
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!("⚠ {error}"))
+                                            .color(theme.tones.red.fg),
+                                    )
+                                    .wrap(),
                                 );
                             });
                         }
@@ -605,6 +585,52 @@ fn log_panel(
                 &[("n", &text.lines().count().to_string())],
             ),
         ));
+    }
+}
+
+/// The log's buttons, right to left: GitLab's whole log, a copy of it; icons
+/// only when `narrow`.
+fn log_buttons(
+    ui: &mut Ui,
+    theme: &Theme,
+    log: &details::LogView<'_>,
+    url: Option<&str>,
+    narrow: bool,
+) {
+    if narrow {
+        let style = theme.outlined_icon_button();
+        if let Some(url) = url {
+            if icon_button(
+                ui,
+                tl("The whole log, in GitLab"),
+                Icon::ExternalLink,
+                &style,
+                24.0,
+            )
+            .clicked()
+            {
+                ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+            }
+        }
+        if let details::LogView::Ready(text) = log {
+            if icon_button(ui, tl("Copy"), Icon::Copy, &style, 24.0).clicked() {
+                ui.ctx().copy_text(text.to_string());
+            }
+        }
+        return;
+    }
+    if let Some(url) = url {
+        if button(ui, theme, Some(Icon::ExternalLink), tl("Full log"), false)
+            .on_hover_text(tl("The whole log, in GitLab"))
+            .clicked()
+        {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+        }
+    }
+    if let details::LogView::Ready(text) = log {
+        if button(ui, theme, Some(Icon::Copy), tl("Copy"), false).clicked() {
+            ui.ctx().copy_text(text.to_string());
+        }
     }
 }
 
@@ -870,12 +896,23 @@ fn stages(
             let (glyph, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
             ui.painter()
                 .circle_filled(glyph.center(), 3.5, job_color(theme, worst));
-            ui.label(
-                RichText::new(stage.to_uppercase())
-                    .font(fonts::medium(theme.text_size - 2.5))
-                    .color(theme.palette.text_muted),
+            // The name and the count as one text, cut when the name is long.
+            let size = theme.text_size - 2.5;
+            let mut text = egui::text::LayoutJob::default();
+            text.append(
+                &stage.to_uppercase(),
+                0.0,
+                egui::TextFormat::simple(fonts::medium(size), theme.palette.text_muted),
             );
-            ui.label(muted(theme, jobs.len().to_string()).size(theme.text_size - 2.5));
+            text.append(
+                &jobs.len().to_string(),
+                6.0,
+                egui::TextFormat::simple(
+                    egui::FontId::proportional(size),
+                    theme.palette.text_muted,
+                ),
+            );
+            ui.add(egui::Label::new(text).truncate());
             glyph.center()
         });
         let anchor = title.inner;
