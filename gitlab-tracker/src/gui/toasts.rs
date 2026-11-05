@@ -278,7 +278,8 @@ struct Line {
 
 /// What the panel asked for.
 enum Ask {
-    Open(usize, String),
+    /// Its tab, MR, and whether it is a failed pipeline (opened on the pipelines).
+    Open(usize, String, bool),
     ReadAll,
     Clear,
 }
@@ -425,7 +426,11 @@ pub fn panel(g: &mut GuiApp, button: &egui::Response) {
                                 day_heading(ui, &theme, date, today);
                             }
                             if row(ui, &theme, line, several) {
-                                ask = Some(Ask::Open(line.tab, line.past.id.clone()));
+                                ask = Some(Ask::Open(
+                                    line.tab,
+                                    line.past.id.clone(),
+                                    line.past.kind == Kind::PipelineFailed,
+                                ));
                             }
                         }
                         ui.add_space(6.0);
@@ -462,9 +467,12 @@ pub fn panel(g: &mut GuiApp, button: &egui::Response) {
     match ask {
         Some(Ask::ReadAll) => each(&mut |t| t.history.iter_mut().for_each(|p| p.read = true)),
         Some(Ask::Clear) => each(&mut |t| t.history.clear()),
-        Some(Ask::Open(tab, id)) => {
+        Some(Ask::Open(tab, id, failed)) => {
             each(&mut |t| t.history.iter_mut().for_each(|p| p.read = true));
             g.open_link(tab, &id);
+            if failed {
+                g.mr_tab = super::mr_page::Tab::Pipelines;
+            }
             return;
         }
         None => {}

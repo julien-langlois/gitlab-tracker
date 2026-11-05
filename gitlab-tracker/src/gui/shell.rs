@@ -208,22 +208,29 @@ fn bell(g: &mut GuiApp, ui: &mut Ui) {
             })
             .sum::<usize>();
     if unread > 0 {
-        let center = egui::pos2(
-            response.rect.center().x + 7.0,
-            response.rect.center().y - 7.0,
+        // A disc for one digit, stretched into a pill around "9+".
+        let text = if unread > 9 {
+            "9+".to_string()
+        } else {
+            unread.to_string()
+        };
+        let galley = ui
+            .painter()
+            .layout_no_wrap(text, fonts::semibold(8.5), theme.palette.chrome);
+        let rect = Rect::from_center_size(
+            egui::pos2(
+                response.rect.center().x + 7.0,
+                response.rect.center().y - 7.0,
+            ),
+            Vec2::new((galley.size().x + 5.0).max(12.0), 12.0),
         );
         ui.painter()
-            .circle_filled(center, 7.5, theme.palette.chrome);
-        ui.painter().circle_filled(center, 6.0, theme.tones.red.fg);
-        ui.painter().text(
-            center,
-            egui::Align2::CENTER_CENTER,
-            if unread > 9 {
-                "9+".to_string()
-            } else {
-                unread.to_string()
-            },
-            fonts::semibold(8.5),
+            .rect_filled(rect.expand(1.5), CornerRadius::same(8), theme.palette.chrome);
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(6), theme.tones.red.fg);
+        ui.painter().galley(
+            rect.center() - galley.size() / 2.0,
+            galley,
             theme.palette.chrome,
         );
     }
