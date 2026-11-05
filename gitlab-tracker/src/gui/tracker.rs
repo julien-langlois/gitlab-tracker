@@ -50,6 +50,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let provider = g.app.tracker.as_ref().map_or("Tracker", |t| t.name());
 
     let mut picked = None;
+    // Double-clicked: the ticket opened in the browser.
+    let mut opened = None;
     let mut log_time = None;
     let mut moved: Option<Move> = None;
     let mut tile = None;
@@ -99,7 +101,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     &columns,
                     movable,
                     selected,
-                    (&mut picked, &mut log_time, &mut moved),
+                    (&mut picked, &mut opened, &mut log_time, &mut moved),
                 );
                 return;
             }
@@ -115,6 +117,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                                 ticket_row(ui, &theme, row, selected == Some(row.index));
                             if card.clicked() {
                                 picked = Some(row.index);
+                            }
+                            if card.double_clicked() {
+                                opened = Some(row.index);
                             }
                             let right =
                                 avatar.map_or(card.rect.right() - 14.0, |a| a.left() - 10.0);
@@ -133,9 +138,12 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     if let Some((key, label)) = tile {
         g.focus_on(key, tl(label));
     }
-    if let Some(index) = picked.or(log_time) {
+    if let Some(index) = opened.or(picked).or(log_time) {
         g.app.table_state.select(Some(index));
         g.app.layout.inspector.reset();
+    }
+    if opened.is_some() {
+        g.pending.push(Action::OpenSelectedTicket);
     }
     if log_time.is_some() {
         g.pending.push(Action::OpenLogTime);
@@ -248,7 +256,12 @@ fn board_view(
     columns: &[(String, Option<String>)],
     movable: bool,
     selected: Option<usize>,
-    (picked, log_time, moved): (&mut Option<usize>, &mut Option<usize>, &mut Option<Move>),
+    (picked, opened, log_time, moved): (
+        &mut Option<usize>,
+        &mut Option<usize>,
+        &mut Option<usize>,
+        &mut Option<Move>,
+    ),
 ) {
     let gap = 12.0;
     let count = columns.len().max(1) as f32;
@@ -304,6 +317,9 @@ fn board_view(
                                 };
                                 if card.clicked() {
                                     *picked = Some(row.index);
+                                }
+                                if card.double_clicked() {
+                                    *opened = Some(row.index);
                                 }
                                 if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
                                     *log_time = Some(row.index);

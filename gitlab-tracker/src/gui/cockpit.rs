@@ -797,6 +797,8 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
                     .max_rect(rect.shrink2(Vec2::new(12.0, 0.0)))
                     .layout(Layout::left_to_right(Align::Center)),
             );
+            // The row takes the click: its texts, selectable, would take it over them.
+            row.style_mut().interaction.selectable_labels = false;
             row.spacing_mut().item_spacing.x = 8.0;
             row.label(
                 mono(format!("!{}", u.id), theme.text_size - 1.0)

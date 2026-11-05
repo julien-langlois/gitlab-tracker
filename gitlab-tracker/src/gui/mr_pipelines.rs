@@ -798,7 +798,15 @@ pub fn compact(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.spacing_mut().item_spacing.y = 0.0;
-                    stages(g, ui, &theme, latest, &mut state, project_url.as_deref(), demo);
+                    stages(
+                        g,
+                        ui,
+                        &theme,
+                        latest,
+                        &mut state,
+                        project_url.as_deref(),
+                        demo,
+                    );
                 });
         });
 
@@ -835,7 +843,11 @@ fn tally_left(ui: &mut Ui, theme: &Theme, jobs: &[PipelineJob]) {
     );
     let failed = jobs.iter().filter(|j| j.status == "failed").count();
     if failed > 0 {
-        ui.label(RichText::new("·").size(size).color(theme.palette.text_muted));
+        ui.label(
+            RichText::new("·")
+                .size(size)
+                .color(theme.palette.text_muted),
+        );
         ui.label(
             RichText::new(tn(failed as u64, "{n} failed", "{n} failed"))
                 .size(size)
@@ -844,7 +856,11 @@ fn tally_left(ui: &mut Ui, theme: &Theme, jobs: &[PipelineJob]) {
     }
     let total: f64 = jobs.iter().filter_map(|j| j.duration).sum();
     if total > 0.0 {
-        ui.label(RichText::new("·").size(size).color(theme.palette.text_muted));
+        ui.label(
+            RichText::new("·")
+                .size(size)
+                .color(theme.palette.text_muted),
+        );
         ui.label(
             RichText::new(long_duration(total))
                 .size(size)
@@ -961,7 +977,10 @@ fn stages(
         }
         // The rail down the stage, along its jobs.
         ui.painter().line_segment(
-            [anchor + Vec2::new(0.0, 6.0), egui::pos2(anchor.x, last_bottom)],
+            [
+                anchor + Vec2::new(0.0, 6.0),
+                egui::pos2(anchor.x, last_bottom),
+            ],
             Stroke::new(1.5, theme.palette.border),
         );
         previous = Some(egui::pos2(anchor.x, last_bottom));
@@ -1021,7 +1040,10 @@ fn older_row(ui: &mut Ui, theme: &Theme, pipeline: &Pipeline, project_url: Optio
     status_glyph(ui.painter(), glyph, status, tone.fg);
     let mut row = ui.new_child(
         egui::UiBuilder::new()
-            .max_rect(rect.with_min_x(glyph.right() + 8.0).shrink2(Vec2::new(0.0, 0.0)))
+            .max_rect(
+                rect.with_min_x(glyph.right() + 8.0)
+                    .shrink2(Vec2::new(0.0, 0.0)),
+            )
             .layout(Layout::left_to_right(Align::Center)),
     );
     row.spacing_mut().item_spacing.x = 8.0;
@@ -1038,7 +1060,12 @@ fn older_row(ui: &mut Ui, theme: &Theme, pipeline: &Pipeline, project_url: Optio
         ui.add_space(8.0);
         if response.hovered() && project_url.is_some() {
             let (icon, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
-            super::icons::paint(ui.painter(), icon, Icon::ExternalLink, theme.palette.text_muted);
+            super::icons::paint(
+                ui.painter(),
+                icon,
+                Icon::ExternalLink,
+                theme.palette.text_muted,
+            );
         }
         if let Some(at) = &pipeline.created_at {
             ui.label(muted(theme, format_relative_date(at)).size(theme.text_size - 1.5));

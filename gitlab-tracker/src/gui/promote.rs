@@ -296,6 +296,8 @@ fn row(ui: &mut Ui, theme: &Theme, r: &Row, from: &str, to: &str, tone: Tone) ->
             .max_rect(rect.shrink2(Vec2::new(12.0, 0.0)))
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // The row takes the click: its texts, selectable, would take it over them.
+    line.style_mut().interaction.selectable_labels = false;
     line.spacing_mut().item_spacing.x = 8.0;
     line.label(
         mono(format!("!{}", r.id), theme.text_size - 1.0).color(theme.palette.text_secondary),

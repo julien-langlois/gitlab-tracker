@@ -224,8 +224,11 @@ fn bell(g: &mut GuiApp, ui: &mut Ui) {
             ),
             Vec2::new((galley.size().x + 5.0).max(12.0), 12.0),
         );
-        ui.painter()
-            .rect_filled(rect.expand(1.5), CornerRadius::same(8), theme.palette.chrome);
+        ui.painter().rect_filled(
+            rect.expand(1.5),
+            CornerRadius::same(8),
+            theme.palette.chrome,
+        );
         ui.painter()
             .rect_filled(rect, CornerRadius::same(6), theme.tones.red.fg);
         ui.painter().galley(
