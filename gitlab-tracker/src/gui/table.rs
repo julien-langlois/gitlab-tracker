@@ -2150,9 +2150,8 @@ fn next_cell(ui: &mut Ui, theme: &Theme, r: &RowView, compact: bool) {
     let response = if compact {
         ui.horizontal(|ui| head(ui)).response
     } else {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 1.0;
-            ui.add_space(7.0);
+        super::widgets::centered_block(ui, ("next", &r.id), |ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
             ui.horizontal(|ui| head(ui));
             if !next.since.is_empty() {
                 ui.add(
@@ -2399,9 +2398,8 @@ fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) -> Option<St
         .cells
         .iter()
         .any(|(c, _, _)| *c == Cell::Optional(Col::Labels));
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 1.0;
-        ui.add_space(6.0);
+    super::widgets::centered_block(ui, ("title", &r.id), |ui| {
+        ui.spacing_mut().item_spacing.y = 3.0;
         if r.loading {
             ui.add_space(3.0);
             shimmer(ui, theme, (ui.available_width() * 0.6).min(260.0), 12.0);

@@ -750,9 +750,8 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<Ro
             .on_hover_text(tl("Since when it waits"));
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.add_space(7.0);
+            super::widgets::centered_block(ui, ("today", &item.project, &item.id), |ui| {
+                ui.spacing_mut().item_spacing.y = 3.0;
                 ui.add(
                     egui::Label::new(
                         RichText::new(&item.title).font(fonts::semibold(theme.text_size)),

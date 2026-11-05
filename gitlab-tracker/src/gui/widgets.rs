@@ -39,6 +39,31 @@ pub fn semibold(text: impl Into<String>, size: f32) -> RichText {
     RichText::new(text).font(fonts::semibold(size))
 }
 
+/// Lays out `add` top-down, centered on the height left in `ui`: a block of
+/// lines (a title over a detail) in the middle of its row. Its height is the
+/// one measured on the previous frame, under `key` (one per row and cell).
+pub fn centered_block<R>(
+    ui: &mut Ui,
+    key: impl std::hash::Hash + std::fmt::Debug,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let id = egui::Id::unique(("centered_block", key));
+    let height: Option<f32> = ui.data(|d| d.get_temp(id));
+    let room = ui.available_height();
+    ui.vertical(|ui| {
+        ui.spacing_mut().interact_size.y = 0.0;
+        ui.add_space(((room - height.unwrap_or(room)) / 2.0).max(0.0).floor());
+        let top = ui.cursor().top();
+        let inner = add(ui);
+        let measured = (ui.min_rect().bottom() - top).round();
+        if height != Some(measured) {
+            ui.data_mut(|d| d.insert_temp(id, measured));
+            ui.ctx().request_repaint();
+        }
+        inner
+    })
+}
+
 pub fn mono(text: impl Into<String>, size: f32) -> RichText {
     RichText::new(text).font(FontId::monospace(size))
 }
