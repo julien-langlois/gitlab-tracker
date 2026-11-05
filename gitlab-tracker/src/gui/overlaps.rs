@@ -1418,7 +1418,13 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, overlaps: &Overlaps, pair: Option<&(St
 
 /// A file two MRs share: its path, how they meet, the hunks of each, and the
 /// lines both change.
-type Meeting<'a> = (&'a String, Level, Vec<(u32, u32)>, Vec<(u32, u32)>, Vec<(u32, u32)>);
+type Meeting<'a> = (
+    &'a String,
+    Level,
+    Vec<(u32, u32)>,
+    Vec<(u32, u32)>,
+    Vec<(u32, u32)>,
+);
 
 /// The lines (first, last) both hunk lists change, merged and in order.
 fn common_lines(a: &[(u32, u32)], b: &[(u32, u32)]) -> Vec<(u32, u32)> {

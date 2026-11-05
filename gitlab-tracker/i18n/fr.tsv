@@ -1491,3 +1491,9 @@ rail	Overlaps	Conflits
 @plural	{n} on the same lines|{n} on the same lines	{n} sur les mêmes lignes|{n} sur les mêmes lignes
 @plural	{n} on close lines|{n} on close lines	{n} sur des lignes proches|{n} sur des lignes proches
 @plural	{n} only in the same file|{n} only in the same file	{n} seulement dans le même fichier|{n} seulement dans le même fichier
+	no pace yet	pas encore de rythme
+	on the due date	pile à l'échéance
+	lands around {date}	arrivée vers le {date}
+	Due {due}, projected {eta}	Échéance le {due}, projection le {eta}
+@plural	day late|days late	jour de retard|jours de retard
+@plural	day early|days early	jour d'avance|jours d'avance

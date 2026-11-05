@@ -1491,3 +1491,9 @@ rail	Overlaps	重叠
 @plural	{n} on the same lines|{n} on the same lines	{n} 个在相同行上
 @plural	{n} on close lines|{n} on close lines	{n} 个在相近行上
 @plural	{n} only in the same file|{n} only in the same file	{n} 个仅在同一文件中
+	no pace yet	暂无速度数据
+	on the due date	恰好在截止日期
+	lands around {date}	预计约 {date} 完成
+	Due {due}, projected {eta}	截止 {due}，预计 {eta}
+@plural	day late|days late	天延期
+@plural	day early|days early	天提前

@@ -1491,3 +1491,9 @@ rail	Overlaps	Solapes
 @plural	{n} on the same lines|{n} on the same lines	{n} en las mismas líneas|{n} en las mismas líneas
 @plural	{n} on close lines|{n} on close lines	{n} en líneas cercanas|{n} en líneas cercanas
 @plural	{n} only in the same file|{n} only in the same file	{n} solo en el mismo archivo|{n} solo en el mismo archivo
+	no pace yet	aún sin ritmo
+	on the due date	justo en la fecha
+	lands around {date}	llega hacia el {date}
+	Due {due}, projected {eta}	Fecha límite {due}, proyección {eta}
+@plural	day late|days late	día de retraso|días de retraso
+@plural	day early|days early	día de adelanto|días de adelanto
