@@ -47,6 +47,15 @@ pub struct ProjectEntry {
     /// `tracker_state.json` on first startup, then owned exclusively here.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tracked_branches: Option<Vec<String>>,
+    /// What each tracked branch is for, and which branch feeds a feature branch;
+    /// what is left out is guessed from the names (see [`crate::branch_flow`]).
+    ///
+    /// ```toml
+    /// [project.branch_flow]
+    /// redesign_develop = { role = "feature", parent = "develop" }
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_flow: Option<std::collections::BTreeMap<String, crate::branch_flow::BranchSetting>>,
     /// How often the MR list is refreshed from GitLab, in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_interval_secs: Option<u64>,
@@ -811,6 +820,18 @@ pub async fn save_visible_columns_async(
 pub async fn save_branches_async(branches: &[String], gitlab_url: &str, project_id: &str) {
     update_project_entry(gitlab_url, project_id, |entry| {
         entry.tracked_branches = (!branches.is_empty()).then(|| branches.to_vec());
+    })
+    .await;
+}
+
+/// Persists the branch roles and parents of the current project into `projects.toml`.
+pub async fn save_branch_flow_async(
+    flow: Option<&std::collections::BTreeMap<String, crate::branch_flow::BranchSetting>>,
+    gitlab_url: &str,
+    project_id: &str,
+) {
+    update_project_entry(gitlab_url, project_id, |entry| {
+        entry.branch_flow = flow.cloned();
     })
     .await;
 }

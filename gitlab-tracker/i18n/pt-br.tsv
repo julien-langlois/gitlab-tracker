@@ -870,7 +870,6 @@ date	Merged	Mesclada
 	Last push	Último push
 	Approved	Aprovada
 	Pipeline #{id} · {status}	Pipeline #{id} · {status}
-	Merged by {who}	Mesclada por {who}
 	Approval rules	Regras de aprovação
 	met	cumprida
 	{who} approved	{who} aprovou
@@ -943,3 +942,26 @@ date	Merged	Mesclada
 	Status: {name}	Status: {name}
 @plural	{n} MR in the list|{n} MRs in the list	{n} MR na lista|{n} MRs na lista
 @plural	{n} MR|{n} MRs	{n} MR|{n} MRs
+	Merged into {branch}	Mesclada em {branch}
+	Merged into {branch} by {who}	Mesclada em {branch} por {who}
+	Synced into {branch}	Levada para {branch}
+	Not in {branch} yet	Ainda não em {branch}
+	Rebase it on {target}, or merge {target} into it	Fazer rebase sobre {target}, ou mesclar {target} nela
+	Feature	Feature
+	Integration	Integração
+	Staging	Homologação
+	Production	Produção
+	Role in the flow	Papel no fluxo
+	Guess from the name	Deduzir pelo nome
+	Fed by	Alimentada por
+	Guessed from the name, fed by {parent}: click to set	Deduzido pelo nome, alimentada por {parent}: clique para definir
+	Fed by {parent}: click to change	Alimentada por {parent}: clique para mudar
+	Guessed from the name: click to set	Deduzido pelo nome: clique para definir
+	Click to change	Clique para mudar
+	Not synced	Não levada
+@plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR a trazer|↓ {n} MRs a trazer
+	Merged upstream, not in {branch} yet: rebase it, or merge into it	Mescladas a montante, ainda não em {branch}: fazer rebase ou mesclar nela
+	Merged upstream, not in {branch} yet	Mescladas a montante, ainda não em {branch}
+	Merged into {target}, open its page	Mesclada em {target}, abrir sua página
+	Compare with {source} on GitLab	Comparar com {source} no GitLab
+	Only the tracked MRs are listed; GitLab compares every commit.	Só as MRs acompanhadas são listadas; o GitLab compara todos os commits.

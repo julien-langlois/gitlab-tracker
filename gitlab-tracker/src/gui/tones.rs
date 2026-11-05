@@ -3,6 +3,7 @@
 use bevel_theme::{Tone, Tones};
 use egui::Color32;
 
+use crate::branch_flow::Place;
 use crate::i18n::tl;
 use crate::models::{BranchPresence, Effort, GitlabMrState, MergeabilityStatus, PipelineState};
 use crate::status::StatusKind;
@@ -69,6 +70,22 @@ pub fn presence(
         Some(BranchPresence::Absent) => ("○", tl("Absent"), tones.red),
         None if failed => ("✕", tl("Failed"), tones.red),
         None => ("…", tl("Loading"), tones.gray),
+    }
+}
+
+/// [`presence`] of a branch at its `place` in an MR's flow: a branch to sync
+/// not reached yet is behind (amber, a rebase is due), not a failure; one off
+/// the MR's path, absent, does not concern it (gray).
+pub fn flow_presence(
+    presence: Option<BranchPresence>,
+    failed: bool,
+    place: Place,
+    tones: &Tones,
+) -> (&'static str, &'static str, Tone) {
+    match (presence, place) {
+        (Some(BranchPresence::Absent), Place::Sync) => ("○", tl("Not synced"), tones.amber),
+        (Some(BranchPresence::Absent), Place::Off) => ("○", tl("Absent"), tones.gray),
+        _ => self::presence(presence, failed, tones),
     }
 }
 

@@ -870,7 +870,6 @@ date	Merged	Gemergt
 	Last push	Letzter Push
 	Approved	Genehmigt
 	Pipeline #{id} · {status}	Pipeline #{id} · {status}
-	Merged by {who}	Gemergt von {who}
 	Approval rules	Genehmigungsregeln
 	met	erfüllt
 	{who} approved	{who} hat genehmigt
@@ -943,3 +942,26 @@ date	Merged	Gemergt
 	Status: {name}	Status: {name}
 @plural	{n} MR in the list|{n} MRs in the list	{n} MR in der Liste|{n} MRs in der Liste
 @plural	{n} MR|{n} MRs	{n} MR|{n} MRs
+	Merged into {branch}	In {branch} gemergt
+	Merged into {branch} by {who}	Von {who} in {branch} gemergt
+	Synced into {branch}	In {branch} übernommen
+	Not in {branch} yet	Noch nicht in {branch}
+	Rebase it on {target}, or merge {target} into it	Auf {target} rebasen oder {target} hineinmergen
+	Feature	Feature
+	Integration	Integration
+	Staging	Staging
+	Production	Produktion
+	Role in the flow	Rolle im Ablauf
+	Guess from the name	Aus dem Namen ableiten
+	Fed by	Gespeist von
+	Guessed from the name, fed by {parent}: click to set	Aus dem Namen abgeleitet, gespeist von {parent}: zum Festlegen klicken
+	Fed by {parent}: click to change	Gespeist von {parent}: zum Ändern klicken
+	Guessed from the name: click to set	Aus dem Namen abgeleitet: zum Festlegen klicken
+	Click to change	Zum Ändern klicken
+	Not synced	Nicht übernommen
+@plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR zu übernehmen|↓ {n} MRs zu übernehmen
+	Merged upstream, not in {branch} yet: rebase it, or merge into it	Upstream gemergt, noch nicht in {branch}: rebasen oder hineinmergen
+	Merged upstream, not in {branch} yet	Upstream gemergt, noch nicht in {branch}
+	Merged into {target}, open its page	In {target} gemergt, Seite öffnen
+	Compare with {source} on GitLab	Auf GitLab mit {source} vergleichen
+	Only the tracked MRs are listed; GitLab compares every commit.	Nur verfolgte MRs werden gelistet; GitLab vergleicht alle Commits.

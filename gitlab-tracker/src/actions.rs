@@ -15,8 +15,8 @@ use crate::gitlab::{spawn_milestone_mrs_fetch, spawn_mr_fetch, CachePolicy, Cach
 use crate::i18n::tl;
 use crate::models::{AppEvent, MrStatus};
 use crate::storage::{
-    save_branches_async, save_hide_merged_async, save_project_settings_async,
-    save_visible_columns_async, ProjectEntry, StateFile, StateWriter,
+    save_branch_flow_async, save_branches_async, save_hide_merged_async,
+    save_project_settings_async, save_visible_columns_async, ProjectEntry, StateFile, StateWriter,
 };
 use crate::utils::parse_duration_to_hours;
 
@@ -65,6 +65,15 @@ pub enum Action {
     MoveBranch {
         from: usize,
         to: usize,
+    },
+    /// Sets what a tracked branch is for (its role, its parent) and saves it.
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window draws the branch flow")
+    )]
+    SetBranchFlow {
+        branch: String,
+        setting: crate::branch_flow::BranchSetting,
     },
     /// Opens the Log Time form for the selected MR's ticket, loading the
     /// activities on first use. Does nothing when the MR has no linked ticket.
@@ -116,6 +125,26 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
                 if !app.read_only {
                     save_branches_async(&app.branches, &app.base_url, &app.project_id).await;
                 }
+            }
+        }
+
+        Action::SetBranchFlow { branch, setting } => {
+            let flow = app.project_settings.branch_flow.get_or_insert_default();
+            if setting.is_empty() {
+                flow.remove(&branch);
+            } else {
+                flow.insert(branch, setting);
+            }
+            if flow.is_empty() {
+                app.project_settings.branch_flow = None;
+            }
+            if !app.read_only {
+                save_branch_flow_async(
+                    app.project_settings.branch_flow.as_ref(),
+                    &app.base_url,
+                    &app.project_id,
+                )
+                .await;
             }
         }
 

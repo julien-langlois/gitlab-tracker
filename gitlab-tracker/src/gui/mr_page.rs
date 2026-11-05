@@ -1399,13 +1399,13 @@ fn tile_title(ui: &mut Ui, theme: &Theme, title: &str) {
 fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     tile_title(ui, &theme, tl("Where it is"));
-    let rows = g.app.branch_rows(mr);
+    let rows = g.app.flow_branch_rows(mr);
     let failed = matches!(mr.status, MrStatus::Error(_));
     let shown = MAX_BRANCH_LINES;
     let name_width = rows
         .iter()
         .take(shown)
-        .map(|r| {
+        .map(|(r, _)| {
             text_width(
                 ui,
                 &r.branch,
@@ -1417,14 +1417,15 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
     // Even lines, as tight as the chips allow.
     ui.spacing_mut().item_spacing.y = 4.0;
     ui.spacing_mut().interact_size.y = BRANCH_LINE - 4.0;
-    for row in rows.iter().take(shown) {
+    for (row, place) in rows.iter().take(shown) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 10.0;
             fixed(ui, name_width, |ui| {
                 ui.add(egui::Label::new(mono(&row.branch, theme.text_size - 1.5)).truncate())
                     .on_hover_text(&row.branch);
             });
-            let (glyph, label, tone) = tones::presence(row.presence, failed, &theme.tones);
+            let (glyph, label, tone) =
+                tones::flow_presence(row.presence, failed, *place, &theme.tones);
             let label = match row.presence {
                 Some(BranchPresence::Partial) => {
                     tf("{n} missing", &[("n", &row.missing.len().to_string())])
@@ -1766,6 +1767,7 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
                     detail: Some(format_relative_date(at)),
                     color,
                     pending: false,
+                    side: false,
                 },
             ));
         }
@@ -1812,25 +1814,21 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
         let by = mr.merged_by.as_deref().unwrap_or("?");
         add(
             mr.merged_at.as_deref(),
-            tf("Merged by {who}", &[("who", by)]),
+            tf(
+                "Merged into {branch} by {who}",
+                &[("branch", &mr.target_branch), ("who", by)],
+            ),
             t.purple.fg,
         );
     }
     dated.sort_by(|a, b| b.0.cmp(&a.0));
     let mut steps = Vec::new();
-    // Where it went since, above the dated steps.
+    // Where it went since, above the dated steps: up to production, then
+    // the branches its changes came down to, nearest to the merge last.
     if mr.state == GitlabMrState::Merged {
-        for branch in g.app.branches.iter().rev() {
-            let presence = g.app.branch_presence(mr, branch);
-            let reached = presence.is_some_and(|p| !p.is_missing());
-            let (_, label, tone) = tones::presence(presence, false, t);
-            steps.push(Step {
-                title: tf("On {branch}", &[("branch", branch)]),
-                detail: Some(label.to_string()),
-                color: tone.fg,
-                pending: !reached,
-            });
-        }
+        let (sync, promotion) = super::inspector::flow_steps(g, mr, format_relative_date);
+        steps.extend(promotion.into_iter().rev());
+        steps.extend(sync.into_iter().rev());
     }
     steps.extend(dated.into_iter().map(|(_, s)| s));
     steps

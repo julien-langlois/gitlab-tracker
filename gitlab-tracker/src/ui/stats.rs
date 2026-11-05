@@ -264,6 +264,20 @@ fn trigger_stats_report_refresh(
                 .await
                 .map(Box::new);
             let _ = tx2.send(crate::models::AppEvent::StatsCockpitLoaded { generation, result });
+
+            // The dates the MRs reached the tracked branches, for the timelines.
+            if let Some(project_id) = &cockpit_filter.project_id {
+                match db.query_branch_arrivals(project_id, None, None).await {
+                    Ok(rows) => {
+                        let arrivals = rows
+                            .into_iter()
+                            .map(|a| ((a.mr_id, a.branch), a.arrived_at))
+                            .collect();
+                        let _ = tx2.send(crate::models::AppEvent::BranchArrivalsLoaded(arrivals));
+                    }
+                    Err(e) => tracing::warn!(error = %e, "Failed to read branch arrivals"),
+                }
+            }
         });
     }
 }

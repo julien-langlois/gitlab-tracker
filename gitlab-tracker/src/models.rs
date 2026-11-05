@@ -782,6 +782,11 @@ pub enum AppEvent {
     StatsSnapshotFailed {
         mr_id: String,
     },
+    /// The first arrival of each MR on each tracked branch, read from the stats DB.
+    #[cfg(feature = "stats")]
+    BranchArrivalsLoaded(
+        std::collections::HashMap<(String, String), chrono::DateTime<chrono::Utc>>,
+    ),
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,

@@ -870,7 +870,6 @@ date	Merged	Fusionnée
 	Last push	Dernier push
 	Approved	Approuvée
 	Pipeline #{id} · {status}	Pipeline #{id} · {status}
-	Merged by {who}	Fusionnée par {who}
 	Approval rules	Règles d'approbation
 	met	remplie
 	{who} approved	{who} a approuvé
@@ -943,3 +942,26 @@ date	Merged	Fusionnée
 	Status: {name}	Statut : {name}
 @plural	{n} MR in the list|{n} MRs in the list	{n} MR dans la liste|{n} MR dans la liste
 @plural	{n} MR|{n} MRs	{n} MR|{n} MR
+	Merged into {branch}	Fusionnée dans {branch}
+	Merged into {branch} by {who}	Fusionnée dans {branch} par {who}
+	Synced into {branch}	Reportée sur {branch}
+	Not in {branch} yet	Pas encore sur {branch}
+	Rebase it on {target}, or merge {target} into it	La rebaser sur {target}, ou y fusionner {target}
+	Feature	Feature
+	Integration	Intégration
+	Staging	Préproduction
+	Production	Production
+	Role in the flow	Rôle dans le flux
+	Guess from the name	Deviner d'après le nom
+	Fed by	Alimentée par
+	Guessed from the name, fed by {parent}: click to set	Deviné d'après le nom, alimentée par {parent} : cliquer pour régler
+	Fed by {parent}: click to change	Alimentée par {parent} : cliquer pour changer
+	Guessed from the name: click to set	Deviné d'après le nom : cliquer pour régler
+	Click to change	Cliquer pour changer
+	Not synced	Pas reportée
+@plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR à récupérer|↓ {n} MR à récupérer
+	Merged upstream, not in {branch} yet: rebase it, or merge into it	Fusionnées en amont, pas encore sur {branch} : la rebaser, ou y fusionner
+	Merged upstream, not in {branch} yet	Fusionnées en amont, pas encore sur {branch}
+	Merged into {target}, open its page	Fusionnée dans {target}, ouvrir sa page
+	Compare with {source} on GitLab	Comparer avec {source} sur GitLab
+	Only the tracked MRs are listed; GitLab compares every commit.	Seules les MR suivies sont listées ; GitLab compare tous les commits.

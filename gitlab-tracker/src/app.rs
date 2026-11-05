@@ -495,6 +495,13 @@ pub struct App {
     /// per `Tick` instead of once per recorded snapshot.
     #[cfg(feature = "stats")]
     pub stats_report_dirty: bool,
+    /// When each MR first reached each tracked branch other than its target, as
+    /// recorded in the stats DB (empty without it), by `(mr_id, branch)`.
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window draws the branch flow")
+    )]
+    pub branch_arrivals: HashMap<(String, String), chrono::DateTime<chrono::Utc>>,
     /// Active colour palette — resolved once at startup from the terminal background
     /// colour (OSC 11 via `terminal-colorsaurus`). Falls back to the dark palette
     /// when the terminal does not respond. Forwarded to renderers that need it.
@@ -631,6 +638,7 @@ impl App {
             stats_last_refresh_date: std::collections::HashMap::new(),
             #[cfg(feature = "stats")]
             stats_report_dirty: false,
+            branch_arrivals: HashMap::new(),
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,
             discovery_started_at: None,
@@ -1612,6 +1620,18 @@ impl App {
         }
     }
 
+    /// The tracked branches with their roles (see [`crate::branch_flow`]).
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window draws the branch flow")
+    )]
+    pub fn branch_flow(&self) -> crate::branch_flow::BranchFlow {
+        crate::branch_flow::BranchFlow::new(
+            &self.branches,
+            self.project_settings.branch_flow.as_ref(),
+        )
+    }
+
     /// How `mr` shows up on `branch`; `None` while it is loading or failed.
     pub fn branch_presence(&self, mr: &TrackedMr, branch: &str) -> Option<BranchPresence> {
         let MrStatus::MergedIn(found) = &mr.status else {
@@ -1625,6 +1645,48 @@ impl App {
                 .get(branch)
                 .map_or(BranchPresence::Absent, |index| copy_presence(mr, index)),
         )
+    }
+
+    /// [`App::branch_rows`] in the MR's flow: its target, up to production, the
+    /// branches its changes come down to, then the others; each with its place.
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window draws the branch flow")
+    )]
+    pub fn flow_branch_rows(&self, mr: &TrackedMr) -> Vec<(BranchRow, crate::branch_flow::Place)> {
+        self.branch_flow().path(&mr.target_branch).arrange(
+            &mr.target_branch,
+            self.branch_rows(mr),
+            |row| row.branch.as_str(),
+        )
+    }
+
+    /// The merged MRs whose changes have to come down to `branch` (it is fed by
+    /// their target, see [`crate::branch_flow`]) and are not (all) there yet,
+    /// latest merge first: a rebase or a merge is due.
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window draws the branch flow")
+    )]
+    pub fn behind_on(&self, branch: &str) -> Vec<&TrackedMr> {
+        let flow = self.branch_flow();
+        let mut behind: Vec<&TrackedMr> = self
+            .mrs
+            .iter()
+            .filter(|mr| matches!(mr.status, MrStatus::MergedIn(_)))
+            .filter(|mr| {
+                flow.path(&mr.target_branch)
+                    .sync
+                    .iter()
+                    .any(|b| b == branch)
+            })
+            .filter(|mr| {
+                self.branch_presence(mr, branch)
+                    .is_some_and(|p| p.is_missing())
+            })
+            .collect();
+        behind.sort_by(|a, b| b.merged_at.cmp(&a.merged_at));
+        behind
     }
 
     /// Once no MR is loading any more, every MR has been fetched since the last
@@ -2243,6 +2305,12 @@ impl App {
             }
 
             #[cfg(feature = "stats")]
+            AppEvent::BranchArrivalsLoaded(arrivals) => {
+                self.branch_arrivals = arrivals;
+                false
+            }
+
+            #[cfg(feature = "stats")]
             AppEvent::StatsSnapshotRecorded => {
                 self.stats_report_dirty = true;
                 false
@@ -2385,6 +2453,7 @@ pub(crate) mod tests {
                 table_label_prefixes: None,
                 complexity_profile: None,
                 tracked_branches: None,
+                branch_flow: None,
                 refresh_interval_secs: None,
                 activity_stale_days: None,
                 activity_recent_days: None,
@@ -2537,6 +2606,36 @@ pub(crate) mod tests {
             app.branch_presence(mr, "prod"),
             Some(BranchPresence::Absent)
         );
+    }
+
+    #[tokio::test]
+    async fn behind_on_lists_the_merges_of_the_parent_missing_from_the_feature() {
+        let mut app = app_with_mrs(&[
+            ("on develop", "None"),
+            ("synced", "None"),
+            ("hotfix", "None"),
+        ])
+        .await;
+        app.branches = ["master", "develop", "redesign_develop"]
+            .map(String::from)
+            .to_vec();
+        let merged =
+            |found: &[&str]| MrStatus::MergedIn(found.iter().map(|b| b.to_string()).collect());
+        app.mrs[0].status = merged(&["develop"]);
+        app.mrs[0].data.target_branch = "develop".into();
+        app.mrs[1].status = merged(&["develop", "redesign_develop"]);
+        app.mrs[1].data.target_branch = "develop".into();
+        app.mrs[2].status = merged(&["master"]);
+        app.mrs[2].data.target_branch = "master".into();
+
+        let ids = |mrs: Vec<&TrackedMr>| mrs.iter().map(|mr| mr.title.clone()).collect::<Vec<_>>();
+        // The hotfix comes down to develop, then to the feature branch.
+        assert_eq!(
+            ids(app.behind_on("redesign_develop")),
+            ["on develop", "hotfix"]
+        );
+        assert_eq!(ids(app.behind_on("develop")), ["hotfix"]);
+        assert!(app.behind_on("master").is_empty());
     }
 
     #[tokio::test]

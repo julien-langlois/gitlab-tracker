@@ -870,7 +870,6 @@ date	Merged	合并时间
 	Last push	最近推送
 	Approved	已批准
 	Pipeline #{id} · {status}	流水线 #{id} · {status}
-	Merged by {who}	由 {who} 合并
 	Approval rules	批准规则
 	met	已满足
 	{who} approved	{who} 已批准
@@ -943,3 +942,26 @@ date	Merged	合并时间
 	Status: {name}	状态：{name}
 @plural	{n} MR in the list|{n} MRs in the list	列表中有 {n} 个 MR
 @plural	{n} MR|{n} MRs	{n} 个 MR
+	Merged into {branch}	已合并到 {branch}
+	Merged into {branch} by {who}	由 {who} 合并到 {branch}
+	Synced into {branch}	已同步到 {branch}
+	Not in {branch} yet	尚未进入 {branch}
+	Rebase it on {target}, or merge {target} into it	将其变基到 {target}，或将 {target} 合并进来
+	Feature	功能
+	Integration	集成
+	Staging	预发布
+	Production	生产
+	Role in the flow	在流程中的角色
+	Guess from the name	根据名称推断
+	Fed by	来源分支
+	Guessed from the name, fed by {parent}: click to set	根据名称推断，来源 {parent}：点击设置
+	Fed by {parent}: click to change	来源 {parent}：点击更改
+	Guessed from the name: click to set	根据名称推断：点击设置
+	Click to change	点击更改
+	Not synced	未同步
+@plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} 个 MR 待同步
+	Merged upstream, not in {branch} yet: rebase it, or merge into it	已在上游合并，尚未进入 {branch}：请变基或合并进来
+	Merged upstream, not in {branch} yet	已在上游合并，尚未进入 {branch}
+	Merged into {target}, open its page	已合并到 {target}，打开其页面
+	Compare with {source} on GitLab	在 GitLab 上与 {source} 比较
+	Only the tracked MRs are listed; GitLab compares every commit.	仅列出已跟踪的 MR；GitLab 会比较所有提交。

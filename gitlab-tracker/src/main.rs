@@ -1,5 +1,6 @@
 mod actions;
 mod app;
+mod branch_flow;
 mod cli;
 mod columns_core;
 mod config;

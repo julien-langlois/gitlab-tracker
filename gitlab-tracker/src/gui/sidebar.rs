@@ -11,8 +11,10 @@ use super::widgets::{
 };
 use super::{tones, GuiApp};
 use crate::actions::Action;
-use crate::i18n::{tf, tl};
+use crate::branch_flow::{BranchFlow, BranchRole, BranchSetting, FlowBranch};
+use crate::i18n::{tf, tl, tn};
 use crate::models::Effort;
+use bevel_theme::{fonts, Chip};
 
 /// Views listed first, with their glyph; the other one-click filters are under
 /// "More views".
@@ -696,13 +698,26 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
     ui.add_space(4.0);
     let mut removed = None;
     let mut moved = None;
+    let mut flow_change = None;
+    let mut open = None;
     let count = g.app.branches.len();
+    let flow = g.app.branch_flow();
+    let project = project_url(g);
     for (i, branch) in g.app.branches.iter().enumerate() {
         let row = ui.horizontal(|ui| {
             ui.set_height(24.0);
             dot(ui, theme.tones.green.fg, 6.0);
             ui.label(mono(branch, theme.text_size - 1.0));
+            if let Some(fb) = flow.get(branch) {
+                flow_change = flow_change
+                    .take()
+                    .or_else(|| role_chip(g, ui, i, fb, &flow, project.as_deref()));
+            }
         });
+        // Under it, the merges it still has to take in, when there are some.
+        open = open
+            .take()
+            .or_else(|| behind(g, ui, branch, project.as_deref()));
         // The controls show on hover: the order is the table's columns.
         if !ui.rect_contains_pointer(row.response.rect) {
             continue;
@@ -733,6 +748,12 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
     if let Some((from, to)) = moved {
         g.pending.push(Action::MoveBranch { from, to });
     }
+    if let Some((branch, setting)) = flow_change {
+        g.pending.push(Action::SetBranchFlow { branch, setting });
+    }
+    if let Some(id) = open {
+        g.open_mr(&id);
+    }
     if g.app.read_only {
         return;
     }
@@ -754,6 +775,222 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
         draft.clear();
     }
     ui.data_mut(|d| d.insert_temp(id, draft));
+}
+
+/// What a tracked branch is for, as a chip: a click sets its role and, for a
+/// feature branch, the branch it is fed by. A guessed role shows muted.
+/// Returns the new setting of the branch when one was picked.
+fn role_chip(
+    g: &GuiApp,
+    ui: &mut Ui,
+    index: usize,
+    branch: &FlowBranch,
+    flow: &BranchFlow,
+    project: Option<&str>,
+) -> Option<(String, BranchSetting)> {
+    let theme = g.theme;
+    let t = &theme.tones;
+    let tone = match branch.role {
+        BranchRole::Feature => t.teal,
+        BranchRole::Integration => t.blue,
+        BranchRole::Staging => t.amber,
+        BranchRole::Production => t.purple,
+    };
+    let tone = if branch.guessed { t.gray } else { tone };
+    let chip =
+        ui.add(Chip::new(tl(branch.role.label()), tone).font(fonts::medium(theme.text_size - 3.0)));
+    let response = ui
+        .interact(
+            chip.rect,
+            ui.make_persistent_id(("branch_role", index)),
+            Sense::click(),
+        )
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    let hint = match (&branch.parent, branch.guessed) {
+        (Some(parent), true) => tf(
+            "Guessed from the name, fed by {parent}: click to set",
+            &[("parent", parent)],
+        ),
+        (Some(parent), false) => tf("Fed by {parent}: click to change", &[("parent", parent)]),
+        (None, true) => tl("Guessed from the name: click to set").to_string(),
+        (None, false) => tl("Click to change").to_string(),
+    };
+    let response = response.on_hover_text(hint);
+    if g.app.read_only {
+        return None;
+    }
+    let saved = g
+        .app
+        .project_settings
+        .branch_flow
+        .as_ref()
+        .and_then(|s| s.get(&branch.name))
+        .cloned()
+        .unwrap_or_default();
+    let mut picked = None;
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(180.0);
+        ui.label(muted(&theme, tl("Role in the flow")));
+        for role in BranchRole::ALL {
+            let on = !branch.guessed && branch.role == role;
+            if ui.selectable_label(on, tl(role.label())).clicked() {
+                picked = Some(BranchSetting {
+                    role: Some(role),
+                    ..saved.clone()
+                });
+            }
+        }
+        if ui
+            .selectable_label(branch.guessed, tl("Guess from the name"))
+            .clicked()
+        {
+            picked = Some(BranchSetting {
+                role: None,
+                ..saved.clone()
+            });
+        }
+        if let (Some(parent), Some(project)) = (&branch.parent, project) {
+            ui.separator();
+            compare_link(ui, project, &branch.name, parent);
+        }
+        if branch.role != BranchRole::Feature {
+            return;
+        }
+        ui.separator();
+        ui.label(muted(&theme, tl("Fed by")));
+        for other in flow.branches.iter().filter(|b| b.name != branch.name) {
+            let on = branch.parent.as_deref() == Some(other.name.as_str());
+            if ui
+                .selectable_label(on, mono(&other.name, theme.text_size - 1.0))
+                .clicked()
+            {
+                picked = Some(BranchSetting {
+                    parent: Some(other.name.clone()),
+                    ..saved.clone()
+                });
+            }
+        }
+    });
+    picked.map(|setting| (branch.name.clone(), setting))
+}
+
+/// "https://host/group/project", from the web URL of a tracked MR.
+fn project_url(g: &GuiApp) -> Option<String> {
+    g.app.mrs.iter().find_map(|mr| {
+        mr.web_url
+            .split_once("/-/merge_requests")
+            .map(|(project, _)| project.to_string())
+    })
+}
+
+/// GitLab's comparison of `branch` with `source`: the commits of `source`
+/// not in `branch` yet, tracked MRs or not.
+fn compare_url(project: &str, branch: &str, source: &str) -> String {
+    format!("{project}/-/compare/{branch}...{source}")
+}
+
+fn compare_link(ui: &mut Ui, project: &str, branch: &str, source: &str) {
+    let text = format!(
+        "{} ↗",
+        tf("Compare with {source} on GitLab", &[("source", source)])
+    );
+    if ui
+        .button(text)
+        .on_hover_text(compare_url(project, branch, source))
+        .clicked()
+    {
+        ui.ctx()
+            .open_url(egui::OpenUrl::new_tab(compare_url(project, branch, source)));
+        ui.close();
+    }
+}
+
+/// The tracked MRs merged upstream of `branch` and not in it yet, as a line
+/// under it: a click lists them, each opening its page, with the comparison
+/// on GitLab for what the tracking does not see. Returns the MR to open.
+fn behind(g: &GuiApp, ui: &mut Ui, branch: &str, project: Option<&str>) -> Option<String> {
+    let theme = g.theme;
+    let mrs = g.app.behind_on(branch);
+    if mrs.is_empty() {
+        return None;
+    }
+    let text = tn(
+        mrs.len() as u64,
+        "↓ {n} MR to bring in",
+        "↓ {n} MRs to bring in",
+    );
+    let line = ui.horizontal(|ui| {
+        ui.add_space(14.0);
+        ui.add(
+            egui::Label::new(
+                RichText::new(text)
+                    .size(theme.text_size - 2.0)
+                    .color(theme.tones.amber.fg),
+            )
+            .sense(Sense::click()),
+        )
+    });
+    let response = line
+        .inner
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tf(
+            "Merged upstream, not in {branch} yet: rebase it, or merge into it",
+            &[("branch", branch)],
+        ));
+    let mut open = None;
+    egui::Popup::menu(&response).show(|ui| {
+        ui.set_min_width(320.0);
+        ui.set_max_width(420.0);
+        ui.label(muted(
+            &theme,
+            tf(
+                "Merged upstream, not in {branch} yet",
+                &[("branch", branch)],
+            ),
+        ));
+        ui.add_space(2.0);
+        for mr in &mrs {
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("↗")
+                    .on_hover_text(tl("Open in GitLab"))
+                    .clicked()
+                {
+                    ui.ctx()
+                        .open_url(egui::OpenUrl::new_tab(mr.web_url.clone()));
+                    ui.close();
+                }
+                let label = RichText::new(format!("!{}  {}", mr.id, mr.title));
+                let row = ui
+                    .add(egui::Button::new(label).frame(false).truncate())
+                    .on_hover_text(tf(
+                        "Merged into {target}, open its page",
+                        &[("target", &mr.target_branch)],
+                    ));
+                if row.clicked() {
+                    open = Some(mr.id.clone());
+                    ui.close();
+                }
+            });
+        }
+        if let Some(project) = project {
+            ui.separator();
+            let mut sources: Vec<&str> = mrs.iter().map(|mr| mr.target_branch.as_str()).collect();
+            sources.sort_unstable();
+            sources.dedup();
+            for source in sources {
+                compare_link(ui, project, branch, source);
+            }
+            ui.label(
+                muted(
+                    &theme,
+                    tl("Only the tracked MRs are listed; GitLab compares every commit."),
+                )
+                .size(theme.text_size - 2.0),
+            );
+        }
+    });
+    open
 }
 
 #[cfg(test)]

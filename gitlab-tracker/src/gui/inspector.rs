@@ -678,7 +678,7 @@ const BRANCH_CHIP_ROOM: f32 = 90.0;
 
 pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
-    let rows = g.app.branch_rows(mr);
+    let (rows, places): (Vec<_>, Vec<_>) = g.app.flow_branch_rows(mr).into_iter().unzip();
     let failed = matches!(mr.status, MrStatus::Error(_));
     let fetching = g.app.pending_initial_fetches.contains(&mr.id)
         || g.app.pending_refresh_fetches.contains(&mr.id);
@@ -700,8 +700,9 @@ pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             })
             .collect();
         let name_width = names.iter().map(|name| name.size().x).fold(0.0, f32::max);
-        for (row, name) in rows.iter().zip(names) {
-            let (glyph, label, tone) = match tones::presence(row.presence, failed, &theme.tones) {
+        for ((row, name), place) in rows.iter().zip(names).zip(places.iter()) {
+            let cell = tones::flow_presence(row.presence, failed, *place, &theme.tones);
+            let (glyph, label, tone) = match cell {
                 // Not loading: nothing is on its way, the next refresh tells.
                 _ if row.presence.is_none() && !failed && !fetching => {
                     ("—", tl("Not checked yet"), theme.tones.gray)
@@ -1268,6 +1269,81 @@ pub(super) struct Step {
     pub color: egui::Color32,
     /// Not reached yet: a hollow node, muted text.
     pub pending: bool,
+    /// Off the main line: a branch the changes come down to (sync), drawn as
+    /// a branch-off of the line.
+    pub side: bool,
+}
+
+/// Where a merged MR went after its merge, nearest first: the branches fed by
+/// its target (`sync`, side steps) and those up to production (`promotion`).
+/// `date` writes when it reached a branch, as the timeline dates its steps.
+pub(super) fn flow_steps(
+    g: &GuiApp,
+    mr: &TrackedMr,
+    date: impl Fn(&str) -> String,
+) -> (Vec<Step>, Vec<Step>) {
+    let tones = &g.theme.tones;
+    let path = g.app.branch_flow().path(&mr.target_branch);
+    let detail = |branch: &str, label: &str| {
+        let arrived = g
+            .app
+            .branch_arrivals
+            .get(&(mr.id.clone(), branch.to_string()))
+            .map(|at| at.with_timezone(&chrono::Local).to_rfc3339());
+        match arrived {
+            Some(at) => format!("{label} · {}", date(&at)),
+            None => label.to_string(),
+        }
+    };
+    let sync = path
+        .sync
+        .iter()
+        .map(|branch| {
+            let presence = g.app.branch_presence(mr, branch);
+            let (_, label, tone) = super::tones::presence(presence, false, tones);
+            let reached = presence.is_some_and(|p| !p.is_missing());
+            let vars = [
+                ("branch", branch.as_str()),
+                ("target", mr.target_branch.as_str()),
+            ];
+            match presence {
+                // Behind its parent: a rebase (or merge) is due, not a failure.
+                Some(BranchPresence::Absent) => Step {
+                    title: tf("Not in {branch} yet", &vars),
+                    detail: Some(tf(
+                        "Rebase it on {target}, or merge {target} into it",
+                        &vars,
+                    )),
+                    color: tones.amber.fg,
+                    pending: true,
+                    side: true,
+                },
+                _ => Step {
+                    title: tf("Synced into {branch}", &vars),
+                    detail: Some(detail(branch, label)),
+                    color: tone.fg,
+                    pending: !reached,
+                    side: true,
+                },
+            }
+        })
+        .collect();
+    let promotion = path
+        .promotion
+        .iter()
+        .map(|branch| {
+            let presence = g.app.branch_presence(mr, branch);
+            let (_, label, tone) = super::tones::presence(presence, false, tones);
+            Step {
+                title: tf("On {branch}", &[("branch", branch)]),
+                detail: Some(detail(branch, label)),
+                color: tone.fg,
+                pending: !presence.is_some_and(|p| !p.is_missing()),
+                side: false,
+            }
+        })
+        .collect();
+    (sync, promotion)
 }
 
 fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
@@ -1278,36 +1354,34 @@ fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         detail: Some(when(mr.created_at.as_deref())),
         color: tones.blue.fg,
         pending: false,
+        side: false,
     }];
     match mr.state {
         GitlabMrState::Merged => {
             let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
             steps.push(Step {
-                title: tc("date", "Merged").into(),
+                title: match mr.target_branch.as_str() {
+                    "" | "unknown" => tc("date", "Merged").into(),
+                    target => tf("Merged into {branch}", &[("branch", target)]),
+                },
                 detail: Some(tf(
                     "{when} by {name}",
                     &[("when", &when(mr.merged_at.as_deref())), ("name", by)],
                 )),
                 color: tones.purple.fg,
                 pending: false,
+                side: false,
             });
-            for branch in &g.app.branches {
-                let presence = g.app.branch_presence(mr, branch);
-                let (_, label, tone) = super::tones::presence(presence, false, tones);
-                let reached = presence.is_some_and(|p| !p.is_missing());
-                steps.push(Step {
-                    title: tf("On {branch}", &[("branch", branch)]),
-                    detail: Some(label.to_string()),
-                    color: tone.fg,
-                    pending: !reached,
-                });
-            }
+            let (sync, promotion) = flow_steps(g, mr, |at| when(Some(at)));
+            steps.extend(sync);
+            steps.extend(promotion);
         }
         GitlabMrState::Closed => steps.push(Step {
             title: tl("Closed").into(),
             detail: Some(when(mr.updated_at.as_deref())),
             color: tones.gray.fg,
             pending: false,
+            side: false,
         }),
         GitlabMrState::Opened => {
             steps.push(Step {
@@ -1315,12 +1389,14 @@ fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 detail: Some(when(mr.updated_at.as_deref())),
                 color: tones.amber.fg,
                 pending: false,
+                side: false,
             });
             steps.push(Step {
                 title: tl("Merge").into(),
                 detail: Some(tl("not merged yet").into()),
                 color: tones.gray.fg,
                 pending: true,
+                side: false,
             });
         }
     }
@@ -1344,13 +1420,16 @@ fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 }
 
 /// The steps down a line: a node per step, its title and detail beside it.
+/// A side step branches off the line, a little to the right.
 pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
+    /// How far a side step sits right of the line.
+    const SIDE: f32 = 18.0;
     ui.spacing_mut().item_spacing.y = 0.0;
     let mut nodes = Vec::new();
     for step in steps {
         let response = ui
             .horizontal_top(|ui| {
-                ui.add_space(22.0);
+                ui.add_space(if step.side { 22.0 + SIDE } else { 22.0 });
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     let title_color = if step.pending {
@@ -1374,22 +1453,35 @@ pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
     }
     let painter = ui.painter();
     let x = |r: egui::Rect| r.left() + 7.0;
-    for pair in nodes.windows(2) {
-        let (a, _) = pair[0];
-        let (b, next) = pair[1];
-        let color = if next.pending {
+    let line = |pending: bool| {
+        let color = if pending {
             theme.palette.border
         } else {
             theme.palette.text_muted.gamma_multiply(0.6)
         };
+        egui::Stroke::new(1.5, color)
+    };
+    for pair in nodes.windows(2) {
+        let (a, _) = pair[0];
+        let (b, next) = pair[1];
+        // Down to the next node, or to the branch-off of a side step.
+        let end = if next.side {
+            b.top() + 9.0
+        } else {
+            b.top() + 3.0
+        };
         painter.vline(
             x(a),
-            (a.top() + 15.0)..=(b.top() + 3.0),
-            egui::Stroke::new(1.5, color),
+            (a.top() + 15.0)..=end,
+            line(next.pending && !next.side),
         );
     }
     for (rect, step) in nodes {
-        let center = egui::pos2(x(rect), rect.top() + 9.0);
+        let mut center = egui::pos2(x(rect), rect.top() + 9.0);
+        if step.side {
+            center.x += SIDE;
+            painter.hline((x(rect))..=(center.x - 5.0), center.y, line(step.pending));
+        }
         if step.pending {
             painter.circle_filled(center, 5.0, theme.palette.panel);
             painter.circle_stroke(center, 4.5, egui::Stroke::new(1.5, step.color));

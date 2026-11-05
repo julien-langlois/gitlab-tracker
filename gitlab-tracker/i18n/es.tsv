@@ -870,7 +870,6 @@ date	Merged	Fusionada
 	Last push	Último push
 	Approved	Aprobada
 	Pipeline #{id} · {status}	Pipeline #{id} · {status}
-	Merged by {who}	Fusionada por {who}
 	Approval rules	Reglas de aprobación
 	met	cumplida
 	{who} approved	{who} aprobó
@@ -943,3 +942,26 @@ date	Merged	Fusionada
 	Status: {name}	Estado: {name}
 @plural	{n} MR in the list|{n} MRs in the list	{n} MR en la lista|{n} MR en la lista
 @plural	{n} MR|{n} MRs	{n} MR|{n} MR
+	Merged into {branch}	Fusionada en {branch}
+	Merged into {branch} by {who}	Fusionada en {branch} por {who}
+	Synced into {branch}	Llevada a {branch}
+	Not in {branch} yet	Aún no en {branch}
+	Rebase it on {target}, or merge {target} into it	Hacer rebase sobre {target}, o fusionar {target} en ella
+	Feature	Feature
+	Integration	Integración
+	Staging	Preproducción
+	Production	Producción
+	Role in the flow	Papel en el flujo
+	Guess from the name	Deducir del nombre
+	Fed by	Alimentada por
+	Guessed from the name, fed by {parent}: click to set	Deducido del nombre, alimentada por {parent}: clic para ajustar
+	Fed by {parent}: click to change	Alimentada por {parent}: clic para cambiar
+	Guessed from the name: click to set	Deducido del nombre: clic para ajustar
+	Click to change	Clic para cambiar
+	Not synced	Sin llevar
+@plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR por traer|↓ {n} MR por traer
+	Merged upstream, not in {branch} yet: rebase it, or merge into it	Fusionadas aguas arriba, aún no en {branch}: hacer rebase o fusionar en ella
+	Merged upstream, not in {branch} yet	Fusionadas aguas arriba, aún no en {branch}
+	Merged into {target}, open its page	Fusionada en {target}, abrir su página
+	Compare with {source} on GitLab	Comparar con {source} en GitLab
+	Only the tracked MRs are listed; GitLab compares every commit.	Solo se listan las MR seguidas; GitLab compara todos los commits.
