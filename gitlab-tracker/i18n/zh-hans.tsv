@@ -1207,7 +1207,6 @@ date	Merged	合并时间
 	Job picked	选中的作业
 	Jobs	作业
 	Journal	日志
-	Last 7 days	最近 7 天
 	Last asked {when}	上次请求于 {when}
 	Last deployment of {env}: {when}	{env} 的最近一次部署：{when}
 	Last failure	最近一次失败
@@ -1497,3 +1496,5 @@ rail	Overlaps	重叠
 	Due {due}, projected {eta}	截止 {due}，预计 {eta}
 @plural	day late|days late	天延期
 @plural	day early|days early	天提前
+	Activity by hour	按小时的活动
+	Activity by day	按天的活动

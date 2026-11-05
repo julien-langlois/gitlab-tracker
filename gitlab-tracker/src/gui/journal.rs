@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bevel_theme::{fonts, Theme, Tone};
-use chrono::{DateTime, Datelike, Duration, Local, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, Timelike, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Ui, Vec2};
 
 use super::board::{self, GAP};
@@ -428,7 +428,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let me = g.app.config.gitlab_username.clone();
     let query = g.journal.search.trim().to_lowercase();
     let state = &g.journal;
-    let shown: Vec<&Event> = all
+    let filtered: Vec<&Event> = all
         .iter()
         .filter(|e| !state.hidden.contains(&e.kind))
         .filter(|e| !state.hidden_tabs.contains(&e.tab))
@@ -448,8 +448,8 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                 .to_lowercase()
                 .contains(&query)
         })
-        .take(MOST)
         .collect();
+    let shown: Vec<&Event> = filtered.iter().take(MOST).copied().collect();
     let selected = g
         .journal
         .selected
@@ -462,8 +462,19 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         sizes,
         "journal",
         |g, ui| nav(g, ui, &all, &tabs),
-        |g, ui| inspector(g, ui, &shown, selected.as_ref(), now),
-        |g, ui| main(g, ui, &shown, selected.as_ref(), now, tabs.len() > 1),
+        |g, ui| inspector(g, ui, &filtered, selected.as_ref(), now),
+        |g, ui| {
+            main(
+                g,
+                ui,
+                &shown,
+                &filtered,
+                days,
+                selected.as_ref(),
+                now,
+                tabs.len() > 1,
+            )
+        },
     );
 }
 
@@ -587,10 +598,13 @@ fn day_label(day: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn main(
     g: &mut GuiApp,
     ui: &mut Ui,
     shown: &[&Event],
+    filtered: &[&Event],
+    days: i64,
     selected: Option<&Event>,
     now: DateTime<Utc>,
     several: bool,
@@ -632,6 +646,8 @@ fn main(
         g.feed_seen_at = Some(Local::now());
     }
     ui.add_space(14.0);
+    activity_card(ui, &theme, filtered, days, now);
+    ui.add_space(GAP);
     let seen_at = g.feed_seen_at.map(|t| t.with_timezone(&Utc));
     let mut picked = None;
     let mut open = None;
@@ -882,6 +898,156 @@ fn event_row(
     }
 }
 
+/// The events of the period, filters applied, as stacked bars by kind: one
+/// bar an hour over 24 h, one a day over 7 or 30 days.
+fn activity_card(ui: &mut Ui, theme: &Theme, events: &[&Event], days: i64, now: DateTime<Utc>) {
+    let hourly = days <= 1;
+    let local_now = now.with_timezone(&Local);
+    // The buckets, oldest first: their start (local) and label.
+    let buckets: Vec<chrono::DateTime<Local>> = if hourly {
+        let hour = local_now
+            .date_naive()
+            .and_hms_opt(local_now.hour(), 0, 0)
+            .and_then(|t| t.and_local_timezone(Local).earliest())
+            .unwrap_or(local_now);
+        (0..24).rev().map(|h| hour - Duration::hours(h)).collect()
+    } else {
+        let today = local_now.date_naive();
+        (0..days)
+            .rev()
+            .filter_map(|d| today.checked_sub_days(chrono::Days::new(d as u64)))
+            .filter_map(|d| d.and_hms_opt(0, 0, 0))
+            .filter_map(|t| t.and_local_timezone(Local).earliest())
+            .collect()
+    };
+    let step = if hourly {
+        Duration::hours(1)
+    } else {
+        Duration::days(1)
+    };
+    let mut counts = vec![BTreeMap::<Kind, usize>::new(); buckets.len()];
+    for e in events {
+        let at = e.when.with_timezone(&Local);
+        if let Some(i) = buckets.iter().position(|b| at >= *b && at < *b + step) {
+            *counts[i].entry(e.kind).or_default() += 1;
+        }
+    }
+    let total: usize = counts.iter().map(|c| c.values().sum::<usize>()).sum();
+    let note = tn(total as u64, "{n} event", "{n} events");
+    let title = if hourly {
+        tl("Activity by hour")
+    } else {
+        tl("Activity by day")
+    };
+    board::card(ui, theme, title, &note, 0.0, |ui| {
+        let max = counts
+            .iter()
+            .map(|c| c.values().sum::<usize>())
+            .max()
+            .unwrap_or(0)
+            .max(1);
+        let (rect, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 110.0), Sense::hover());
+        let n = buckets.len().max(1);
+        let gap = if n > 14 { 4.0 } else { 8.0 };
+        let w = ((rect.width() - gap * (n - 1) as f32) / n as f32).max(2.0);
+        for (i, day) in counts.iter().enumerate() {
+            let x = rect.left() + i as f32 * (w + gap);
+            let column =
+                Rect::from_min_max(egui::pos2(x, rect.top()), egui::pos2(x + w, rect.bottom()));
+            let sum: usize = day.values().sum();
+            if sum == 0 {
+                ui.painter().rect_filled(
+                    Rect::from_min_max(
+                        egui::pos2(x, rect.bottom() - 2.0),
+                        egui::pos2(x + w, rect.bottom()),
+                    ),
+                    CornerRadius::same(1),
+                    theme.palette.border,
+                );
+            }
+            let mut y = rect.bottom();
+            for kind in Kind::ALL {
+                let k = day.get(&kind).copied().unwrap_or(0);
+                if k == 0 {
+                    continue;
+                }
+                let h = (rect.height() * k as f32 / max as f32).max(3.0);
+                ui.painter().rect_filled(
+                    Rect::from_min_max(egui::pos2(x, y - h), egui::pos2(x + w, y)),
+                    CornerRadius::same(2),
+                    kind.tone(theme).fg,
+                );
+                y -= h + 1.5;
+            }
+            let when = if hourly {
+                buckets[i].format("%H:00").to_string()
+            } else {
+                buckets[i].format("%Y-%m-%d").to_string()
+            };
+            let mut tip = format!("{when} · {}", tn(sum as u64, "{n} event", "{n} events"));
+            for (kind, k) in day {
+                tip.push_str(&format!("\n{} · {k}", kind.short()));
+            }
+            ui.interact(column, ui.scope_id().with(("bucket", i)), Sense::hover())
+                .on_hover_text(tip);
+        }
+        // The labels: as many as fit, evenly spread, the last one always.
+        let (labels, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 16.0), Sense::hover());
+        let font = FontId::proportional(theme.text_size - 2.5);
+        let label = |i: usize| -> String {
+            if hourly {
+                buckets[i].format("%H:00").to_string()
+            } else if n <= 7 {
+                tc(
+                    "date",
+                    match buckets[i].weekday() {
+                        chrono::Weekday::Mon => "Mon",
+                        chrono::Weekday::Tue => "Tue",
+                        chrono::Weekday::Wed => "Wed",
+                        chrono::Weekday::Thu => "Thu",
+                        chrono::Weekday::Fri => "Fri",
+                        chrono::Weekday::Sat => "Sat",
+                        chrono::Weekday::Sun => "Sun",
+                    },
+                )
+                .to_string()
+            } else {
+                buckets[i].format("%d/%m").to_string()
+            }
+        };
+        let room = 52.0;
+        let every = ((room / (w + gap)).ceil() as usize).max(1);
+        let mut right_edge = f32::NEG_INFINITY;
+        let last_cx = labels.left() + (n - 1) as f32 * (w + gap) + w / 2.0;
+        for i in (0..n).filter(|i| (n - 1 - i) % every == 0) {
+            let cx = labels.left() + i as f32 * (w + gap) + w / 2.0;
+            let text = label(i);
+            let galley = board::one_line(ui, &text, font.clone(), theme.palette.text_muted, room);
+            let half = galley.size().x / 2.0;
+            let left = (cx - half).clamp(labels.left(), labels.right() - galley.size().x);
+            if left < right_edge + 8.0
+                || (i + 1 < n && left + galley.size().x > last_cx - half - 8.0 && i != n - 1)
+            {
+                continue;
+            }
+            right_edge = left + galley.size().x;
+            ui.painter().galley(
+                egui::pos2(left, labels.center().y - galley.size().y / 2.0),
+                galley,
+                theme.palette.text_muted,
+            );
+        }
+        ui.add_space(8.0);
+        let legend: Vec<(Color32, String)> = Kind::ALL
+            .iter()
+            .map(|k| (k.tone(theme).fg, k.short().to_string()))
+            .collect();
+        board::legend(ui, theme, &legend);
+    });
+}
+
 // ── Inspector ────────────────────────────────────────────────────────────────
 
 fn inspector(
@@ -919,92 +1085,6 @@ fn inspector(
             });
         },
     );
-    board::section(ui, &theme, tl("Last 7 days"), "", |ui| {
-        let today = Local::now().date_naive();
-        let days: Vec<chrono::NaiveDate> = (0..7)
-            .rev()
-            .filter_map(|d| today.checked_sub_days(chrono::Days::new(d)))
-            .collect();
-        let mut counts = vec![BTreeMap::<Kind, usize>::new(); 7];
-        for e in shown {
-            let day = e.when.with_timezone(&Local).date_naive();
-            if let Some(i) = days.iter().position(|d| *d == day) {
-                *counts[i].entry(e.kind).or_default() += 1;
-            }
-        }
-        let max = counts
-            .iter()
-            .map(|c| c.values().sum::<usize>())
-            .max()
-            .unwrap_or(0)
-            .max(1);
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(ui.available_width(), 96.0), Sense::hover());
-        let gap = 8.0;
-        let w = (rect.width() - gap * 6.0) / 7.0;
-        for (i, day) in counts.iter().enumerate() {
-            let x = rect.left() + i as f32 * (w + gap);
-            let mut y = rect.bottom();
-            let total: usize = day.values().sum();
-            if total == 0 {
-                ui.painter().rect_filled(
-                    Rect::from_min_max(
-                        egui::pos2(x, rect.bottom() - 2.0),
-                        egui::pos2(x + w, rect.bottom()),
-                    ),
-                    CornerRadius::same(1),
-                    theme.palette.border,
-                );
-            }
-            for kind in Kind::ALL {
-                let n = day.get(&kind).copied().unwrap_or(0);
-                if n == 0 {
-                    continue;
-                }
-                let h = (rect.height() * n as f32 / max as f32).max(3.0);
-                let seg = Rect::from_min_max(egui::pos2(x, y - h), egui::pos2(x + w, y));
-                ui.painter()
-                    .rect_filled(seg, CornerRadius::same(2), kind.tone(&theme).fg);
-                y -= h + 1.5;
-            }
-            let column =
-                Rect::from_min_max(egui::pos2(x, rect.top()), egui::pos2(x + w, rect.bottom()));
-            ui.interact(column, ui.scope_id().with(("day", i)), Sense::hover())
-                .on_hover_text(tn(total as u64, "{n} event", "{n} events"));
-        }
-        let (labels, _) =
-            ui.allocate_exact_size(Vec2::new(ui.available_width(), 16.0), Sense::hover());
-        for (i, day) in days.iter().enumerate() {
-            let cx = labels.left() + i as f32 * (w + gap) + w / 2.0;
-            let short = tc(
-                "date",
-                match day.weekday() {
-                    chrono::Weekday::Mon => "Mon",
-                    chrono::Weekday::Tue => "Tue",
-                    chrono::Weekday::Wed => "Wed",
-                    chrono::Weekday::Thu => "Thu",
-                    chrono::Weekday::Fri => "Fri",
-                    chrono::Weekday::Sat => "Sat",
-                    chrono::Weekday::Sun => "Sun",
-                },
-            );
-            board::paint_text(
-                ui,
-                egui::pos2(cx, labels.center().y),
-                Align2::CENTER_CENTER,
-                short,
-                FontId::proportional(theme.text_size - 2.5),
-                theme.palette.text_muted,
-                w + gap,
-            );
-        }
-        ui.add_space(8.0);
-        let legend: Vec<(Color32, String)> = Kind::ALL
-            .iter()
-            .map(|k| (k.tone(&theme).fg, k.short().to_string()))
-            .collect();
-        board::legend(ui, &theme, &legend);
-    });
     board::section(ui, &theme, tl("Most active"), "", |ui| {
         let mut by_mr: HashMap<(usize, &str), (usize, &str)> = HashMap::new();
         for e in shown {

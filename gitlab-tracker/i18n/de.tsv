@@ -1207,7 +1207,6 @@ date	Merged	Gemergt
 	Job picked	Gewählter Job
 	Jobs	Jobs
 	Journal	Journal
-	Last 7 days	Letzte 7 Tage
 	Last asked {when}	Zuletzt angefragt {when}
 	Last deployment of {env}: {when}	Letztes Deployment von {env}: {when}
 	Last failure	Letzter Fehlschlag
@@ -1497,3 +1496,5 @@ rail	Overlaps	Konflikte
 	Due {due}, projected {eta}	Fällig am {due}, Prognose {eta}
 @plural	day late|days late	Tag zu spät|Tage zu spät
 @plural	day early|days early	Tag zu früh|Tage zu früh
+	Activity by hour	Aktivität pro Stunde
+	Activity by day	Aktivität pro Tag

@@ -1207,7 +1207,6 @@ date	Merged	Mesclada
 	Job picked	Job escolhido
 	Jobs	Jobs
 	Journal	Diário
-	Last 7 days	Últimos 7 dias
 	Last asked {when}	Último pedido {when}
 	Last deployment of {env}: {when}	Última implantação de {env}: {when}
 	Last failure	Última falha
@@ -1497,3 +1496,5 @@ rail	Overlaps	Conflitos
 	Due {due}, projected {eta}	Prazo {due}, projeção {eta}
 @plural	day late|days late	dia de atraso|dias de atraso
 @plural	day early|days early	dia adiantado|dias adiantados
+	Activity by hour	Atividade por hora
+	Activity by day	Atividade por dia
