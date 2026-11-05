@@ -62,17 +62,22 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             &theme,
             tl("Cockpit"),
             tf(
-                "{n} tracked merge requests · live from the list",
-                &[("n", &g.app.mrs.len().to_string())],
+                "{n} tracked merge requests · trends against the {weeks} previous weeks",
+                &[
+                    ("n", &g.app.mrs.len().to_string()),
+                    ("weeks", &g.trend_period.before().to_string()),
+                ],
             ),
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 16.0;
             if switch(ui, &theme, g.hide_zeros, tl("Hide zeros"))
                 .on_hover_text(tl("Hide the counters at zero"))
                 .clicked()
             {
                 g.hide_zeros = !g.hide_zeros;
             }
+            super::flow::period_toggle(ui, &theme, &mut g.trend_period);
         });
     });
     ui.add_space(16.0);
@@ -93,11 +98,23 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 }
                 ui.add_space(12.0);
             }
+            if let Some((key, name)) = super::flow::flow_card(ui, &theme, &g.app) {
+                pick = Some(Pick::Focus(key, name));
+            }
+            ui.add_space(12.0);
+            super::flow::trend_tiles(
+                ui,
+                &theme,
+                &super::flow::trends(&g.app, chrono::Utc::now(), g.trend_period),
+            );
+            ui.add_space(12.0);
+            // As in the mockup: what needs attention, right after the trends.
+            let from_list = needs_attention(ui, &theme, &urgent);
+            ui.add_space(12.0);
             let from_tiles = tiles(ui, &theme, &headline, &counts);
             ui.add_space(12.0);
             let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
-            let from_list = needs_attention(ui, &theme, &urgent);
-            pick = from_tiles.or(from_cards).or(from_list);
+            pick = pick.take().or(from_tiles).or(from_cards).or(from_list);
         });
 
     if close_digest {
@@ -726,6 +743,8 @@ struct Urgent {
     status: (&'static str, Tone),
     /// The counters it is behind, heaviest first.
     reasons: Vec<(&'static str, u32)>,
+    /// Who it waits on and since when ("You · 3 d"), in their tone.
+    next: Option<(String, Tone)>,
 }
 
 /// The listed MRs that weigh most in [`URGENCY`], heaviest first.
@@ -741,7 +760,21 @@ fn urgent(g: &GuiApp) -> Vec<Urgent> {
         .visible_mrs()
         .filter_map(|mr| {
             let reasons = by_mr.get(mr.id.as_str())?.clone();
+            let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
+            // Who has to act: nobody once done, closed or not loaded.
+            let acts = !matches!(
+                step.actor,
+                crate::next_step::Actor::Unknown | crate::next_step::Actor::Nobody
+            );
+            let next = acts.then(|| {
+                let mut text = step.who();
+                if let Some(days) = step.waited_days(chrono::Utc::now()) {
+                    text = format!("{text} · {}", crate::next_step::days_text(days));
+                }
+                (text, super::next::tone(&step, &g.theme))
+            });
             Some(Urgent {
+                next,
                 id: mr.id.clone(),
                 title: mr.title.clone(),
                 author: mr.author.clone(),
@@ -809,6 +842,18 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
             row.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 badge(ui, theme, u.status.0, u.status.1);
+                if let Some((text, tone)) = &u.next {
+                    ui.add_sized(
+                        Vec2::new(120.0, 20.0),
+                        egui::Label::new(
+                            RichText::new(text)
+                                .font(fonts::medium(theme.text_size - 1.5))
+                                .color(tone.fg),
+                        )
+                        .truncate(),
+                    )
+                    .on_hover_text(tl("Who it waits on, and since when"));
+                }
                 let mut reasons = u.reasons.clone();
                 reasons.sort_by_key(|r| std::cmp::Reverse(r.1));
                 for (key, weight) in reasons.iter().take(3).rev() {

@@ -364,6 +364,9 @@ pub struct App {
     /// What changed while the app was closed, once the startup load is over
     /// (the window shows it on the cockpit).
     pub last_digest: Option<String>,
+    /// The same changes one by one, for the window's Today page.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub last_changes: Vec<SessionChange>,
     /// List of active/upcoming milestones fetched from GitLab on startup.
     /// Used to power the milestone autocomplete in the input field.
     pub milestones: Vec<GitLabMilestone>,
@@ -591,6 +594,7 @@ impl App {
             flash: None,
             startup_baseline: HashMap::new(),
             last_digest: None,
+            last_changes: Vec::new(),
             milestones: Vec::new(),
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
@@ -1483,6 +1487,66 @@ struct MrBaseline {
     pipeline: Option<PipelineState>,
 }
 
+/// What happened to an MR while the app was closed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub enum ChangeKind {
+    Merged,
+    Closed,
+    /// Reached this branch.
+    Arrived(String),
+    CiFailing,
+}
+
+/// One change of [`session_changes`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub struct SessionChange {
+    pub id: String,
+    pub title: String,
+    pub kind: ChangeKind,
+}
+
+/// What changed between the saved `baseline` and the freshly fetched `mrs`, one
+/// change per line: what [`session_digest`] counts.
+fn session_changes(
+    baseline: &HashMap<String, MrBaseline>,
+    mrs: &[TrackedMr],
+) -> Vec<SessionChange> {
+    let mut changes = Vec::new();
+    let failed = Some(PipelineState::Failed);
+    for mr in mrs {
+        let Some(before) = baseline.get(&mr.id) else {
+            continue;
+        };
+        let mut push = |kind| {
+            changes.push(SessionChange {
+                id: mr.id.clone(),
+                title: mr.title.clone(),
+                kind,
+            })
+        };
+        if mr.state != before.state {
+            match mr.state {
+                GitlabMrState::Merged => push(ChangeKind::Merged),
+                GitlabMrState::Closed => push(ChangeKind::Closed),
+                GitlabMrState::Opened => {}
+            }
+        }
+        if let MrStatus::MergedIn(found) = &mr.status {
+            let mut arrived: Vec<&String> = found.difference(&before.branches).collect();
+            arrived.sort();
+            for branch in arrived {
+                push(ChangeKind::Arrived(branch.clone()));
+            }
+        }
+        if mr.pipelines.first().map(|p| p.status) == failed && before.pipeline != failed {
+            push(ChangeKind::CiFailing);
+        }
+    }
+    changes
+}
+
 /// One-line summary of what changed between the saved `baseline` and the freshly
 /// fetched `mrs`, or `None` when nothing worth reporting did.
 fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> Option<String> {
@@ -1872,6 +1936,7 @@ impl App {
         self.spawn_branch_scans(semaphore, tx);
         if initial_sync {
             let baseline = std::mem::take(&mut self.startup_baseline);
+            self.last_changes = session_changes(&baseline, &self.mrs);
             if let Some(digest) = session_digest(&baseline, &self.mrs) {
                 self.last_digest = Some(digest.clone());
                 self.flash_for(digest, false, DIGEST_TICKS);
@@ -2836,6 +2901,14 @@ pub(crate) mod tests {
             Some("Since last session: 1 merged · 2 new on a branch · 1 CI failing")
         );
         assert_eq!(session_digest(&baseline, &app.mrs[2..]), None);
+        // The same changes one by one: as many as the digest counts.
+        let changes = session_changes(&baseline, &app.mrs);
+        assert_eq!(changes.len(), 4);
+        assert_eq!(changes[0].kind, ChangeKind::Merged);
+        assert!(changes
+            .iter()
+            .any(|c| c.id == "2" && c.kind == ChangeKind::CiFailing));
+        assert!(session_changes(&baseline, &app.mrs[2..]).is_empty());
     }
 
     #[test]

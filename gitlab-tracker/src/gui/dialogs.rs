@@ -300,6 +300,21 @@ fn columns(g: &mut GuiApp, ui: &mut Ui) {
             g.app.project_settings.visible_columns = Some(g.app.config.visible_columns.clone());
         }
     }
+    ui.add_space(10.0);
+    ui.label(muted(&theme, tl("This window only")));
+    ui.add_space(4.0);
+    let mut next = !g.hide_next_column;
+    if ui
+        .checkbox(&mut next, tl("Next step"))
+        .on_hover_text(tl("Who each MR waits on, and since when"))
+        .changed()
+    {
+        g.hide_next_column = !next;
+    }
+    ui.checkbox(&mut g.flow_cells, tl("Branches in one cell"))
+        .on_hover_text(tl(
+            "A dot per branch, joined, instead of a column each: room for the title",
+        ));
     buttons(ui, |ui| {
         if primary_button(ui, &theme, tl("Done")).clicked() {
             close(g);

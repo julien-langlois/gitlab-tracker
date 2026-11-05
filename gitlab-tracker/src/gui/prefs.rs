@@ -16,6 +16,10 @@ pub struct Prefs {
     pub compact: bool,
     pub tracker_board: bool,
     pub hide_zeros: bool,
+    /// The table's Next step column is hidden.
+    pub hide_next_column: bool,
+    /// The table's branches in a column each (default: one flow cell).
+    pub branch_columns: bool,
     pub folded_sections: Vec<String>,
     /// Inner size in points.
     pub window: Option<[f32; 2]>,
@@ -75,6 +79,7 @@ fn group_name(group: GroupBy) -> &'static str {
         GroupBy::Status => "status",
         GroupBy::Milestone => "milestone",
         GroupBy::Author => "author",
+        GroupBy::NextStep => "next_step",
     }
 }
 
@@ -99,11 +104,14 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
         Some("status") => GroupBy::Status,
         Some("milestone") => GroupBy::Milestone,
         Some("author") => GroupBy::Author,
+        Some("next_step") => GroupBy::NextStep,
         _ => GroupBy::None,
     };
     g.compact = prefs.compact;
     g.tracker_board = prefs.tracker_board;
     g.hide_zeros = prefs.hide_zeros;
+    g.hide_next_column = prefs.hide_next_column;
+    g.flow_cells = !prefs.branch_columns;
     *super::widgets::folded_sections() = prefs.folded_sections.iter().cloned().collect();
 }
 
@@ -116,6 +124,8 @@ pub fn current(g: &GuiApp) -> Prefs {
         compact: g.compact,
         tracker_board: g.tracker_board,
         hide_zeros: g.hide_zeros,
+        hide_next_column: g.hide_next_column,
+        branch_columns: !g.flow_cells,
         folded_sections: super::widgets::folded_sections().iter().cloned().collect(),
         window: g.window_size.map(|s| [s.x, s.y]),
         tabs: g
@@ -143,6 +153,8 @@ mod tests {
             compact: true,
             tracker_board: true,
             hide_zeros: true,
+            hide_next_column: false,
+            branch_columns: false,
             folded_sections: vec!["History".into()],
             window: Some([1600.0, 1000.0]),
             tabs: vec![SavedTab {

@@ -14,6 +14,8 @@ mod gitlab_detail;
 mod gui;
 mod i18n;
 mod models;
+#[cfg(feature = "gui")]
+mod next_step;
 mod notify;
 mod settings;
 mod settings_core;

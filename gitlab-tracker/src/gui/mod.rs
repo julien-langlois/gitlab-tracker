@@ -9,6 +9,7 @@ mod cockpit;
 mod colors;
 mod details;
 mod dialogs;
+mod flow;
 mod i18n;
 mod icons;
 mod inspector;
@@ -16,6 +17,7 @@ mod keys;
 mod markdown;
 mod mr_page;
 mod mr_pipelines;
+mod next;
 mod palette;
 mod prefs;
 mod promote;
@@ -227,6 +229,8 @@ enum InspectorSection {
     Pipelines,
     Ticket,
     Description,
+    /// The unresolved threads.
+    Threads,
 }
 
 /// The window's state: the project session plus what only the window needs.
@@ -308,6 +312,18 @@ struct GuiApp {
     tracker_board: bool,
     /// The table's compact density: one line per MR.
     compact: bool,
+    /// The table's Next step column is hidden (the window's column picker).
+    hide_next_column: bool,
+    /// The table shows the branches as one flow cell instead of a column each.
+    flow_cells: bool,
+    /// The Promote page's ready MRs left out of the release, by id.
+    promote_skipped: HashSet<String>,
+    /// The inspector's section last picked in its tabs.
+    inspector_tab: InspectorSection,
+    /// When the Today feed was last marked as seen.
+    feed_seen_at: Option<chrono::DateTime<chrono::Local>>,
+    /// The period the cockpit's trends compare with.
+    trend_period: flow::Period,
     /// MRs picked with Ctrl / Shift + click, by id, and what the bulk bar asked for.
     marked: HashSet<String>,
     bulk: Option<table::Bulk>,
@@ -421,6 +437,12 @@ impl GuiApp {
             bell_filter: toasts::Filter::All,
             bell_open: false,
             compact: false,
+            hide_next_column: false,
+            flow_cells: true,
+            promote_skipped: HashSet::new(),
+            inspector_tab: InspectorSection::Review,
+            feed_seen_at: None,
+            trend_period: flow::Period::Month,
             marked,
             bulk: None,
             window_size: None,
@@ -1110,6 +1132,17 @@ struct Baseline {
 /// release's MRs still to merge), or `size:<min>:<max>` (the merged MRs with that
 /// many changed lines, a bucket of the stats).
 fn members_of(app: &App, members: &HashMap<String, Vec<String>>, key: &str) -> Vec<String> {
+    if let Some(ids) = flow::stage_members(app, key) {
+        return ids;
+    }
+    let buckets = crate::next_step::Bucket::of_key(key);
+    if !buckets.is_empty() {
+        return crate::next_step::all(app)
+            .into_iter()
+            .filter(|(_, step)| buckets.contains(&step.bucket()))
+            .map(|(id, _)| id)
+            .collect();
+    }
     if let Some(range) = key.strip_prefix("size:") {
         let mut bounds = range.split(':').map(|b| b.parse::<u32>().ok());
         let min = bounds.next().flatten().unwrap_or(0);
@@ -1419,6 +1452,15 @@ impl eframe::App for GuiApp {
                 .chars()
             {
                 keys::character(self, c);
+            }
+            // `GITLAB_TRACKER_GUI_TABLE=columns,group` shows a column per branch
+            // and groups the table by next step.
+            let table = std::env::var("GITLAB_TRACKER_GUI_TABLE").unwrap_or_default();
+            if table.split(',').any(|t| t == "columns") {
+                self.flow_cells = false;
+            }
+            if table.split(',').any(|t| t == "group") {
+                self.group_by = table::GroupBy::NextStep;
             }
             match std::env::var("GITLAB_TRACKER_GUI_PAGE").as_deref() {
                 Ok("cockpit") => self.open_page(Page::Cockpit),

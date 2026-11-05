@@ -6,7 +6,7 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, CornerRadius, Layout, RichText, Sense, Ui, Vec2};
 
-use super::widgets::{avatar, badge, card, mono, muted, page_title, split_person};
+use super::widgets::{avatar, card, mono, muted, page_title, split_person};
 use super::{tones, GuiApp, SlotState};
 use crate::app::App;
 use crate::i18n::{tf, tl, tn};
@@ -90,15 +90,26 @@ pub struct Item {
     pub reasons: Vec<String>,
     pub state: GitlabMrState,
     pub mergeability: MergeabilityStatus,
+    /// Since when it waits, and the usual wait when known: "6 d · usually 1 d".
+    pub since: Option<String>,
+    /// Waits too long for that step: the since in amber.
+    pub late: bool,
+    /// A message to remind whoever it waits on, for the MRs waiting on the others.
+    pub reminder: Option<String>,
+    /// The tab of the MR's page that helps with it, and the button's name.
+    pub action: Option<(super::mr_page::Tab, &'static str)>,
 }
 
 /// Where each MR of `app` stands for `username`; the MRs that are none of my
 /// business are left out.
 pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate) -> Vec<Item> {
+    use crate::next_step::{days_text, first_name, Actor};
     let project = app
         .project_name
         .clone()
         .unwrap_or_else(|| app.project_id.clone());
+    let usual_review = crate::next_step::usual_first_review_days(app);
+    let now = chrono::Utc::now();
     let mut items = Vec::new();
     for mr in &app.mrs {
         if mr.title.is_empty() {
@@ -174,6 +185,71 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
         } else {
             None
         };
+        // Who it waits on, since when, and (waiting on the others) a reminder.
+        let step = crate::next_step::of(app, mr, Some(username));
+        let waited = step.waited_days(now);
+        let usual = (step.actor == Actor::Reviewers)
+            .then_some(usual_review)
+            .flatten();
+        let late = match (waited, usual) {
+            (Some(w), Some(u)) => w > u * 1.5 && w - u > 0.5,
+            (Some(w), None) => w > 7.0,
+            _ => false,
+        };
+        let since = waited.map(|w| match usual {
+            Some(u) => tf(
+                "{time} · usually {usual}",
+                &[("time", &days_text(w)), ("usual", &days_text(u))],
+            ),
+            None => days_text(w),
+        });
+        let mut reminder = None;
+        if kind == Some(Kind::Waiting) && !step.mine && !step.people.is_empty() {
+            let names: Vec<&str> = step.people.iter().map(|p| first_name(p)).collect();
+            let what = step
+                .todos
+                .first()
+                .map(|t| t.text().to_lowercase())
+                .unwrap_or_default();
+            reasons.push(tf(
+                "Waiting on {who}: {what}",
+                &[("who", &names.join(", ")), ("what", &what)],
+            ));
+            reminder = Some(tf(
+                "Hi {who}, could you have a look at !{id} \"{title}\" when you can? {url} (waiting for {time})",
+                &[
+                    ("who", &names.join(", ")),
+                    ("id", &mr.id),
+                    ("title", &mr.title),
+                    ("url", &mr.web_url),
+                    ("time", &waited.map(days_text).unwrap_or_default()),
+                ],
+            ));
+        }
+        use crate::next_step::Todo;
+        let action = match kind {
+            Some(Kind::Review) => Some(if step.todos.contains(&Todo::Review { again: true }) {
+                (super::mr_page::Tab::Commits, tl("See the new commits"))
+            } else {
+                (super::mr_page::Tab::Changes, tl("Review it"))
+            }),
+            Some(Kind::Fix)
+                if step
+                    .todos
+                    .iter()
+                    .any(|t| matches!(t, Todo::AnswerThreads { .. })) =>
+            {
+                Some((super::mr_page::Tab::Discussions, tl("Open the threads")))
+            }
+            Some(Kind::Fix) if step.todos.contains(&Todo::FixPipeline) => {
+                Some((super::mr_page::Tab::Pipelines, tl("See the pipeline")))
+            }
+            _ => None,
+        };
+        let shows_since = matches!(
+            kind,
+            Some(Kind::Review | Kind::Fix | Kind::Waiting | Kind::Ready | Kind::Assigned)
+        );
         if let Some(kind) = kind {
             items.push(Item {
                 kind,
@@ -185,6 +261,10 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
                 reasons,
                 state: mr.state,
                 mergeability: mr.mergeability,
+                since: since.filter(|_| shows_since),
+                late: late && shows_since,
+                reminder,
+                action,
             });
         }
     }
@@ -259,35 +339,287 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
 
     let several = projects > 1;
     let mut pick = None;
+    let mut copied = false;
+    let mut seen = false;
+    let changes = feed(g);
+    let wide = ui.available_width() >= 1100.0;
+    type Pick = Option<(usize, String, Option<super::mr_page::Tab>)>;
+    let lists = |ui: &mut Ui, pick: &mut Pick, copied: &mut bool| {
+        let mut empty = Vec::new();
+        for kind in Kind::ALL {
+            let list: Vec<&Item> = items.iter().filter(|i| i.kind == kind).collect();
+            // The quiet sections only when they have something.
+            if list.is_empty() && matches!(kind, Kind::Assigned | Kind::Waiting) {
+                continue;
+            }
+            // The empty ones in a line at the end: they take no room.
+            if list.is_empty() {
+                empty.push(kind);
+                continue;
+            }
+            let title = format!("{} · {}", kind.title(), list.len());
+            card(ui, &theme, &title, |ui| {
+                if kind == Kind::Waiting {
+                    ui.label(muted(
+                        &theme,
+                        tl("Your MRs blocked by someone else: a reminder can unblock them."),
+                    ));
+                    ui.add_space(4.0);
+                }
+                ui.spacing_mut().item_spacing.y = 2.0;
+                for item in list {
+                    match row(ui, &theme, item, several) {
+                        Some(RowClick::Open) => *pick = Some((item.tab, item.id.clone(), None)),
+                        Some(RowClick::Page(tab)) => {
+                            *pick = Some((item.tab, item.id.clone(), Some(tab)))
+                        }
+                        Some(RowClick::Copied) => *copied = true,
+                        None => {}
+                    }
+                }
+            });
+            ui.add_space(10.0);
+        }
+        if !empty.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
+                for kind in empty {
+                    egui::Frame::new()
+                        .stroke(egui::Stroke::new(1.0, theme.palette.border))
+                        .corner_radius(CornerRadius::same(theme.radii.medium))
+                        .inner_margin(egui::Margin::symmetric(12, 8))
+                        .show(ui, |ui| {
+                            ui.label(muted(
+                                &theme,
+                                tf("{section} · nothing yet", &[("section", kind.title())]),
+                            ))
+                            .on_hover_text(kind.empty());
+                        });
+                }
+            });
+        }
+    };
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
-            for kind in Kind::ALL {
-                let list: Vec<&Item> = items.iter().filter(|i| i.kind == kind).collect();
-                // The quiet sections only when they have something.
-                if list.is_empty() && matches!(kind, Kind::Assigned | Kind::Waiting) {
-                    continue;
-                }
-                let title = format!("{} · {}", kind.title(), list.len());
-                card(ui, &theme, &title, |ui| {
-                    if list.is_empty() {
-                        ui.label(muted(&theme, kind.empty()));
-                        return;
-                    }
-                    ui.spacing_mut().item_spacing.y = 2.0;
-                    for item in list {
-                        if row(ui, &theme, item, several) {
-                            pick = Some((item.tab, item.id.clone()));
-                        }
-                    }
+            if wide {
+                ui.horizontal_top(|ui| {
+                    let side = 360.0;
+                    let left = ui.available_width() - side - 16.0;
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(left, 0.0),
+                        Layout::top_down(Align::Min),
+                        |ui| {
+                            ui.set_width(left);
+                            lists(ui, &mut pick, &mut copied);
+                        },
+                    );
+                    ui.add_space(16.0);
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(side, 0.0),
+                        Layout::top_down(Align::Min),
+                        |ui| {
+                            ui.set_width(side);
+                            match feed_card(ui, &theme, &changes, several) {
+                                Some(FeedClick::Open(tab, id)) => pick = Some((tab, id, None)),
+                                Some(FeedClick::Seen) => seen = true,
+                                None => {}
+                            }
+                        },
+                    );
                 });
+            } else {
+                lists(ui, &mut pick, &mut copied);
                 ui.add_space(10.0);
+                match feed_card(ui, &theme, &changes, several) {
+                    Some(FeedClick::Open(tab, id)) => pick = Some((tab, id, None)),
+                    Some(FeedClick::Seen) => seen = true,
+                    None => {}
+                }
             }
         });
-    if let Some((tab, id)) = pick {
-        g.activate(tab);
-        g.show_mr(&id);
+    if copied {
+        g.app.flash(
+            tl("Reminder copied: paste it in a chat or a comment"),
+            false,
+        );
     }
+    if seen {
+        g.feed_seen_at = Some(chrono::Local::now());
+        g.app.last_changes.clear();
+        for slot in &mut g.tabs {
+            if let SlotState::Parked(tab) = &mut slot.state {
+                tab.app.last_changes.clear();
+            }
+        }
+    }
+    match pick {
+        Some((tab, id, None)) => {
+            g.activate(tab);
+            g.show_mr(&id);
+        }
+        Some((tab, id, Some(page_tab))) => {
+            g.activate(tab);
+            g.open_mr(&id);
+            g.mr_tab = page_tab;
+        }
+        None => {}
+    }
+}
+
+/// A line of the feed: about which MR (and tab), what, when.
+struct Change {
+    tab: usize,
+    project: String,
+    id: String,
+    title: String,
+    text: String,
+    color: egui::Color32,
+    /// `None`: found at startup (while the app was closed).
+    when: Option<chrono::DateTime<chrono::Local>>,
+}
+
+/// What changed: while the app was closed (each tab's startup), then during the
+/// session (the bell's notifications), newest first.
+fn feed(g: &GuiApp) -> Vec<Change> {
+    use crate::app::ChangeKind;
+    let t = &g.theme.tones;
+    let mut session = Vec::new();
+    let mut startup = Vec::new();
+    for (index, slot) in g.tabs.iter().enumerate() {
+        let (app, toasts) = match &slot.state {
+            SlotState::Active => (&g.app, &g.toasts),
+            SlotState::Parked(tab) => (&tab.app, &tab.toasts),
+            _ => continue,
+        };
+        let project = app
+            .project_name
+            .clone()
+            .unwrap_or_else(|| app.project_id.clone());
+        for past in &toasts.history {
+            if g.feed_seen_at.is_some_and(|seen| past.when <= seen) {
+                continue;
+            }
+            session.push(Change {
+                tab: index,
+                project: project.clone(),
+                id: past.id.clone(),
+                title: past.title.clone(),
+                text: past.text.clone(),
+                color: past.tone.fg,
+                when: Some(past.when),
+            });
+        }
+        for change in &app.last_changes {
+            let (text, color) = match &change.kind {
+                ChangeKind::Merged => (tl("merged").to_string(), t.purple.fg),
+                ChangeKind::Closed => (tl("closed").to_string(), t.gray.fg),
+                ChangeKind::Arrived(branch) => {
+                    (tf("reached {branch}", &[("branch", branch)]), t.green.fg)
+                }
+                ChangeKind::CiFailing => (tl("pipeline failed").to_string(), t.red.fg),
+            };
+            startup.push(Change {
+                tab: index,
+                project: project.clone(),
+                id: change.id.clone(),
+                title: change.title.clone(),
+                text: format!("!{} {text}", change.id),
+                color,
+                when: None,
+            });
+        }
+    }
+    session.sort_by_key(|c| std::cmp::Reverse(c.when));
+    session.extend(startup);
+    session
+}
+
+/// The feed in a card; the MR clicked, with its tab.
+/// What a click in the feed asked for.
+enum FeedClick {
+    Open(usize, String),
+    Seen,
+}
+
+fn feed_card(ui: &mut Ui, theme: &Theme, changes: &[Change], several: bool) -> Option<FeedClick> {
+    let mut picked = None;
+    card(ui, theme, tl("Since your last visit"), |ui| {
+        if changes.is_empty() {
+            ui.label(muted(
+                theme,
+                tl("Nothing changed on your tracked MRs since the app was last opened."),
+            ));
+            return;
+        }
+        let mut heading = None;
+        for change in changes {
+            let group = if change.when.is_some() {
+                tl("This session")
+            } else {
+                tl("While the app was closed")
+            };
+            if heading != Some(group) {
+                if heading.is_some() {
+                    ui.add_space(6.0);
+                }
+                ui.label(muted(theme, group).size(theme.text_size - 2.0));
+                ui.add_space(2.0);
+                heading = Some(group);
+            }
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), Sense::click());
+            if response.hovered() {
+                ui.painter().rect_filled(
+                    rect,
+                    CornerRadius::same(theme.radii.medium),
+                    theme.palette.raised,
+                );
+            }
+            ui.painter().circle_filled(
+                egui::pos2(rect.left() + 8.0, rect.top() + 12.0),
+                4.0,
+                change.color,
+            );
+            let mut inner = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(
+                        rect.shrink2(Vec2::new(0.0, 3.0))
+                            .with_min_x(rect.left() + 20.0),
+                    )
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            inner.style_mut().interaction.selectable_labels = false;
+            inner.spacing_mut().item_spacing.y = 1.0;
+            inner.add(
+                egui::Label::new(
+                    RichText::new(&change.text).font(fonts::medium(theme.text_size - 1.0)),
+                )
+                .truncate(),
+            );
+            let mut detail = change.title.clone();
+            if several {
+                detail = format!("{} · {detail}", change.project);
+            }
+            if let Some(when) = change.when {
+                detail = format!("{} · {detail}", when.format("%H:%M"));
+            }
+            inner
+                .add(egui::Label::new(muted(theme, detail).size(theme.text_size - 2.0)).truncate());
+            if response
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(tl("Show it in its project's tab"))
+                .clicked()
+            {
+                picked = Some(FeedClick::Open(change.tab, change.id.clone()));
+            }
+        }
+        ui.add_space(8.0);
+        if super::widgets::button(ui, theme, None, tl("Mark all as seen"), false).clicked() {
+            picked = Some(FeedClick::Seen);
+        }
+    });
+    picked
 }
 
 /// A count of one kind, in its tone.
@@ -315,10 +647,25 @@ fn tile(ui: &mut Ui, theme: &Theme, kind: Kind, n: usize) {
         });
 }
 
-/// One MR; `true` when clicked.
-fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> bool {
+/// The project and id columns of a row.
+const PROJECT_WIDTH: f32 = 92.0;
+const ID_WIDTH: f32 = 44.0;
+
+/// What a click on a row asked for.
+enum RowClick {
+    Open,
+    /// The MR's page, on this tab.
+    Page(super::mr_page::Tab),
+    /// Its reminder was copied.
+    Copied,
+}
+
+/// One MR, on two lines as in the mockup: its title, then why it is here in the
+/// section's tone; on the right since when it waits (amber when late) and the
+/// button that helps (the threads, the new commits, a reminder).
+fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<RowClick> {
     let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 36.0), Sense::click());
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), 50.0), Sense::click());
     if response.hovered() {
         ui.painter().rect_filled(
             rect,
@@ -326,9 +673,15 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> bool {
             theme.palette.raised,
         );
     }
+    // A line between rows, as in the mockup's list.
+    ui.painter().hline(
+        rect.x_range(),
+        rect.top(),
+        egui::Stroke::new(1.0, theme.palette.border_soft),
+    );
     let tone = item.kind.tone(theme);
     ui.painter().rect_filled(
-        egui::Rect::from_min_size(rect.min + Vec2::new(0.0, 6.0), Vec2::new(3.0, 24.0)),
+        egui::Rect::from_min_size(rect.min + Vec2::new(0.0, 11.0), Vec2::new(3.0, 28.0)),
         CornerRadius::same(2),
         tone.fg,
     );
@@ -339,35 +692,96 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> bool {
     );
     // The row takes the click: its texts, selectable, would take it over them.
     line.style_mut().interaction.selectable_labels = false;
-    line.spacing_mut().item_spacing.x = 8.0;
+    line.spacing_mut().item_spacing.x = 10.0;
     if show_project {
-        line.add(
-            Chip::new(&item.project, theme.tones.gray).font(fonts::medium(theme.text_size - 2.5)),
+        // A column of its own, so that the titles line up.
+        line.allocate_ui_with_layout(
+            Vec2::new(PROJECT_WIDTH, 20.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.set_width(PROJECT_WIDTH);
+                ui.add(
+                    Chip::new(&item.project, theme.tones.gray)
+                        .font(fonts::medium(theme.text_size - 2.5)),
+                );
+            },
         );
     }
-    line.label(
-        mono(format!("!{}", item.id), theme.text_size - 1.0).color(theme.palette.text_secondary),
+    line.allocate_ui_with_layout(
+        Vec2::new(ID_WIDTH, 20.0),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            ui.set_width(ID_WIDTH);
+            ui.label(
+                mono(format!("!{}", item.id), theme.text_size - 1.0)
+                    .color(theme.palette.text_secondary),
+            );
+        },
     );
     let (name, _) = split_person(&item.author);
     avatar(&mut line, theme, name, 18.0).on_hover_text(name);
+    let mut click = None;
     line.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let (status, status_tone) = tones::status(item.state, &item.mergeability, &theme.tones);
-        badge(ui, theme, status, status_tone);
-        for reason in item.reasons.iter().rev() {
-            ui.add(Chip::new(reason, tone).font(fonts::medium(theme.text_size - 2.5)));
+        ui.spacing_mut().item_spacing.x = 12.0;
+        if let Some(reminder) = &item.reminder {
+            if super::widgets::button(ui, theme, None, tl("Copy a reminder"), false)
+                .on_hover_text(reminder)
+                .clicked()
+            {
+                ui.ctx().copy_text(reminder.clone());
+                click = Some(RowClick::Copied);
+            }
+        } else if let Some((tab, label)) = item.action {
+            if super::widgets::button(ui, theme, None, label, false).clicked() {
+                click = Some(RowClick::Page(tab));
+            }
+        }
+        if let Some(since) = &item.since {
+            let color = if item.late {
+                theme.tones.amber.fg
+            } else {
+                theme.palette.text_muted
+            };
+            ui.label(
+                RichText::new(since)
+                    .size(theme.text_size - 1.5)
+                    .color(color),
+            )
+            .on_hover_text(tl("Since when it waits"));
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-            ui.add(
-                egui::Label::new(RichText::new(&item.title).font(fonts::medium(theme.text_size)))
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                ui.add_space(7.0);
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(&item.title).font(fonts::semibold(theme.text_size)),
+                    )
                     .truncate(),
-            );
+                );
+                // Why: the reasons, then the status, in the section's tone.
+                let (status, _) = tones::status(item.state, &item.mergeability, &theme.tones);
+                let mut why: Vec<String> = item.reasons.clone();
+                why.push(status.to_string());
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(why.join(" · "))
+                            .size(theme.text_size - 1.5)
+                            .color(tone.fg),
+                    )
+                    .truncate(),
+                );
+            });
         });
     });
+    if click.is_some() {
+        return click;
+    }
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(tl("Show it in its project's tab"))
         .clicked()
+        .then_some(RowClick::Open)
 }
 
 #[cfg(test)]

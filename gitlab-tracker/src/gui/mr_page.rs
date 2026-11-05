@@ -64,7 +64,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         .id_salt(("mr_page", &mr.id))
         .auto_shrink(false)
         .show(ui, |ui| {
+            next_banner(g, ui, &mr);
             tiles(g, ui, &mr, data.as_ref(), width);
+            ui.add_space(12.0);
+            lifecycle(g, ui, &mr);
             ui.add_space(16.0);
             if width >= TWO_COLUMNS {
                 let left = width - SIDE_WIDTH - 16.0;
@@ -103,6 +106,49 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 context(g, ui, &mr, data.as_ref());
             }
             ui.add_space(24.0);
+        });
+}
+
+/// Who the MR waits on, what they have to do, and what comes after.
+fn next_banner(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = g.theme;
+    let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
+    if step.actor == crate::next_step::Actor::Unknown {
+        return;
+    }
+    let action = super::next::card(ui, &theme, mr, &step, true);
+    ui.add_space(12.0);
+    if let Some(action) = action {
+        super::next::apply(g, action, true);
+    }
+}
+
+/// The MR's stages in a line, with the time each hop took against the usual.
+fn lifecycle(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = g.theme;
+    let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
+    let stages = super::next::lifecycle(&g.app, mr, &step);
+    let tone = super::next::tone(&step, &theme);
+    egui::Frame::new()
+        .fill(theme.palette.panel)
+        .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
+        .corner_radius(CornerRadius::same(theme.radii.large))
+        .inner_margin(Margin::symmetric(14, 12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                tile_title(ui, &theme, tl("Lifecycle"));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(
+                        muted(
+                            &theme,
+                            tl("Time between steps · the median of the tracked MRs in grey"),
+                        )
+                        .size(theme.text_size - 2.5),
+                    );
+                });
+            });
+            super::next::lifecycle_strip(ui, &theme, &stages, tone);
         });
 }
 
@@ -1315,7 +1361,19 @@ fn discussions(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageDa
         return;
     }
     let me = g.app.config.gitlab_username.clone();
-    for thread in threads.iter().filter(|t| g.show_resolved || !t.resolved) {
+    // The threads waiting for me first, then the other open ones, then the rest.
+    let waits_for_me = |t: &Thread| {
+        !t.resolved
+            && t.notes
+                .last()
+                .is_some_and(|last| me.as_deref().is_some_and(|u| last.username != u))
+    };
+    let mut shown: Vec<&Thread> = threads
+        .iter()
+        .filter(|t| g.show_resolved || !t.resolved)
+        .collect();
+    shown.sort_by_key(|t| (!waits_for_me(t), t.resolved));
+    for thread in shown {
         // The code it is about, from the diff once read.
         let code: Vec<String> = match (&thread.path, thread.line, g.details.diff(&mr.id)) {
             (Some(path), Some(line), Some(files)) => files
@@ -1357,12 +1415,13 @@ fn thread_card(ui: &mut Ui, theme: &Theme, thread: &Thread, code: &[String], me:
                                 let waiting =
                                     !thread.resolved && me.is_some_and(|u| last.username != u);
                                 let when = format_relative_date(&last.created_at);
-                                let text = if waiting {
-                                    tf("waiting for you · {when}", &[("when", &when)])
+                                if waiting {
+                                    ui.label(muted(theme, when));
+                                    ui.add(Chip::new(tl("Your turn"), theme.tones.orange))
+                                        .on_hover_text(tl("The last note is someone else's"));
                                 } else {
-                                    when
-                                };
-                                ui.label(muted(theme, text));
+                                    ui.label(muted(theme, when));
+                                }
                             }
                             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                                 let (label, tone) = if thread.resolved {
@@ -1729,7 +1788,9 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
             let deployed =
                 data.and_then(|d| d.deployments.iter().find(|dep| dep.reference == row.branch));
             if let Some(dep) = deployed {
-                ui.label(deployment_line(&theme, dep, ui.available_width()));
+                // Cut to the room left: a plain label in a row extends past it.
+                let line = deployment_line(&theme, dep, ui.available_width());
+                ui.add(egui::Label::new(line).truncate());
             }
         });
     }
@@ -2418,6 +2479,37 @@ fn compared(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 None,
                 tf("larger than {p} %", &[("p", &percent.to_string())]),
             ));
+        }
+    }
+    let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
+    if matches!(
+        step.actor,
+        crate::next_step::Actor::Author
+            | crate::next_step::Actor::Reviewers
+            | crate::next_step::Actor::Merger
+    ) {
+        if let Some(waited) = step.waited_days(chrono::Utc::now()) {
+            let usual = (step.actor == crate::next_step::Actor::Reviewers)
+                .then(|| crate::next_step::usual_first_review_days(&g.app))
+                .flatten();
+            let who = if step.mine {
+                tl("you").to_string()
+            } else {
+                step.who()
+            };
+            rows.insert(
+                0,
+                (
+                    tf("Waiting on {who}", &[("who", &who)]),
+                    span(waited),
+                    usual
+                        .map_or(waited > 7.0, |u| waited > u * 1.5)
+                        .then_some(theme.tones.amber),
+                    usual
+                        .map(|u| tf("usually {v}", &[("v", &span(u))]))
+                        .unwrap_or_else(|| tl("since the last move").to_string()),
+                ),
+            );
         }
     }
     if rows.is_empty() {

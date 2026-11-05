@@ -42,6 +42,7 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                 return;
             };
             header(g, ui, &mr);
+            next_card(g, ui, &mr);
             anchors(g, ui, &mr);
             // The tracker page brings each MR it opens to its ticket, then leaves the
             // scrolling to the user. It scrolls on its own, away from the other pages.
@@ -60,53 +61,99 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
         });
 }
 
-/// The sections as links under the header (which stays in place): a click
+/// Who the MR waits on, under the header (which stays in place).
+fn next_card(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = g.theme;
+    let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
+    let mut action = None;
+    egui::Frame::new()
+        .inner_margin(Margin {
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 12,
+        })
+        .show(ui, |ui| {
+            action = super::next::card(ui, &theme, mr, &step, false);
+        });
+    if let Some(action) = action {
+        super::next::apply(g, action, false);
+    }
+}
+
+/// The sections as tabs under the header (which stays in place): a click
 /// scrolls the body to that section.
 fn anchors(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let mut links = vec![
-        (InspectorSection::Review, tl("Review")),
-        (InspectorSection::Changes, tl("Changes")),
-        (InspectorSection::Branches, tl("Branches")),
+        (InspectorSection::Review, tl("Review").to_string()),
+        (InspectorSection::Changes, tl("Changes").to_string()),
+        (InspectorSection::Branches, tl("Branches").to_string()),
     ];
+    let open_threads = mr.threads.iter().filter(|t| !t.resolved).count();
+    if open_threads > 0 {
+        links.push((
+            InspectorSection::Threads,
+            format!("{} {open_threads}", tl("Threads")),
+        ));
+    }
     if g.app.tracker.is_some() || mr.linked_ticket.is_some() {
-        links.push((InspectorSection::Ticket, tl("Ticket")));
+        links.push((InspectorSection::Ticket, tl("Ticket").to_string()));
     }
-    links.push((InspectorSection::Pipelines, tl("Pipelines")));
+    links.push((InspectorSection::Pipelines, tl("Pipelines").to_string()));
     if !mr.description.trim().is_empty() {
-        links.push((InspectorSection::Description, tl("Description")));
+        links.push((InspectorSection::Description, tl("Description").to_string()));
     }
-    super::widgets::rule(ui, &theme);
+    let current = g.inspector_tab;
     egui::Frame::new()
-        .inner_margin(Margin::symmetric(12, 6))
+        .inner_margin(Margin {
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 12,
+        })
         .show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
-                for (section, name) in links {
-                    let response = ui
-                        .add(
-                            egui::Label::new(
-                                RichText::new(name)
-                                    .size(theme.text_size - 1.5)
-                                    .color(theme.palette.text_secondary),
-                            )
-                            .sense(Sense::click()),
-                        )
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    if response.hovered() {
-                        ui.painter().hline(
-                            response.rect.x_range(),
-                            response.rect.bottom(),
-                            Stroke::new(1.0, theme.palette.accent),
-                        );
-                    }
-                    if response.clicked() {
-                        g.scroll_to = Some(section);
-                    }
-                    ui.label(muted(&theme, "·"));
-                }
-            });
+            egui::Frame::new()
+                .fill(theme.palette.content)
+                .stroke(Stroke::new(1.0, theme.palette.border_soft))
+                .corner_radius(egui::CornerRadius::same(theme.radii.large))
+                .inner_margin(Margin::same(3))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = Vec2::new(2.0, 2.0);
+                        for (section, name) in links {
+                            let on = current == section;
+                            let galley = ui.painter().layout_no_wrap(
+                                name.clone(),
+                                fonts::medium(theme.text_size - 1.5),
+                                theme.palette.text_secondary,
+                            );
+                            let size = galley.size() + Vec2::new(18.0, 12.0);
+                            let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+                            let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            let radius = egui::CornerRadius::same(theme.radii.medium);
+                            let color = if on {
+                                ui.painter()
+                                    .rect_filled(rect, radius, theme.palette.selection);
+                                theme.palette.text
+                            } else if response.hovered() {
+                                ui.painter().rect_filled(rect, radius, theme.palette.raised);
+                                theme.palette.text
+                            } else {
+                                theme.palette.text_secondary
+                            };
+                            ui.painter()
+                                .galley(rect.center() - galley.size() / 2.0, galley, color);
+                            if response.clicked() {
+                                g.scroll_to = Some(section);
+                                g.inspector_tab = section;
+                            }
+                        }
+                    });
+                });
         });
+    super::widgets::rule(ui, &theme);
 }
 
 /// Scrolls the body to here when `section` was asked for.
@@ -498,7 +545,8 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         anchor(g, ui, InspectorSection::Ticket);
         ticket(g, ui, mr);
     }
-    threads(ui, &theme, mr);
+    anchor(g, ui, InspectorSection::Threads);
+    threads(ui, &theme, mr, g.app.config.gitlab_username.as_deref());
     anchor(g, ui, InspectorSection::Pipelines);
     pipelines(g, ui, mr);
     anchor(g, ui, InspectorSection::Description);
@@ -770,11 +818,10 @@ pub(super) fn branches(
                 ui.add_space(2.0 - ui.spacing().item_spacing.y);
                 ui.horizontal(|ui| {
                     ui.add_space(name_width + BRANCH_CHIP_GAP);
-                    ui.label(super::mr_page::deployment_line(
-                        &theme,
-                        dep,
-                        ui.available_width(),
-                    ));
+                    // Cut to the room left: in a row, a plain label extends past
+                    // the panel, which would push the inspector off the window.
+                    let line = super::mr_page::deployment_line(&theme, dep, ui.available_width());
+                    ui.add(egui::Label::new(line).truncate());
                 });
             }
             if row.presence == Some(BranchPresence::Partial) && !row.missing.is_empty() {
@@ -1029,7 +1076,9 @@ fn time_log(g: &GuiApp, ui: &mut Ui, ticket_id: &str) {
 }
 
 /// The unresolved threads; a click opens one in GitLab.
-fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
+fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr, me: Option<&str>) {
+    use crate::next_step::{thread_turn, Turn};
+    let author_is_me = me.is_some_and(|me| matches_gitlab_username(&mr.author, me));
     let open: Vec<_> = mr.threads.iter().filter(|t| !t.resolved).collect();
     if open.is_empty() {
         return;
@@ -1060,6 +1109,23 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
                                 format_relative_date(&thread.last_note_at)
                             ),
                         ));
+                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                            let turn = thread_turn(mr, thread);
+                            let mine = match turn {
+                                Turn::Author => author_is_me,
+                                Turn::Others => me.is_some_and(|me| thread.author == me),
+                            };
+                            let (text, tone) = match (turn, mine) {
+                                (_, true) => (tl("Your turn"), theme.tones.orange),
+                                (Turn::Author, false) => (tl("Author's turn"), theme.tones.amber),
+                                (Turn::Others, false) => {
+                                    (tl("Reviewer's turn"), theme.tones.purple)
+                                }
+                            };
+                            ui.add(
+                                Chip::new(text, tone).font(fonts::medium(theme.text_size - 2.5)),
+                            );
+                        });
                     });
                     ui.add(
                         egui::Label::new(

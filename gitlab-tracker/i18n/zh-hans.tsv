@@ -525,6 +525,146 @@
 	Effort: Complex 🔴	工作量：复杂 🔴
 	Has linked ticket 🎫	有关联工单 🎫
 
+# Next step, delivery flow and promotion
+	Finish the draft	完成草稿
+	Resolve the conflicts with the target	解决与目标分支的冲突
+	Rebase on the target	变基到目标分支
+	Fix the failed pipeline	修复失败的流水线
+	{threads} ({who})	{threads}（{who}）
+	Address the changes asked	处理要求的修改
+	Ask for a review	请求评审
+	Review it	评审
+	Review the new commits	评审新提交
+	Merge it	合并
+	Deploy to {branch}	部署到 {branch}
+	draft	草稿
+	conflicts	冲突
+	rebase	变基
+	fix CI	修复 CI
+	changes asked	要求修改
+	ask a review	请求评审
+	review	评审
+	review again	再次评审
+	merge	合并
+	to {branch}	到 {branch}
+	You	你
+	Deploy	部署
+	not merged	未合并
+	nothing left	无待办
+	To deploy · on {branch} for {time}	待部署 · 已在 {branch} {time}
+	To deploy	待部署
+	Closed without merging	未合并即关闭
+	Done · on {branch}	已完成 · 在 {branch}
+	Known once the MR is loaded	MR 加载后可知
+	Waiting on {who} · for {time}	等待 {who} · 已 {time}
+	Waiting on {who}	等待 {who}
+	Ball in your court	轮到你了
+	Nothing left: it reached every branch of its flow.	无待办：已到达其流程中的所有分支。
+	Then: {steps}	然后：{steps}
+	Open the threads	打开讨论
+	Copy the rebase commands	复制变基命令
+	See the pipeline	查看流水线
+	Open Promote	打开 Promote
+	on {branch} since {date}	自 {date} 起在 {branch}
+	since {date}	自 {date} 起
+	Rebase commands copied	已复制变基命令
+	Waiting on you	等待你
+	Waiting for {branch}	等待进入 {branch}
+	(median {time})	（中位数 {time}）
+	median {time}	中位数 {time}
+	Waiting for a review	等待评审
+	Waiting on the author	等待作者
+	Approved, not merged	已批准，未合并
+	Merged, not on {to}	已合并，未进入 {to}
+	On {from}, not on {to}	在 {from}，未进入 {to}
+	Delivery flow · where MRs wait	交付流程 · MR 在哪里等待
+	Count now · median time spent in the stage	当前数量 · 在该阶段停留的中位时间
+	Show these MRs in the list	在列表中显示这些 MR
+	Bottleneck: {stage} — {time} median.	瓶颈：{stage} — 中位数 {time}。
+	MRs merged per week	每周合并的 MR
+	Time to first review	首次评审耗时
+	median, by week of the review	中位数，按评审所在周
+	Lead time to {branch}	到 {branch} 的交付周期
+	Lead time	交付周期
+	created → there, median by week of arrival	创建 → 到达，按到达周的中位数
+	CI success	CI 成功率
+	pipelines of the tracked MRs	已跟踪 MR 的流水线
+	4 weeks	4 周
+	Quarter	季度
+	against {avg} on average the weeks before	之前几周平均为 {avg}
+	{time} · usually {usual}	{time} · 通常 {usual}
+	Waiting on {who}: {what}	等待 {who}：{what}
+	Hi {who}, could you have a look at !{id} "{title}" when you can? {url} (waiting for {time})	你好 {who}，方便时能看一下 !{id}「{title}」吗？{url}（已等待 {time}）
+	See the new commits	查看新提交
+	Your MRs blocked by someone else: a reminder can unblock them.	被他人阻塞的你的 MR：发个提醒或许能推进。
+	{section} · nothing yet	{section} · 暂无
+	Reminder copied: paste it in a chat or a comment	提醒已复制：粘贴到聊天或评论中
+	closed	已关闭
+	reached {branch}	已进入 {branch}
+	pipeline failed	流水线失败
+	Since your last visit	自上次访问以来
+	Nothing changed on your tracked MRs since the app was last opened.	自上次打开以来，你跟踪的 MR 没有变化。
+	This session	本次会话
+	While the app was closed	应用关闭期间
+	Mark all as seen	全部标记为已读
+	Copy a reminder	复制提醒
+	Since when it waits	等待了多久
+	No commit known yet: refresh first	尚无已知提交：请先刷新
+	on {from}, not on {to} · in merge order	在 {from}，未进入 {to} · 按合并顺序
+	{n} selected	已选 {n} 个
+	Copy commands	复制命令
+	Release notes	发布说明
+	The selected MRs as a Markdown list	以 Markdown 列表形式的选中 MR
+	Markdown checklist	Markdown 清单
+	The selected MRs as a Markdown table, for the release ticket	以 Markdown 表格形式的选中 MR，用于发布工单
+	Tick the MRs to ship above.	在上方勾选要交付的 MR。
+	Commits listed oldest merge first, so they apply in the order the branch got them.	提交按最早合并排列，按分支接收它们的顺序应用。
+	Merged, not on {from} yet · {n}	已合并，尚未进入 {from} · {n}
+	Every merged MR reached it.	所有已合并的 MR 都已到达。
+	merged {when}	{when}合并
+	Promote them to {from} first.	先将它们推进到 {from}。
+	Still open · {n}	仍未合并 · {n}
+	Commands copied	命令已复制
+	Release notes copied	发布说明已复制
+	Not on {from} yet	尚未进入 {from}
+	Released to {to}	已发布到 {to}
+	On {branch} for	在 {branch} 已
+	How	方式
+	In the release or not	是否纳入本次发布
+	merged {when} · {who}	{when}合并 · {who}
+	How long it has been tested there: under a day, in amber	已在此测试多久：不足一天以琥珀色显示
+	The linked ticket and its status	关联的工单及其状态
+	on {branch}	在 {branch}
+	on {branch} for {time}	已在 {branch} {time}
+	waiting {time}	已等待 {time}
+	No pipeline	无流水线
+	Lifecycle	生命周期
+	Time between steps · the median of the tracked MRs in grey	步骤间耗时 · 灰色为已跟踪 MR 的中位数
+	Your turn	轮到你
+	The last note is someone else's	最后一条评论来自他人
+	usually {v}	通常 {v}
+	since the last move	自上次变动以来
+	Author's turn	轮到作者
+	Reviewer's turn	轮到评审者
+	This window only	仅此窗口
+	Next step	下一步
+	Who each MR waits on, and since when	每个 MR 在等谁，以及从何时起
+	Branches in one cell	分支合并为一格
+	A dot per branch, joined, instead of a column each: room for the title	每个分支一个点并相连，代替各占一列：为标题留出空间
+	{n} tracked merge requests · trends against the {weeks} previous weeks	已跟踪 {n} 个合并请求 · 与前 {weeks} 周对比的趋势
+	Who it waits on, and since when	在等谁，以及从何时起
+	Waiting on me	等待我
+	Waiting on others	等待他人
+	To promote	待推进
+	On me	待我处理
+	On the author	待作者处理
+	On the reviewers	待评审者处理
+	To merge	待合并
+	Not known yet	尚不清楚
+	By next step	按下一步
+	Waiting on: {name}	等待：{name}
+	CI	CI
+
 # In a context (tc)
 date	Merged	合并时间
 
@@ -976,3 +1116,14 @@ date	Merged	合并时间
 	merged by {who} {when}, not tracked	由 {who} 于 {when} 合并，未跟踪
 	pushed by {who} {when}	由 {who} 于 {when} 推送
 @plural	{n} commit behind|{n} commits behind	落后 {n} 个提交
+@plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	变基：落后目标 {n} 个提交
+@plural	Answer {n} thread|Answer {n} threads	回复 {n} 个讨论
+@plural	Read the answer to {n} thread|Read the answers to {n} threads	阅读 {n} 个讨论的回复
+@plural	{n} thread|{n} threads	{n} 个讨论
+@plural	{n} answer|{n} answers	{n} 条回复
+@plural	{n} reviewer|{n} reviewers	{n} 位评审者
+@plural	MR|MRs	个 MR
+@plural	· {n} on me|· {n} on me	· {n} 个待我处理
+@plural	No data over the last {n} week|No data over the last {n} weeks	最近 {n} 周无数据
+@plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	将 {n} 个 MR 从 {from} 带到 {to}
+@plural	To ship the {n} selected MR|To ship the {n} selected MRs	交付选中的 {n} 个 MR

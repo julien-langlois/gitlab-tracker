@@ -28,6 +28,7 @@ pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     toolbar(g, ui, shown, sizes);
     super::shell::fetch_errors(g, ui);
     status_bar(g, ui);
+    next_chips(g, ui);
     active_filters(g, ui);
     bulk_bar(g, ui);
 
@@ -125,14 +126,17 @@ pub enum GroupBy {
     Status,
     Milestone,
     Author,
+    /// Who each MR waits on (see `crate::next_step`).
+    NextStep,
 }
 
 impl GroupBy {
-    const ALL: [GroupBy; 4] = [
+    const ALL: [GroupBy; 5] = [
         GroupBy::None,
         GroupBy::Status,
         GroupBy::Milestone,
         GroupBy::Author,
+        GroupBy::NextStep,
     ];
 
     fn label(self) -> &'static str {
@@ -141,6 +145,7 @@ impl GroupBy {
             GroupBy::Status => "By status",
             GroupBy::Milestone => "By milestone",
             GroupBy::Author => "By author",
+            GroupBy::NextStep => "By next step",
         })
     }
 }
@@ -478,6 +483,157 @@ fn legend_item(
     response
 }
 
+/// The tone of a next-step bucket: mine in orange, the rest by stage.
+pub fn bucket_tone(bucket: crate::next_step::Bucket, tones: &bevel_theme::Tones) -> Tone {
+    use crate::next_step::Bucket;
+    match bucket {
+        Bucket::OnMe => tones.orange,
+        Bucket::OnAuthor => tones.amber,
+        Bucket::OnReviewers => tones.purple,
+        Bucket::ToMerge => tones.teal,
+        Bucket::ToDeploy => tones.blue,
+        Bucket::Done => tones.green,
+        Bucket::Unknown => tones.gray,
+    }
+}
+
+/// Who the tracked MRs wait on, a chip per bucket with its count: a click lists
+/// that bucket alone (again: all of them).
+fn next_chips(g: &mut GuiApp, ui: &mut Ui) {
+    use crate::next_step::Bucket;
+    if g.app.mrs.is_empty() {
+        return;
+    }
+    let theme = g.theme;
+    let steps = crate::next_step::all(&g.app);
+    let current = g.app.focus.as_ref().map(|f| f.key.clone());
+    let mut clicked = None;
+    egui::Frame::new()
+        .inner_margin(Margin {
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 6,
+        })
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
+                for bucket in Bucket::ALL {
+                    let n = steps.values().filter(|s| s.bucket() == bucket).count();
+                    if bucket == Bucket::Unknown || bucket == Bucket::ToMerge && n == 0 {
+                        continue;
+                    }
+                    let on = current.as_deref() == Some(bucket.key());
+                    let tone = bucket_tone(bucket, &theme.tones);
+                    let response = pill(
+                        ui,
+                        &theme,
+                        bucket.label(),
+                        n,
+                        tone,
+                        on,
+                        current.is_some() && !on,
+                    );
+                    if response
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(tl(if on {
+                            "Click to show them all"
+                        } else {
+                            "Click to show only these"
+                        }))
+                        .clicked()
+                    {
+                        clicked = Some((bucket, on));
+                    }
+                }
+            });
+        });
+    match clicked {
+        Some((_, true)) => g.next_focus = Some(None),
+        Some((bucket, false)) => g.focus_on(bucket.key(), bucket.label()),
+        None => {}
+    }
+}
+
+/// A rounded chip with a dot, a name and a count; filled when `on`.
+fn pill(
+    ui: &mut Ui,
+    theme: &Theme,
+    name: &str,
+    count: usize,
+    tone: Tone,
+    on: bool,
+    dim: bool,
+) -> egui::Response {
+    let font = fonts::medium(theme.text_size - 1.5);
+    let text_color = if dim {
+        theme.palette.text_muted
+    } else {
+        theme.palette.text_secondary
+    };
+    let name_g = ui
+        .painter()
+        .layout_no_wrap(name.to_owned(), font.clone(), text_color);
+    let count_g = ui.painter().layout_no_wrap(
+        count.to_string(),
+        fonts::semibold(theme.text_size - 1.5),
+        if count > 0 && !dim {
+            tone.fg
+        } else {
+            theme.palette.text_muted
+        },
+    );
+    let size = Vec2::new(
+        10.0 + 13.0 + name_g.size().x + 6.0 + count_g.size().x + 10.0,
+        24.0,
+    );
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let radius = CornerRadius::same(12);
+    if on {
+        ui.painter().rect_filled(rect, radius, tone.bg);
+        ui.painter().rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0, tone.fg),
+            egui::StrokeKind::Inside,
+        );
+    } else if response.hovered() {
+        ui.painter().rect_filled(rect, radius, theme.palette.raised);
+    } else {
+        ui.painter().rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0, theme.palette.border_soft),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let mut x = rect.left() + 10.0;
+    ui.painter().circle_filled(
+        egui::pos2(x + 3.5, rect.center().y),
+        3.5,
+        if dim {
+            tone.fg.gamma_multiply(0.35)
+        } else {
+            tone.fg
+        },
+    );
+    x += 13.0;
+    let w = name_g.size().x;
+    ui.painter().galley(
+        egui::pos2(x, rect.center().y - name_g.size().y / 2.0),
+        name_g,
+        text_color,
+    );
+    x += w + 6.0;
+    ui.painter().galley(
+        egui::pos2(x, rect.center().y - count_g.size().y / 2.0),
+        count_g,
+        theme.palette.text,
+    );
+    super::widgets::focus_ring(ui, theme, &response, 12);
+    response
+}
+
 /// "Conflict · 1 MR (14 %)" and what a click does, on a segment or a legend item.
 fn status_hint(
     response: egui::Response,
@@ -509,8 +665,13 @@ fn active_filters(g: &mut GuiApp, ui: &mut Ui) {
     let tones = &theme.tones;
     let mut chips: Vec<(String, Tone, Undo)> = Vec::new();
     if let Some(focus) = &g.app.focus {
+        let template = if !crate::next_step::Bucket::of_key(&focus.key).is_empty() {
+            "Waiting on: {name}"
+        } else {
+            "Cockpit: {name}"
+        };
         chips.push((
-            tf("Cockpit: {name}", &[("name", &focus.label)]),
+            tf(template, &[("name", &focus.label)]),
             tones.blue,
             Undo::Focus,
         ));
@@ -800,6 +961,10 @@ fn milestone_suggestions(g: &mut GuiApp, ui: &mut Ui, bar: Rect) {
 /// The optional columns, by their `ColumnDef` id (shared with the TUI's column picker).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Col {
+    /// Who the MR waits on, and since when (the window's own: not in the TUI).
+    Next,
+    /// The latest pipeline, as an icon (the window's own).
+    Ci,
     Effort,
     Notes,
     Activity,
@@ -812,7 +977,9 @@ pub enum Col {
 
 impl Col {
     /// Display order.
-    const ALL: [Col; 8] = [
+    const ALL: [Col; 10] = [
+        Col::Next,
+        Col::Ci,
         Col::Effort,
         Col::Notes,
         Col::Activity,
@@ -823,7 +990,7 @@ impl Col {
         Col::Ticket,
     ];
     /// The order columns are dropped in when the window is too narrow for them.
-    const DROP_ORDER: [Col; 8] = [
+    const DROP_ORDER: [Col; 10] = [
         Col::Activity,
         Col::Labels,
         Col::Ticket,
@@ -832,10 +999,19 @@ impl Col {
         Col::Milestone,
         Col::Notes,
         Col::Effort,
+        Col::Ci,
+        Col::Next,
     ];
+
+    /// Drawn by the window alone: shown unless hidden in its column picker.
+    pub fn window_only(self) -> bool {
+        matches!(self, Col::Next | Col::Ci)
+    }
 
     fn id(self) -> &'static str {
         match self {
+            Col::Next => "next_step",
+            Col::Ci => "ci",
             Col::Effort => "diff_stats",
             Col::Notes => "notes",
             Col::Activity => "activity",
@@ -849,6 +1025,8 @@ impl Col {
 
     fn width(self) -> f32 {
         match self {
+            Col::Next => 196.0,
+            Col::Ci => 36.0,
             Col::Effort => 92.0,
             Col::Notes => 44.0,
             Col::Activity => 96.0,
@@ -862,6 +1040,8 @@ impl Col {
 
     fn title(self) -> &'static str {
         tl(match self {
+            Col::Next => "Next step",
+            Col::Ci => "CI",
             Col::Effort => "Effort",
             Col::Notes => "Threads",
             Col::Activity => "Activity",
@@ -876,14 +1056,16 @@ impl Col {
 
 /// The columns the user chose. Until they pick some (here or in the TUI), the
 /// window shows a set suited to its width rather than the TUI's empty default.
-fn wanted_columns(app: &App) -> Vec<Col> {
+fn wanted_columns(app: &App, hide_next: bool) -> Vec<Col> {
     let offered: Vec<&str> = app.visible_column_defs().iter().map(|c| c.id).collect();
     let chosen = app.project_settings.visible_columns.is_some();
     Col::ALL
         .into_iter()
-        .filter(|c| offered.contains(&c.id()))
+        .filter(|c| c.window_only() || offered.contains(&c.id()))
         .filter(|c| {
-            if chosen {
+            if c.window_only() {
+                !(hide_next && *c == Col::Next)
+            } else if chosen {
                 app.config.visible_columns.is_visible(c.id())
             } else {
                 !matches!(c, Col::Activity | Col::Labels)
@@ -918,8 +1100,19 @@ const ROW_GAP: f32 = 2.0;
 /// Returns the columns kept (in display order), how many were dropped, and the
 /// width of each branch column.
 pub fn fit_columns(wanted: &[Col], width: f32, branch_count: usize) -> (Vec<Col>, usize, f32) {
+    fit_columns_with(wanted, width, branch_count, 0.0)
+}
+
+/// [`fit_columns`], with `extra` points taken by another fixed cell (the flow).
+pub fn fit_columns_with(
+    wanted: &[Col],
+    width: f32,
+    branch_count: usize,
+    extra: f32,
+) -> (Vec<Col>, usize, f32) {
     let base = ROW_PADDING * 2.0
         + FIXED_COLUMNS_WIDTH
+        + extra
         + branch_count as f32 * BRANCH_WIDTH
         + (3 + branch_count) as f32 * COLUMN_GAP;
     let mut kept: Vec<Col> = wanted.to_vec();
@@ -947,6 +1140,8 @@ enum Cell {
     Status,
     Optional(Col),
     Branch(usize),
+    /// Every branch in one cell, as a line of dots (see `GuiApp::flow_cells`).
+    Flow,
 }
 
 /// Where each column sits inside a row, from its left edge.
@@ -954,9 +1149,59 @@ struct Grid {
     cells: Vec<(Cell, f32, f32)>,
     width: f32,
     row_height: f32,
+    /// The tracked branches, named in the flow cell's hover.
+    names: Vec<String>,
+    /// Their short names, over the flow cell's dots and the branch columns.
+    aliases: Vec<String>,
+    /// The space between two dots of the flow cell, for the widest alias.
+    flow_step: f32,
+}
+
+/// The tracked branches from feature to production (the timeline's order),
+/// each with its short name: `(name, alias)`.
+fn branch_order(app: &crate::app::App) -> Vec<(String, String)> {
+    app.branch_flow()
+        .in_order()
+        .into_iter()
+        .map(|b| (b.name.clone(), b.alias.clone()))
+        .collect()
+}
+
+/// The flow cell: a dot per branch, joined.
+fn flow_width(branches: usize, step: f32) -> f32 {
+    (branches as f32 * step + 12.0).max(64.0)
+}
+/// The narrowest space between two dots of the flow cell.
+const FLOW_STEP: f32 = 30.0;
+
+/// The space between two dots for the widest of `aliases` to sit over its dot.
+fn flow_step(ui: &Ui, theme: &Theme, aliases: &[String]) -> f32 {
+    let font = egui::FontId::monospace(theme.text_size - 3.0);
+    let widest = aliases
+        .iter()
+        .map(|a| {
+            ui.fonts_mut(|f| {
+                f.layout_no_wrap(a.clone(), font.clone(), egui::Color32::WHITE)
+                    .size()
+                    .x
+            })
+        })
+        .fold(0.0, f32::max);
+    (widest + 8.0).max(FLOW_STEP).ceil()
 }
 
 impl Grid {
+    /// The branches in one flow cell instead of a column each.
+    fn with_flow(columns: &[Col], branches: usize, step: f32, width: f32) -> Self {
+        let flow = flow_width(branches, step);
+        let mut grid = Self::new(columns, 0, BRANCH_WIDTH, width - flow - COLUMN_GAP);
+        let x = grid.width - ROW_PADDING + COLUMN_GAP;
+        grid.cells.push((Cell::Flow, x, flow));
+        grid.width += flow + COLUMN_GAP;
+        grid.flow_step = step;
+        grid
+    }
+
     fn new(columns: &[Col], branches: usize, branch_width: f32, width: f32) -> Self {
         let mut cells: Vec<(Cell, f32)> = vec![
             (Cell::Flag, FLAG_WIDTH),
@@ -984,6 +1229,9 @@ impl Grid {
             cells,
             width: fixed + title,
             row_height: ROW_HEIGHT,
+            names: Vec::new(),
+            aliases: Vec::new(),
+            flow_step: FLOW_STEP,
         }
     }
 
@@ -1026,6 +1274,88 @@ struct RowView {
     opened: bool,
     ticket: Option<(String, String)>,
     has_ticket: bool,
+    /// Who it waits on, for the Next step column.
+    next: Option<NextView>,
+    /// The latest pipeline: its state, `None` without one.
+    pipeline: Option<crate::models::PipelineState>,
+}
+
+/// The Next step cell: who, what, since when.
+#[derive(Debug, Clone)]
+pub struct NextView {
+    /// "You", "Alex", "Deploy"…
+    pub who: String,
+    /// "rebase, 2 threads"
+    pub what: String,
+    /// "waiting 12 d", "on staging for 4 d"
+    pub since: String,
+    pub tone: Tone,
+    /// I have to act: drawn stronger.
+    pub mine: bool,
+    /// The todos in full, for the hover.
+    pub hint: String,
+}
+
+impl NextView {
+    pub fn of(step: &crate::next_step::NextStep, theme: &Theme) -> Option<Self> {
+        use crate::next_step::{days_text, Actor};
+        let tones = &theme.tones;
+        let now = chrono::Utc::now();
+        let waited = step.waited_days(now).map(days_text);
+        let (tone, since) = match step.actor {
+            Actor::Unknown => return None,
+            Actor::Nobody if step.closed => (tones.gray, String::new()),
+            Actor::Nobody => (
+                tones.green,
+                step.reached
+                    .as_ref()
+                    .map(|b| tf("on {branch}", &[("branch", b)]))
+                    .unwrap_or_default(),
+            ),
+            Actor::Deploy => (
+                tones.blue,
+                match (&step.reached, &waited) {
+                    (Some(b), Some(w)) => {
+                        tf("on {branch} for {time}", &[("branch", b), ("time", w)])
+                    }
+                    (Some(b), None) => tf("on {branch}", &[("branch", b)]),
+                    _ => String::new(),
+                },
+            ),
+            _ => (
+                if step.mine { tones.orange } else { tones.gray },
+                waited
+                    .map(|w| tf("waiting {time}", &[("time", &w)]))
+                    .unwrap_or_default(),
+            ),
+        };
+        let mut hint: Vec<String> = step
+            .todos
+            .iter()
+            .map(|t| format!("• {}", t.text()))
+            .collect();
+        if !step.people.is_empty() && !step.mine {
+            hint.insert(
+                0,
+                step.people
+                    .iter()
+                    .map(|p| split_person(p).0.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+        }
+        if !step.then.is_empty() {
+            hint.push(tf("Then: {steps}", &[("steps", &step.then.join(" → "))]));
+        }
+        Some(Self {
+            who: step.who(),
+            what: step.summary(),
+            since,
+            tone,
+            mine: step.mine,
+            hint: hint.join("\n"),
+        })
+    }
 }
 
 /// A branch cell: where the MR stands on it, or why that is not known yet.
@@ -1046,6 +1376,8 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
     let tones = &theme.tones;
     let selected = app.table_state.selected();
     let fresh_window = app.update_highlight_ticks > 0;
+    let me = app.config.gitlab_username.as_deref();
+    let order = branch_order(app);
     let mut views: Vec<RowView> = app
         .visible_mrs()
         .enumerate()
@@ -1091,10 +1423,9 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 }),
                 threads: mr.user_notes_count,
                 activity,
-                branches: app
-                    .branches
+                branches: order
                     .iter()
-                    .map(|b| match app.branch_presence(mr, b) {
+                    .map(|(b, _)| match app.branch_presence(mr, b) {
                         None if !failed && fetching => BranchCell::Loading,
                         None if !failed => BranchCell::Unknown,
                         presence => {
@@ -1112,6 +1443,8 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                     .as_ref()
                     .map(|t| (t.id.clone(), t.status.clone())),
                 has_ticket: mr.linked_ticket.is_some() && app.tracker.is_some(),
+                next: NextView::of(&crate::next_step::of(app, mr, me), theme),
+                pipeline: mr.pipelines.first().map(|p| p.status),
             }
         })
         .collect();
@@ -1140,10 +1473,15 @@ fn lines(g: &GuiApp) -> Vec<Line> {
         return (0..app.visible_mrs().count()).map(Line::Mr).collect();
     }
     let tones = &g.theme.tones;
+    let me = app.config.gitlab_username.as_deref();
     // (key, label, tone, members), groups in the order they first show up.
     let mut groups: Vec<(String, String, Option<Tone>, Vec<usize>)> = Vec::new();
     for (index, mr) in app.visible_mrs().enumerate() {
         let (label, tone) = match g.group_by {
+            GroupBy::NextStep => {
+                let bucket = crate::next_step::of(app, mr, me).bucket();
+                (bucket.label().to_string(), Some(bucket_tone(bucket, tones)))
+            }
             GroupBy::Status => {
                 let (label, tone) = tones::status(mr.state, &mr.mergeability, tones);
                 (label.to_string(), Some(tone))
@@ -1166,6 +1504,15 @@ fn lines(g: &GuiApp) -> Vec<Line> {
                 vec![index],
             )),
         }
+    }
+    if g.group_by == GroupBy::NextStep {
+        // In the order of the flow: me first, done last.
+        groups.sort_by_key(|grp| {
+            crate::next_step::Bucket::ALL
+                .iter()
+                .position(|b| b.label() == grp.1)
+                .unwrap_or(usize::MAX)
+        });
     }
     let mut lines = Vec::new();
     for (key, label, tone, members) in groups {
@@ -1203,14 +1550,30 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     // The "Behind" counts drawn, by MR id: a click lists what the MR lacks.
     let mut behind_cells: Vec<(String, egui::Response)> = Vec::new();
     let lines = lines(g);
-    let branches = g.app.branches.clone();
-    let wanted = wanted_columns(&g.app);
-    let (columns, dropped, branch_width) =
-        fit_columns(&wanted, ui.available_width(), branches.len());
-    let mut grid = Grid::new(&columns, branches.len(), branch_width, ui.available_width());
+    let (branches, aliases): (Vec<String>, Vec<String>) = branch_order(&g.app).into_iter().unzip();
+    let wanted = wanted_columns(&g.app, g.hide_next_column);
+    let flow = g.flow_cells && !branches.is_empty();
+    let step = flow_step(ui, &theme, &aliases);
+    let (columns, dropped, branch_width) = if flow {
+        fit_columns_with(
+            &wanted,
+            ui.available_width(),
+            0,
+            flow_width(branches.len(), step) + COLUMN_GAP,
+        )
+    } else {
+        fit_columns(&wanted, ui.available_width(), branches.len())
+    };
+    let mut grid = if flow {
+        Grid::with_flow(&columns, branches.len(), step, ui.available_width())
+    } else {
+        Grid::new(&columns, branches.len(), branch_width, ui.available_width())
+    };
     if g.compact {
         grid.row_height = COMPACT_ROW_HEIGHT;
     }
+    grid.names = branches.clone();
+    grid.aliases = aliases;
 
     // Keyboard moves bring the selected row into view.
     let selected = g.app.table_state.selected().filter(|&i| i < shown);
@@ -1457,11 +1820,31 @@ fn header(
             (Cell::Optional(col), _) => {
                 ui.label(caption(col.title()));
             }
+            (Cell::Flow, _) => {
+                // Each branch's short name over its dot (see `flow_cell`).
+                let (rect, response) = ui.allocate_exact_size(
+                    Vec2::new(branches.len() as f32 * grid.flow_step, 16.0),
+                    Sense::hover(),
+                );
+                let font = egui::FontId::monospace(theme.text_size - 3.0);
+                for (i, alias) in grid.aliases.iter().enumerate() {
+                    let x = rect.left() + 11.0 + i as f32 * grid.flow_step;
+                    ui.painter().text(
+                        egui::pos2(x, rect.center().y),
+                        egui::Align2::CENTER_CENTER,
+                        alias,
+                        font.clone(),
+                        theme.palette.text_muted,
+                    );
+                }
+                response.on_hover_text(branches.join(" → "));
+            }
             (Cell::Branch(i), _) => {
                 let name = branches.get(i).map_or("", String::as_str);
+                let alias = grid.aliases.get(i).map_or(name, String::as_str);
                 ui.add(
                     egui::Label::new(
-                        mono(name, theme.text_size - 1.5).color(theme.palette.text_muted),
+                        mono(alias, theme.text_size - 1.5).color(theme.palette.text_muted),
                     )
                     .truncate(),
                 )
@@ -1665,6 +2048,8 @@ fn row(
             Cell::Status => {
                 badge(&mut ui, theme, r.status.0, r.status.1);
             }
+            Cell::Optional(Col::Next) => next_cell(&mut ui, theme, r, grid.row_height < ROW_HEIGHT),
+            Cell::Flow => flow_cell(&mut ui, theme, &r.branches, &grid.names, grid.flow_step),
             Cell::Optional(Col::Behind) if r.opened && r.behind.is_some_and(|n| n > 0) => {
                 behind = Some(behind_link(&mut ui, theme, r.behind.unwrap_or_default()));
             }
@@ -1729,6 +2114,149 @@ fn behind_link(ui: &mut Ui, theme: &Theme, n: u32) -> egui::Response {
     )
     .on_hover_cursor(egui::CursorIcon::PointingHand)
     .on_hover_text(tl("See what it lacks"))
+}
+
+/// The Next step cell: who (in their tone, stronger when it is me) and what,
+/// over since when; one line in the compact density. The todos on hover.
+fn next_cell(ui: &mut Ui, theme: &Theme, r: &RowView, compact: bool) {
+    let Some(next) = &r.next else {
+        ui.label(muted(theme, "—"))
+            .on_hover_text(tl("Known once the MR is loaded"));
+        return;
+    };
+    let who_color = if next.mine || next.tone.fg != theme.tones.gray.fg {
+        next.tone.fg
+    } else {
+        theme.palette.text
+    };
+    let head = |ui: &mut Ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(
+            RichText::new(&next.who)
+                .font(fonts::semibold(theme.text_size - 0.5))
+                .color(who_color),
+        );
+        if !next.what.is_empty() {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(format!("· {}", next.what))
+                        .font(fonts::medium(theme.text_size - 1.0))
+                        .color(theme.palette.text_secondary),
+                )
+                .truncate(),
+            );
+        }
+    };
+    let response = if compact {
+        ui.horizontal(|ui| head(ui)).response
+    } else {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 1.0;
+            ui.add_space(7.0);
+            ui.horizontal(|ui| head(ui));
+            if !next.since.is_empty() {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(&next.since)
+                            .size(theme.text_size - 1.5)
+                            .color(theme.palette.text_muted),
+                    )
+                    .truncate(),
+                );
+            }
+        })
+        .response
+    };
+    if !next.hint.is_empty() {
+        let hint = if compact && !next.since.is_empty() {
+            format!("{}\n{}", next.since, next.hint)
+        } else {
+            next.hint.clone()
+        };
+        response.on_hover_text(hint);
+    }
+}
+
+/// The latest pipeline as a round icon: a check, a cross, a ring while it runs.
+fn ci_cell(ui: &mut Ui, theme: &Theme, state: Option<crate::models::PipelineState>) {
+    use crate::models::PipelineState as P;
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::hover());
+    let c = rect.center();
+    let painter = ui.painter();
+    let Some(state) = state else {
+        painter.hline(
+            c.x - 4.0..=c.x + 4.0,
+            c.y,
+            Stroke::new(1.5, theme.palette.border),
+        );
+        response.on_hover_text(tl("No pipeline"));
+        return;
+    };
+    let (label, tone) = tones::pipeline(state, &theme.tones);
+    let stroke = Stroke::new(1.8, tone.fg);
+    match state {
+        P::Success => {
+            painter.circle_filled(c, 8.0, tone.bg);
+            painter.line_segment([c + Vec2::new(-3.5, 0.2), c + Vec2::new(-1.0, 2.8)], stroke);
+            painter.line_segment([c + Vec2::new(-1.0, 2.8), c + Vec2::new(3.8, -2.6)], stroke);
+        }
+        P::Failed => {
+            painter.circle_filled(c, 8.0, tone.bg);
+            painter.line_segment([c + Vec2::new(-3.0, -3.0), c + Vec2::new(3.0, 3.0)], stroke);
+            painter.line_segment([c + Vec2::new(3.0, -3.0), c + Vec2::new(-3.0, 3.0)], stroke);
+        }
+        P::Running | P::Pending | P::Created => {
+            painter.circle_stroke(c, 6.5, Stroke::new(1.8, tone.fg.gamma_multiply(0.35)));
+            let arc: Vec<egui::Pos2> = (0..=12)
+                .map(|i| {
+                    let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / 12.0;
+                    c + Vec2::angled(a) * 6.5
+                })
+                .collect();
+            painter.add(egui::Shape::line(arc, Stroke::new(1.8, tone.fg)));
+        }
+        _ => {
+            painter.circle_stroke(c, 6.5, Stroke::new(1.5, tone.fg));
+        }
+    }
+    response.on_hover_text(label);
+}
+
+/// Every branch of the row as a line of dots, joined: the flow at a glance.
+fn flow_cell(ui: &mut Ui, theme: &Theme, cells: &[BranchCell], names: &[String], step: f32) {
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(cells.len() as f32 * step, 22.0), Sense::hover());
+    let painter = ui.painter();
+    let center = |i: usize| egui::pos2(rect.left() + 11.0 + i as f32 * step, rect.center().y);
+    for i in 1..cells.len() {
+        painter.line_segment(
+            [
+                center(i - 1) + Vec2::new(8.0, 0.0),
+                center(i) - Vec2::new(8.0, 0.0),
+            ],
+            Stroke::new(1.5, theme.palette.border),
+        );
+    }
+    let mut hints = Vec::new();
+    for (i, cell) in cells.iter().enumerate() {
+        let name = names.get(i).map_or("", String::as_str);
+        match cell {
+            BranchCell::Known(glyph, label, tone) => {
+                painter.circle_filled(center(i), 8.0, tone.bg);
+                presence_glyph(painter, center(i), glyph, tone.fg);
+                hints.push(format!("{name}: {label}"));
+            }
+            BranchCell::Loading => {
+                painter.circle_stroke(center(i), 6.0, Stroke::new(1.5, theme.palette.text_muted));
+                hints.push(format!("{name}: {}", tl("Loading")));
+            }
+            BranchCell::Unknown => {
+                painter.circle_stroke(center(i), 6.0, Stroke::new(1.0, theme.palette.border));
+                hints.push(format!("{name}: —"));
+            }
+        }
+    }
+    response.on_hover_text(hints.join("\n"));
 }
 
 /// A branch cell: a dot in the presence's tone with its glyph, named on hover.
@@ -1942,6 +2470,8 @@ fn select(g: &mut GuiApp, index: usize) {
 fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) -> Option<String> {
     let mut clicked = None;
     match col {
+        Col::Next => next_cell(ui, theme, r, false),
+        Col::Ci => ci_cell(ui, theme, r.pipeline),
         Col::Effort => match r.effort {
             Some((label, tone)) => {
                 ui.add(Chip::new(label, tone).glyph("●").pill());

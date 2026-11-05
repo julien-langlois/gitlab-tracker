@@ -619,6 +619,153 @@ fn demo_updated_at(days_ago: i64) -> String {
         .to_string()
 }
 
+/// Review timelines, unresolved threads and branch arrivals for the demo MRs,
+/// dated from now: what the discussions and the stats DB give a real project.
+fn demo_review_activity(app: &mut App) {
+    use crate::models::{MrThread, ReviewActivity};
+    let now = chrono::Utc::now();
+    let at = |days: f64| {
+        (now - chrono::Duration::minutes((days * 1440.0) as i64))
+            .format("%Y-%m-%dT%H:%M:%S.000Z")
+            .to_string()
+    };
+    let thread =
+        |id: u64, author: &str, excerpt: &str, opened: f64, last: f64, notes: u32| MrThread {
+            note_id: id,
+            author: author.into(),
+            excerpt: excerpt.into(),
+            created_at: at(opened),
+            last_note_at: at(last),
+            notes,
+            resolved: false,
+        };
+    for mr in &mut app.mrs {
+        match mr.id.as_str() {
+            "104" => {
+                mr.review = Some(ReviewActivity {
+                    first_review_at: Some("2024-04-20T20:00:00Z".into()),
+                    approved_at: Some("2024-05-03T10:00:00Z".into()),
+                    review_requested_at: [
+                        ("thomas_db".to_string(), "2024-04-20T09:00:00Z".to_string()),
+                        ("alex_dev".to_string(), "2024-04-20T09:00:00Z".to_string()),
+                    ]
+                    .into(),
+                    last_push_at: Some("2024-05-02T16:00:00Z".into()),
+                    last_activity_by: [
+                        ("thomas_db".to_string(), "2024-05-03T10:00:00Z".to_string()),
+                        ("alex_dev".to_string(), "2024-04-22T11:00:00Z".to_string()),
+                    ]
+                    .into(),
+                });
+            }
+            "102" => {
+                mr.threads = vec![
+                    thread(
+                        9_102_001,
+                        "alex_dev",
+                        "Shouldn't the timeout be configurable? 30 s will still block the worker under load.",
+                        16.0,
+                        3.0,
+                        4,
+                    ),
+                    thread(
+                        9_102_002,
+                        "sarah_code",
+                        "This index is created without CONCURRENTLY: it will lock the table on production.",
+                        12.0,
+                        12.0,
+                        2,
+                    ),
+                    thread(
+                        9_102_003,
+                        "sarah_code",
+                        "Nit: the pool size could come from the settings.",
+                        12.0,
+                        11.0,
+                        3,
+                    ),
+                ];
+                mr.review = Some(ReviewActivity {
+                    first_review_at: Some(at(16.0)),
+                    approved_at: None,
+                    review_requested_at: [("sarah_code".to_string(), at(17.0))].into(),
+                    last_push_at: Some(at(13.0)),
+                    last_activity_by: [
+                        ("alex_dev".to_string(), at(3.0)),
+                        ("sarah_code".to_string(), at(11.0)),
+                        ("thomas_db".to_string(), at(11.0)),
+                    ]
+                    .into(),
+                });
+                mr.created_at = Some(at(20.0));
+            }
+            "107" => {
+                mr.threads = vec![thread(
+                    9_107_001,
+                    "thomas_db",
+                    "The notification fires twice when two branches change in the same refresh.",
+                    6.0,
+                    4.0,
+                    2,
+                )];
+                mr.review = Some(ReviewActivity {
+                    first_review_at: Some(at(6.0)),
+                    approved_at: None,
+                    review_requested_at: [("thomas_db".to_string(), at(7.0))].into(),
+                    last_push_at: Some(at(2.0)),
+                    last_activity_by: [
+                        ("thomas_db".to_string(), at(4.0)),
+                        ("julien_m".to_string(), at(2.0)),
+                    ]
+                    .into(),
+                });
+                mr.created_at = Some(at(8.0));
+            }
+            _ => {}
+        }
+    }
+    // What the last startup found changed since the session before.
+    app.last_changes = vec![
+        crate::app::SessionChange {
+            id: "101".into(),
+            title: "feat(auth): Add OAuth2 PKCE flow for mobile clients".into(),
+            kind: crate::app::ChangeKind::Arrived("staging".into()),
+        },
+        crate::app::SessionChange {
+            id: "106".into(),
+            title: "chore(deps): Bump tokio to 1.37 and update async ecosystem".into(),
+            kind: crate::app::ChangeKind::CiFailing,
+        },
+    ];
+    // !101 went through review and merge last week, and sits on staging.
+    if let Some(mr) = app.mrs.iter_mut().find(|m| m.id == "101") {
+        mr.created_at = Some(at(11.0));
+        mr.merged_at = Some(at(6.0));
+        mr.review = Some(ReviewActivity {
+            first_review_at: Some(at(10.2)),
+            approved_at: Some(at(7.0)),
+            ..Default::default()
+        });
+    }
+    app.branch_arrivals.insert(
+        ("101".into(), "staging".into()),
+        now - chrono::Duration::days(4),
+    );
+    let utc = |s: &str| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .map(|t| t.with_timezone(&chrono::Utc))
+            .unwrap_or(now)
+    };
+    app.branch_arrivals.insert(
+        ("104".into(), "staging".into()),
+        utc("2024-05-08T09:00:00Z"),
+    );
+    app.branch_arrivals.insert(
+        ("104".into(), "production".into()),
+        utc("2024-05-12T09:00:00Z"),
+    );
+}
+
 /// Runs the application in demo mode with pre-populated mock data.
 /// This mode is intended for screenshots, testing, and demonstrations.
 /// The demo project: mock MRs, branches and tickets, read-only (no disk writes,
@@ -1081,6 +1228,10 @@ pub async fn demo_app(config: AppConfig) -> App {
     // Apply the default sort (UpdatedAt Descending) so the table order at startup
     // matches exactly what the user sees — MR 104 is given the most recent timestamp
     // so it lands at row 0 after sorting.
+    // The review timeline, threads and branch arrivals the refreshes would read,
+    // so the window can tell who each MR waits on and since when.
+    demo_review_activity(&mut app);
+
     app.sort_mrs();
     app.table_state.select(Some(0));
     // The tracker's data is loaded up front: the demo drops fetch results.

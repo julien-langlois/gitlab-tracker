@@ -525,6 +525,146 @@
 	Effort: Complex 🔴	Aufwand: komplex 🔴
 	Has linked ticket 🎫	Mit verknüpftem Ticket 🎫
 
+# Next step, delivery flow and promotion
+	Finish the draft	Entwurf fertigstellen
+	Resolve the conflicts with the target	Konflikte mit dem Ziel lösen
+	Rebase on the target	Auf das Ziel rebasen
+	Fix the failed pipeline	Fehlgeschlagene Pipeline beheben
+	{threads} ({who})	{threads} ({who})
+	Address the changes asked	Angeforderte Änderungen umsetzen
+	Ask for a review	Review anfordern
+	Review it	Reviewen
+	Review the new commits	Neue Commits reviewen
+	Merge it	Mergen
+	Deploy to {branch}	Nach {branch} ausliefern
+	draft	Entwurf
+	conflicts	Konflikte
+	rebase	Rebase
+	fix CI	CI beheben
+	changes asked	Änderungen angefordert
+	ask a review	Review anfordern
+	review	Review
+	review again	erneut reviewen
+	merge	Merge
+	to {branch}	nach {branch}
+	You	Du
+	Deploy	Auslieferung
+	not merged	nicht gemergt
+	nothing left	nichts mehr zu tun
+	To deploy · on {branch} for {time}	Auszuliefern · seit {time} auf {branch}
+	To deploy	Auszuliefern
+	Closed without merging	Ohne Merge geschlossen
+	Done · on {branch}	Erledigt · auf {branch}
+	Known once the MR is loaded	Bekannt, sobald der MR geladen ist
+	Waiting on {who} · for {time}	Wartet auf {who} · seit {time}
+	Waiting on {who}	Wartet auf {who}
+	Ball in your court	Du bist am Zug
+	Nothing left: it reached every branch of its flow.	Nichts mehr zu tun: Er hat alle Branches seines Flusses erreicht.
+	Then: {steps}	Danach: {steps}
+	Open the threads	Threads öffnen
+	Copy the rebase commands	Rebase-Befehle kopieren
+	See the pipeline	Pipeline ansehen
+	Open Promote	Promote öffnen
+	on {branch} since {date}	seit {date} auf {branch}
+	since {date}	seit {date}
+	Rebase commands copied	Rebase-Befehle kopiert
+	Waiting on you	Wartet auf dich
+	Waiting for {branch}	Wartet auf {branch}
+	(median {time})	(Median {time})
+	median {time}	Median {time}
+	Waiting for a review	Wartet auf ein Review
+	Waiting on the author	Wartet auf den Autor
+	Approved, not merged	Freigegeben, nicht gemergt
+	Merged, not on {to}	Gemergt, nicht auf {to}
+	On {from}, not on {to}	Auf {from}, nicht auf {to}
+	Delivery flow · where MRs wait	Lieferfluss · wo MRs warten
+	Count now · median time spent in the stage	Anzahl jetzt · Median der Zeit in der Phase
+	Show these MRs in the list	Diese MRs in der Liste zeigen
+	Bottleneck: {stage} — {time} median.	Engpass: {stage} — Median {time}.
+	MRs merged per week	Gemergte MRs pro Woche
+	Time to first review	Zeit bis zum ersten Review
+	median, by week of the review	Median, nach Woche des Reviews
+	Lead time to {branch}	Durchlaufzeit bis {branch}
+	Lead time	Durchlaufzeit
+	created → there, median by week of arrival	erstellt → dort, Median nach Ankunftswoche
+	CI success	CI-Erfolg
+	pipelines of the tracked MRs	Pipelines der verfolgten MRs
+	4 weeks	4 Wochen
+	Quarter	Quartal
+	against {avg} on average the weeks before	gegenüber durchschnittlich {avg} in den Wochen davor
+	{time} · usually {usual}	{time} · üblich {usual}
+	Waiting on {who}: {what}	Wartet auf {who}: {what}
+	Hi {who}, could you have a look at !{id} "{title}" when you can? {url} (waiting for {time})	Hallo {who}, könntest du dir !{id} „{title}“ ansehen, wenn du Zeit hast? {url} (wartet seit {time})
+	See the new commits	Neue Commits ansehen
+	Your MRs blocked by someone else: a reminder can unblock them.	Deine MRs, die jemand anderes blockiert: Eine Erinnerung kann helfen.
+	{section} · nothing yet	{section} · noch nichts
+	Reminder copied: paste it in a chat or a comment	Erinnerung kopiert: In einen Chat oder Kommentar einfügen
+	closed	geschlossen
+	reached {branch}	auf {branch} angekommen
+	pipeline failed	Pipeline fehlgeschlagen
+	Since your last visit	Seit deinem letzten Besuch
+	Nothing changed on your tracked MRs since the app was last opened.	Seit dem letzten Öffnen hat sich an deinen verfolgten MRs nichts geändert.
+	This session	Diese Sitzung
+	While the app was closed	Während die App geschlossen war
+	Mark all as seen	Alle als gesehen markieren
+	Copy a reminder	Erinnerung kopieren
+	Since when it waits	Seit wann er wartet
+	No commit known yet: refresh first	Noch kein Commit bekannt: zuerst aktualisieren
+	on {from}, not on {to} · in merge order	auf {from}, nicht auf {to} · in Merge-Reihenfolge
+	{n} selected	{n} ausgewählt
+	Copy commands	Befehle kopieren
+	Release notes	Release Notes
+	The selected MRs as a Markdown list	Die ausgewählten MRs als Markdown-Liste
+	Markdown checklist	Markdown-Checkliste
+	The selected MRs as a Markdown table, for the release ticket	Die ausgewählten MRs als Markdown-Tabelle für das Release-Ticket
+	Tick the MRs to ship above.	Oben die auszuliefernden MRs ankreuzen.
+	Commits listed oldest merge first, so they apply in the order the branch got them.	Commits nach ältestem Merge zuerst: Sie werden in der Reihenfolge angewendet, in der der Branch sie erhielt.
+	Merged, not on {from} yet · {n}	Gemergt, noch nicht auf {from} · {n}
+	Every merged MR reached it.	Alle gemergten MRs sind dort angekommen.
+	merged {when}	gemergt {when}
+	Promote them to {from} first.	Zuerst nach {from} befördern.
+	Still open · {n}	Noch offen · {n}
+	Commands copied	Befehle kopiert
+	Release notes copied	Release Notes kopiert
+	Not on {from} yet	Noch nicht auf {from}
+	Released to {to}	Nach {to} ausgeliefert
+	On {branch} for	Auf {branch} seit
+	How	Wie
+	In the release or not	Im Release oder nicht
+	merged {when} · {who}	gemergt {when} · {who}
+	How long it has been tested there: under a day, in amber	Wie lange dort getestet: unter einem Tag in Bernstein
+	The linked ticket and its status	Das verknüpfte Ticket und sein Status
+	on {branch}	auf {branch}
+	on {branch} for {time}	seit {time} auf {branch}
+	waiting {time}	wartet seit {time}
+	No pipeline	Keine Pipeline
+	Lifecycle	Lebenszyklus
+	Time between steps · the median of the tracked MRs in grey	Zeit zwischen den Schritten · Median der verfolgten MRs in Grau
+	Your turn	Du bist dran
+	The last note is someone else's	Die letzte Notiz ist von jemand anderem
+	usually {v}	üblich {v}
+	since the last move	seit der letzten Bewegung
+	Author's turn	Autor ist dran
+	Reviewer's turn	Reviewer ist dran
+	This window only	Nur dieses Fenster
+	Next step	Nächster Schritt
+	Who each MR waits on, and since when	Auf wen jeder MR wartet und seit wann
+	Branches in one cell	Branches in einer Zelle
+	A dot per branch, joined, instead of a column each: room for the title	Ein Punkt pro Branch, verbunden, statt je einer Spalte: Platz für den Titel
+	{n} tracked merge requests · trends against the {weeks} previous weeks	{n} verfolgte Merge Requests · Trends gegenüber den {weeks} Wochen davor
+	Who it waits on, and since when	Auf wen er wartet und seit wann
+	Waiting on me	Wartet auf mich
+	Waiting on others	Wartet auf andere
+	To promote	Zu befördern
+	On me	Bei mir
+	On the author	Beim Autor
+	On the reviewers	Bei den Reviewern
+	To merge	Zu mergen
+	Not known yet	Noch unbekannt
+	By next step	Nach nächstem Schritt
+	Waiting on: {name}	Wartet auf: {name}
+	CI	CI
+
 # In a context (tc)
 date	Merged	Gemergt
 
@@ -976,3 +1116,14 @@ date	Merged	Gemergt
 	merged by {who} {when}, not tracked	gemergt von {who} {when}, nicht verfolgt
 	pushed by {who} {when}	gepusht von {who} {when}
 @plural	{n} commit behind|{n} commits behind	{n} Commit zurück|{n} Commits zurück
+@plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	Rebasen: {n} Commit hinter dem Ziel|Rebasen: {n} Commits hinter dem Ziel
+@plural	Answer {n} thread|Answer {n} threads	{n} Thread beantworten|{n} Threads beantworten
+@plural	Read the answer to {n} thread|Read the answers to {n} threads	Antwort auf {n} Thread lesen|Antworten auf {n} Threads lesen
+@plural	{n} thread|{n} threads	{n} Thread|{n} Threads
+@plural	{n} answer|{n} answers	{n} Antwort|{n} Antworten
+@plural	{n} reviewer|{n} reviewers	{n} Reviewer|{n} Reviewer
+@plural	MR|MRs	MR|MRs
+@plural	· {n} on me|· {n} on me	· {n} bei mir|· {n} bei mir
+@plural	No data over the last {n} week|No data over the last {n} weeks	Keine Daten in der letzten {n} Woche|Keine Daten in den letzten {n} Wochen
+@plural	Bring {n} MR from {from} to {to}|Bring {n} MRs from {from} to {to}	{n} MR von {from} nach {to} bringen|{n} MRs von {from} nach {to} bringen
+@plural	To ship the {n} selected MR|To ship the {n} selected MRs	Den {n} ausgewählten MR ausliefern|Die {n} ausgewählten MRs ausliefern

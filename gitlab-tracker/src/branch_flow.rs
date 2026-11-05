@@ -103,11 +103,51 @@ pub struct BranchSetting {
     /// The branch a feature branch is fed by (default: the first integration branch).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// A short name for the narrow columns (default: see [`short_name`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
 }
 
 impl BranchSetting {
     pub fn is_empty(&self) -> bool {
-        self.role.is_none() && self.parent.is_none()
+        self.role.is_none() && self.parent.is_none() && self.alias.is_none()
+    }
+}
+
+/// A short name for `branch`, where its full name does not fit: the usual
+/// abbreviations (`preproduction` → `preprod`, `develop` → `dev`), a feature
+/// branch without its `feature/` prefix or `_develop` suffix, cut at 8 letters.
+pub fn short_name(branch: &str) -> String {
+    let lower = branch.to_ascii_lowercase();
+    let known = match lower.as_str() {
+        "production" => Some("prod"),
+        "preproduction" | "pre-production" | "pre_production" => Some("preprod"),
+        "develop" | "development" | "devel" => Some("dev"),
+        "integration" => Some("integ"),
+        _ => None,
+    };
+    if let Some(short) = known {
+        return short.to_string();
+    }
+    let mut name = branch;
+    for prefix in ["feature/", "features/", "feat/"] {
+        if lower.starts_with(prefix) && lower.len() > prefix.len() {
+            name = &name[prefix.len()..];
+            break;
+        }
+    }
+    for suffix in ["_develop", "-develop", "_dev", "-dev"] {
+        if name.to_ascii_lowercase().ends_with(suffix) && name.len() > suffix.len() {
+            name = &name[..name.len() - suffix.len()];
+            break;
+        }
+    }
+    const MAX: usize = 8;
+    if name.chars().count() > MAX {
+        let cut: String = name.chars().take(MAX - 1).collect();
+        format!("{cut}…")
+    } else {
+        name.to_string()
     }
 }
 
@@ -120,6 +160,8 @@ pub struct FlowBranch {
     pub guessed: bool,
     /// The branch it is fed by: a feature branch's integration branch.
     pub parent: Option<String>,
+    /// Its name in the narrow columns: the alias set, else [`short_name`].
+    pub alias: String,
 }
 
 /// Where a merged MR goes from its target branch.
@@ -197,6 +239,10 @@ impl BranchFlow {
                     role: role.unwrap_or_else(|| BranchRole::guess_among(name, tracked)),
                     guessed: role.is_none(),
                     parent: None,
+                    alias: setting(name)
+                        .and_then(|s| s.alias.clone())
+                        .filter(|a| !a.trim().is_empty())
+                        .unwrap_or_else(|| short_name(name)),
                 }
             })
             .collect();
@@ -214,6 +260,14 @@ impl BranchFlow {
             };
         }
         Self { branches }
+    }
+
+    /// The branches from the furthest from production to production (feature,
+    /// integration, staging, production), those of a role in the tracked order.
+    pub fn in_order(&self) -> Vec<&FlowBranch> {
+        let mut ordered: Vec<&FlowBranch> = self.branches.iter().collect();
+        ordered.sort_by_key(|b| b.role);
+        ordered
     }
 
     pub fn get(&self, name: &str) -> Option<&FlowBranch> {
@@ -388,6 +442,42 @@ mod tests {
     }
 
     #[test]
+    fn the_branches_go_from_feature_to_production() {
+        let flow = BranchFlow::new(&tracked(), None);
+        let order: Vec<&str> = flow.in_order().iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(
+            order,
+            ["redesign_develop", "develop", "preproduction", "master"]
+        );
+    }
+
+    #[test]
+    fn long_branch_names_are_shortened() {
+        for (name, short) in [
+            ("master", "master"),
+            ("main", "main"),
+            ("staging", "staging"),
+            ("production", "prod"),
+            ("preproduction", "preprod"),
+            ("develop", "dev"),
+            ("redesign_develop", "redesign"),
+            ("feature/checkout-v2", "checkou…"),
+            ("feature/login", "login"),
+        ] {
+            assert_eq!(short_name(name), short, "{name}");
+        }
+        let settings = BTreeMap::from([(
+            "master".to_string(),
+            BranchSetting {
+                alias: Some("prod".into()),
+                ..BranchSetting::default()
+            },
+        )]);
+        let flow = BranchFlow::new(&tracked(), Some(&settings));
+        assert_eq!(flow.get("master").unwrap().alias, "prod");
+    }
+
+    #[test]
     fn the_settings_override_the_guess() {
         let tracked = ["main", "next", "v2"].map(String::from).to_vec();
         let settings = BTreeMap::from([
@@ -396,6 +486,7 @@ mod tests {
                 BranchSetting {
                     role: Some(BranchRole::Integration),
                     parent: None,
+                    alias: None,
                 },
             ),
             (
@@ -403,6 +494,7 @@ mod tests {
                 BranchSetting {
                     role: None,
                     parent: Some("next".into()),
+                    alias: None,
                 },
             ),
         ]);
@@ -423,6 +515,7 @@ mod tests {
             BranchSetting {
                 role: None,
                 parent: Some("redesign_develop".into()),
+                alias: None,
             },
         )]);
         let flow = BranchFlow::new(&tracked, Some(&settings));
