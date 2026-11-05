@@ -474,7 +474,10 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         );
     });
     anchor(g, ui, InspectorSection::Branches);
-    branches(g, ui, mr);
+    // The deployments come with the MR page's data, read once per version
+    // of the MR and shared with the page.
+    let data = g.details.page_data(&g.app, mr, ui.ctx()).cloned();
+    branches(g, ui, mr, data.as_ref());
     if !mr.labels.is_empty() {
         let mut clicked = None;
         section(ui, &theme, tl("Labels"), |ui| {
@@ -676,7 +679,12 @@ const BRANCH_CHIP_GAP: f32 = 16.0;
 /// Kept for the presence chip when a branch's name is long.
 const BRANCH_CHIP_ROOM: f32 = 90.0;
 
-pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+pub(super) fn branches(
+    g: &GuiApp,
+    ui: &mut Ui,
+    mr: &TrackedMr,
+    data: Option<&crate::gitlab_detail::PageData>,
+) {
     let theme = g.theme;
     let (rows, places): (Vec<_>, Vec<_>) = g.app.flow_branch_rows(mr).into_iter().unzip();
     let failed = matches!(mr.status, MrStatus::Error(_));
@@ -700,6 +708,8 @@ pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             })
             .collect();
         let name_width = names.iter().map(|name| name.size().x).fold(0.0, f32::max);
+        // Lines as tall as the chips, so a deployment stays by its branch.
+        ui.spacing_mut().interact_size.y = 20.0;
         for ((row, name), place) in rows.iter().zip(names).zip(places.iter()) {
             let cell = tones::flow_presence(row.presence, failed, *place, &theme.tones);
             let (glyph, label, tone) = match cell {
@@ -751,6 +761,21 @@ pub(super) fn branches(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             // Next to a long name, the detail goes on its own line.
             if !detail_fits && !detail.is_empty() {
                 ui.label(muted(&theme, detail.as_str()));
+            }
+            // Under it, set off under the chip: the environment deployed from it.
+            let deployed =
+                data.and_then(|d| d.deployments.iter().find(|dep| dep.reference == row.branch));
+            if let Some(dep) = deployed {
+                // Close to its branch: the section's spacing goes between branches.
+                ui.add_space(2.0 - ui.spacing().item_spacing.y);
+                ui.horizontal(|ui| {
+                    ui.add_space(name_width + BRANCH_CHIP_GAP);
+                    ui.label(super::mr_page::deployment_line(
+                        &theme,
+                        dep,
+                        ui.available_width(),
+                    ));
+                });
             }
             if row.presence == Some(BranchPresence::Partial) && !row.missing.is_empty() {
                 egui::CollapsingHeader::new(muted(&theme, tl("Missing commits")))

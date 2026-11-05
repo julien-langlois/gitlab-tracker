@@ -1667,16 +1667,12 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
         })
         .fold(0.0, f32::max)
         .min(ui.available_width() * 0.4);
-    // Even lines, as tight as the chips allow.
-    ui.spacing_mut().item_spacing.y = 4.0;
-    ui.spacing_mut().interact_size.y = BRANCH_LINE - 4.0;
-    for (row, place) in rows.iter().take(shown) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 10.0;
-            fixed(ui, name_width, |ui| {
-                ui.add(egui::Label::new(mono(&row.branch, theme.text_size - 1.5)).truncate())
-                    .on_hover_text(&row.branch);
-            });
+    // Each row's chip, ahead: the widest sets the column the deployments
+    // start at, so they all line up.
+    let chips: Vec<(&str, String, Tone)> = rows
+        .iter()
+        .take(shown)
+        .map(|(row, place)| {
             let (glyph, label, tone) =
                 tones::flow_presence(row.presence, failed, *place, &theme.tones);
             let label = match row.presence {
@@ -1685,50 +1681,42 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
                 }
                 _ => label.to_string(),
             };
-            ui.add(Chip::new(&label, tone).glyph(glyph));
+            (glyph, label, tone)
+        })
+        .collect();
+    let small = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Small)
+        .map_or(11.0, |f| f.size);
+    // As the chip draws it: "glyph label", padded 7 on each side.
+    let chip_width = chips
+        .iter()
+        .map(|(glyph, label, _)| {
+            text_width(
+                ui,
+                &format!("{glyph} {label}"),
+                egui::FontId::proportional(small),
+            ) + 14.0
+        })
+        .fold(0.0, f32::max);
+    // Even lines, as tight as the chips allow.
+    ui.spacing_mut().item_spacing.y = 4.0;
+    ui.spacing_mut().interact_size.y = BRANCH_LINE - 4.0;
+    for ((row, _), (glyph, label, tone)) in rows.iter().zip(chips) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            fixed(ui, name_width, |ui| {
+                ui.add(egui::Label::new(mono(&row.branch, theme.text_size - 1.5)).truncate())
+                    .on_hover_text(&row.branch);
+            });
+            fixed(ui, chip_width, |ui| {
+                ui.add(Chip::new(&label, tone).glyph(glyph));
+            });
             let deployed =
                 data.and_then(|d| d.deployments.iter().find(|dep| dep.reference == row.branch));
             if let Some(dep) = deployed {
-                let (text, color) = match dep.includes {
-                    Some(true) => (
-                        tf("deployed on {env}", &[("env", &dep.environment)]),
-                        theme.tones.green.fg,
-                    ),
-                    Some(false) => (
-                        tf("not yet on {env}", &[("env", &dep.environment)]),
-                        theme.palette.text_muted,
-                    ),
-                    None => (dep.environment.clone(), theme.palette.text_muted),
-                };
-                // What was deployed and when, in clear after it.
-                let mut job = egui::text::LayoutJob::default();
-                let size = theme.text_size - 1.5;
-                job.append(
-                    &text,
-                    0.0,
-                    egui::TextFormat::simple(egui::FontId::proportional(size), color),
-                );
-                job.append(
-                    dep.sha.get(..8).unwrap_or(&dep.sha),
-                    6.0,
-                    egui::TextFormat::simple(
-                        egui::FontId::monospace(size - 0.5),
-                        theme.palette.text_muted,
-                    ),
-                );
-                job.append(
-                    &format!("· {}", format_relative_date(&dep.created_at)),
-                    6.0,
-                    egui::TextFormat::simple(
-                        egui::FontId::proportional(size),
-                        theme.palette.text_muted,
-                    ),
-                );
-                job.wrap.max_rows = 1;
-                job.wrap.max_width = ui.available_width();
-                job.wrap.break_anywhere = true;
-                job.wrap.overflow_character = Some('…');
-                ui.label(job);
+                ui.label(deployment_line(&theme, dep, ui.available_width()));
             }
         });
     }
@@ -1742,6 +1730,51 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
             ),
         ));
     }
+}
+
+/// A deployment in one line: whether it includes the MR (in green when it
+/// does), then what was deployed and when, cut with an ellipsis to `width`.
+pub(super) fn deployment_line(
+    theme: &Theme,
+    dep: &crate::gitlab_detail::Deployment,
+    width: f32,
+) -> egui::text::LayoutJob {
+    let (text, color) = match dep.includes {
+        Some(true) => (
+            tf("deployed on {env}", &[("env", &dep.environment)]),
+            theme.tones.green.fg,
+        ),
+        Some(false) => (
+            tf("not yet on {env}", &[("env", &dep.environment)]),
+            theme.palette.text_muted,
+        ),
+        None => (dep.environment.clone(), theme.palette.text_muted),
+    };
+    let mut job = egui::text::LayoutJob::default();
+    let size = theme.text_size - 1.5;
+    job.append(
+        &text,
+        0.0,
+        egui::TextFormat::simple(egui::FontId::proportional(size), color),
+    );
+    job.append(
+        dep.sha.get(..8).unwrap_or(&dep.sha),
+        6.0,
+        egui::TextFormat::simple(
+            egui::FontId::monospace(size - 0.5),
+            theme.palette.text_muted,
+        ),
+    );
+    job.append(
+        &format!("· {}", format_relative_date(&dep.created_at)),
+        6.0,
+        egui::TextFormat::simple(egui::FontId::proportional(size), theme.palette.text_muted),
+    );
+    job.wrap.max_rows = 1;
+    job.wrap.max_width = width;
+    job.wrap.break_anywhere = true;
+    job.wrap.overflow_character = Some('…');
+    job
 }
 
 /// Author, assignee, reviewers and approvers, me marked.
