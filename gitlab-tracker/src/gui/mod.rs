@@ -10,6 +10,7 @@ mod colors;
 mod details;
 mod dialogs;
 mod flow;
+mod history;
 mod i18n;
 mod icons;
 mod inspector;
@@ -265,6 +266,8 @@ struct GuiApp {
     views_shown: bool,
     /// The page shown when the stats are not open (see [`GuiApp::page`]).
     page: Page,
+    /// The pages visited, for the back and forward buttons.
+    history: history::History,
     /// Set by a shortcut: the inspector scrolls to this section on the next frame.
     scroll_to: Option<InspectorSection>,
     /// The MR whose ticket the inspector was last brought to on the tracker page;
@@ -379,6 +382,7 @@ impl GuiApp {
             last_known_branches,
             state_writer,
             page,
+            history,
             ticket_anchor,
             text_filter,
             members,
@@ -414,6 +418,7 @@ impl GuiApp {
             show_inspector: None,
             views_shown: false,
             page,
+            history,
             scroll_to: None,
             ticket_anchor,
             text_filter,
@@ -470,6 +475,7 @@ impl GuiApp {
         if !gui.demo {
             let prefs = prefs::load();
             prefs::apply(&mut gui, &prefs);
+            gui.history.clear();
             gui.restore_tabs(&prefs.tabs, &projects_config.projects);
         }
         gui
@@ -752,6 +758,7 @@ impl GuiApp {
         swap(&mut self.last_known_branches, &mut tab.last_known_branches);
         swap(&mut self.state_writer, &mut tab.state_writer);
         swap(&mut self.page, &mut tab.page);
+        swap(&mut self.history, &mut tab.history);
         swap(&mut self.ticket_anchor, &mut tab.ticket_anchor);
         swap(&mut self.text_filter, &mut tab.text_filter);
         swap(&mut self.members, &mut tab.members);
@@ -932,6 +939,7 @@ impl GuiApp {
 
     /// Shows `page`, opening or closing the stats as the TUI's `G` does.
     fn open_page(&mut self, page: Page) {
+        history::visit(self, page);
         #[cfg(feature = "stats")]
         {
             let on_stats = self.on_stats();
@@ -1349,6 +1357,7 @@ struct Tab {
     last_known_branches: HashMap<String, HashSet<String>>,
     state_writer: StateWriter,
     page: Page,
+    history: history::History,
     ticket_anchor: Option<String>,
     text_filter: (Option<usize>, String),
     members: HashMap<String, Vec<String>>,
@@ -1383,6 +1392,7 @@ impl Tab {
             last_known_branches,
             state_writer: StateWriter::default(),
             page: Page::MergeRequests,
+            history: history::History::default(),
             ticket_anchor: None,
             text_filter: (None, String::new()),
             members: HashMap::new(),

@@ -16,7 +16,11 @@ pub fn handle(g: &mut GuiApp, ctx: &egui::Context) {
     if tab_keys(g, ctx) {
         return;
     }
-    if g.palette.is_some() || ctx.memory(|m| m.focused().is_some()) {
+    let typing = ctx.memory(|m| m.focused().is_some());
+    if g.palette.is_none() && g.wizard.is_none() {
+        super::history::handle(g, ctx, typing);
+    }
+    if g.palette.is_some() || typing {
         return;
     }
     let events = ctx.input(|i| i.events.clone());
