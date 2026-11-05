@@ -5,15 +5,17 @@
 use egui::{Align, Color32, CornerRadius, Layout, Margin, RichText, Sense, Stroke, Ui, Vec2};
 use gitlab_tracker_core::FilterDef;
 
+use super::icons::Icon;
 use super::widgets::{
-    dot, dot_label, field, label_tone, mono, muted, pill_toggle, rule, section_title, semibold,
-    switch, FieldLook,
+    avatar, button, dot, dot_label, field, icon_button, label_tone, mono, muted, pill_toggle, rule,
+    section_title, semibold, split_person, switch, FieldLook,
 };
 use super::{tones, GuiApp};
 use crate::actions::Action;
 use crate::branch_flow::{BranchFlow, BranchRole, BranchSetting, FlowBranch};
 use crate::i18n::{tf, tl, tn};
-use crate::models::Effort;
+use crate::models::{BranchPresence, Effort, TrackedMr};
+use crate::utils::format_relative_date;
 use bevel_theme::{fonts, Chip};
 
 /// Views listed first, with their glyph; the other one-click filters are under
@@ -939,58 +941,151 @@ fn behind(g: &GuiApp, ui: &mut Ui, branch: &str, project: Option<&str>) -> Optio
         ));
     let mut open = None;
     egui::Popup::menu(&response).show(|ui| {
-        ui.set_min_width(320.0);
-        ui.set_max_width(420.0);
-        ui.label(muted(
-            &theme,
-            tf(
-                "Merged upstream, not in {branch} yet",
-                &[("branch", branch)],
-            ),
-        ));
-        ui.add_space(2.0);
+        const WIDTH: f32 = 400.0;
+        ui.set_width(WIDTH);
+        ui.spacing_mut().item_spacing.y = 2.0;
+        // Header: how many, into which branch, and what to do.
+        ui.horizontal(|ui| {
+            ui.label(semibold(
+                tn(
+                    mrs.len() as u64,
+                    "{n} MR to bring in",
+                    "{n} MRs to bring in",
+                ),
+                theme.text_size,
+            ));
+            ui.add(
+                Chip::new(branch, theme.tones.amber)
+                    .font(egui::FontId::monospace(theme.text_size - 2.5)),
+            );
+        });
+        ui.label(
+            muted(
+                &theme,
+                tl("Merged upstream, not in this branch yet: rebase it, or merge into it."),
+            )
+            .size(theme.text_size - 1.5),
+        );
+        ui.add_space(6.0);
         for mr in &mrs {
-            ui.horizontal(|ui| {
-                if ui
-                    .small_button("↗")
-                    .on_hover_text(tl("Open in GitLab"))
+            if let Some(id) = behind_row(g, ui, mr, branch, WIDTH) {
+                open = Some(id);
+                ui.close();
+            }
+        }
+        let Some(project) = project else {
+            return;
+        };
+        ui.add_space(6.0);
+        rule(ui, &theme);
+        ui.add_space(6.0);
+        let mut sources: Vec<&str> = mrs.iter().map(|mr| mr.target_branch.as_str()).collect();
+        sources.sort_unstable();
+        sources.dedup();
+        ui.horizontal_wrapped(|ui| {
+            for source in sources {
+                let text = tf("Compare with {source} on GitLab", &[("source", source)]);
+                let url = compare_url(project, branch, source);
+                if button(ui, &theme, Some(Icon::ExternalLink), &text, false)
+                    .on_hover_text(&url)
                     .clicked()
                 {
-                    ui.ctx()
-                        .open_url(egui::OpenUrl::new_tab(mr.web_url.clone()));
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(url));
                     ui.close();
                 }
-                let label = RichText::new(format!("!{}  {}", mr.id, mr.title));
-                let row = ui
-                    .add(egui::Button::new(label).frame(false).truncate())
-                    .on_hover_text(tf(
-                        "Merged into {target}, open its page",
-                        &[("target", &mr.target_branch)],
-                    ));
-                if row.clicked() {
-                    open = Some(mr.id.clone());
-                    ui.close();
-                }
-            });
-        }
-        if let Some(project) = project {
-            ui.separator();
-            let mut sources: Vec<&str> = mrs.iter().map(|mr| mr.target_branch.as_str()).collect();
-            sources.sort_unstable();
-            sources.dedup();
-            for source in sources {
-                compare_link(ui, project, branch, source);
             }
-            ui.label(
-                muted(
-                    &theme,
-                    tl("Only the tracked MRs are listed; GitLab compares every commit."),
-                )
-                .size(theme.text_size - 2.0),
-            );
-        }
+        });
+        ui.add_space(4.0);
+        ui.label(
+            muted(
+                &theme,
+                tl("Only the tracked MRs are listed; GitLab compares every commit."),
+            )
+            .size(theme.text_size - 2.5),
+        );
     });
     open
+}
+
+/// One MR of the "to bring in" list: its author, `!iid` and title, where and
+/// when it was merged, and how much of it `branch` lacks. A click opens its
+/// page (returns its id); the arrow opens it on GitLab.
+fn behind_row(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, branch: &str, width: f32) -> Option<String> {
+    let theme = g.theme;
+    let p = &theme.palette;
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click());
+    let response = response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl("Open its page"));
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(theme.radii.medium), p.raised);
+    }
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect.shrink2(Vec2::new(8.0, 5.0)))
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    let ui = &mut child;
+    let name = split_person(&mr.author).0;
+    avatar(ui, &theme, name, 26.0).on_hover_text(name);
+    ui.add_space(4.0);
+    // The arrow to GitLab on the right, the texts in what is left.
+    let gitlab = ui
+        .with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let clicked = icon_button(
+                ui,
+                tl("Open in GitLab"),
+                Icon::ExternalLink,
+                &theme.icon_button(),
+                24.0,
+            )
+            .clicked();
+            ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(
+                        mono(format!("!{}", mr.id), theme.text_size - 1.5).color(p.text_muted),
+                    );
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(&mr.title)
+                                .font(fonts::medium(theme.text_size - 1.0))
+                                .color(p.text),
+                        )
+                        .truncate()
+                        .selectable(false),
+                    );
+                });
+                let when = mr
+                    .merged_at
+                    .as_deref()
+                    .map(format_relative_date)
+                    .unwrap_or_default();
+                let mut detail = tf(
+                    "merged into {target} {when}",
+                    &[("target", &mr.target_branch), ("when", &when)],
+                );
+                if g.app.branch_presence(mr, branch) == Some(BranchPresence::Partial) {
+                    detail = format!("{detail} · {}", tl("partly there"));
+                }
+                ui.add(
+                    egui::Label::new(muted(&theme, detail).size(theme.text_size - 2.5))
+                        .truncate()
+                        .selectable(false),
+                );
+            });
+            clicked
+        })
+        .inner;
+    if gitlab {
+        ui.ctx()
+            .open_url(egui::OpenUrl::new_tab(mr.web_url.clone()));
+        ui.close();
+        return None;
+    }
+    response.clicked().then(|| mr.id.clone())
 }
 
 #[cfg(test)]

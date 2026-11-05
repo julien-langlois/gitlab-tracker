@@ -961,7 +961,10 @@ date	Merged	Fusionnée
 	Not synced	Pas reportée
 @plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR à récupérer|↓ {n} MR à récupérer
 	Merged upstream, not in {branch} yet: rebase it, or merge into it	Fusionnées en amont, pas encore sur {branch} : la rebaser, ou y fusionner
-	Merged upstream, not in {branch} yet	Fusionnées en amont, pas encore sur {branch}
-	Merged into {target}, open its page	Fusionnée dans {target}, ouvrir sa page
 	Compare with {source} on GitLab	Comparer avec {source} sur GitLab
 	Only the tracked MRs are listed; GitLab compares every commit.	Seules les MR suivies sont listées ; GitLab compare tous les commits.
+@plural	{n} MR to bring in|{n} MRs to bring in	{n} MR à récupérer|{n} MR à récupérer
+	Merged upstream, not in this branch yet: rebase it, or merge into it.	Fusionnées en amont, pas encore sur cette branche : la rebaser, ou y fusionner.
+	Open its page	Ouvrir sa page
+	merged into {target} {when}	fusionnée dans {target} {when}
+	partly there	en partie présente

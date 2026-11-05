@@ -1753,8 +1753,9 @@ fn side_card(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut Ui)
     ui.add_space(12.0);
 }
 
-/// The MR's life, newest first: review requests and reviews, pushes, pipelines,
-/// approval, merge, then the branches it reached.
+/// The MR's life, newest first: the branches up to production, then (oldest
+/// last) review requests and reviews, pushes, pipelines, approval and merge,
+/// the branches its changes came down to branching off just above the merge.
 fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
     let t = &g.theme.tones;
     let mut dated: Vec<(String, Step)> = Vec::new();
@@ -1821,16 +1822,22 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
             t.purple.fg,
         );
     }
-    dated.sort_by(|a, b| b.0.cmp(&a.0));
-    let mut steps = Vec::new();
-    // Where it went since, above the dated steps: up to production, then
-    // the branches its changes came down to, nearest to the merge last.
-    if mr.state == GitlabMrState::Merged {
-        let (sync, promotion) = super::inspector::flow_steps(g, mr, format_relative_date);
-        steps.extend(promotion.into_iter().rev());
-        steps.extend(sync.into_iter().rev());
+    // Built oldest first, then turned over: the newest on top, as in the
+    // History of the MR list's inspector, the steps still to come above all.
+    dated.sort_by(|a, b| a.0.cmp(&b.0));
+    if mr.state != GitlabMrState::Merged {
+        return dated.into_iter().rev().map(|(_, s)| s).collect();
     }
-    steps.extend(dated.into_iter().map(|(_, s)| s));
+    let (sync, promotion) = super::inspector::flow_steps(g, mr, format_relative_date);
+    // The branches its changes come down to branch off right at the merge.
+    let merged_at = mr.merged_at.clone().unwrap_or_default();
+    let split = dated.partition_point(|(at, _)| *at <= merged_at);
+    let after = dated.split_off(split);
+    let mut steps: Vec<Step> = dated.into_iter().map(|(_, s)| s).collect();
+    steps.extend(sync);
+    steps.extend(after.into_iter().map(|(_, s)| s));
+    steps.extend(promotion);
+    steps.reverse();
     steps
 }
 

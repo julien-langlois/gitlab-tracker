@@ -1673,7 +1673,8 @@ impl App {
         let mut behind: Vec<&TrackedMr> = self
             .mrs
             .iter()
-            .filter(|mr| matches!(mr.status, MrStatus::MergedIn(_)))
+            // `MergedIn` only says the MR was loaded: an open MR has it too.
+            .filter(|mr| mr.state == GitlabMrState::Merged)
             .filter(|mr| {
                 flow.path(&mr.target_branch)
                     .sync
@@ -2627,6 +2628,20 @@ pub(crate) mod tests {
         app.mrs[1].data.target_branch = "develop".into();
         app.mrs[2].status = merged(&["master"]);
         app.mrs[2].data.target_branch = "master".into();
+        for mr in &mut app.mrs {
+            mr.data.state = GitlabMrState::Merged;
+        }
+        // Loaded (so `MergedIn`) but still in review, or closed: nothing to bring in.
+        for (title, state) in [
+            ("in review", GitlabMrState::Opened),
+            ("closed", GitlabMrState::Closed),
+        ] {
+            let mut mr = app.mrs[0].clone();
+            mr.data.title = title.into();
+            mr.data.state = state;
+            mr.status = merged(&[]);
+            app.mrs.push(mr);
+        }
 
         let ids = |mrs: Vec<&TrackedMr>| mrs.iter().map(|mr| mr.title.clone()).collect::<Vec<_>>();
         // The hotfix comes down to develop, then to the feature branch.

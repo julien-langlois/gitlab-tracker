@@ -1400,6 +1400,8 @@ fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             });
         }
     }
+    // The newest on top, the steps still to come above all.
+    steps.reverse();
     section(ui, theme, tl("History"), |ui| {
         timeline(ui, theme, &steps);
         ui.add_space(4.0);
@@ -1462,7 +1464,7 @@ pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
         egui::Stroke::new(1.5, color)
     };
     for pair in nodes.windows(2) {
-        let (a, _) = pair[0];
+        let (a, above) = pair[0];
         let (b, next) = pair[1];
         // Down to the next node, or to the branch-off of a side step.
         let end = if next.side {
@@ -1470,11 +1472,10 @@ pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
         } else {
             b.top() + 3.0
         };
-        painter.vline(
-            x(a),
-            (a.top() + 15.0)..=end,
-            line(next.pending && !next.side),
-        );
+        // Faint towards (or from) a step still to come, whichever way the
+        // line reads; a side step's state is on its own branch-off.
+        let pending = (above.pending && !above.side) || (next.pending && !next.side);
+        painter.vline(x(a), (a.top() + 15.0)..=end, line(pending));
     }
     for (rect, step) in nodes {
         let mut center = egui::pos2(x(rect), rect.top() + 9.0);

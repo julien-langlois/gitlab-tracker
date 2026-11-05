@@ -961,7 +961,10 @@ date	Merged	Gemergt
 	Not synced	Nicht übernommen
 @plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR zu übernehmen|↓ {n} MRs zu übernehmen
 	Merged upstream, not in {branch} yet: rebase it, or merge into it	Upstream gemergt, noch nicht in {branch}: rebasen oder hineinmergen
-	Merged upstream, not in {branch} yet	Upstream gemergt, noch nicht in {branch}
-	Merged into {target}, open its page	In {target} gemergt, Seite öffnen
 	Compare with {source} on GitLab	Auf GitLab mit {source} vergleichen
 	Only the tracked MRs are listed; GitLab compares every commit.	Nur verfolgte MRs werden gelistet; GitLab vergleicht alle Commits.
+@plural	{n} MR to bring in|{n} MRs to bring in	{n} MR zu übernehmen|{n} MRs zu übernehmen
+	Merged upstream, not in this branch yet: rebase it, or merge into it.	Upstream gemergt, noch nicht in diesem Branch: rebasen oder hineinmergen.
+	Open its page	Seite öffnen
+	merged into {target} {when}	in {target} gemergt, {when}
+	partly there	teilweise vorhanden

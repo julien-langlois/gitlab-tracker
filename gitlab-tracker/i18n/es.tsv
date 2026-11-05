@@ -961,7 +961,10 @@ date	Merged	Fusionada
 	Not synced	Sin llevar
 @plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} MR por traer|↓ {n} MR por traer
 	Merged upstream, not in {branch} yet: rebase it, or merge into it	Fusionadas aguas arriba, aún no en {branch}: hacer rebase o fusionar en ella
-	Merged upstream, not in {branch} yet	Fusionadas aguas arriba, aún no en {branch}
-	Merged into {target}, open its page	Fusionada en {target}, abrir su página
 	Compare with {source} on GitLab	Comparar con {source} en GitLab
 	Only the tracked MRs are listed; GitLab compares every commit.	Solo se listan las MR seguidas; GitLab compara todos los commits.
+@plural	{n} MR to bring in|{n} MRs to bring in	{n} MR por traer|{n} MR por traer
+	Merged upstream, not in this branch yet: rebase it, or merge into it.	Fusionadas aguas arriba, aún no en esta rama: hacer rebase o fusionar en ella.
+	Open its page	Abrir su página
+	merged into {target} {when}	fusionada en {target} {when}
+	partly there	en parte presente

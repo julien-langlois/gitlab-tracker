@@ -961,7 +961,10 @@ date	Merged	合并时间
 	Not synced	未同步
 @plural	↓ {n} MR to bring in|↓ {n} MRs to bring in	↓ {n} 个 MR 待同步
 	Merged upstream, not in {branch} yet: rebase it, or merge into it	已在上游合并，尚未进入 {branch}：请变基或合并进来
-	Merged upstream, not in {branch} yet	已在上游合并，尚未进入 {branch}
-	Merged into {target}, open its page	已合并到 {target}，打开其页面
 	Compare with {source} on GitLab	在 GitLab 上与 {source} 比较
 	Only the tracked MRs are listed; GitLab compares every commit.	仅列出已跟踪的 MR；GitLab 会比较所有提交。
+@plural	{n} MR to bring in|{n} MRs to bring in	{n} 个 MR 待同步
+	Merged upstream, not in this branch yet: rebase it, or merge into it.	已在上游合并，尚未进入此分支：请变基或合并进来。
+	Open its page	打开其页面
+	merged into {target} {when}	{when}合并到 {target}
+	partly there	部分存在
