@@ -1020,6 +1020,8 @@ pub struct Links {
     /// for the ids that are not tracked.
     prefix: Option<String>,
     tickets: std::collections::HashMap<String, String>,
+    /// Each tracked MR's ticket, for the texts that name it next to the MR.
+    mr_tickets: std::collections::HashMap<String, String>,
 }
 
 impl Links {
@@ -1027,6 +1029,7 @@ impl Links {
         let mut mrs = std::collections::HashMap::new();
         let mut prefix = None;
         let mut tickets = std::collections::HashMap::new();
+        let mut mr_tickets = std::collections::HashMap::new();
         for mr in app.mrs.iter().filter(|mr| !mr.web_url.is_empty()) {
             mrs.insert(mr.id.clone(), mr.web_url.clone());
             if prefix.is_none() {
@@ -1049,6 +1052,7 @@ impl Links {
                         .filter(|t| t.id == id && !t.url.is_empty())
                         .map(|t| t.url.clone())
                         .unwrap_or_else(|| tracker.ticket_url(&id));
+                    mr_tickets.insert(mr.id.clone(), id.clone());
                     tickets.insert(id, url);
                 }
             }
@@ -1057,7 +1061,14 @@ impl Links {
             mrs,
             prefix,
             tickets,
+            mr_tickets,
         }
+    }
+
+    /// `#4567`, the ticket of MR `id`, unless `title` already names it.
+    pub fn ticket_of(&self, id: &str, title: &str) -> Option<String> {
+        let reference = format!("#{}", self.mr_tickets.get(id)?);
+        (!title.contains(&reference)).then_some(reference)
     }
 
     fn url(&self, sigil: char, id: &str) -> Option<String> {
@@ -1213,6 +1224,7 @@ mod links_tests {
             .into(),
             prefix: Some("https://gl/p/-/merge_requests/".into()),
             tickets: [("4567".to_string(), "https://rm/issues/4567".to_string())].into(),
+            mr_tickets: [("12".to_string(), "4567".to_string())].into(),
         }
     }
 
@@ -1224,6 +1236,14 @@ mod links_tests {
             "- [!12](https://gl/p/-/merge_requests/12) Fix [#4567](https://rm/issues/4567) (2 d), \
              [!99](https://gl/p/-/merge_requests/99) × [!12](https://gl/p/-/merge_requests/12)"
         );
+    }
+
+    #[test]
+    fn an_mr_names_its_ticket_unless_its_title_does() {
+        let l = links();
+        assert_eq!(l.ticket_of("12", "Fix the login"), Some("#4567".into()));
+        assert_eq!(l.ticket_of("12", "Fix #4567"), None);
+        assert_eq!(l.ticket_of("99", "Untracked"), None);
     }
 
     #[test]
