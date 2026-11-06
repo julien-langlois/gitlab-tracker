@@ -494,7 +494,8 @@ fn main(
         },
     );
     if copy {
-        ui.ctx().copy_text(report(overlaps));
+        ui.ctx()
+            .copy_text(board::Links::of(&g.app).apply(&report(overlaps)));
         g.app.flash(tl("Report copied"), false);
     }
     ui.add_space(14.0);
@@ -1404,7 +1405,7 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, overlaps: &Overlaps, pair: Option<&(St
                 &[("first", &first.id), ("second", &second.id)],
             ),
         );
-        ui.ctx().copy_text(text);
+        ui.ctx().copy_text(board::Links::of(&g.app).apply(&text));
         g.app.flash(tl("Message copied"), false);
     }
     if diff {

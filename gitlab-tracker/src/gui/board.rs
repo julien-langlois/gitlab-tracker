@@ -506,6 +506,39 @@ pub fn facts(ui: &mut Ui, theme: &Theme, rows: &[(&str, String)]) {
     }
 }
 
+/// The inspector's top line for what was picked: `title` on the left, a cross
+/// on the right to close it and get back to what the inspector shows by
+/// default; whether the cross was clicked.
+pub fn inspector_title(ui: &mut Ui, theme: &Theme, title: &str) -> bool {
+    let mut closed = false;
+    egui::Frame::new()
+        .inner_margin(Margin {
+            left: 16,
+            right: 10,
+            top: 10,
+            bottom: 0,
+        })
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(
+                    semibold(title, theme.text_size - 1.0).color(theme.palette.text_secondary),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    closed = super::widgets::icon_button(
+                        ui,
+                        tl("Close"),
+                        super::icons::Icon::Close,
+                        &theme.icon_button(),
+                        24.0,
+                    )
+                    .clicked();
+                });
+            });
+        });
+    closed
+}
+
 /// What the inspector says when nothing is picked.
 pub fn inspector_empty(ui: &mut Ui, theme: &Theme, text: &str) {
     egui::Frame::new()
@@ -976,6 +1009,105 @@ pub fn inside(ui: &mut Ui, rect: Rect) -> Ui {
     child
 }
 
+// ── Links in the exports ─────────────────────────────────────────────────────
+
+/// Where the copied texts point: each MR to its GitLab page, each ticket to
+/// the tracker's, so that `!123` and `#4567` can be clicked once pasted (a chat
+/// that does not render Markdown still turns the URL in it into a link).
+pub struct Links {
+    mrs: std::collections::HashMap<String, String>,
+    /// `https://gitlab/group/project/-/merge_requests/`, from any tracked MR:
+    /// for the ids that are not tracked.
+    prefix: Option<String>,
+    tickets: std::collections::HashMap<String, String>,
+}
+
+impl Links {
+    pub fn of(app: &crate::app::App) -> Self {
+        let mut mrs = std::collections::HashMap::new();
+        let mut prefix = None;
+        let mut tickets = std::collections::HashMap::new();
+        for mr in app.mrs.iter().filter(|mr| !mr.web_url.is_empty()) {
+            mrs.insert(mr.id.clone(), mr.web_url.clone());
+            if prefix.is_none() {
+                if let Some((base, _)) = mr.web_url.split_once("/-/merge_requests/") {
+                    prefix = Some(format!("{base}/-/merge_requests/"));
+                }
+            }
+            // The tickets the MRs name (only those: a `#` number in a title
+            // is not always a ticket).
+            if let Some(tracker) = &app.tracker {
+                let id = mr
+                    .linked_ticket
+                    .as_ref()
+                    .map(|t| t.id.clone())
+                    .or_else(|| tracker.detect_ticket_id(&mr.title, &mr.description));
+                if let Some(id) = id {
+                    let url = mr
+                        .linked_ticket
+                        .as_ref()
+                        .filter(|t| t.id == id && !t.url.is_empty())
+                        .map(|t| t.url.clone())
+                        .unwrap_or_else(|| tracker.ticket_url(&id));
+                    tickets.insert(id, url);
+                }
+            }
+        }
+        Self {
+            mrs,
+            prefix,
+            tickets,
+        }
+    }
+
+    fn url(&self, sigil: char, id: &str) -> Option<String> {
+        match sigil {
+            '!' => self
+                .mrs
+                .get(id)
+                .cloned()
+                .or_else(|| self.prefix.as_ref().map(|p| format!("{p}{id}"))),
+            _ => self.tickets.get(id).cloned(),
+        }
+    }
+
+    /// `text` with each `!123` as `[!123](its MR)` and each known `#4567` as
+    /// `[#4567](its ticket)`. What is already a link, or part of a word or a
+    /// path, is left as it is.
+    pub fn apply(&self, text: &str) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        let mut out = String::with_capacity(text.len() + 64);
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            let before = i.checked_sub(1).map(|j| chars[j]);
+            let starts = (c == '!' || c == '#')
+                && !before.is_some_and(|b| {
+                    b.is_alphanumeric() || matches!(b, '[' | '/' | '&' | '_' | '!' | '#')
+                });
+            if starts {
+                let digits: String = chars[i + 1..]
+                    .iter()
+                    .take_while(|d| d.is_ascii_digit())
+                    .collect();
+                let end = i + 1 + digits.len();
+                let after = chars.get(end);
+                let whole = !after.is_some_and(|a| a.is_alphanumeric() || matches!(a, '_' | ']'));
+                if !digits.is_empty() && whole {
+                    if let Some(url) = self.url(c, &digits) {
+                        out.push_str(&format!("[{c}{digits}]({url})"));
+                        i = end;
+                        continue;
+                    }
+                }
+            }
+            out.push(c);
+            i += 1;
+        }
+        out
+    }
+}
+
 // ── Time ─────────────────────────────────────────────────────────────────────
 
 /// A GitLab timestamp (RFC 3339) as UTC.
@@ -1066,4 +1198,50 @@ pub fn caption(ui: &mut Ui, theme: &Theme, text: &str) {
 /// Translated "—" placeholder for a missing value.
 pub fn dash() -> &'static str {
     tl("—")
+}
+
+#[cfg(test)]
+mod links_tests {
+    use super::Links;
+
+    fn links() -> Links {
+        Links {
+            mrs: [(
+                "12".to_string(),
+                "https://gl/p/-/merge_requests/12".to_string(),
+            )]
+            .into(),
+            prefix: Some("https://gl/p/-/merge_requests/".into()),
+            tickets: [("4567".to_string(), "https://rm/issues/4567".to_string())].into(),
+        }
+    }
+
+    #[test]
+    fn mr_and_ticket_numbers_become_links() {
+        let l = links();
+        assert_eq!(
+            l.apply("- !12 Fix #4567 (2 d), !99 × !12"),
+            "- [!12](https://gl/p/-/merge_requests/12) Fix [#4567](https://rm/issues/4567) (2 d), \
+             [!99](https://gl/p/-/merge_requests/99) × [!12](https://gl/p/-/merge_requests/12)"
+        );
+    }
+
+    #[test]
+    fn what_is_not_a_reference_is_left_alone() {
+        let l = links();
+        for text in [
+            "[!12](https://gl/p/-/merge_requests/12)", // already a link
+            "#0000 unknown ticket",                    // not a ticket the MRs name
+            "page#4567 and a/!12 path",                // part of a word, a path
+            "!12a, Hi!, ##4567, !!12",                 // not whole numbers
+            "### Heading",                             // Markdown, no number
+        ] {
+            assert_eq!(l.apply(text), text);
+        }
+        // A sentence's end is fine.
+        assert_eq!(
+            l.apply("merge !12."),
+            "merge [!12](https://gl/p/-/merge_requests/12)."
+        );
+    }
 }

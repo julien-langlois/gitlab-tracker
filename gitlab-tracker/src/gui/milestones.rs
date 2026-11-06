@@ -1,7 +1,8 @@
 //! The milestones page: for the milestone picked, its MRs by where they stand
 //! — on production, on the way there, to merge, in review, back on their
-//! author, drafts —, whether it makes its due date at the pace of the last
-//! four weeks, its burn-up, and its tickets and people.
+//! author, drafts —, whether it makes its due date (a Monte Carlo forecast
+//! drawing from the deliveries of the last eight weeks), its burn-up, and its
+//! tickets and people.
 
 use std::collections::BTreeMap;
 
@@ -122,6 +123,11 @@ impl Milestone {
         !self.items.is_empty() && self.delivered() == self.items.len()
     }
 
+    /// Every MR of it is on the last branch.
+    pub fn is_done(&self) -> bool {
+        self.done()
+    }
+
     fn name(&self) -> String {
         if self.title.is_empty() {
             tl("No milestone").to_string()
@@ -132,7 +138,7 @@ impl Milestone {
 }
 
 /// The last branch of the flow (production), and the tracked branches in order.
-fn flow_of(app: &App) -> (String, Vec<String>) {
+pub(super) fn flow_of(app: &App) -> (String, Vec<String>) {
     let flow = app.branch_flow();
     let ordered: Vec<String> = flow.in_order().iter().map(|b| b.name.clone()).collect();
     (ordered.last().cloned().unwrap_or_default(), ordered)
@@ -140,7 +146,7 @@ fn flow_of(app: &App) -> (String, Vec<String>) {
 
 /// When `mr` reached `branch`: its recorded arrival, else its merge when
 /// `branch` is its target.
-fn arrived(app: &App, mr: &TrackedMr, branch: &str) -> Option<DateTime<Utc>> {
+pub(super) fn arrived(app: &App, mr: &TrackedMr, branch: &str) -> Option<DateTime<Utc>> {
     app.branch_arrivals
         .get(&(mr.id.clone(), branch.to_string()))
         .copied()
@@ -250,40 +256,270 @@ pub fn milestones(app: &App) -> Vec<Milestone> {
     list
 }
 
-/// MRs delivered per week over the last four weeks, all milestones together.
-pub fn pace(app: &App, now: DateTime<Utc>) -> f64 {
-    let (last, _) = flow_of(app);
-    let since = now - Duration::days(28);
-    let delivered = app
-        .mrs
-        .iter()
-        .filter(|mr| mr.state == GitlabMrState::Merged)
-        .filter(|mr| {
-            app.branch_presence(mr, &last)
-                .is_some_and(|p| !p.is_missing())
-        })
-        .filter_map(|mr| {
-            arrived(app, mr, &last).or_else(|| board::time_of(mr.merged_at.as_deref()))
-        })
-        .filter(|at| *at >= since)
-        .count();
-    delivered as f64 / 4.0
+/// The weeks the forecast draws from.
+const WEEKS: usize = 8;
+
+/// The weeks of history a forecast needs at least.
+const MIN_WEEKS: usize = 3;
+
+/// The MRs merged in each of the last [`WEEKS`] weeks, the oldest first,
+/// from the first week with a merge. The project's merges when they were read
+/// (`overview`: every MR, tracked or not, the team's real pace), else those of
+/// the tracked MRs. The weeks before the first merge are weeks nothing is
+/// known of, not weeks without work: drawn as zeros they would slow the
+/// forecast down for no reason.
+///
+/// Merges, not arrivals on the last branch: production gets MRs in batches at
+/// release time, so its weeks say when releases happen, not how fast the work
+/// is done.
+pub fn weekly_merges(
+    app: &App,
+    overview: Option<&crate::gitlab_detail::ProjectOverview>,
+    now: DateTime<Utc>,
+) -> Vec<u32> {
+    let mut weeks = vec![0_u32; WEEKS];
+    // A history still being read for the first time has only its oldest weeks.
+    let project: Vec<&str> = overview
+        .filter(|o| o.merges.is_current(now))
+        .map(|o| o.merges.merged.values().map(String::as_str).collect())
+        .unwrap_or_default();
+    let dates: Vec<&str> = if project.is_empty() {
+        app.mrs
+            .iter()
+            .filter(|mr| mr.state == GitlabMrState::Merged)
+            .filter_map(|mr| mr.merged_at.as_deref())
+            .collect()
+    } else {
+        project
+    };
+    for at in dates {
+        let Some(at) = board::parse_time(at) else {
+            continue;
+        };
+        let ago = (now - at).num_days();
+        if (0..(WEEKS as i64 * 7)).contains(&ago) {
+            weeks[WEEKS - 1 - (ago / 7) as usize] += 1;
+        }
+    }
+    let first = weeks.iter().position(|n| *n > 0).unwrap_or(WEEKS);
+    weeks.split_off(first)
 }
 
-/// When the milestone will be done at `pace` per week, from `now`.
-fn projection(m: &Milestone, pace: f64, now: DateTime<Utc>) -> Option<NaiveDate> {
-    let left = m.items.len() - m.delivered();
-    if left == 0 {
-        return Some(now.date_naive());
+/// The MRs merged a week, on the last four weeks of `weekly` (fewer when the
+/// history is shorter).
+fn pace_of(weekly: &[u32]) -> f64 {
+    let recent = &weekly[weekly.len().saturating_sub(4)..];
+    f64::from(recent.iter().sum::<u32>()) / recent.len().max(1) as f64
+}
+
+/// The MRs of `m` not merged yet: what the forecast waits for.
+fn left_to_merge(m: &Milestone) -> usize {
+    m.items
+        .iter()
+        .filter(|i| !matches!(i.stand, Stand::Delivered | Stand::OnTheWay))
+        .count()
+}
+
+/// When a milestone will be done, from a Monte Carlo simulation: weeks drawn
+/// at random from the recent ones until what is left is delivered, many
+/// times over.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Forecast {
+    /// Half the runs were done by then.
+    pub p50: Option<NaiveDate>,
+    /// 85 % of them were: the date to commit to.
+    pub p85: Option<NaiveDate>,
+    /// The share of the runs done by the due date.
+    pub chance: Option<f64>,
+}
+
+/// Runs of the simulation.
+const RUNS: usize = 2000;
+
+/// A small, seeded random generator: the same forecast on every frame.
+struct XorShift(u64);
+
+impl XorShift {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
     }
-    (pace > 0.0)
-        .then(|| (now + Duration::minutes((left as f64 / pace * 7.0 * 1440.0) as i64)).date_naive())
+}
+
+/// When every MR of `m` is merged, drawing from `weekly` (MRs merged a week).
+pub fn forecast(m: &Milestone, weekly: &[u32], now: DateTime<Utc>) -> Forecast {
+    let today = now.date_naive();
+    if left_to_merge(m) == 0 {
+        return Forecast {
+            p50: Some(today),
+            p85: Some(today),
+            chance: m.due.map(|_| 1.0),
+        };
+    }
+    let Some(days) = simulate(m, weekly) else {
+        return Forecast::default();
+    };
+    let at = |p: f64| {
+        let d = days[((days.len() - 1) as f64 * p).round() as usize];
+        (d < 104 * 7).then(|| today + Duration::days(d))
+    };
+    Forecast {
+        p50: at(0.5),
+        p85: at(0.85),
+        chance: m.due.map(|due| {
+            let within = (due - today).num_days();
+            days.iter().filter(|d| **d <= within).count() as f64 / days.len() as f64
+        }),
+    }
+}
+
+/// The days from today each run took to merge what is left of `m`, sorted;
+/// `None` with fewer than [`MIN_WEEKS`] weeks of merges to draw from.
+fn simulate(m: &Milestone, weekly: &[u32]) -> Option<Vec<i64>> {
+    let left = left_to_merge(m) as u32;
+    if weekly.len() < MIN_WEEKS || weekly.iter().all(|n| *n == 0) {
+        return None;
+    }
+    let seed = m.title.bytes().fold(0x9E37_79B9_7F4A_7C15_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x100_0000_01B3)
+    }) | 1;
+    let mut rng = XorShift(seed);
+    let mut days: Vec<i64> = (0..RUNS)
+        .map(|_| {
+            let mut done = 0;
+            let mut week = 0_i64;
+            // Two years at most: past that, it is no forecast.
+            while week < 104 {
+                let drawn = weekly[(rng.next() % weekly.len() as u64) as usize];
+                if done + drawn >= left && drawn > 0 {
+                    // Within the week, in proportion to what was left.
+                    let share = f64::from(left - done) / f64::from(drawn);
+                    return week * 7 + (share * 7.0).ceil() as i64;
+                }
+                done += drawn;
+                week += 1;
+            }
+            week * 7
+        })
+        .collect();
+    days.sort_unstable();
+    Some(days)
+}
+
+/// The inspector's forecast: the share of the simulations done by the end of
+/// each coming week, the due date's week marked, and the 50 / 85 / 95 % dates.
+fn forecast_section(ui: &mut Ui, theme: &Theme, m: &Milestone, weekly: &[u32], now: DateTime<Utc>) {
+    let Some(days) = simulate(m, weekly) else {
+        return;
+    };
+    let today = now.date_naive();
+    let f = forecast(m, weekly, now);
+    board::section(
+        ui,
+        theme,
+        tl("Forecast"),
+        &tf("{runs} simulations", &[("runs", &RUNS.to_string())]),
+        |ui| {
+            let p95 = days[((days.len() - 1) as f64 * 0.95).round() as usize];
+            let weeks = ((p95 + 6) / 7).clamp(1, 16) as usize;
+            let due_week = m
+                .due
+                .map(|d| ((d - today).num_days() as f64 / 7.0).ceil() as i64);
+            let (area, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 92.0), Sense::hover());
+            let slot = area.width() / weeks as f32;
+            for w in 0..weeks {
+                let end = (w as i64 + 1) * 7;
+                let share = days.iter().filter(|d| **d <= end).count() as f32 / days.len() as f32;
+                let h = (area.height() - 18.0) * share;
+                let bar = Rect::from_min_max(
+                    egui::pos2(
+                        area.left() + w as f32 * slot + 2.0,
+                        area.bottom() - 16.0 - h,
+                    ),
+                    egui::pos2(
+                        area.left() + (w as f32 + 1.0) * slot - 2.0,
+                        area.bottom() - 16.0,
+                    ),
+                );
+                let in_time = due_week.is_none_or(|d| (w as i64) < d.max(0));
+                let color = if in_time {
+                    theme.tones.green.fg
+                } else {
+                    theme.tones.amber.fg
+                };
+                ui.painter()
+                    .rect_filled(bar, CornerRadius::same(2), color.gamma_multiply(0.8));
+                ui.interact(
+                    Rect::from_min_max(egui::pos2(bar.left(), area.top()), bar.max),
+                    ui.scope_id().with(("forecast_week", w)),
+                    Sense::hover(),
+                )
+                .on_hover_text(tf(
+                    "{share} done by {date}",
+                    &[
+                        ("share", &board::percent(f64::from(share))),
+                        (
+                            "date",
+                            &(today + Duration::days(end)).format("%Y-%m-%d").to_string(),
+                        ),
+                    ],
+                ));
+                if w % (weeks / 4).max(1) == 0 {
+                    board::paint_text(
+                        ui,
+                        egui::pos2(bar.center().x, area.bottom() - 6.0),
+                        Align2::CENTER_CENTER,
+                        &tf("W{n}", &[("n", &(w + 1).to_string())]),
+                        FontId::proportional(theme.text_size - 3.0),
+                        theme.palette.text_muted,
+                        slot * 2.0,
+                    );
+                }
+            }
+            if let Some(d) = due_week.filter(|d| *d > 0 && (*d as usize) <= weeks) {
+                let x = area.left() + d as f32 * slot;
+                dashed(
+                    ui,
+                    egui::pos2(x, area.top()),
+                    egui::pos2(x, area.bottom() - 14.0),
+                    theme.tones.amber.fg,
+                );
+            }
+            ui.add_space(8.0);
+            let date = |d: Option<NaiveDate>| {
+                d.map_or_else(
+                    || board::dash().to_string(),
+                    |d| d.format("%Y-%m-%d").to_string(),
+                )
+            };
+            let p95_date = (p95 < 104 * 7).then(|| today + Duration::days(p95));
+            let mut rows = vec![
+                (tl("50 % sure by"), date(f.p50)),
+                (tl("85 % sure by"), date(f.p85)),
+                (tl("95 % sure by"), date(p95_date)),
+            ];
+            if let Some(c) = f.chance {
+                rows.push((tl("Chance by the due date"), board::percent(c)));
+            }
+            board::facts(ui, theme, &rows);
+        },
+    );
+}
+
+/// When the milestone can be promised: the forecast's 85 % date.
+fn projection(m: &Milestone, weekly: &[u32], now: DateTime<Utc>) -> Option<NaiveDate> {
+    forecast(m, weekly, now).p85
 }
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
     let all = milestones(&g.app);
-    let pace = pace(&g.app, now);
+    let ctx = ui.ctx().clone();
+    let overview = g.details.project(&g.app, &ctx).cloned();
+    let weekly = weekly_merges(&g.app, overview.as_ref(), now);
     let shown = g
         .milestones
         .selected
@@ -305,8 +541,8 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         sizes,
         "milestones",
         |g, ui| nav(g, ui, &all, shown.as_deref(), now),
-        |g, ui| inspector(g, ui, current.as_ref(), pace, now),
-        |g, ui| main(g, ui, current.as_ref(), pace, now),
+        |g, ui| inspector(g, ui, current.as_ref(), &weekly, now),
+        |g, ui| main(g, ui, current.as_ref(), &weekly, now),
     );
 }
 
@@ -462,13 +698,13 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Milestone], shown: Option<&str>, now:
     board::nav_note(
         ui,
         &theme,
-        &tf("Delivered: on {branch}, the last branch of the flow. The pace is the MRs delivered over the last four weeks.", &[("branch", &last)]),
+        &tf("Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.", &[("branch", &last)]),
     );
 }
 
 // ── Main area ────────────────────────────────────────────────────────────────
 
-fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now: DateTime<Utc>) {
+fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now: DateTime<Utc>) {
     let theme = g.theme;
     let Some(m) = m else {
         board::heading(
@@ -517,7 +753,8 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now: Date
         .clicked();
     });
     if notes {
-        ui.ctx().copy_text(release_notes(m, &last));
+        ui.ctx()
+            .copy_text(board::Links::of(&g.app).apply(&release_notes(m, &last)));
         g.app.flash(tl("Release notes copied"), false);
     }
     if show {
@@ -592,7 +829,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now: Date
 
     // Will it make its date?
     if !m.title.is_empty() && delivered < total {
-        projection_banner(ui, &theme, m, pace, now);
+        projection_banner(ui, &theme, m, weekly, &last, now);
         ui.add_space(GAP);
     }
 
@@ -667,9 +904,19 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now: Date
     }
 }
 
-fn projection_banner(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: DateTime<Utc>) {
-    let eta = projection(m, pace, now);
-    let left = m.items.len() - m.delivered();
+fn projection_banner(
+    ui: &mut Ui,
+    theme: &Theme,
+    m: &Milestone,
+    weekly: &[u32],
+    flow_last: &str,
+    now: DateTime<Utc>,
+) {
+    let flow_last = flow_last.to_string();
+    let f = forecast(m, weekly, now);
+    let eta = f.p85;
+    let pace = pace_of(weekly);
+    let left = left_to_merge(m);
     let held: Vec<&Item> = m
         .items
         .iter()
@@ -679,25 +926,71 @@ fn projection_banner(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: 
     let (tone, headline) = match (eta, m.due) {
         (None, _) => (
             theme.tones.gray,
-            tl("No MR reached production in the last four weeks: no pace to project from.").to_string(),
+            if weekly.iter().any(|n| *n > 0) {
+                tn(
+                    weekly.len() as u64,
+                    "Only {n} week of merges known: a forecast needs three at least.",
+                    "Only {n} weeks of merges known: a forecast needs three at least.",
+                )
+            } else {
+                tl("No tracked MR merged in the last eight weeks: nothing to forecast from.").to_string()
+            },
         ),
         (Some(eta), due) => (
-            match due {
-                Some(due) if eta > due => theme.tones.amber,
-                Some(_) => theme.tones.green,
-                None => theme.tones.blue,
+            match (due, f.chance) {
+                (Some(due), _) if eta <= due => theme.tones.green,
+                (Some(_), Some(c)) if c >= 0.5 => theme.tones.amber,
+                (Some(_), _) => theme.tones.red,
+                (None, _) => theme.tones.blue,
             },
-            tf(
-                "At the pace of the last four weeks ({pace} a week), everything is on production around {eta}.",
-                &[("pace", &format!("{pace:.1}")), ("eta", &eta.format("%Y-%m-%d").to_string())],
-            ),
+            match (f.p50, f.chance) {
+                (Some(p50), Some(chance)) => tf(
+                    "{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.",
+                    &[
+                        ("chance", &board::percent(chance)),
+                        ("p50", &p50.format("%Y-%m-%d").to_string()),
+                        ("eta", &eta.format("%Y-%m-%d").to_string()),
+                    ],
+                ),
+                (Some(p50), None) => tf(
+                    "Half the simulations have every MR merged by {p50}, 85 % by {eta}.",
+                    &[
+                        ("p50", &p50.format("%Y-%m-%d").to_string()),
+                        ("eta", &eta.format("%Y-%m-%d").to_string()),
+                    ],
+                ),
+                _ => tf(
+                    "Every MR is merged around {eta}.",
+                    &[("eta", &eta.format("%Y-%m-%d").to_string())],
+                ),
+            },
         ),
     };
+    let method = tf(
+        "{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.",
+        &[
+            ("runs", &RUNS.to_string()),
+            ("weeks", &weekly.len().to_string()),
+            ("branch", &flow_last),
+            (
+                "list",
+                &weekly
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+            ),
+            ("pace", &format!("{pace:.1}")),
+        ],
+    );
     let detail = if held.is_empty() {
-        tn(
-            left as u64,
-            "{n} MR left to deliver.",
-            "{n} MRs left to deliver.",
+        format!(
+            "{} {method}",
+            tn(
+                left as u64,
+                "{n} MR left to merge.",
+                "{n} MRs left to merge.",
+            )
         )
     } else {
         let ids = held
@@ -705,13 +998,17 @@ fn projection_banner(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: 
             .map(|i| format!("!{}", i.id))
             .collect::<Vec<_>>()
             .join(", ");
-        tf(
+        let held = tf(
             "{left} · back on their author, the first to unblock: {ids}",
             &[
-                ("left", &tn(left as u64, "{n} MR left", "{n} MRs left")),
+                (
+                    "left",
+                    &tn(left as u64, "{n} MR left to merge", "{n} MRs left to merge"),
+                ),
                 ("ids", &ids),
             ],
-        )
+        );
+        format!("{held}\n{method}")
     };
     // The banner (two thirds) and the tile (one third) side by side, as tall
     // as the banner's text needs, the tile's figure at least; one above the
@@ -836,7 +1133,7 @@ fn landing_tile(
     );
     let landing = eta.map(|e| {
         tf(
-            "lands around {date}",
+            "85 % sure by {date}",
             &[("date", &e.format("%Y-%m-%d").to_string())],
         )
     });
@@ -989,7 +1286,13 @@ fn item_row(ui: &mut Ui, theme: &Theme, item: &Item, ordered: &[String]) -> bool
 
 // ── Inspector ────────────────────────────────────────────────────────────────
 
-fn inspector(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now: DateTime<Utc>) {
+fn inspector(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    m: Option<&Milestone>,
+    weekly: &[u32],
+    now: DateTime<Utc>,
+) {
     let theme = g.theme;
     let Some(m) = m else {
         board::inspector_empty(ui, &theme, tl("Pick a milestone."));
@@ -1001,9 +1304,12 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now:
         tl("Burn-up"),
         tl("delivered against the scope"),
         |ui| {
-            burn_up(ui, &theme, m, pace, now);
+            burn_up(ui, &theme, m, weekly, now);
         },
     );
+    if !m.title.is_empty() && !m.done() {
+        forecast_section(ui, &theme, m, weekly, now);
+    }
     let tickets: Vec<&(String, Option<u32>, Option<u32>)> =
         m.items.iter().filter_map(|i| i.ticket.as_ref()).collect();
     if !tickets.is_empty() {
@@ -1095,7 +1401,7 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, pace: f64, now:
 
 /// The scope (MRs created so far) and the MRs delivered, day by day, from the
 /// first MR to the due date (or the projection), today and the due date marked.
-fn burn_up(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: DateTime<Utc>) {
+fn burn_up(ui: &mut Ui, theme: &Theme, m: &Milestone, weekly: &[u32], now: DateTime<Utc>) {
     let today = now.date_naive();
     // From the first MR, two months back at most, a week at least.
     let start = m
@@ -1106,7 +1412,7 @@ fn burn_up(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: DateTime<U
         .unwrap_or(today - Duration::days(14))
         .min(today - Duration::days(7))
         .max(today - Duration::days(60));
-    let eta = projection(m, pace, now);
+    let eta = projection(m, weekly, now);
     let end = [Some(today + Duration::days(3)), m.due, eta]
         .into_iter()
         .flatten()
@@ -1255,7 +1561,7 @@ fn burn_up(ui: &mut Ui, theme: &Theme, m: &Milestone, pace: f64, now: DateTime<U
     );
 }
 
-fn dashed(ui: &Ui, from: egui::Pos2, to: egui::Pos2, color: Color32) {
+pub(super) fn dashed(ui: &Ui, from: egui::Pos2, to: egui::Pos2, color: Color32) {
     let length = from.distance(to);
     if length < 1.0 {
         return;
@@ -1307,7 +1613,12 @@ pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
     let left = m.items.len() - m.delivered();
     let today = now.date_naive();
     let days = (due - today).num_days();
-    let slip = projection(m, pace(&g.app, now), now).map(|p| (p - due).num_days());
+    let slip = projection(
+        m,
+        &weekly_merges(&g.app, g.details.project_ready(), now),
+        now,
+    )
+    .map(|p| (p - due).num_days());
     let stuck = m
         .items
         .iter()
@@ -1332,7 +1643,7 @@ pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
     );
     hint.push('\n');
     hint.push_str(&match slip {
-        None => tl("No delivery in the last 4 weeks: no projection").to_string(),
+        None => tl("Not enough merge history yet: no forecast").to_string(),
         Some(s) if s > 0 => tn(
             s as u64,
             "Projected {n} day late",
@@ -1392,6 +1703,93 @@ mod tests {
             items: Vec::new(),
         };
         // Nothing left: done today.
-        assert_eq!(projection(&m, 0.0, now), Some(now.date_naive()));
+        assert_eq!(projection(&m, &[0; WEEKS], now), Some(now.date_naive()));
+    }
+
+    fn item(id: &str, stand: Stand) -> Item {
+        Item {
+            id: id.into(),
+            title: String::new(),
+            author: String::new(),
+            stand,
+            step: NextStep {
+                actor: Actor::Reviewers,
+                people: Vec::new(),
+                mine: false,
+                todos: Vec::new(),
+                since: None,
+                then: Vec::new(),
+                reached: None,
+                closed: false,
+            },
+            created: None,
+            delivered: None,
+            branches: Vec::new(),
+            ticket: None,
+        }
+    }
+
+    #[test]
+    fn the_weeks_before_the_first_merge_are_left_out() {
+        let now = board::parse_time("2026-11-05T12:00:00Z").unwrap();
+        let mut app = crate::app::tests::test_app();
+        let merged = |id: &str, days: i64| {
+            let mut mr = TrackedMr::placeholder(id.into(), id.into(), None);
+            mr.data.state = GitlabMrState::Merged;
+            mr.data.merged_at = Some((now - Duration::days(days)).to_rfc3339());
+            mr
+        };
+        // Tracked for three weeks: merges 2 and 16 days ago, none in between.
+        app.mrs = vec![merged("1", 2), merged("2", 16), merged("3", 16)];
+        // Three weeks, oldest first, the quiet week kept as a real zero.
+        assert_eq!(weekly_merges(&app, None, now), vec![2, 0, 1]);
+        // The project's merges, when read, win over the tracked MRs'.
+        let overview = crate::gitlab_detail::ProjectOverview {
+            merges: crate::gitlab_detail::MergeHistory {
+                merged: [3, 10, 10, 40]
+                    .iter()
+                    .enumerate()
+                    .map(|(iid, d)| (iid as u64, (now - Duration::days(*d)).to_rfc3339()))
+                    .collect(),
+                read_at: Some(now.to_rfc3339()),
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            weekly_merges(&app, Some(&overview), now),
+            vec![1, 0, 0, 0, 2, 1]
+        );
+        app.mrs.clear();
+        assert!(weekly_merges(&app, None, now).is_empty());
+    }
+
+    #[test]
+    fn the_forecast_draws_from_the_recent_weeks() {
+        let now = board::parse_time("2026-11-05T12:00:00Z").unwrap();
+        let today = now.date_naive();
+        let m = Milestone {
+            title: "v1".into(),
+            due: Some(today + Duration::days(14)),
+            description: None,
+            items: (0..6)
+                .map(|i| item(&i.to_string(), Stand::InReview))
+                .collect(),
+        };
+        // Three a week, every week: six left take two weeks, in every run.
+        let f = forecast(&m, &[3; WEEKS], now);
+        assert_eq!(f.p50, Some(today + Duration::days(14)));
+        assert_eq!(f.p85, f.p50);
+        assert_eq!(f.chance, Some(1.0));
+        // Nothing delivered lately: no forecast.
+        assert_eq!(forecast(&m, &[0; WEEKS], now), Forecast::default());
+        // Uneven weeks: the 85 % date is no earlier than the median, the same
+        // on every call (seeded).
+        // Two weeks of history: too short to draw from.
+        assert_eq!(forecast(&m, &[2, 4], now), Forecast::default());
+        let uneven = [0, 1, 4, 0, 2, 6, 1, 3];
+        let f = forecast(&m, &uneven, now);
+        assert!(f.p50.unwrap() <= f.p85.unwrap());
+        assert!(f.chance.unwrap() < 1.0);
+        assert_eq!(f, forecast(&m, &uneven, now));
     }
 }

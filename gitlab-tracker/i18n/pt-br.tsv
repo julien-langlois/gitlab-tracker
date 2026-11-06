@@ -1519,3 +1519,173 @@ rail	Overlaps	Conflitos
 @plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} par de MRs abertos, um deles seu, altera os mesmos arquivos|{n} pares de MRs abertos, um deles seu, alteram os mesmos arquivos
 @plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} par de MRs abertos altera os mesmos arquivos|{n} pares de MRs abertos alteram os mesmos arquivos
 	{what}: {list}	{what}: {list}
+	Delivery	Entrega
+rail	Delivery	Entrega
+rail	Stacks	Pilhas
+	Steps	Etapas
+	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	A produção é {branch}, o último branch acompanhado. As etapas vêm do histórico de revisão das discussões; as implantações, das do projeto para ele.
+	How fast changes reach production, and where the time goes	Quão rápido as mudanças chegam à produção, e para onde vai o tempo
+	Copy the weekly report	Copiar o relatório semanal
+	Weekly report copied: paste it in a channel or a wiki page	Relatório semanal copiado: cole-o num canal ou numa página wiki
+	as the period before	como o período anterior
+	{n} / month	{n} / mês
+	MRs reaching production	MRs que chegam à produção
+	{d} before	{d} antes
+	from the first commit	desde o primeiro commit
+	nothing on production in the period	nada em produção no período
+	no change in the period	nenhuma mudança no período
+	no failure to recover from	nenhuma falha a recuperar
+	not restored yet	ainda não restaurado
+	Deployment frequency	Frequência de implantação
+	Lead time for changes	Lead time de mudanças
+	Change failure rate	Taxa de falha de mudanças
+	Time to restore	Tempo de restauração
+	Where the time goes	Para onde vai o tempo
+	No MR merged in the period.	Nenhuma MR mesclada no período.
+	Most of the time: {stage}, {share} of the way	A maior parte do tempo: {stage}, {share} do caminho
+	Review rounds	Rodadas de revisão
+	pushes after the first review	pushes após a primeira revisão
+	No reviewed MR merged in the period.	Nenhuma MR revisada mesclada no período.
+	approved at the first round · median {n}	aprovadas na primeira rodada · mediana {n}
+	No open MR goes back and forth.	Nenhuma MR aberta vai e volta.
+	Open MRs going back and forth:	MRs abertas em idas e vindas:
+	no merged MR to compare with yet	ainda não há MR mescladas para comparar
+	Aging work in progress	Idade do trabalho em andamento
+	open for {time}	aberta há {time}
+	Merged in the period	Mescladas no período
+	the slowest first	as mais lentas primeiro
+	Open the MR	Abrir a MR
+	Its way	Seu percurso
+	Figures	Números
+	Opened	Aberta
+	Opening to production	Da abertura à produção
+	older than 85 % of the merged MRs	mais antiga que 85 % das MRs mescladas
+	older than half the merged MRs	mais antiga que metade das MRs mescladas
+	within the usual time	dentro do tempo habitual
+	Against the others	Frente às outras
+	The DORA measures	As métricas DORA
+	Four measures of a team's delivery, from the DORA research. Each is placed in one of four bands, from Elite to Low.	Quatro medidas da entrega de uma equipe, da pesquisa DORA. Cada uma cai em uma de quatro faixas, de Elite a Baixo.
+	How they are measured	Como são medidas
+	Deployments: the successful deployments of the last tracked branch, else the MRs that reached it.	Implantações: as implantações bem-sucedidas do último branch acompanhado, senão as MRs que o alcançaram.
+	Lead time: from an MR's first commit to its arrival on the last branch.	Lead time: do primeiro commit de uma MR até sua chegada ao último branch.
+	Failures: failed deployments, reverts and hotfixes, over the deployments.	Falhas: implantações com falha, reverts e hotfixes, sobre as implantações.
+	Restore: from a failed deployment to the next good one, or from a reverted MR to its revert.	Restauração: de uma implantação com falha até a próxima boa, ou de uma MR revertida até seu revert.
+	Weekly report · {project} · week of {date}	Relatório semanal · {project} · semana de {date}
+	Approved at the first round: {share} of the reviewed MRs	Aprovadas na primeira rodada: {share} das MRs revisadas
+	Runner time	Tempo de runner
+	Running late	Atrasadas
+	No open MR is older than usual.	Nenhuma MR aberta está mais antiga que o normal.
+	{p} chance to make it	{p} de chance de conseguir
+	due	prazo
+	no forecast	sem previsão
+	85 % sure by {date}	85 % de certeza até {date}
+	!{parent} is merged: retarget it to {base}	!{parent} foi mesclada: mude o destino para {base}
+	!{parent} changed since: rebase it on its branch	!{parent} mudou desde então: faça rebase no branch dela
+	Held back by !{parent}: {why}	Retida por !{parent}: {why}
+	Ready before !{parent}: merging it now lands in !{parent}'s branch	Pronta antes de !{parent}: mesclá-la agora a leva ao branch de !{parent}
+	a draft	um rascunho
+	its pipeline failed	seu pipeline falhou
+	in conflict	em conflito
+	changes requested	alterações solicitadas
+	Stacked MRs	MRs empilhadas
+	Stacks	Pilhas
+	All the stacks	Todas as pilhas
+	A stack is an MR opened on another MR's branch, to split a change into steps that review well. They merge from the top: each one after the one it sits on.	Uma pilha é uma MR aberta sobre o branch de outra MR, para dividir uma mudança em etapas fáceis de revisar. Elas são mescladas de cima: cada uma depois daquela em que se apoia.
+	MRs built on each other, the order to merge them, and what is out of step	MRs construídas umas sobre as outras, a ordem de mesclagem e o que está fora de compasso
+	MRs in a stack	MRs numa pilha
+	open	abertas
+	To retarget	A redirecionar
+	their parent is merged	a MR mãe foi mesclada
+	To rebase	A fazer rebase
+	their parent changed since	a MR mãe mudou desde então
+	No tracked MR targets another MR's branch: no stack to follow.	Nenhuma MR acompanhada aponta para o branch de outra MR: nenhuma pilha.
+	into {base} · {n}	para {base} · {n}
+	where the stack ends	onde a pilha termina
+	Pick an MR of a stack: where it sits, what it waits on, and the order to merge the stack.	Escolha uma MR de uma pilha: onde se apoia, o que espera e a ordem de mesclagem da pilha.
+	Where it sits	Onde se apoia
+	{i} of {n}	{i} de {n}
+	Targets	Destino
+	Stack ends in	A pilha termina em
+	Merge order	Ordem de mesclagem
+	Sits on	Apoia-se em
+	To look at	Para olhar
+	each after the one it sits on	cada uma após aquela em que se apoia
+	{d} a pipeline	{d} por pipeline
+	CI budget	Orçamento de CI
+	No job ran in the period.	Nenhum job rodou no período.
+	{n} on the period before	{n} em relação ao período anterior
+	Spent on failed pipelines	Gasto em pipelines com falha
+	{share} of the runner time	{share} do tempo de runner
+	Wait for a runner	Espera por um runner
+	not given by GitLab	não informado pelo GitLab
+	Costliest job	Job mais custoso
+	Runner time by day	Tempo de runner por dia
+	The costliest jobs	Os jobs mais custosos
+	Forecast	Previsão
+	{runs} simulations	{runs} simulações
+	{share} done by {date}	{share} concluídas até {date}
+	W{n}	S{n}
+	50 % sure by	50 % de certeza até
+	85 % sure by	85 % de certeza até
+	95 % sure by	95 % de certeza até
+	Chance by the due date	Chance até o prazo
+	Delivery: DORA, and where the time goes	Entrega: DORA, e para onde vai o tempo
+	Stacked MRs: built on each other, and the order to merge them	MRs empilhadas: construídas umas sobre as outras, e a ordem de mesclagem
+	Copy my stand-up	Copiar meu stand-up
+	What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting	O que você fez desde o último dia útil, o que há hoje e o que espera pelos outros, como texto para a daily
+	Stand-up copied: paste it in the team's chat	Stand-up copiado: cole-o no chat da equipe
+	Stand-up · {date}	Stand-up · {date}
+	Since {day}	Desde {day}
+	Merged:	Mescladas:
+	Reviewed:	Revisadas:
+	Pushed to:	Push em:
+	Opened:	Abertas:
+	Nothing on GitLab.	Nada no GitLab.
+	To review:	A revisar:
+	To fix:	A corrigir:
+	To merge:	A mesclar:
+	Nothing waits for me.	Nada espera por mim.
+	daily or more	diário ou mais
+	weekly	semanal
+	monthly	mensal
+	less	menos
+	< 1 day	< 1 dia
+	< 1 week	< 1 semana
+	< 1 month	< 1 mês
+	more	mais
+	< 1 h	< 1 h
+	Before the review	Antes da revisão
+	Waiting for the merge	Aguardando a mesclagem
+	Waiting for production	Aguardando produção
+	Elite	Elite
+	High	Alto
+	Low	Baixo
+	From the opening to the first review request.	Da abertura ao primeiro pedido de revisão.
+	From the review request to the first review.	Do pedido de revisão à primeira revisão.
+	From the first review to the approval.	Da primeira revisão à aprovação.
+	From the approval to the merge.	Da aprovação à mesclagem.
+	From the merge to the arrival on the last branch.	Da mesclagem à chegada ao último branch.
+@plural	{n} MR merged in the period|{n} MRs merged in the period	{n} MR mesclada no período|{n} MRs mescladas no período
+@plural	{n} deployment|{n} deployments	{n} implantação|{n} implantações
+@plural	{n} incident|{n} incidents	{n} incidente|{n} incidentes
+@plural	median of {n} merged MR|median of {n} merged MRs	mediana de {n} MR mesclada|mediana de {n} MRs mescladas
+@plural	{n} round|{n} rounds	{n} rodada|{n} rodadas
+@plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} além de 85 % das MRs mescladas|{n} além de 85 % das MRs mescladas
+@plural	{n} MR merged|{n} MRs merged	{n} MR mesclada|{n} MRs mescladas
+@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} MR aberta mais antiga que 85 % das mescladas|{n} MRs abertas mais antigas que 85 % das mescladas
+@plural	{n} stack|{n} stacks	{n} pilha|{n} pilhas
+@plural	{n} MR deep at most|{n} MRs deep at most	no máximo {n} MR de profundidade|no máximo {n} MRs de profundidade
+@plural	{n} behind|{n} behind	{n} atrás|{n} atrás
+@plural	{n} stacked MR to retarget or rebase|{n} stacked MRs to retarget or rebase	{n} MR empilhada a redirecionar ou fazer rebase|{n} MRs empilhadas a redirecionar ou fazer rebase
+state	Merged	Mesclada
+state	Draft	Rascunho
+@plural	Only {n} week of merges known: a forecast needs three at least.|Only {n} weeks of merges known: a forecast needs three at least.	Só {n} semana de mesclagens conhecida: uma previsão precisa de pelo menos três.|Só {n} semanas de mesclagens conhecidas: uma previsão precisa de pelo menos três.
+	No tracked MR merged in the last eight weeks: nothing to forecast from.	Nenhuma MR acompanhada mesclada nas últimas oito semanas: nada para prever.
+	{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.	{chance} de chance de todas as MRs estarem mescladas no prazo: metade das simulações termina até {p50}, 85 % até {eta}.
+	Half the simulations have every MR merged by {p50}, 85 % by {eta}.	Metade das simulações tem todas as MRs mescladas até {p50}, 85 % até {eta}.
+	Every MR is merged around {eta}.	Todas as MRs estarão mescladas por volta de {eta}.
+	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	{runs} simulações a partir de {weeks} semanas de mesclagens ({list}) · {pace} por semana ultimamente · depois o release para {branch}.
+@plural	{n} MR left to merge.|{n} MRs left to merge.	Falta {n} MR para mesclar.|Faltam {n} MRs para mesclar.
+@plural	{n} MR left to merge|{n} MRs left to merge	{n} MR a mesclar|{n} MRs a mesclar
+	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Entregue: em {branch}, o último branch do fluxo. A previsão repete ao acaso as MRs mescladas em cada uma das últimas oito semanas (desde a primeira mesclagem conhecida), até todas estarem mescladas; o release vem depois.
+	Not enough merge history yet: no forecast	Ainda não há histórico de mesclagens suficiente: sem previsão

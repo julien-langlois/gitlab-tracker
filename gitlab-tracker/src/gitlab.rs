@@ -725,6 +725,9 @@ fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
                 activity.approved_at = None;
                 false
             } else if let Some(who) = body.strip_prefix("requested review from ") {
+                if activity.first_review_requested_at.is_none() {
+                    activity.first_review_requested_at = Some(at.clone());
+                }
                 for reviewer in mentions(who) {
                     activity
                         .review_requested_at
@@ -739,6 +742,9 @@ fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
             } else {
                 if body.starts_with("added ") && body.contains(" commit") {
                     activity.last_push_at = Some(at.clone());
+                    if activity.first_review_at.is_some() {
+                        activity.pushes_after_review += 1;
+                    }
                 }
                 false
             }
@@ -2043,6 +2049,12 @@ mod tests {
         assert_eq!(
             activity.last_push_at.as_deref(),
             Some("2026-09-01T12:00:00.000Z")
+        );
+        // The push came after Alice's review: one round back to the author.
+        assert_eq!(activity.pushes_after_review, 1);
+        assert_eq!(
+            activity.first_review_requested_at.as_deref(),
+            Some("2026-09-01T09:00:00.000Z")
         );
         let requested: Vec<&str> = activity
             .review_requested_at

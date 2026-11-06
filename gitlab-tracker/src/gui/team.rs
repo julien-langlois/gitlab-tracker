@@ -535,7 +535,8 @@ fn main(
         },
     );
     if copy {
-        ui.ctx().copy_text(summary(analysis, now));
+        ui.ctx()
+            .copy_text(board::Links::of(&g.app).apply(&summary(analysis, now)));
         g.app.flash(tl("Summary copied"), false);
     }
     ui.add_space(14.0);
@@ -1600,7 +1601,8 @@ fn inspector(
         g.open_page(super::Page::MergeRequests);
     }
     if remind {
-        ui.ctx().copy_text(reminder_text(person, now));
+        ui.ctx()
+            .copy_text(board::Links::of(&g.app).apply(&reminder_text(person, now)));
         g.app.flash(
             tl("Reminder copied: paste it in a chat or a comment"),
             false,

@@ -324,7 +324,30 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             &[("n", &projects.to_string()), ("user", &who)],
         )
     };
-    page_title(ui, &theme, tl("Today"), subtitle);
+    let mut standup_copied = false;
+    ui.horizontal(|ui| {
+        page_title(ui, &theme, tl("Today"), subtitle);
+        if !users.is_empty() {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                standup_copied = super::widgets::button(
+                    ui,
+                    &theme,
+                    Some(super::icons::Icon::Copy),
+                    tl("Copy my stand-up"),
+                    false,
+                )
+                .on_hover_text(tl(
+                    "What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting",
+                ))
+                .clicked();
+            });
+        }
+    });
+    if standup_copied {
+        ui.ctx().copy_text(standup(g, &items, chrono::Local::now()));
+        g.app
+            .flash(tl("Stand-up copied: paste it in the team's chat"), false);
+    }
     ui.add_space(14.0);
 
     // The counts, one tile per kind that matters for the day.
@@ -465,6 +488,172 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         }
         None => {}
     }
+}
+
+/// Where the stand-up's "since" starts: the last working day, at midnight
+/// (Friday on a Monday, else yesterday).
+fn last_working_day(now: chrono::DateTime<chrono::Local>) -> chrono::DateTime<chrono::Utc> {
+    use chrono::{Datelike, Weekday};
+    let back = match now.weekday() {
+        Weekday::Mon => 3,
+        Weekday::Sun => 2,
+        _ => 1,
+    };
+    let day = now.date_naive() - chrono::Duration::days(back);
+    day.and_hms_opt(0, 0, 0)
+        .and_then(|t| t.and_local_timezone(chrono::Local).earliest())
+        .map_or_else(
+            || now.with_timezone(&chrono::Utc) - chrono::Duration::days(back),
+            |t| t.with_timezone(&chrono::Utc),
+        )
+}
+
+/// My stand-up as text: what I did since the last working day (merged,
+/// reviewed, pushed, opened), what is on today (reviews, fixes, merges) and
+/// what waits on others; across every open tab.
+fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> String {
+    use std::fmt::Write;
+    let since = last_working_day(now);
+    let after = |at: Option<&str>| {
+        at.and_then(|a| chrono::DateTime::parse_from_rfc3339(a).ok())
+            .is_some_and(|t| t.with_timezone(&chrono::Utc) >= since)
+    };
+    let line = |id: &str, title: &str, project: Option<&str>| match project {
+        Some(p) => format!("!{id} {title} ({p})"),
+        None => format!("!{id} {title}"),
+    };
+    let several = g
+        .tabs
+        .iter()
+        .filter(|t| matches!(t.state, SlotState::Active | SlotState::Parked(_)))
+        .count()
+        > 1;
+    // Each tab's links: its MRs and tickets, clickable once pasted.
+    let links: Vec<Option<super::board::Links>> = g
+        .tabs
+        .iter()
+        .map(|slot| match &slot.state {
+            SlotState::Active => Some(super::board::Links::of(&g.app)),
+            SlotState::Parked(tab) => Some(super::board::Links::of(&tab.app)),
+            _ => None,
+        })
+        .collect();
+    let linked = |tab: usize, text: String| match links.get(tab).and_then(Option::as_ref) {
+        Some(l) => l.apply(&text),
+        None => text,
+    };
+    let (mut merged, mut reviewed, mut pushed, mut opened) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (index, slot) in g.tabs.iter().enumerate() {
+        let app = match &slot.state {
+            SlotState::Active => &g.app,
+            SlotState::Parked(tab) => &tab.app,
+            _ => continue,
+        };
+        let Some(me) = app.config.gitlab_username.as_deref() else {
+            continue;
+        };
+        let project = app
+            .project_name
+            .clone()
+            .unwrap_or_else(|| app.project_id.clone());
+        let project = several.then_some(project.as_str());
+        for mr in app.mrs.iter().filter(|mr| !mr.title.is_empty()) {
+            let mine = matches_gitlab_username(&mr.author, me) || mr.author == me;
+            let text = linked(index, line(&mr.id, &mr.title, project));
+            if mine {
+                if mr.state == GitlabMrState::Merged && after(mr.merged_at.as_deref()) {
+                    merged.push(text);
+                } else if after(mr.created_at.as_deref()) {
+                    opened.push(text);
+                } else if mr.state == GitlabMrState::Opened
+                    && after(mr.review.as_ref().and_then(|r| r.last_push_at.as_deref()))
+                {
+                    pushed.push(text);
+                }
+            } else if after(
+                mr.review
+                    .as_ref()
+                    .and_then(|r| r.last_activity_by.get(me))
+                    .map(String::as_str),
+            ) {
+                reviewed.push(text);
+            }
+        }
+    }
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "**{}**",
+        tf(
+            "Stand-up · {date}",
+            &[("date", &now.format("%Y-%m-%d").to_string())]
+        )
+    );
+    let section = |out: &mut String, title: &str, lines: &[String]| {
+        if lines.is_empty() {
+            return;
+        }
+        let _ = writeln!(out, "{title}");
+        for l in lines {
+            let _ = writeln!(out, "- {l}");
+        }
+    };
+    let _ = writeln!(
+        out,
+        "\n_{}_",
+        tf(
+            "Since {day}",
+            &[(
+                "day",
+                &since
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d")
+                    .to_string()
+            )]
+        )
+    );
+    let done_before = out.len();
+    section(&mut out, tl("Merged:"), &merged);
+    section(&mut out, tl("Reviewed:"), &reviewed);
+    section(&mut out, tl("Pushed to:"), &pushed);
+    section(&mut out, tl("Opened:"), &opened);
+    if out.len() == done_before {
+        let _ = writeln!(out, "- {}", tl("Nothing on GitLab."));
+    }
+    let _ = writeln!(out, "\n_{}_", tl("Today"));
+    let today_before = out.len();
+    let with_reasons = |kind: Kind| -> Vec<String> {
+        items
+            .iter()
+            .filter(|i| i.kind == kind)
+            .map(|i| {
+                let base = linked(
+                    i.tab,
+                    line(&i.id, &i.title, several.then_some(i.project.as_str())),
+                );
+                if i.reasons.is_empty() {
+                    base
+                } else {
+                    format!("{base} — {}", i.reasons.join(", "))
+                }
+            })
+            .collect()
+    };
+    section(&mut out, tl("To review:"), &with_reasons(Kind::Review));
+    section(&mut out, tl("To fix:"), &with_reasons(Kind::Fix));
+    section(&mut out, tl("To merge:"), &with_reasons(Kind::Ready));
+    if out.len() == today_before {
+        let _ = writeln!(out, "- {}", tl("Nothing waits for me."));
+    }
+    let waiting = with_reasons(Kind::Waiting);
+    if !waiting.is_empty() {
+        let _ = writeln!(out, "\n_{}_", tl("Waiting on others"));
+        for l in waiting {
+            let _ = writeln!(out, "- {l}");
+        }
+    }
+    out
 }
 
 /// A line of the feed: about which MR (and tab), what, when.
@@ -812,5 +1001,26 @@ mod tests {
         }
         // Someone with nothing to do gets nothing.
         assert!(classify(&app, "nobody_here", 0, today).is_empty());
+    }
+
+    #[test]
+    fn the_stand_up_looks_back_to_the_last_working_day() {
+        use chrono::TimeZone;
+        let at = |y, m, d| {
+            chrono::Local
+                .with_ymd_and_hms(y, m, d, 9, 30, 0)
+                .earliest()
+                .unwrap()
+        };
+        let day = |t: chrono::DateTime<chrono::Utc>| t.with_timezone(&chrono::Local).date_naive();
+        // Monday 2026-11-09 → Friday; Wednesday → Tuesday.
+        assert_eq!(
+            day(last_working_day(at(2026, 11, 9))),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+        );
+        assert_eq!(
+            day(last_working_day(at(2026, 11, 11))),
+            chrono::NaiveDate::from_ymd_opt(2026, 11, 10).unwrap()
+        );
     }
 }

@@ -241,7 +241,7 @@ pub fn projects_toml_path() -> Option<PathBuf> {
 
 /// Writes `content` to a sibling `*.tmp` file then renames it over `path`, so a
 /// crash mid-write never leaves a truncated file behind.
-async fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+pub(crate) async fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     tokio::fs::write(&tmp, content).await?;
@@ -1129,6 +1129,15 @@ fn apply_env_overrides_with_prefix(config: AppConfig, prefix: &str) -> AppConfig
 ///
 /// The hash is computed over the canonical form `"<url>|<project_id>"` so that
 /// different (url, id) pairs never collide even when one is a prefix of the other.
+/// Where the project's merge history is kept between launches:
+/// `merges_<hash>.json`, the hash of its state file. `None` without a config
+/// directory (and under test).
+#[cfg(feature = "gui")]
+pub fn merges_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> {
+    let name = tracker_state_file_name(gitlab_url, project_id).replacen("tracker_", "merges_", 1);
+    Some(get_save_dir()?.join(name))
+}
+
 fn tracker_state_file_name(gitlab_url: &str, project_id: &str) -> String {
     // FNV-1a 32-bit constants.
     const FNV_OFFSET: u32 = 2_166_136_261;

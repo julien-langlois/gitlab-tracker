@@ -275,6 +275,14 @@ pub struct ReviewActivity {
     pub last_push_at: Option<String>,
     /// Latest comment or approval per user.
     pub last_activity_by: std::collections::BTreeMap<String, String>,
+    /// The first review request, whoever it went to (kept when it is withdrawn):
+    /// where the wait for a review starts.
+    #[serde(default)]
+    pub first_review_requested_at: Option<String>,
+    /// Pushes ("added N commits") after the first review: the rounds the review
+    /// sent back to the author.
+    #[serde(default)]
+    pub pushes_after_review: u32,
 }
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author
@@ -702,7 +710,7 @@ impl Default for DifficultyProfile {
 }
 
 /// A single job within a pipeline, as returned by the GitLab API.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct PipelineJob {
     /// GitLab's job id: its log is read with it (0 in state files older than it).
     #[serde(default)]
@@ -715,6 +723,10 @@ pub struct PipelineJob {
     pub status: String,
     /// Duration in seconds, null while running.
     pub duration: Option<f64>,
+    /// Seconds it waited for a runner before it started (`None`: not given,
+    /// e.g. state files older than it).
+    #[serde(default)]
+    pub queued_duration: Option<f64>,
 }
 
 /// A GitLab pipeline attached to a merge request.

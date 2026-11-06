@@ -9,6 +9,7 @@ mod board;
 mod ci;
 mod cockpit;
 mod colors;
+mod delivery;
 mod details;
 mod dialogs;
 mod environments;
@@ -32,6 +33,7 @@ mod rail_badges;
 mod setup;
 mod shell;
 mod sidebar;
+mod stacks;
 #[cfg(feature = "stats")]
 mod stats;
 mod table;
@@ -249,6 +251,10 @@ enum Page {
     Milestones,
     /// Open MRs that change the same files.
     Overlaps,
+    /// How fast changes reach production: DORA, where the time goes.
+    Delivery,
+    /// MRs opened on another MR's branch.
+    Stacks,
 }
 
 /// An inspector section a shortcut brings into view.
@@ -385,6 +391,8 @@ struct GuiApp {
     ci: ci::State,
     milestones: milestones::State,
     overlaps: overlaps::State,
+    delivery: delivery::State,
+    stacks: stacks::State,
     /// The tracker's statuses (the board's columns), once fetched, and the
     /// fetch in flight.
     statuses: Option<Vec<gitlab_tracker_core::TicketTransitionTarget>>,
@@ -504,6 +512,8 @@ impl GuiApp {
             ci: ci::State::default(),
             milestones: milestones::State::default(),
             overlaps: overlaps::State::default(),
+            delivery: delivery::State::default(),
+            stacks: stacks::State::default(),
             statuses,
             statuses_rx,
             moves,
@@ -1529,6 +1539,8 @@ impl eframe::App for GuiApp {
                 Ok("ci") => self.open_page(Page::Ci),
                 Ok("milestones") => self.open_page(Page::Milestones),
                 Ok("overlaps") => self.open_page(Page::Overlaps),
+                Ok("delivery") => self.open_page(Page::Delivery),
+                Ok("stacks") => self.open_page(Page::Stacks),
                 // The bell's panel, with notifications in both tabs.
                 Ok("bell") => {
                     use toasts::Kind;

@@ -76,6 +76,8 @@ fn page_name(page: Page) -> &'static str {
         Page::Ci => "ci",
         Page::Milestones => "milestones",
         Page::Overlaps => "overlaps",
+        Page::Delivery => "delivery",
+        Page::Stacks => "stacks",
     }
 }
 
@@ -102,6 +104,8 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
         Some("ci") => Page::Ci,
         Some("milestones") => Page::Milestones,
         Some("overlaps") => Page::Overlaps,
+        Some("delivery") => Page::Delivery,
+        Some("stacks") => Page::Stacks,
         // The stats open through their action once the window runs.
         _ => Page::MergeRequests,
     };

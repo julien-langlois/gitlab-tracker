@@ -50,6 +50,10 @@ pub enum Icon {
     Flag,
     /// Two overlapping squares: the overlaps.
     Overlap,
+    /// A speedometer: the delivery.
+    Gauge,
+    /// Cards on top of each other, joined: the stacked MRs.
+    Stack,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -435,6 +439,38 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 1.0 * scale,
                 color.gamma_multiply(0.45),
             );
+        }
+        Icon::Gauge => {
+            // An arc open at the bottom, its needle, its hub.
+            let center = p(12.0, 14.0);
+            let points: Vec<Pos2> = (0..=24)
+                .map(|i| {
+                    let a = std::f32::consts::PI * (0.85 + 1.3 * i as f32 / 24.0);
+                    center + egui::vec2(a.cos(), a.sin()) * 8.5 * scale
+                })
+                .collect();
+            painter.add(Shape::line(points, stroke));
+            line(center, p(16.5, 8.5));
+            painter.circle_filled(center, 1.6 * scale, color);
+            line(p(7.0, 20.0), p(17.0, 20.0));
+        }
+        Icon::Stack => {
+            for (top, left) in [(3.5, 3.5), (9.5, 7.5)] {
+                painter.rect_stroke(
+                    Rect::from_min_max(p(left, top), p(left + 13.0, top + 5.0)),
+                    1.5 * scale,
+                    stroke,
+                    egui::StrokeKind::Middle,
+                );
+            }
+            painter.rect_stroke(
+                Rect::from_min_max(p(3.5, 15.5), p(20.5, 20.5)),
+                1.5 * scale,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+            line(p(6.0, 8.5), p(6.0, 15.5));
+            line(p(10.0, 14.5), p(10.0, 15.5));
         }
         Icon::ArrowDown | Icon::ArrowUp => {
             let (from, to, wing) = if icon == Icon::ArrowDown {

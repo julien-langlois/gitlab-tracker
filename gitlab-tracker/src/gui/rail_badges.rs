@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 use bevel_theme::Tone;
 use chrono::Utc;
 
-use super::{ci, environments, journal, milestones, overlaps, team, GuiApp, Page};
+use super::{
+    ci, delivery, environments, journal, milestones, overlaps, stacks, team, GuiApp, Page,
+};
 
 /// What a rail entry's badge shows.
 #[derive(Debug, Clone)]
@@ -65,6 +67,8 @@ fn compute(g: &GuiApp) -> Vec<(Page, Badge)> {
         (Page::Ci, ci::badge(g, now)),
         (Page::Milestones, milestones::badge(g, now)),
         (Page::Overlaps, overlaps::badge(g)),
+        (Page::Delivery, delivery::badge(g, now)),
+        (Page::Stacks, stacks::badge(g)),
     ]
     .into_iter()
     .filter_map(|(page, badge)| Some((page, badge?)))

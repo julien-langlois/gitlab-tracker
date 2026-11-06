@@ -64,6 +64,8 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
         Page::Ci => super::ci::screen(g, ui, &sizes),
         Page::Milestones => super::milestones::screen(g, ui, &sizes),
         Page::Overlaps => super::overlaps::screen(g, ui, &sizes),
+        Page::Delivery => super::delivery::screen(g, ui, &sizes),
+        Page::Stacks => super::stacks::screen(g, ui, &sizes),
         Page::MergeRequests | Page::Tracker => {
             if let (Page::MergeRequests, Some(width)) = (page, sizes.views) {
                 sidebar::panel(g, ui, width);
@@ -791,6 +793,8 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         Page::Ci,
                         Page::Milestones,
                         Page::Overlaps,
+                        Page::Delivery,
+                        Page::Stacks,
                     ]
                     .into_iter()
                     .filter_map(|page| {
@@ -872,6 +876,18 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         // A shorter word than the page's title where it is long.
                         crate::i18n::tc("rail", "Overlaps"),
                         tl("Open MRs that change the same files"),
+                    ),
+                    (
+                        Page::Delivery,
+                        Icon::Gauge,
+                        crate::i18n::tc("rail", "Delivery"),
+                        tl("Delivery: DORA, and where the time goes"),
+                    ),
+                    (
+                        Page::Stacks,
+                        Icon::Stack,
+                        crate::i18n::tc("rail", "Stacks"),
+                        tl("Stacked MRs: built on each other, and the order to merge them"),
                     ),
                 ]);
                 // Captions while every entry fits with them, else icons alone,
@@ -1032,6 +1048,8 @@ fn items_label(page: Page) -> &'static str {
         Page::Ci => tl("CI / Pipelines"),
         Page::Milestones => tl("Milestones"),
         Page::Overlaps => tl("Overlaps"),
+        Page::Delivery => tl("Delivery"),
+        Page::Stacks => tl("Stacked MRs"),
     }
 }
 

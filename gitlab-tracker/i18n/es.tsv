@@ -1519,3 +1519,173 @@ rail	Overlaps	Solapes
 @plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} par de MR abiertos, uno tuyo, cambia los mismos archivos|{n} pares de MR abiertos, uno tuyo, cambian los mismos archivos
 @plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} par de MR abiertos cambia los mismos archivos|{n} pares de MR abiertos cambian los mismos archivos
 	{what}: {list}	{what}: {list}
+	Delivery	Entrega
+rail	Delivery	Entrega
+rail	Stacks	Pilas
+	Steps	Etapas
+	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	La producción es {branch}, la última rama seguida. Las etapas salen del historial de revisión de las discusiones; los despliegues, de los del proyecto hacia ella.
+	How fast changes reach production, and where the time goes	Lo rápido que los cambios llegan a producción, y adónde va el tiempo
+	Copy the weekly report	Copiar el informe semanal
+	Weekly report copied: paste it in a channel or a wiki page	Informe semanal copiado: pégalo en un canal o una página wiki
+	as the period before	como el periodo anterior
+	{n} / month	{n} / mes
+	MRs reaching production	MR que llegan a producción
+	{d} before	{d} antes
+	from the first commit	desde el primer commit
+	nothing on production in the period	nada en producción en el periodo
+	no change in the period	ningún cambio en el periodo
+	no failure to recover from	ningún fallo del que recuperarse
+	not restored yet	aún no restablecido
+	Deployment frequency	Frecuencia de despliegue
+	Lead time for changes	Tiempo de entrega de cambios
+	Change failure rate	Tasa de fallos de cambios
+	Time to restore	Tiempo de restauración
+	Where the time goes	Adónde va el tiempo
+	No MR merged in the period.	Ninguna MR fusionada en el periodo.
+	Most of the time: {stage}, {share} of the way	La mayor parte del tiempo: {stage}, {share} del camino
+	Review rounds	Rondas de revisión
+	pushes after the first review	pushes tras la primera revisión
+	No reviewed MR merged in the period.	Ninguna MR revisada fusionada en el periodo.
+	approved at the first round · median {n}	aprobadas a la primera · mediana {n}
+	No open MR goes back and forth.	Ninguna MR abierta va y viene.
+	Open MRs going back and forth:	MR abiertas en idas y vueltas:
+	no merged MR to compare with yet	aún no hay MR fusionadas para comparar
+	Aging work in progress	Antigüedad del trabajo en curso
+	open for {time}	abierta desde hace {time}
+	Merged in the period	Fusionadas en el periodo
+	the slowest first	las más lentas primero
+	Open the MR	Abrir la MR
+	Its way	Su recorrido
+	Figures	Cifras
+	Opened	Abierta
+	Opening to production	De la apertura a producción
+	older than 85 % of the merged MRs	más antigua que el 85 % de las MR fusionadas
+	older than half the merged MRs	más antigua que la mitad de las MR fusionadas
+	within the usual time	dentro del tiempo habitual
+	Against the others	Frente a las demás
+	The DORA measures	Las métricas DORA
+	Four measures of a team's delivery, from the DORA research. Each is placed in one of four bands, from Elite to Low.	Cuatro medidas de la entrega de un equipo, de la investigación DORA. Cada una cae en uno de cuatro niveles, de Élite a Bajo.
+	How they are measured	Cómo se miden
+	Deployments: the successful deployments of the last tracked branch, else the MRs that reached it.	Despliegues: los despliegues correctos de la última rama seguida, si no las MR que la alcanzaron.
+	Lead time: from an MR's first commit to its arrival on the last branch.	Tiempo de entrega: del primer commit de una MR a su llegada a la última rama.
+	Failures: failed deployments, reverts and hotfixes, over the deployments.	Fallos: despliegues fallidos, reverts y hotfixes, sobre los despliegues.
+	Restore: from a failed deployment to the next good one, or from a reverted MR to its revert.	Restauración: de un despliegue fallido al siguiente correcto, o de una MR revertida a su revert.
+	Weekly report · {project} · week of {date}	Informe semanal · {project} · semana del {date}
+	Approved at the first round: {share} of the reviewed MRs	Aprobadas a la primera: {share} de las MR revisadas
+	Runner time	Tiempo de runner
+	Running late	Con retraso
+	No open MR is older than usual.	Ninguna MR abierta es más antigua de lo habitual.
+	{p} chance to make it	{p} de probabilidad de lograrlo
+	due	vence
+	no forecast	sin previsión
+	85 % sure by {date}	85 % seguro para el {date}
+	!{parent} is merged: retarget it to {base}	!{parent} está fusionada: cambia su destino a {base}
+	!{parent} changed since: rebase it on its branch	!{parent} cambió desde entonces: haz rebase sobre su rama
+	Held back by !{parent}: {why}	Retenida por !{parent}: {why}
+	Ready before !{parent}: merging it now lands in !{parent}'s branch	Lista antes que !{parent}: fusionarla ahora la lleva a la rama de !{parent}
+	a draft	un borrador
+	its pipeline failed	su pipeline falló
+	in conflict	en conflicto
+	changes requested	cambios solicitados
+	Stacked MRs	MR apiladas
+	Stacks	Pilas
+	All the stacks	Todas las pilas
+	A stack is an MR opened on another MR's branch, to split a change into steps that review well. They merge from the top: each one after the one it sits on.	Una pila es una MR abierta sobre la rama de otra MR, para dividir un cambio en pasos fáciles de revisar. Se fusionan desde arriba: cada una después de aquella sobre la que se apoya.
+	MRs built on each other, the order to merge them, and what is out of step	MR construidas unas sobre otras, el orden para fusionarlas y lo que está desfasado
+	MRs in a stack	MR en una pila
+	open	abiertas
+	To retarget	Por redirigir
+	their parent is merged	su MR padre está fusionada
+	To rebase	Por hacer rebase
+	their parent changed since	su MR padre cambió desde entonces
+	No tracked MR targets another MR's branch: no stack to follow.	Ninguna MR seguida apunta a la rama de otra MR: no hay pilas.
+	into {base} · {n}	hacia {base} · {n}
+	where the stack ends	donde termina la pila
+	Pick an MR of a stack: where it sits, what it waits on, and the order to merge the stack.	Elige una MR de una pila: dónde se apoya, qué espera y el orden de fusión de la pila.
+	Where it sits	Dónde se apoya
+	{i} of {n}	{i} de {n}
+	Targets	Destino
+	Stack ends in	La pila termina en
+	Merge order	Orden de fusión
+	Sits on	Se apoya en
+	To look at	Para revisar
+	each after the one it sits on	cada una tras aquella sobre la que se apoya
+	{d} a pipeline	{d} por pipeline
+	CI budget	Presupuesto de CI
+	No job ran in the period.	Ningún job se ejecutó en el periodo.
+	{n} on the period before	{n} respecto al periodo anterior
+	Spent on failed pipelines	Gastado en pipelines fallidos
+	{share} of the runner time	{share} del tiempo de runner
+	Wait for a runner	Espera de un runner
+	not given by GitLab	GitLab no lo da
+	Costliest job	Job más costoso
+	Runner time by day	Tiempo de runner por día
+	The costliest jobs	Los jobs más costosos
+	Forecast	Previsión
+	{runs} simulations	{runs} simulaciones
+	{share} done by {date}	{share} terminadas el {date}
+	W{n}	S{n}
+	50 % sure by	50 % seguro para el
+	85 % sure by	85 % seguro para el
+	95 % sure by	95 % seguro para el
+	Chance by the due date	Probabilidad para la fecha límite
+	Delivery: DORA, and where the time goes	Entrega: DORA, y adónde va el tiempo
+	Stacked MRs: built on each other, and the order to merge them	MR apiladas: construidas unas sobre otras, y el orden de fusión
+	Copy my stand-up	Copiar mi stand-up
+	What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting	Lo que hiciste desde el último día laborable, lo de hoy y lo que espera a otros, como texto para la daily
+	Stand-up copied: paste it in the team's chat	Stand-up copiado: pégalo en el chat del equipo
+	Stand-up · {date}	Stand-up · {date}
+	Since {day}	Desde el {day}
+	Merged:	Fusionadas:
+	Reviewed:	Revisadas:
+	Pushed to:	Push a:
+	Opened:	Abiertas:
+	Nothing on GitLab.	Nada en GitLab.
+	To review:	Por revisar:
+	To fix:	Por corregir:
+	To merge:	Por fusionar:
+	Nothing waits for me.	Nada me espera.
+	daily or more	diario o más
+	weekly	semanal
+	monthly	mensual
+	less	menos
+	< 1 day	< 1 día
+	< 1 week	< 1 semana
+	< 1 month	< 1 mes
+	more	más
+	< 1 h	< 1 h
+	Before the review	Antes de la revisión
+	Waiting for the merge	Esperando la fusión
+	Waiting for production	Esperando producción
+	Elite	Élite
+	High	Alto
+	Low	Bajo
+	From the opening to the first review request.	De la apertura a la primera solicitud de revisión.
+	From the review request to the first review.	De la solicitud de revisión a la primera revisión.
+	From the first review to the approval.	De la primera revisión a la aprobación.
+	From the approval to the merge.	De la aprobación a la fusión.
+	From the merge to the arrival on the last branch.	De la fusión a la llegada a la última rama.
+@plural	{n} MR merged in the period|{n} MRs merged in the period	{n} MR fusionada en el periodo|{n} MR fusionadas en el periodo
+@plural	{n} deployment|{n} deployments	{n} despliegue|{n} despliegues
+@plural	{n} incident|{n} incidents	{n} incidente|{n} incidentes
+@plural	median of {n} merged MR|median of {n} merged MRs	mediana de {n} MR fusionada|mediana de {n} MR fusionadas
+@plural	{n} round|{n} rounds	{n} ronda|{n} rondas
+@plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} más allá del 85 % de las MR fusionadas|{n} más allá del 85 % de las MR fusionadas
+@plural	{n} MR merged|{n} MRs merged	{n} MR fusionada|{n} MR fusionadas
+@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} MR abierta más antigua que el 85 % de las fusionadas|{n} MR abiertas más antiguas que el 85 % de las fusionadas
+@plural	{n} stack|{n} stacks	{n} pila|{n} pilas
+@plural	{n} MR deep at most|{n} MRs deep at most	{n} MR de profundidad como máximo|{n} MR de profundidad como máximo
+@plural	{n} behind|{n} behind	{n} por detrás|{n} por detrás
+@plural	{n} stacked MR to retarget or rebase|{n} stacked MRs to retarget or rebase	{n} MR apilada por redirigir o rebasar|{n} MR apiladas por redirigir o rebasar
+state	Merged	Fusionada
+state	Draft	Borrador
+@plural	Only {n} week of merges known: a forecast needs three at least.|Only {n} weeks of merges known: a forecast needs three at least.	Solo se conoce {n} semana de fusiones: una previsión necesita al menos tres.|Solo se conocen {n} semanas de fusiones: una previsión necesita al menos tres.
+	No tracked MR merged in the last eight weeks: nothing to forecast from.	Ninguna MR seguida fusionada en las últimas ocho semanas: nada sobre lo que prever.
+	{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.	{chance} de probabilidad de que todas las MR estén fusionadas en la fecha límite: la mitad de las simulaciones terminan el {p50}, el 85 % el {eta}.
+	Half the simulations have every MR merged by {p50}, 85 % by {eta}.	La mitad de las simulaciones tienen todas las MR fusionadas el {p50}, el 85 % el {eta}.
+	Every MR is merged around {eta}.	Todas las MR están fusionadas hacia el {eta}.
+	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	{runs} simulaciones a partir de {weeks} semanas de fusiones ({list}) · {pace} por semana últimamente · luego el paso a {branch}.
+@plural	{n} MR left to merge.|{n} MRs left to merge.	Queda {n} MR por fusionar.|Quedan {n} MR por fusionar.
+@plural	{n} MR left to merge|{n} MRs left to merge	{n} MR por fusionar|{n} MR por fusionar
+	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Entregada: en {branch}, la última rama del flujo. La previsión repite al azar las MR fusionadas cada una de las últimas ocho semanas (desde la primera fusión conocida), hasta que todas estén fusionadas; el paso a producción viene después.
+	Not enough merge history yet: no forecast	Aún no hay suficiente historial de fusiones: sin previsión

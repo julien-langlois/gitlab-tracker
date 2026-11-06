@@ -181,8 +181,14 @@ impl Details {
                     project_id: app.project_id.clone(),
                 };
                 let branches = app.branches.clone();
+                // The merges already known: only what changed since is asked for.
+                let merges = self
+                    .project_ready()
+                    .map(|o| o.merges.clone())
+                    .unwrap_or_default();
+                let cache = crate::storage::merges_cache_path(&app.base_url, &app.project_id);
                 Self::fetch(ctx, async move {
-                    Ok(crate::gitlab_detail::fetch_project(target, branches).await)
+                    Ok(crate::gitlab_detail::fetch_project(target, branches, merges, cache).await)
                 })
             };
             // Keep showing the previous overview while the new one loads.

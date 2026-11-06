@@ -589,7 +589,49 @@ pub struct ProjectOverview {
     pub deployments: Vec<DeploymentRecord>,
     /// One per tracked branch that has a pipeline.
     pub pipelines: Vec<BranchPipeline>,
+    /// The project's merges, tracked or not: the team's pace for the
+    /// milestones' forecast.
+    pub merges: MergeHistory,
 }
+
+/// When the project's MRs merged over the last [`MERGE_HISTORY_DAYS`] days,
+/// kept between reads and between launches (`merges_<hash>.json` beside the
+/// project's state file): the first read takes the whole period, the next ones
+/// only what was merged (or updated) since, and are merged into it.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MergeHistory {
+    /// Merge date by MR iid.
+    #[serde(default)]
+    pub merged: std::collections::BTreeMap<u64, String>,
+    /// Up to when it is complete (RFC 3339): every MR updated before is in.
+    #[serde(default)]
+    pub read_at: Option<String>,
+}
+
+impl MergeHistory {
+    fn read_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        let at = chrono::DateTime::parse_from_rfc3339(self.read_at.as_deref()?).ok()?;
+        Some(at.with_timezone(&chrono::Utc))
+    }
+
+    /// Complete up to the last day: fit to draw a pace from. A first read cut
+    /// short (more merges than its pages hold) has only the oldest weeks yet,
+    /// and is not.
+    pub fn is_current(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
+        self.read_at()
+            .is_some_and(|at| now - at <= chrono::Duration::days(1))
+    }
+}
+
+/// How far back the project's merges are read.
+pub const MERGE_HISTORY_DAYS: i64 = 56;
+
+/// Pages of 100 merged MRs read at most in one go; a read cut short goes on
+/// from where it stopped at the next one.
+const MERGE_HISTORY_PAGES: u32 = 5;
+
+/// Overlap with the last read, for clocks and MRs updated while it ran.
+const MERGE_OVERLAP_MINUTES: i64 = 10;
 
 /// Where to read a project-level overview.
 #[derive(Clone)]
@@ -613,10 +655,16 @@ impl ProjectTarget {
     }
 }
 
-/// Reads the project's latest deployments (100 at most) and the latest
-/// pipeline of each of `branches`, with the jobs that failed in it. A part that
-/// cannot be read is left empty.
-pub async fn fetch_project(target: ProjectTarget, branches: Vec<String>) -> ProjectOverview {
+/// Reads the project's latest deployments (100 at most), the latest pipeline
+/// of each of `branches` with the jobs that failed in it, and its merges since
+/// `merges` was last read (all of the period on the first read). A part that
+/// cannot be read is left empty; the merges keep what they had.
+pub async fn fetch_project(
+    target: ProjectTarget,
+    branches: Vec<String>,
+    merges: MergeHistory,
+    cache: Option<std::path::PathBuf>,
+) -> ProjectOverview {
     let target = target.as_target();
     let deployments = project_deployments(&target);
     let pipelines = futures::future::join_all(
@@ -624,10 +672,102 @@ pub async fn fetch_project(target: ProjectTarget, branches: Vec<String>) -> Proj
             .iter()
             .map(|branch| branch_pipeline(&target, branch)),
     );
-    let (deployments, pipelines) = tokio::join!(deployments, pipelines);
+    let merges = async {
+        // Not known in this session yet: what the last launch left on disk.
+        let known = match (&merges.read_at, &cache) {
+            (None, Some(path)) => load_merges(path).await.unwrap_or(merges),
+            _ => merges,
+        };
+        let updated = project_merges(&target, known.clone()).await;
+        if let Some(path) = cache.filter(|_| updated != known) {
+            save_merges(&path, &updated).await;
+        }
+        updated
+    };
+    let (deployments, pipelines, merges) = tokio::join!(deployments, pipelines, merges);
     ProjectOverview {
         deployments,
         pipelines: pipelines.into_iter().flatten().collect(),
+        merges,
+    }
+}
+
+/// `known` brought up to date: the MRs updated since it was complete (with
+/// [`MERGE_OVERLAP_MINUTES`] of overlap), the whole period when it never was
+/// or is older than the period; merges older than the period dropped. Read in
+/// update order, [`MERGE_HISTORY_PAGES`] at most: cut short, it is complete up
+/// to the last MR read and the next read goes on from there. On an error,
+/// `known` as it was.
+async fn project_merges(target: &Target, known: MergeHistory) -> MergeHistory {
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        iid: u64,
+        merged_at: Option<String>,
+        updated_at: Option<String>,
+    }
+    let now = chrono::Utc::now();
+    let start = now - chrono::Duration::days(MERGE_HISTORY_DAYS);
+    let since = known
+        .read_at()
+        .map(|at| at - chrono::Duration::minutes(MERGE_OVERLAP_MINUTES))
+        .filter(|at| *at > start)
+        .unwrap_or(start);
+    let since_text = since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let mut merged = known.merged.clone();
+    let mut read_at = now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    for page in 1..=MERGE_HISTORY_PAGES {
+        // Updated after: an MR merged since was updated since.
+        let path = format!(
+            "merge_requests?state=merged&updated_after={}&order_by=updated_at&sort=asc&per_page=100&page={page}",
+            urlencoding::encode(&since_text)
+        );
+        let Ok(raw) = target.get::<Vec<Raw>>(&path).await else {
+            return known;
+        };
+        let full = raw.len() == 100;
+        let last_updated = raw.last().and_then(|r| r.updated_at.clone());
+        merged.extend(raw.into_iter().filter_map(|r| Some((r.iid, r.merged_at?))));
+        if !full {
+            break;
+        }
+        // More than the pages hold: complete up to the last MR read.
+        if page == MERGE_HISTORY_PAGES {
+            if let Some(at) = last_updated {
+                read_at = at;
+            }
+        }
+    }
+    merged.retain(|_, at| {
+        chrono::DateTime::parse_from_rfc3339(at)
+            .is_ok_and(|t| t.with_timezone(&chrono::Utc) >= start)
+    });
+    MergeHistory {
+        merged,
+        read_at: Some(read_at),
+    }
+}
+
+/// The merge history a previous launch saved, if any (a file that cannot be
+/// read is ignored: the next read starts over).
+async fn load_merges(path: &std::path::Path) -> Option<MergeHistory> {
+    let text = tokio::fs::read_to_string(path).await.ok()?;
+    match serde_json::from_str(&text) {
+        Ok(history) => Some(history),
+        Err(e) => {
+            tracing::warn!(error = %e, path = ?path, "Unreadable merge history, read again");
+            None
+        }
+    }
+}
+
+async fn save_merges(path: &std::path::Path, history: &MergeHistory) {
+    match serde_json::to_string(history) {
+        Ok(text) => {
+            if let Err(e) = crate::storage::write_atomic(path, &text).await {
+                tracing::warn!(error = %e, path = ?path, "Could not save the merge history");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "Could not serialise the merge history"),
     }
 }
 
@@ -730,6 +870,33 @@ async fn branch_pipeline(target: &Target, branch: &str) -> Option<BranchPipeline
 mod tests {
     use super::*;
     use crate::gitlab::FileDiff;
+
+    #[test]
+    fn the_merge_history_round_trips_and_knows_when_it_is_current() {
+        let now = chrono::Utc::now();
+        let history = MergeHistory {
+            merged: [(12, "2026-11-01T10:00:00Z".to_string())].into(),
+            read_at: Some((now - chrono::Duration::hours(3)).to_rfc3339()),
+        };
+        let text = serde_json::to_string(&history).unwrap();
+        assert_eq!(
+            serde_json::from_str::<MergeHistory>(&text).unwrap(),
+            history
+        );
+        assert!(history.is_current(now));
+        // A read cut short two days ago: only its oldest weeks are known.
+        let behind = MergeHistory {
+            read_at: Some((now - chrono::Duration::days(2)).to_rfc3339()),
+            ..history.clone()
+        };
+        assert!(!behind.is_current(now));
+        assert!(!MergeHistory::default().is_current(now));
+        // An older file without some fields still loads.
+        assert_eq!(
+            serde_json::from_str::<MergeHistory>("{}").unwrap(),
+            MergeHistory::default()
+        );
+    }
 
     fn file(path: &str, diff: &str) -> FileDiff {
         FileDiff {

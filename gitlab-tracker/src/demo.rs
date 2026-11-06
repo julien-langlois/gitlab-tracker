@@ -656,6 +656,7 @@ fn demo_review_activity(app: &mut App) {
                         ("alex_dev".to_string(), "2024-04-22T11:00:00Z".to_string()),
                     ]
                     .into(),
+                    ..Default::default()
                 });
             }
             "102" => {
@@ -696,6 +697,7 @@ fn demo_review_activity(app: &mut App) {
                         ("thomas_db".to_string(), at(11.0)),
                     ]
                     .into(),
+                    ..Default::default()
                 });
                 mr.created_at = Some(at(20.0));
             }
@@ -718,6 +720,7 @@ fn demo_review_activity(app: &mut App) {
                         ("julien_m".to_string(), at(2.0)),
                     ]
                     .into(),
+                    ..Default::default()
                 });
                 mr.created_at = Some(at(8.0));
             }
@@ -863,10 +866,10 @@ pub async fn demo_app(config: AppConfig) -> App {
                         updated_at: Some("2024-11-14T10:35:40Z".into()),
                         sha: Some("c9d0e1f2".into()),
                         jobs: vec![
-                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0) },
-                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0) },
-                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "success".into(), duration: Some(42.0) },
-                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "success".into(), duration: Some(31.0) },
+                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(18.0), queued_duration: None },
+                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "success".into(), duration: Some(74.0), queued_duration: None },
+                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "success".into(), duration: Some(42.0), queued_duration: None },
+                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "success".into(), duration: Some(31.0), queued_duration: None },
                         ],
                     },
                     Pipeline {
@@ -876,10 +879,10 @@ pub async fn demo_app(config: AppConfig) -> App {
                         updated_at: Some("2024-11-13T17:19:02Z".into()),
                         sha: Some("b81f2a07".into()),
                         jobs: vec![
-                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0) },
-                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0) },
-                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "skipped".into(), duration: None },
-                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "skipped".into(), duration: None },
+                            PipelineJob { id: 0, name: "lint".into(),           stage: "test".into(),   status: "success".into(), duration: Some(17.0), queued_duration: None },
+                            PipelineJob { id: 0, name: "unit-tests".into(),     stage: "test".into(),   status: "failed".into(),  duration: Some(61.0), queued_duration: None },
+                            PipelineJob { id: 0, name: "build".into(),          stage: "build".into(),  status: "skipped".into(), duration: None, queued_duration: None },
+                            PipelineJob { id: 0, name: "deploy-staging".into(), stage: "deploy".into(), status: "skipped".into(), duration: None, queued_duration: None },
                         ],
                     },
                 ],
@@ -1408,15 +1411,15 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
             other => other.to_string(),
         };
         // The closer to production, the rarer: dev twice a day, staging every
-        // other day, production twice in two weeks.
+        // other day, production every two or three days.
         let every = match last - index {
-            0 => 150.0,
+            0 => 60.0,
             1 => 44.0,
             _ => 11.0,
         };
         let mut hours = 0.7 + index as f64 * 6.0;
         let mut n = 0;
-        while hours < 14.0 * 24.0 {
+        while hours < 35.0 * 24.0 {
             let status = if n % 9 == 4 { "failed" } else { "success" };
             deployments.push(DeploymentRecord {
                 environment: environment.clone(),
@@ -1426,6 +1429,18 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
                 status: status.into(),
                 user: people[(index + n) % people.len()].into(),
             });
+            // A failed production deployment, three hours before the last one
+            // that fixed it: an incident for the delivery page.
+            if n == 0 && index == last && last > 0 {
+                deployments.push(DeploymentRecord {
+                    environment: environment.clone(),
+                    reference: branch.clone(),
+                    sha: "7c19f03".into(),
+                    created_at: at(hours + 3.0),
+                    status: "failed".into(),
+                    user: people[1].into(),
+                });
+            }
             hours += every * (0.8 + 0.4 * ((n * 7 % 5) as f64 / 4.0));
             n += 1;
         }
@@ -1457,6 +1472,14 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
     ProjectOverview {
         deployments,
         pipelines,
+        merges: crate::gitlab_detail::MergeHistory {
+            merged: app
+                .mrs
+                .iter()
+                .filter_map(|mr| Some((mr.id.parse().ok()?, mr.merged_at.clone()?)))
+                .collect(),
+            read_at: Some(now.to_rfc3339()),
+        },
     }
 }
 
@@ -1578,6 +1601,10 @@ pub fn enrich_for_window(app: &mut App) {
                             stage: (*stage).into(),
                             status: status.into(),
                             duration: (status != "skipped").then(|| (secs * jitter(j)).round()),
+                            // From a few seconds to over a minute waiting for a runner.
+                            queued_duration: (status != "skipped").then(|| {
+                                (8.0 + ((base as usize + k * 13 + j * 5) % 11) as f64 * 6.5).round()
+                            }),
                         }
                     })
                     .collect();
@@ -1726,6 +1753,480 @@ pub fn enrich_for_window(app: &mut App) {
             "102" => ask("alex_dev", 30.0, Some(21.0)),
             _ => {}
         }
+    }
+    // The open MRs opened weeks ago, not years: their age means something.
+    for (id, days) in [("103", 12.0), ("106", 26.0)] {
+        if let Some(mr) = app.mrs.iter_mut().find(|m| m.id == id) {
+            mr.data.created_at = Some(at(days * 24.0));
+        }
+    }
+    demo_history(app, now);
+    demo_stacks(app, now);
+}
+
+#[cfg(feature = "gui")]
+/// The people of the demo: display string, login.
+const DEMO_PEOPLE: [(&str, &str); 5] = [
+    ("Thomas Dubosc (@thomas_db)", "thomas_db"),
+    ("Alex Devries (@alex_dev)", "alex_dev"),
+    ("Sarah Codewyn (@sarah_code)", "sarah_code"),
+    ("Julien Morel (@julien_m)", "julien_m"),
+    ("Marina Graphetti (@marina_gql)", "marina_gql"),
+];
+
+#[cfg(feature = "gui")]
+/// A demo MR with its basics; the caller fills in the rest.
+fn demo_mr(id: &str, title: &str, author: usize, source: &str, target: &str) -> TrackedMr {
+    let mut mr = TrackedMr::placeholder(id.into(), title.into(), None);
+    mr.data = crate::models::MrData {
+        title: title.into(),
+        author: DEMO_PEOPLE[author].0.into(),
+        web_url: format!("https://gitlab.com/demo/project/-/merge_requests/{id}"),
+        source_branch: source.into(),
+        target_branch: target.into(),
+        ..crate::models::MrData::default()
+    };
+    mr
+}
+
+/// MRs merged over the last eight weeks, most of them on production, with
+/// their review timeline: a past for the delivery page, the milestones'
+/// forecast and the journal. A revert and a hotfix among them, for the change
+/// failure rate.
+#[cfg(feature = "gui")]
+fn demo_history(app: &mut App, now: chrono::DateTime<chrono::Utc>) {
+    use crate::models::{CommitFingerprint, MrCommit, ReviewActivity};
+    let at = |days: f64| now - chrono::Duration::minutes((days * 1440.0) as i64);
+    let text = |days: f64| at(days).format("%Y-%m-%dT%H:%M:%S.000Z").to_string();
+    // id, title, author, reviewer, source branch, milestone, labels,
+    // (opened, review asked, first review, approved, merged, on staging,
+    // on production) in days ago, review rounds.
+    type Past = (
+        &'static str,
+        &'static str,
+        usize,
+        usize,
+        &'static str,
+        Option<&'static str>,
+        &'static [&'static str],
+        [Option<f64>; 7],
+        u32,
+    );
+    let past: [Past; 13] = [
+        (
+            "86",
+            "feat(api): Expose pipelines in the MR payload",
+            2,
+            0,
+            "feat/api-pipelines",
+            None,
+            &["feature"],
+            [
+                Some(54.0),
+                Some(53.8),
+                Some(52.0),
+                Some(51.5),
+                Some(51.4),
+                Some(50.0),
+                Some(48.0),
+            ],
+            1,
+        ),
+        (
+            "87",
+            "fix(ui): Wrap long branch names in the inspector",
+            1,
+            2,
+            "fix/inspector-wrap",
+            None,
+            &["bug"],
+            [
+                Some(43.0),
+                Some(42.9),
+                Some(42.5),
+                Some(42.4),
+                Some(42.3),
+                Some(41.0),
+                Some(40.0),
+            ],
+            0,
+        ),
+        (
+            "88",
+            "feat(api): Cursor pagination for the MR list",
+            2,
+            0,
+            "feat/cursor-pagination",
+            Some("v2.4.0"),
+            &["feature"],
+            [
+                Some(33.0),
+                Some(32.8),
+                Some(31.5),
+                Some(30.2),
+                Some(30.0),
+                Some(29.0),
+                Some(27.5),
+            ],
+            1,
+        ),
+        (
+            "89",
+            "fix(ui): Keep the selection when the list refreshes",
+            1,
+            3,
+            "fix/keep-selection",
+            Some("v2.4.0"),
+            &["bug"],
+            [
+                Some(29.0),
+                Some(28.9),
+                Some(28.2),
+                Some(28.0),
+                Some(27.9),
+                Some(27.0),
+                Some(25.0),
+            ],
+            0,
+        ),
+        (
+            "90",
+            "chore(ci): Cache the cargo registry between jobs",
+            3,
+            1,
+            "chore/ci-cache",
+            None,
+            &["ci"],
+            [
+                Some(26.0),
+                Some(25.9),
+                Some(24.0),
+                Some(23.8),
+                Some(23.7),
+                Some(23.0),
+                Some(20.9),
+            ],
+            0,
+        ),
+        (
+            "91",
+            "feat(tracker): Log time from the MR page",
+            4,
+            0,
+            "feat/log-time-mr-page",
+            Some("v2.4.0"),
+            &["feature"],
+            [
+                Some(24.0),
+                Some(23.0),
+                Some(19.5),
+                Some(17.0),
+                Some(16.8),
+                Some(16.0),
+                Some(13.9),
+            ],
+            2,
+        ),
+        (
+            "92",
+            "perf(cache): LRU eviction for the diff stats cache",
+            0,
+            2,
+            "perf/lru-diff-cache",
+            None,
+            &["performance"],
+            [
+                Some(20.0),
+                Some(19.8),
+                Some(18.0),
+                Some(17.5),
+                Some(17.4),
+                Some(16.0),
+                Some(13.9),
+            ],
+            1,
+        ),
+        (
+            "93",
+            "Revert \"perf(cache): LRU eviction for the diff stats cache\"",
+            1,
+            0,
+            "revert-lru-diff-cache",
+            None,
+            &[],
+            [
+                Some(13.5),
+                Some(13.48),
+                Some(13.45),
+                Some(13.42),
+                Some(13.4),
+                Some(13.3),
+                Some(13.2),
+            ],
+            0,
+        ),
+        (
+            "94",
+            "fix(auth): Invalidate sessions on password change",
+            2,
+            1,
+            "fix/session-invalidation",
+            Some("v2.4.0"),
+            &["bug", "security"],
+            [
+                Some(16.0),
+                Some(15.5),
+                Some(12.0),
+                Some(11.0),
+                Some(10.8),
+                Some(10.0),
+                Some(6.9),
+            ],
+            1,
+        ),
+        (
+            "95",
+            "fix(auth): Token refresh race on expired sessions",
+            3,
+            0,
+            "hotfix/token-refresh",
+            None,
+            &["hotfix"],
+            [
+                Some(7.2),
+                Some(7.15),
+                Some(7.1),
+                Some(7.05),
+                Some(7.0),
+                Some(6.95),
+                Some(6.9),
+            ],
+            0,
+        ),
+        (
+            "96",
+            "feat(export): CSV report of the tracked MRs",
+            4,
+            2,
+            "feat/csv-export",
+            Some("v2.4.0"),
+            &["feature"],
+            [
+                Some(14.0),
+                Some(13.0),
+                Some(8.0),
+                Some(5.0),
+                Some(4.8),
+                Some(3.9),
+                None,
+            ],
+            3,
+        ),
+        (
+            "97",
+            "fix(db): NULL handling in migration v3",
+            0,
+            1,
+            "fix/migration-v3-null",
+            Some("v2.5.0"),
+            &["bug"],
+            [
+                Some(9.0),
+                Some(8.5),
+                Some(6.0),
+                Some(5.6),
+                Some(5.5),
+                Some(4.5),
+                None,
+            ],
+            1,
+        ),
+        (
+            "98",
+            "docs: Explain the stacked MRs page",
+            1,
+            3,
+            "docs/stacks-page",
+            None,
+            &["docs"],
+            [
+                Some(5.0),
+                Some(4.9),
+                Some(3.2),
+                Some(2.9),
+                Some(2.8),
+                None,
+                None,
+            ],
+            0,
+        ),
+    ];
+    let (staging, production) = ("staging".to_string(), "production".to_string());
+    for (id, title, author, reviewer, source, milestone, labels, times, rounds) in past {
+        if app.mrs.iter().any(|m| m.id == id) {
+            continue;
+        }
+        let [opened, asked, reviewed, approved, merged, on_staging, on_production] = times;
+        let mut mr = demo_mr(id, title, author, source, "main");
+        let (reviewer_name, login) = DEMO_PEOPLE[reviewer];
+        let mut branches: std::collections::BTreeSet<String> = ["main".to_string()].into();
+        if let Some(d) = on_staging {
+            branches.insert(staging.clone());
+            app.branch_arrivals
+                .insert((id.to_string(), staging.clone()), at(d));
+        }
+        if let Some(d) = on_production {
+            branches.insert(production.clone());
+            app.branch_arrivals
+                .insert((id.to_string(), production.clone()), at(d));
+        }
+        mr.status = MrStatus::MergedIn(branches.into_iter().collect());
+        mr.mergeability = MergeabilityStatus::NotOpen;
+        let data = &mut mr.data;
+        data.state = GitlabMrState::Merged;
+        data.labels = labels.iter().map(|l| l.to_string()).collect();
+        data.milestone = milestone.map(str::to_string);
+        data.reviewers = vec![reviewer_name.into()];
+        data.approved_by = vec![login.into()];
+        data.approvers = vec![reviewer_name.into()];
+        data.created_at = opened.map(text);
+        data.merged_at = merged.map(text);
+        data.updated_at = merged.map(text);
+        data.merged_by = Some(DEMO_PEOPLE[reviewer].0.into());
+        data.sha = Some(format!(
+            "{:040x}",
+            0xc0ffee_u64 * 1000 + id.parse::<u64>().unwrap_or(0)
+        ));
+        let first_commit = opened.map(|o| o + 0.4 + (id.len() % 3) as f64 * 0.3);
+        data.commits = vec![MrCommit {
+            sha: format!(
+                "{:040x}",
+                0xbeef_u64 * 1000 + id.parse::<u64>().unwrap_or(0)
+            ),
+            fingerprint: CommitFingerprint {
+                author_email: format!("{}@demo.dev", DEMO_PEOPLE[author].1),
+                authored_at: first_commit.map_or(0, |d| at(d).timestamp()),
+                title: title.into(),
+            },
+        }];
+        data.diff_stats = Some(crate::models::DiffStats {
+            files_changed: 2 + (rounds * 3),
+            additions: 40 + rounds * 120,
+            deletions: 12 + rounds * 30,
+            commits_count: 1 + rounds,
+            ..Default::default()
+        });
+        // A push between the first review and the approval per round.
+        let last_push = match (reviewed, approved) {
+            (Some(r), Some(a)) if rounds > 0 => Some(text(r - (r - a) * 0.6)),
+            _ => None,
+        };
+        data.review = Some(ReviewActivity {
+            first_review_requested_at: asked.map(text),
+            review_requested_at: asked
+                .map(|a| [(login.to_string(), text(a))].into())
+                .unwrap_or_default(),
+            first_review_at: reviewed.map(text),
+            approved_at: approved.map(text),
+            last_push_at: last_push,
+            pushes_after_review: rounds,
+            last_activity_by: approved
+                .or(reviewed)
+                .map(|a| [(login.to_string(), text(a))].into())
+                .unwrap_or_default(),
+        });
+        app.mrs.push(mr);
+    }
+}
+
+/// MRs opened on another MR's branch: !108 on !107, !109 on !108 (a chain of
+/// three), and !110 on !101's branch while !101 is merged (to retarget).
+#[cfg(feature = "gui")]
+fn demo_stacks(app: &mut App, now: chrono::DateTime<chrono::Utc>) {
+    use crate::models::ReviewActivity;
+    let text = |days: f64| {
+        (now - chrono::Duration::minutes((days * 1440.0) as i64))
+            .format("%Y-%m-%dT%H:%M:%S.000Z")
+            .to_string()
+    };
+    let plan: [(
+        &str,
+        &str,
+        usize,
+        &str,
+        &str,
+        MergeabilityStatus,
+        f64,
+        f64,
+        bool,
+    ); 3] = [
+        (
+            "108",
+            "feat(notif): Notification settings panel",
+            3,
+            "feat/notification-settings",
+            "feat/desktop-notifications",
+            MergeabilityStatus::Mergeable,
+            5.0,
+            3.0,
+            true,
+        ),
+        (
+            "109",
+            "feat(notif): Mute notifications per project",
+            3,
+            "feat/notification-mute",
+            "feat/notification-settings",
+            MergeabilityStatus::Draft,
+            2.0,
+            1.0,
+            false,
+        ),
+        (
+            "110",
+            "feat(auth): Keep the PKCE verifier across restarts",
+            2,
+            "feat/pkce-verifier-store",
+            "feat/oauth2-pkce",
+            MergeabilityStatus::Mergeable,
+            8.0,
+            6.5,
+            false,
+        ),
+    ];
+    for (id, title, author, source, target, mergeability, opened, pushed, approved) in plan {
+        if app.mrs.iter().any(|m| m.id == id) {
+            continue;
+        }
+        let mut mr = demo_mr(id, title, author, source, target);
+        mr.mergeability = mergeability;
+        let data = &mut mr.data;
+        data.state = GitlabMrState::Opened;
+        data.labels = vec!["feature".into()];
+        data.reviewers = vec![DEMO_PEOPLE[0].0.into()];
+        if approved {
+            data.approved_by = vec![DEMO_PEOPLE[0].1.into()];
+            data.approvers = vec![DEMO_PEOPLE[0].0.into()];
+        }
+        data.created_at = Some(text(opened));
+        data.updated_at = Some(text(pushed));
+        data.diff_stats = Some(crate::models::DiffStats {
+            files_changed: 3,
+            additions: 96,
+            deletions: 14,
+            commits_count: 2,
+            commits_behind: Some(if id == "108" { 2 } else { 0 }),
+            ..Default::default()
+        });
+        data.review = Some(ReviewActivity {
+            first_review_requested_at: Some(text(opened - 0.2)),
+            review_requested_at: [(DEMO_PEOPLE[0].1.to_string(), text(opened - 0.2))].into(),
+            first_review_at: approved.then(|| text(pushed + 0.5)),
+            approved_at: approved.then(|| text(pushed - 0.5)),
+            last_push_at: Some(text(pushed)),
+            ..ReviewActivity::default()
+        });
+        app.mrs.push(mr);
     }
 }
 

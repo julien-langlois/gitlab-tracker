@@ -1519,3 +1519,173 @@ rail	Overlaps	重叠
 @plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} 对打开的 MR（其中一个是你的）修改了相同文件
 @plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} 对打开的 MR 修改了相同文件
 	{what}: {list}	{what}：{list}
+	Delivery	交付
+rail	Delivery	交付
+rail	Stacks	堆叠
+	Steps	步骤
+	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	生产环境是 {branch}，即最后一个跟踪的分支。步骤来自讨论中的评审时间线；部署来自项目对它的部署。
+	How fast changes reach production, and where the time goes	变更多快到达生产环境，时间花在了哪里
+	Copy the weekly report	复制周报
+	Weekly report copied: paste it in a channel or a wiki page	周报已复制：粘贴到频道或 Wiki 页面
+	as the period before	与上一周期相同
+	{n} / month	{n} / 月
+	MRs reaching production	到达生产的 MR
+	{d} before	之前 {d}
+	from the first commit	从第一次提交起
+	nothing on production in the period	该周期内无内容上线
+	no change in the period	该周期内无变更
+	no failure to recover from	无需恢复的故障
+	not restored yet	尚未恢复
+	Deployment frequency	部署频率
+	Lead time for changes	变更前置时间
+	Change failure rate	变更失败率
+	Time to restore	恢复时间
+	Where the time goes	时间去哪了
+	No MR merged in the period.	该周期内没有合并的 MR。
+	Most of the time: {stage}, {share} of the way	大部分时间：{stage}，占全程 {share}
+	Review rounds	评审轮次
+	pushes after the first review	首次评审后的推送
+	No reviewed MR merged in the period.	该周期内没有合并经评审的 MR。
+	approved at the first round · median {n}	首轮即获批准 · 中位数 {n}
+	No open MR goes back and forth.	没有来回反复的未关闭 MR。
+	Open MRs going back and forth:	来回反复的未关闭 MR：
+	no merged MR to compare with yet	尚无可比较的已合并 MR
+	Aging work in progress	在制品时长
+	open for {time}	已开启 {time}
+	Merged in the period	该周期内合并
+	the slowest first	最慢的在前
+	Open the MR	打开 MR
+	Its way	历程
+	Figures	数据
+	Opened	开启
+	Opening to production	从开启到上线
+	older than 85 % of the merged MRs	比 85% 的已合并 MR 更久
+	older than half the merged MRs	比一半的已合并 MR 更久
+	within the usual time	在通常时间内
+	Against the others	与其他相比
+	The DORA measures	DORA 指标
+	Four measures of a team's delivery, from the DORA research. Each is placed in one of four bands, from Elite to Low.	来自 DORA 研究的四项团队交付指标。每项分为四个等级，从精英到低。
+	How they are measured	如何测量
+	Deployments: the successful deployments of the last tracked branch, else the MRs that reached it.	部署：最后一个跟踪分支的成功部署，否则为到达该分支的 MR。
+	Lead time: from an MR's first commit to its arrival on the last branch.	前置时间：从 MR 的第一次提交到抵达最后一个分支。
+	Failures: failed deployments, reverts and hotfixes, over the deployments.	失败：失败的部署、回滚和热修复，占部署的比例。
+	Restore: from a failed deployment to the next good one, or from a reverted MR to its revert.	恢复：从失败的部署到下一次成功部署，或从被回滚的 MR 到其回滚。
+	Weekly report · {project} · week of {date}	周报 · {project} · {date} 当周
+	Approved at the first round: {share} of the reviewed MRs	首轮即获批准：占已评审 MR 的 {share}
+	Runner time	Runner 时间
+	Running late	进度落后
+	No open MR is older than usual.	没有比平常更久的未关闭 MR。
+	{p} chance to make it	{p} 的把握按时完成
+	due	截止
+	no forecast	无预测
+	85 % sure by {date}	85% 把握在 {date} 前
+	!{parent} is merged: retarget it to {base}	!{parent} 已合并：请将目标改为 {base}
+	!{parent} changed since: rebase it on its branch	!{parent} 之后有变更：请变基到其分支上
+	Held back by !{parent}: {why}	被 !{parent} 阻塞：{why}
+	Ready before !{parent}: merging it now lands in !{parent}'s branch	先于 !{parent} 就绪：现在合并会进入 !{parent} 的分支
+	a draft	草稿
+	its pipeline failed	其流水线失败
+	in conflict	存在冲突
+	changes requested	需要修改
+	Stacked MRs	堆叠的 MR
+	Stacks	堆叠
+	All the stacks	全部堆叠
+	A stack is an MR opened on another MR's branch, to split a change into steps that review well. They merge from the top: each one after the one it sits on.	堆叠是在另一个 MR 的分支上开启的 MR，用于把变更拆成易于评审的步骤。从上往下合并：每个都在其所依赖的 MR 之后。
+	MRs built on each other, the order to merge them, and what is out of step	相互依赖的 MR、合并顺序以及不同步之处
+	MRs in a stack	堆叠中的 MR
+	open	未关闭
+	To retarget	需改目标
+	their parent is merged	其父 MR 已合并
+	To rebase	需变基
+	their parent changed since	其父 MR 之后有变更
+	No tracked MR targets another MR's branch: no stack to follow.	没有跟踪的 MR 以另一个 MR 的分支为目标：没有堆叠。
+	into {base} · {n}	合入 {base} · {n}
+	where the stack ends	堆叠最终合入处
+	Pick an MR of a stack: where it sits, what it waits on, and the order to merge the stack.	选择堆叠中的一个 MR：它依赖于谁、在等什么，以及堆叠的合并顺序。
+	Where it sits	所在位置
+	{i} of {n}	第 {i} / {n}
+	Targets	目标
+	Stack ends in	堆叠合入
+	Merge order	合并顺序
+	Sits on	依赖于
+	To look at	需关注
+	each after the one it sits on	每个都在其依赖项之后
+	{d} a pipeline	每条流水线 {d}
+	CI budget	CI 预算
+	No job ran in the period.	该周期内没有运行作业。
+	{n} on the period before	较上一周期 {n}
+	Spent on failed pipelines	失败流水线消耗
+	{share} of the runner time	占 Runner 时间的 {share}
+	Wait for a runner	等待 Runner
+	not given by GitLab	GitLab 未提供
+	Costliest job	最耗时的作业
+	Runner time by day	每日 Runner 时间
+	The costliest jobs	最耗时的作业
+	Forecast	预测
+	{runs} simulations	{runs} 次模拟
+	{share} done by {date}	{date} 前完成 {share}
+	W{n}	第{n}周
+	50 % sure by	50% 把握于
+	85 % sure by	85% 把握于
+	95 % sure by	95% 把握于
+	Chance by the due date	截止日前完成的概率
+	Delivery: DORA, and where the time goes	交付：DORA 以及时间去向
+	Stacked MRs: built on each other, and the order to merge them	堆叠的 MR：相互依赖及合并顺序
+	Copy my stand-up	复制我的站会内容
+	What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting	上个工作日以来做了什么、今天要做什么、在等别人什么，作为每日站会的文字
+	Stand-up copied: paste it in the team's chat	站会内容已复制：粘贴到团队聊天中
+	Stand-up · {date}	站会 · {date}
+	Since {day}	自 {day} 起
+	Merged:	已合并：
+	Reviewed:	已评审：
+	Pushed to:	已推送：
+	Opened:	已开启：
+	Nothing on GitLab.	GitLab 上无活动。
+	To review:	待评审：
+	To fix:	待修复：
+	To merge:	待合并：
+	Nothing waits for me.	没有等我处理的事项。
+	daily or more	每天或更频繁
+	weekly	每周
+	monthly	每月
+	less	更少
+	< 1 day	< 1 天
+	< 1 week	< 1 周
+	< 1 month	< 1 个月
+	more	更长
+	< 1 h	< 1 小时
+	Before the review	评审前
+	Waiting for the merge	等待合并
+	Waiting for production	等待上线
+	Elite	精英
+	High	高
+	Low	低
+	From the opening to the first review request.	从开启到首次请求评审。
+	From the review request to the first review.	从请求评审到首次评审。
+	From the first review to the approval.	从首次评审到批准。
+	From the approval to the merge.	从批准到合并。
+	From the merge to the arrival on the last branch.	从合并到抵达最后一个分支。
+@plural	{n} MR merged in the period|{n} MRs merged in the period	该周期内合并了 {n} 个 MR
+@plural	{n} deployment|{n} deployments	{n} 次部署
+@plural	{n} incident|{n} incidents	{n} 次事故
+@plural	median of {n} merged MR|median of {n} merged MRs	{n} 个已合并 MR 的中位数
+@plural	{n} round|{n} rounds	{n} 轮
+@plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} 个超过 85% 的已合并 MR
+@plural	{n} MR merged|{n} MRs merged	合并了 {n} 个 MR
+@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} 个未关闭 MR 比 85% 的已合并 MR 更久
+@plural	{n} stack|{n} stacks	{n} 个堆叠
+@plural	{n} MR deep at most|{n} MRs deep at most	最多 {n} 层
+@plural	{n} behind|{n} behind	落后 {n}
+@plural	{n} stacked MR to retarget or rebase|{n} stacked MRs to retarget or rebase	{n} 个堆叠 MR 需改目标或变基
+state	Merged	已合并
+state	Draft	草稿
+@plural	Only {n} week of merges known: a forecast needs three at least.|Only {n} weeks of merges known: a forecast needs three at least.	目前只知道 {n} 周的合并记录：预测至少需要三周。
+	No tracked MR merged in the last eight weeks: nothing to forecast from.	过去八周没有已跟踪的 MR 被合并：无法预测。
+	{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.	截止日前全部 MR 合并的概率为 {chance}：一半的模拟在 {p50} 前完成，85% 在 {eta} 前。
+	Half the simulations have every MR merged by {p50}, 85 % by {eta}.	一半的模拟在 {p50} 前合并全部 MR，85% 在 {eta} 前。
+	Every MR is merged around {eta}.	全部 MR 约在 {eta} 合并。
+	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	基于 {weeks} 周合并记录（{list}）的 {runs} 次模拟 · 近期每周 {pace} · 之后发布到 {branch}。
+@plural	{n} MR left to merge.|{n} MRs left to merge.	还有 {n} 个 MR 待合并。
+@plural	{n} MR left to merge|{n} MRs left to merge	{n} 个 MR 待合并
+	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	已交付：位于 {branch}，即流程的最后一个分支。预测随机重放过去八周每周合并的 MR 数量（从已知的第一次合并起），直到全部合并；发布在其后。
+	Not enough merge history yet: no forecast	合并历史不足：无预测

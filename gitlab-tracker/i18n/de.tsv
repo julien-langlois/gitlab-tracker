@@ -1519,3 +1519,173 @@ rail	Overlaps	Konflikte
 @plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} Paar offener MRs, eines davon deins, ändert dieselben Dateien|{n} Paare offener MRs, eines davon deins, ändern dieselben Dateien
 @plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} Paar offener MRs ändert dieselben Dateien|{n} Paare offener MRs ändern dieselben Dateien
 	{what}: {list}	{what}: {list}
+	Delivery	Auslieferung
+rail	Delivery	Lieferung
+rail	Stacks	Stapel
+	Steps	Schritte
+	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	Produktion ist {branch}, der letzte verfolgte Branch. Die Schritte stammen aus dem Review-Verlauf der Diskussionen, die Deployments aus denen des Projekts dorthin.
+	How fast changes reach production, and where the time goes	Wie schnell Änderungen in Produktion gehen und wo die Zeit bleibt
+	Copy the weekly report	Wochenbericht kopieren
+	Weekly report copied: paste it in a channel or a wiki page	Wochenbericht kopiert: in einen Kanal oder eine Wiki-Seite einfügen
+	as the period before	wie im Zeitraum davor
+	{n} / month	{n} / Monat
+	MRs reaching production	MRs, die in Produktion ankommen
+	{d} before	vorher {d}
+	from the first commit	ab dem ersten Commit
+	nothing on production in the period	nichts in Produktion im Zeitraum
+	no change in the period	keine Änderung im Zeitraum
+	no failure to recover from	kein Ausfall zu beheben
+	not restored yet	noch nicht behoben
+	Deployment frequency	Deployment-Häufigkeit
+	Lead time for changes	Durchlaufzeit für Änderungen
+	Change failure rate	Änderungsfehlerrate
+	Time to restore	Wiederherstellungszeit
+	Where the time goes	Wo die Zeit bleibt
+	No MR merged in the period.	Keine MR im Zeitraum gemergt.
+	Most of the time: {stage}, {share} of the way	Die meiste Zeit: {stage}, {share} des Wegs
+	Review rounds	Review-Runden
+	pushes after the first review	Pushes nach dem ersten Review
+	No reviewed MR merged in the period.	Keine reviewte MR im Zeitraum gemergt.
+	approved at the first round · median {n}	in der ersten Runde freigegeben · Median {n}
+	No open MR goes back and forth.	Keine offene MR geht hin und her.
+	Open MRs going back and forth:	Offene MRs im Hin und Her:
+	no merged MR to compare with yet	noch keine gemergte MR zum Vergleich
+	Aging work in progress	Alter der laufenden Arbeit
+	open for {time}	offen seit {time}
+	Merged in the period	Im Zeitraum gemergt
+	the slowest first	die langsamsten zuerst
+	Open the MR	MR öffnen
+	Its way	Ihr Weg
+	Figures	Zahlen
+	Opened	Geöffnet
+	Opening to production	Von Eröffnung bis Produktion
+	older than 85 % of the merged MRs	älter als 85 % der gemergten MRs
+	older than half the merged MRs	älter als die Hälfte der gemergten MRs
+	within the usual time	im üblichen Rahmen
+	Against the others	Im Vergleich
+	The DORA measures	Die DORA-Kennzahlen
+	Four measures of a team's delivery, from the DORA research. Each is placed in one of four bands, from Elite to Low.	Vier Kennzahlen der Auslieferung eines Teams aus der DORA-Forschung. Jede fällt in eine von vier Stufen, von Elite bis Niedrig.
+	How they are measured	Wie sie gemessen werden
+	Deployments: the successful deployments of the last tracked branch, else the MRs that reached it.	Deployments: die erfolgreichen Deployments des letzten verfolgten Branchs, sonst die MRs, die ihn erreicht haben.
+	Lead time: from an MR's first commit to its arrival on the last branch.	Durchlaufzeit: vom ersten Commit einer MR bis zur Ankunft auf dem letzten Branch.
+	Failures: failed deployments, reverts and hotfixes, over the deployments.	Fehler: fehlgeschlagene Deployments, Reverts und Hotfixes, bezogen auf die Deployments.
+	Restore: from a failed deployment to the next good one, or from a reverted MR to its revert.	Wiederherstellung: von einem fehlgeschlagenen Deployment bis zum nächsten guten, oder von einer zurückgenommenen MR bis zu ihrem Revert.
+	Weekly report · {project} · week of {date}	Wochenbericht · {project} · Woche vom {date}
+	Approved at the first round: {share} of the reviewed MRs	In der ersten Runde freigegeben: {share} der reviewten MRs
+	Runner time	Runner-Zeit
+	Running late	Im Verzug
+	No open MR is older than usual.	Keine offene MR ist älter als üblich.
+	{p} chance to make it	{p} Chance, es zu schaffen
+	due	fällig
+	no forecast	keine Prognose
+	85 % sure by {date}	zu 85 % sicher bis {date}
+	!{parent} is merged: retarget it to {base}	!{parent} ist gemergt: Ziel auf {base} ändern
+	!{parent} changed since: rebase it on its branch	!{parent} hat sich seitdem geändert: auf ihren Branch rebasen
+	Held back by !{parent}: {why}	Aufgehalten durch !{parent}: {why}
+	Ready before !{parent}: merging it now lands in !{parent}'s branch	Vor !{parent} fertig: ein Merge jetzt landet im Branch von !{parent}
+	a draft	ein Entwurf
+	its pipeline failed	ihre Pipeline ist fehlgeschlagen
+	in conflict	im Konflikt
+	changes requested	Änderungen angefordert
+	Stacked MRs	Gestapelte MRs
+	Stacks	Stapel
+	All the stacks	Alle Stapel
+	A stack is an MR opened on another MR's branch, to split a change into steps that review well. They merge from the top: each one after the one it sits on.	Ein Stapel ist eine MR auf dem Branch einer anderen MR, um eine Änderung in gut reviewbare Schritte zu teilen. Gemergt wird von oben: jede nach der, auf der sie aufsetzt.
+	MRs built on each other, the order to merge them, and what is out of step	Aufeinander aufbauende MRs, ihre Merge-Reihenfolge und was aus dem Takt ist
+	MRs in a stack	MRs in einem Stapel
+	open	offen
+	To retarget	Neu auszurichten
+	their parent is merged	ihre Eltern-MR ist gemergt
+	To rebase	Zu rebasen
+	their parent changed since	ihre Eltern-MR hat sich seitdem geändert
+	No tracked MR targets another MR's branch: no stack to follow.	Keine verfolgte MR zielt auf den Branch einer anderen MR: kein Stapel.
+	into {base} · {n}	nach {base} · {n}
+	where the stack ends	wo der Stapel endet
+	Pick an MR of a stack: where it sits, what it waits on, and the order to merge the stack.	Wähle eine MR eines Stapels: worauf sie aufsetzt, worauf sie wartet und die Merge-Reihenfolge.
+	Where it sits	Wo sie aufsetzt
+	{i} of {n}	{i} von {n}
+	Targets	Ziel
+	Stack ends in	Stapel endet in
+	Merge order	Merge-Reihenfolge
+	Sits on	Setzt auf
+	To look at	Zu prüfen
+	each after the one it sits on	jede nach der, auf der sie aufsetzt
+	{d} a pipeline	{d} pro Pipeline
+	CI budget	CI-Budget
+	No job ran in the period.	Im Zeitraum lief kein Job.
+	{n} on the period before	{n} gegenüber dem Zeitraum davor
+	Spent on failed pipelines	In fehlgeschlagenen Pipelines verbraucht
+	{share} of the runner time	{share} der Runner-Zeit
+	Wait for a runner	Warten auf einen Runner
+	not given by GitLab	von GitLab nicht geliefert
+	Costliest job	Teuerster Job
+	Runner time by day	Runner-Zeit pro Tag
+	The costliest jobs	Die teuersten Jobs
+	Forecast	Prognose
+	{runs} simulations	{runs} Simulationen
+	{share} done by {date}	{share} fertig bis {date}
+	W{n}	W{n}
+	50 % sure by	Zu 50 % sicher bis
+	85 % sure by	Zu 85 % sicher bis
+	95 % sure by	Zu 95 % sicher bis
+	Chance by the due date	Chance bis zum Fälligkeitsdatum
+	Delivery: DORA, and where the time goes	Auslieferung: DORA und wo die Zeit bleibt
+	Stacked MRs: built on each other, and the order to merge them	Gestapelte MRs: aufeinander aufgebaut, und ihre Merge-Reihenfolge
+	Copy my stand-up	Mein Stand-up kopieren
+	What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting	Was du seit dem letzten Arbeitstag getan hast, was heute ansteht und was auf andere wartet, als Text für das Daily
+	Stand-up copied: paste it in the team's chat	Stand-up kopiert: in den Team-Chat einfügen
+	Stand-up · {date}	Stand-up · {date}
+	Since {day}	Seit {day}
+	Merged:	Gemergt:
+	Reviewed:	Reviewt:
+	Pushed to:	Gepusht auf:
+	Opened:	Geöffnet:
+	Nothing on GitLab.	Nichts auf GitLab.
+	To review:	Zu reviewen:
+	To fix:	Zu beheben:
+	To merge:	Zu mergen:
+	Nothing waits for me.	Nichts wartet auf mich.
+	daily or more	täglich oder öfter
+	weekly	wöchentlich
+	monthly	monatlich
+	less	seltener
+	< 1 day	< 1 Tag
+	< 1 week	< 1 Woche
+	< 1 month	< 1 Monat
+	more	mehr
+	< 1 h	< 1 Std.
+	Before the review	Vor dem Review
+	Waiting for the merge	Wartet auf den Merge
+	Waiting for production	Wartet auf Produktion
+	Elite	Elite
+	High	Hoch
+	Low	Niedrig
+	From the opening to the first review request.	Von der Eröffnung bis zur ersten Review-Anfrage.
+	From the review request to the first review.	Von der Review-Anfrage bis zum ersten Review.
+	From the first review to the approval.	Vom ersten Review bis zur Freigabe.
+	From the approval to the merge.	Von der Freigabe bis zum Merge.
+	From the merge to the arrival on the last branch.	Vom Merge bis zur Ankunft auf dem letzten Branch.
+@plural	{n} MR merged in the period|{n} MRs merged in the period	{n} MR im Zeitraum gemergt|{n} MRs im Zeitraum gemergt
+@plural	{n} deployment|{n} deployments	{n} Deployment|{n} Deployments
+@plural	{n} incident|{n} incidents	{n} Vorfall|{n} Vorfälle
+@plural	median of {n} merged MR|median of {n} merged MRs	Median von {n} gemergter MR|Median von {n} gemergten MRs
+@plural	{n} round|{n} rounds	{n} Runde|{n} Runden
+@plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} über 85 % der gemergten MRs|{n} über 85 % der gemergten MRs
+@plural	{n} MR merged|{n} MRs merged	{n} MR gemergt|{n} MRs gemergt
+@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} offene MR älter als 85 % der gemergten|{n} offene MRs älter als 85 % der gemergten
+@plural	{n} stack|{n} stacks	{n} Stapel|{n} Stapel
+@plural	{n} MR deep at most|{n} MRs deep at most	höchstens {n} MR tief|höchstens {n} MRs tief
+@plural	{n} behind|{n} behind	{n} zurück|{n} zurück
+@plural	{n} stacked MR to retarget or rebase|{n} stacked MRs to retarget or rebase	{n} gestapelte MR neu auszurichten oder zu rebasen|{n} gestapelte MRs neu auszurichten oder zu rebasen
+state	Merged	Gemergt
+state	Draft	Entwurf
+@plural	Only {n} week of merges known: a forecast needs three at least.|Only {n} weeks of merges known: a forecast needs three at least.	Erst {n} Woche Merges bekannt: eine Prognose braucht mindestens drei.|Erst {n} Wochen Merges bekannt: eine Prognose braucht mindestens drei.
+	No tracked MR merged in the last eight weeks: nothing to forecast from.	Keine verfolgte MR in den letzten acht Wochen gemergt: keine Grundlage für eine Prognose.
+	{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.	{chance} Chance, dass jede MR bis zum Fälligkeitsdatum gemergt ist: die Hälfte der Simulationen ist bis {p50} fertig, 85 % bis {eta}.
+	Half the simulations have every MR merged by {p50}, 85 % by {eta}.	Die Hälfte der Simulationen hat jede MR bis {p50} gemergt, 85 % bis {eta}.
+	Every MR is merged around {eta}.	Jede MR ist um den {eta} gemergt.
+	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	{runs} Simulationen aus {weeks} Wochen Merges ({list}) · zuletzt {pace} pro Woche · danach das Release nach {branch}.
+@plural	{n} MR left to merge.|{n} MRs left to merge.	{n} MR noch zu mergen.|{n} MRs noch zu mergen.
+@plural	{n} MR left to merge|{n} MRs left to merge	{n} MR zu mergen|{n} MRs zu mergen
+	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Ausgeliefert: auf {branch}, dem letzten Branch des Flusses. Die Prognose spielt die in den letzten acht Wochen je Woche gemergten MRs (ab dem ersten bekannten Merge) zufällig nach, bis jede MR gemergt ist; das Release kommt danach.
+	Not enough merge history yet: no forecast	Noch zu wenig Merge-Verlauf: keine Prognose

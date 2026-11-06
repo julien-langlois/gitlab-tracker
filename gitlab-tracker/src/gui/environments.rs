@@ -308,7 +308,8 @@ fn main(
         },
     );
     if copy {
-        ui.ctx().copy_text(state_text(model, now));
+        ui.ctx()
+            .copy_text(board::Links::of(&g.app).apply(&state_text(model, now)));
         g.app.flash(tl("State of the environments copied"), false);
     }
     ui.add_space(14.0);
