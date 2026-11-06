@@ -1065,12 +1065,6 @@ impl Links {
         }
     }
 
-    /// `#4567`, the ticket of MR `id`, unless `title` already names it.
-    pub fn ticket_of(&self, id: &str, title: &str) -> Option<String> {
-        let reference = format!("#{}", self.mr_tickets.get(id)?);
-        (!title.contains(&reference)).then_some(reference)
-    }
-
     fn url(&self, sigil: char, id: &str) -> Option<String> {
         match sigil {
             '!' => self
@@ -1083,11 +1077,24 @@ impl Links {
     }
 
     /// `text` with each `!123` as `[!123](its MR)` and each known `#4567` as
-    /// `[#4567](its ticket)`. What is already a link, or part of a word or a
-    /// path, is left as it is.
+    /// `[#4567](its ticket)`. The first time a line names an MR, its ticket follows
+    /// it, `[!123](…) ([#4567](…))`, unless its line already names that
+    /// ticket. What is already a link, or part of a word or a path, is left as
+    /// it is.
     pub fn apply(&self, text: &str) -> String {
-        let chars: Vec<char> = text.chars().collect();
         let mut out = String::with_capacity(text.len() + 64);
+        for (n, line) in text.split('\n').enumerate() {
+            if n > 0 {
+                out.push('\n');
+            }
+            self.apply_line(line, &mut out);
+        }
+        out
+    }
+
+    fn apply_line(&self, line: &str, out: &mut String) {
+        let mut named = std::collections::HashSet::new();
+        let chars: Vec<char> = line.chars().collect();
         let mut i = 0;
         while i < chars.len() {
             let c = chars[i];
@@ -1107,6 +1114,14 @@ impl Links {
                 if !digits.is_empty() && whole {
                     if let Some(url) = self.url(c, &digits) {
                         out.push_str(&format!("[{c}{digits}]({url})"));
+                        if c == '!' && named.insert(digits.clone()) {
+                            if let Some(ticket) = self.mr_tickets.get(&digits) {
+                                let mentioned = mentions(line, ticket);
+                                if let (false, Some(url)) = (mentioned, self.tickets.get(ticket)) {
+                                    out.push_str(&format!(" ([#{ticket}]({url}))"));
+                                }
+                            }
+                        }
                         i = end;
                         continue;
                     }
@@ -1115,8 +1130,18 @@ impl Links {
             out.push(c);
             i += 1;
         }
-        out
     }
+}
+
+/// Whether `line` names ticket `#id` as a whole number.
+fn mentions(line: &str, id: &str) -> bool {
+    let reference = format!("#{id}");
+    line.match_indices(&reference).any(|(at, _)| {
+        !line[at + reference.len()..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_digit())
+    })
 }
 
 // ── Time ─────────────────────────────────────────────────────────────────────
@@ -1239,11 +1264,19 @@ mod links_tests {
     }
 
     #[test]
-    fn an_mr_names_its_ticket_unless_its_title_does() {
+    fn an_mr_brings_its_ticket_on_each_line_that_names_it() {
         let l = links();
-        assert_eq!(l.ticket_of("12", "Fix the login"), Some("#4567".into()));
-        assert_eq!(l.ticket_of("12", "Fix #4567"), None);
-        assert_eq!(l.ticket_of("99", "Untracked"), None);
+        assert_eq!(
+            l.apply("- !12 Fix the login, !12 again\n- !12"),
+            "- [!12](https://gl/p/-/merge_requests/12) ([#4567](https://rm/issues/4567)) \
+             Fix the login, [!12](https://gl/p/-/merge_requests/12) again\n\
+             - [!12](https://gl/p/-/merge_requests/12) ([#4567](https://rm/issues/4567))"
+        );
+        // Not when its line names the ticket already.
+        assert_eq!(
+            l.apply("- Fix (!12) · #4567"),
+            "- Fix ([!12](https://gl/p/-/merge_requests/12)) · [#4567](https://rm/issues/4567)"
+        );
     }
 
     #[test]
@@ -1260,8 +1293,8 @@ mod links_tests {
         }
         // A sentence's end is fine.
         assert_eq!(
-            l.apply("merge !12."),
-            "merge [!12](https://gl/p/-/merge_requests/12)."
+            l.apply("merge !99."),
+            "merge [!99](https://gl/p/-/merge_requests/99)."
         );
     }
 }

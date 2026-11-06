@@ -110,6 +110,8 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
         .unwrap_or_else(|| app.project_id.clone());
     let usual_review = crate::next_step::usual_first_review_days(app);
     let now = chrono::Utc::now();
+    // Built the first time a reminder needs it.
+    let mut links: Option<super::board::Links> = None;
     let mut items = Vec::new();
     for mr in &app.mrs {
         if mr.title.is_empty() {
@@ -215,16 +217,16 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
                 "Waiting on {who}: {what}",
                 &[("who", &names.join(", ")), ("what", &what)],
             ));
-            reminder = Some(tf(
-                "Hi {who}, could you have a look at !{id} \"{title}\" when you can? {url} (waiting for {time})",
+            let links = links.get_or_insert_with(|| super::board::Links::of(app));
+            reminder = Some(links.apply(&tf(
+                "Hi {who}, could you have a look at !{id} \"{title}\" when you can? (waiting for {time})",
                 &[
                     ("who", &names.join(", ")),
                     ("id", &mr.id),
                     ("title", &mr.title),
-                    ("url", &mr.web_url),
                     ("time", &waited.map(days_text).unwrap_or_default()),
                 ],
-            ));
+            )));
         }
         use crate::next_step::Todo;
         let action = match kind {

@@ -1785,15 +1785,9 @@ pub fn weekly_report(
         let _ = writeln!(out, "- {}", tl("No open MR is older than usual."));
     }
     for a in late {
-        let url = app
-            .mrs
-            .iter()
-            .find(|m| m.id == a.id)
-            .map(|m| m.web_url.clone())
-            .unwrap_or_default();
         let _ = writeln!(
             out,
-            "- [!{}]({url}) {} — {} · {}",
+            "- !{} {} — {} · {}",
             a.id,
             a.title,
             a.column.label(),

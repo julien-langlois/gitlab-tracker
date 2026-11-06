@@ -387,7 +387,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                                     .on_hover_text(tl("The selected MRs as a Markdown list"))
                                     .clicked()
                                 {
-                                    ui.ctx().copy_text(release_notes(&picked, &to));
+                                    ui.ctx().copy_text(
+                                        super::board::Links::of(&g.app)
+                                            .apply(&release_notes(&picked, &to)),
+                                    );
                                     *copied = Some(Copied::Notes);
                                 }
                                 if button(ui, &theme, None, tl("Markdown checklist"), false)

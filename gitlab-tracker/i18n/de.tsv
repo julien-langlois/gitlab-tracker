@@ -594,7 +594,7 @@
 	against {avg} on average the weeks before	gegenüber durchschnittlich {avg} in den Wochen davor
 	{time} · usually {usual}	{time} · üblich {usual}
 	Waiting on {who}: {what}	Wartet auf {who}: {what}
-	Hi {who}, could you have a look at !{id} "{title}" when you can? {url} (waiting for {time})	Hallo {who}, könntest du dir !{id} „{title}“ ansehen, wenn du Zeit hast? {url} (wartet seit {time})
+	Hi {who}, could you have a look at !{id} "{title}" when you can? (waiting for {time})	Hallo {who}, könntest du dir !{id} „{title}“ ansehen, wenn du Zeit hast? (wartet seit {time})
 	See the new commits	Neue Commits ansehen
 	Your MRs blocked by someone else: a reminder can unblock them.	Deine MRs, die jemand anderes blockiert: Eine Erinnerung kann helfen.
 	{section} · nothing yet	{section} · noch nichts

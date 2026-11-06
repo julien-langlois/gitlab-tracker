@@ -1601,9 +1601,8 @@ fn inspector(
         g.open_page(super::Page::MergeRequests);
     }
     if remind {
-        let links = board::Links::of(&g.app);
         ui.ctx()
-            .copy_text(links.apply(&reminder_text(person, &links, now)));
+            .copy_text(board::Links::of(&g.app).apply(&reminder_text(person, now)));
         g.app.flash(
             tl("Reminder copied: paste it in a chat or a comment"),
             false,
@@ -1709,7 +1708,7 @@ fn line(
 }
 
 /// The reminder to paste: the reviews waiting on `person`.
-fn reminder_text(person: &Person, links: &board::Links, now: DateTime<Utc>) -> String {
+fn reminder_text(person: &Person, now: DateTime<Utc>) -> String {
     let mut text = tf(
         "Hi {name}, these reviews are waiting on you:",
         &[("name", board::first_name(&person.name))],
@@ -1728,11 +1727,7 @@ fn reminder_text(person: &Person, links: &board::Links, now: DateTime<Utc>) -> S
                 )
             })
             .unwrap_or_default();
-        let ticket = links
-            .ticket_of(&r.id, &r.title)
-            .map(|t| format!(" ({t})"))
-            .unwrap_or_default();
-        text.push_str(&format!("- !{} {}{ticket}{age}\n", r.id, r.title));
+        text.push_str(&format!("- !{} {}{age}\n", r.id, r.title));
     }
     if person.reviews.is_empty() {
         text = tf(

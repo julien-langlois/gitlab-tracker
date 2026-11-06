@@ -594,7 +594,7 @@
 	against {avg} on average the weeks before	之前几周平均为 {avg}
 	{time} · usually {usual}	{time} · 通常 {usual}
 	Waiting on {who}: {what}	等待 {who}：{what}
-	Hi {who}, could you have a look at !{id} "{title}" when you can? {url} (waiting for {time})	你好 {who}，方便时能看一下 !{id}「{title}」吗？{url}（已等待 {time}）
+	Hi {who}, could you have a look at !{id} "{title}" when you can? (waiting for {time})	你好 {who}，方便时能看一下 !{id}「{title}」吗？（已等待 {time}）
 	See the new commits	查看新提交
 	Your MRs blocked by someone else: a reminder can unblock them.	被他人阻塞的你的 MR：发个提醒或许能推进。
 	{section} · nothing yet	{section} · 暂无
