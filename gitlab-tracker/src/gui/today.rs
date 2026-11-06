@@ -481,7 +481,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     match pick {
         Some((tab, id, None)) => {
             g.activate(tab);
-            g.show_mr(&id);
+            g.open_mr(&id);
         }
         Some((tab, id, Some(page_tab))) => {
             g.activate(tab);
@@ -799,7 +799,7 @@ fn feed_card(ui: &mut Ui, theme: &Theme, changes: &[Change], several: bool) -> O
                 .add(egui::Label::new(muted(theme, detail).size(theme.text_size - 2.0)).truncate());
             if response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tl("Show it in its project's tab"))
+                .on_hover_text(tl("Open its page"))
                 .clicked()
             {
                 picked = Some(FeedClick::Open(change.tab, change.id.clone()));
@@ -844,6 +844,7 @@ const ID_WIDTH: f32 = 44.0;
 
 /// What a click on a row asked for.
 enum RowClick {
+    /// The MR's page, on the tab it was last left on.
     Open,
     /// The MR's page, on this tab.
     Page(super::mr_page::Tab),
@@ -969,7 +970,7 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<Ro
     }
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Show it in its project's tab"))
+        .on_hover_text(tl("Open its page"))
         .clicked()
         .then_some(RowClick::Open)
 }
