@@ -83,6 +83,7 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     }
 
     dialogs::show(g, ui.ctx());
+    super::changelog::show(g, ui.ctx());
     super::palette::show(g, ui.ctx());
     super::toasts::show(g, ui.ctx());
 }

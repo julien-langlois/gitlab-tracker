@@ -1689,3 +1689,17 @@ state	Draft	草稿
 @plural	{n} MR left to merge|{n} MRs left to merge	{n} 个 MR 待合并
 	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	已交付：位于 {branch}，即流程的最后一个分支。预测随机重放过去八周每周合并的 MR 数量（从已知的第一次合并起），直到全部合并；发布在其后。
 	Not enough merge history yet: no forecast	合并历史不足：无预测
+	Generate changelog	生成变更日志
+	The changelog since the last release tag, with the project's git-cliff config	自上一个版本标签以来的变更日志，使用项目的 git-cliff 配置
+	Changelog	变更日志
+	With the project's git-cliff config ({path})	使用项目的 git-cliff 配置（{path}）
+	Unreleased	未发布
+	Generate	生成
+	Reading the commits…	正在读取提交…
+	since {tag}	自 {tag} 起
+	no release tag in the commits read	已读取的提交中没有版本标签
+	no release tag yet	尚无版本标签
+	Nothing to put in it: no commit since the last release, or every one is skipped by the config.	没有内容：自上次发布以来没有提交，或全部被配置跳过。
+	Changelog copied	已复制变更日志
+	Preview	预览
+	Markdown	Markdown

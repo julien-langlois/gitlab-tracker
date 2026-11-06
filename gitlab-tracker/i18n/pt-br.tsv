@@ -1689,3 +1689,17 @@ state	Draft	Rascunho
 @plural	{n} MR left to merge|{n} MRs left to merge	{n} MR a mesclar|{n} MRs a mesclar
 	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Entregue: em {branch}, o último branch do fluxo. A previsão repete ao acaso as MRs mescladas em cada uma das últimas oito semanas (desde a primeira mesclagem conhecida), até todas estarem mescladas; o release vem depois.
 	Not enough merge history yet: no forecast	Ainda não há histórico de mesclagens suficiente: sem previsão
+	Generate changelog	Gerar changelog
+	The changelog since the last release tag, with the project's git-cliff config	O changelog desde a última tag de versão, com a configuração git-cliff do projeto
+	Changelog	Changelog
+	With the project's git-cliff config ({path})	Com a configuração git-cliff do projeto ({path})
+	Unreleased	Não publicada
+	Generate	Gerar
+	Reading the commits…	Lendo os commits…
+	since {tag}	desde {tag}
+	no release tag in the commits read	nenhuma tag de versão nos commits lidos
+	no release tag yet	ainda sem tag de versão
+	Nothing to put in it: no commit since the last release, or every one is skipped by the config.	Nada a incluir: nenhum commit desde a última versão, ou a configuração ignora todos.
+	Changelog copied	Changelog copiado
+	Preview	Pré-visualização
+	Markdown	Markdown

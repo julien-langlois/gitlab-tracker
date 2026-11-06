@@ -741,6 +741,9 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
     }
     let mut notes = false;
     let mut show = false;
+    let mut changelog = false;
+    // Offered when the project's repository holds a git-cliff config.
+    let cliff = super::changelog::config(g, ui.ctx());
     board::heading(ui, &theme, &m.name(), &subtitle.join(" · "), |ui| {
         show = primary_button(ui, &theme, tl("Show in the table")).clicked();
         notes = button(
@@ -751,7 +754,23 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
             false,
         )
         .clicked();
+        if cliff.is_some() {
+            changelog = button(
+                ui,
+                &theme,
+                Some(super::icons::Icon::List),
+                tl("Generate changelog"),
+                false,
+            )
+            .on_hover_text(tl(
+                "The changelog since the last release tag, with the project's git-cliff config",
+            ))
+            .clicked();
+        }
     });
+    if let (true, Some(config)) = (changelog, cliff) {
+        super::changelog::open(g, ui.ctx(), config, &m.title);
+    }
     if notes {
         ui.ctx()
             .copy_text(board::Links::of(&g.app).apply(&release_notes(m, &last)));

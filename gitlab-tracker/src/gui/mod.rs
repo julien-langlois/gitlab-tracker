@@ -6,6 +6,7 @@
 //! as in the TUI. Only the drawing lives here.
 
 mod board;
+mod changelog;
 mod ci;
 mod cockpit;
 mod colors;
@@ -390,6 +391,8 @@ struct GuiApp {
     environments: environments::State,
     ci: ci::State,
     milestones: milestones::State,
+    /// The Plan page's changelog: the project's git-cliff config, the dialog.
+    changelog: changelog::State,
     overlaps: overlaps::State,
     delivery: delivery::State,
     stacks: stacks::State,
@@ -511,6 +514,7 @@ impl GuiApp {
             environments: environments::State::default(),
             ci: ci::State::default(),
             milestones: milestones::State::default(),
+            changelog: changelog::State::default(),
             overlaps: overlaps::State::default(),
             delivery: delivery::State::default(),
             stacks: stacks::State::default(),

@@ -29,6 +29,7 @@ gui = [
   "dep:egui",
   "dep:egui_commonmark",
   "dep:egui_extras",
+  "dep:git-cliff-core",
   "dep:pulldown-cmark",
   "dep:bevel-i18n",
   "dep:bevel-theme",
@@ -91,6 +92,9 @@ egui_commonmark = { version = "0.26", optional = true, default-features = false,
   "pulldown_cmark",
 ] }
 egui_extras = { version = "0.37", optional = true, default-features = false }
+# The Plan page's changelog: the tracked project's own git-cliff config, fed
+# with the commits read from the GitLab API (no clone, so no `repo` feature).
+git-cliff-core = { version = "2.14", optional = true, default-features = false }
 # Same version as egui_commonmark: the description is rewritten before it is shown.
 pulldown-cmark = { version = "0.13", optional = true, default-features = false }
 bevel-i18n = { path = "../../bevel/bevel-i18n", optional = true }

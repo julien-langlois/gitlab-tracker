@@ -1689,3 +1689,17 @@ state	Draft	Brouillon
 @plural	{n} MR left to merge|{n} MRs left to merge	{n} MR à fusionner|{n} MR à fusionner
 	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Livrée : sur {branch}, la dernière branche du flux. La prévision rejoue au hasard les MR fusionnées chacune des huit dernières semaines (depuis la première fusion connue), jusqu'à ce que toutes soient fusionnées ; la mise en production vient après.
 	Not enough merge history yet: no forecast	Pas encore assez d'historique de fusions : pas de prévision
+	Generate changelog	Générer le changelog
+	The changelog since the last release tag, with the project's git-cliff config	Le changelog depuis le dernier tag de version, avec la config git-cliff du projet
+	Changelog	Changelog
+	With the project's git-cliff config ({path})	Avec la config git-cliff du projet ({path})
+	Unreleased	Non publiée
+	Generate	Générer
+	Reading the commits…	Lecture des commits…
+	since {tag}	depuis {tag}
+	no release tag in the commits read	aucun tag de version dans les commits lus
+	no release tag yet	pas encore de tag de version
+	Nothing to put in it: no commit since the last release, or every one is skipped by the config.	Rien à y mettre : aucun commit depuis la dernière version, ou la config les écarte tous.
+	Changelog copied	Changelog copié
+	Preview	Aperçu
+	Markdown	Markdown

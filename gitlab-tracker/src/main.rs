@@ -1,6 +1,8 @@
 mod actions;
 mod app;
 mod branch_flow;
+#[cfg(feature = "gui")]
+mod changelog;
 mod cli;
 mod columns_core;
 mod config;

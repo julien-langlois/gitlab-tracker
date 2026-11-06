@@ -1689,3 +1689,17 @@ state	Draft	Entwurf
 @plural	{n} MR left to merge|{n} MRs left to merge	{n} MR zu mergen|{n} MRs zu mergen
 	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Ausgeliefert: auf {branch}, dem letzten Branch des Flusses. Die Prognose spielt die in den letzten acht Wochen je Woche gemergten MRs (ab dem ersten bekannten Merge) zufällig nach, bis jede MR gemergt ist; das Release kommt danach.
 	Not enough merge history yet: no forecast	Noch zu wenig Merge-Verlauf: keine Prognose
+	Generate changelog	Changelog erzeugen
+	The changelog since the last release tag, with the project's git-cliff config	Das Changelog seit dem letzten Release-Tag, mit der git-cliff-Konfiguration des Projekts
+	Changelog	Changelog
+	With the project's git-cliff config ({path})	Mit der git-cliff-Konfiguration des Projekts ({path})
+	Unreleased	Unveröffentlicht
+	Generate	Erzeugen
+	Reading the commits…	Commits werden gelesen…
+	since {tag}	seit {tag}
+	no release tag in the commits read	kein Release-Tag in den gelesenen Commits
+	no release tag yet	noch kein Release-Tag
+	Nothing to put in it: no commit since the last release, or every one is skipped by the config.	Nichts aufzunehmen: kein Commit seit dem letzten Release, oder die Konfiguration überspringt alle.
+	Changelog copied	Changelog kopiert
+	Preview	Vorschau
+	Markdown	Markdown

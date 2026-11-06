@@ -49,8 +49,24 @@ pub enum Fetch<T> {
     Failed(String),
 }
 
+impl<T: Send + 'static> Fetch<T> {
+    /// Runs `work` on the runtime; the window repaints once it is done.
+    pub fn spawn(
+        ctx: &egui::Context,
+        work: impl std::future::Future<Output = Result<T, String>> + Send + 'static,
+    ) -> Self {
+        let (done, rx) = channel();
+        let ctx = ctx.clone();
+        tokio::spawn(async move {
+            let _ = done.send(work.await);
+            ctx.request_repaint();
+        });
+        Fetch::Loading(rx)
+    }
+}
+
 impl<T> Fetch<T> {
-    fn poll(&mut self) {
+    pub fn poll(&mut self) {
         if let Fetch::Loading(rx) = self {
             if let Ok(result) = rx.try_recv() {
                 *self = match result {
@@ -94,13 +110,7 @@ impl Details {
         ctx: &egui::Context,
         work: impl std::future::Future<Output = Result<T, String>> + Send + 'static,
     ) -> Fetch<T> {
-        let (done, rx) = channel();
-        let ctx = ctx.clone();
-        tokio::spawn(async move {
-            let _ = done.send(work.await);
-            ctx.request_repaint();
-        });
-        Fetch::Loading(rx)
+        Fetch::spawn(ctx, work)
     }
 
     /// The MR page's data for `mr`: read once per version of the MR, in the
