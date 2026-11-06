@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
+use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::widgets::{avatar, button, muted, primary_button, semibold, split_person};
 use super::GuiApp;
@@ -1763,6 +1764,68 @@ fn summary(analysis: &Analysis, now: DateTime<Utc>) -> String {
         text.push_str(&format!("- {}\n", tl("none")));
     }
     text
+}
+
+/// The rail's badge: the reviews waiting past the reminder delay (red past
+/// twice that delay, else orange), else the overloaded reviewers (amber).
+pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
+    let days = PERIODS[g.team.period.min(PERIODS.len() - 1)].0;
+    let analysis = analyze(&g.app, now, days, false);
+    let reminder = g.app.config.review_reminder_hours.max(1) as f64 / 24.0;
+    let tones = &g.theme.tones;
+    let mut late: Vec<(&Person, &Waiting, f64)> = analysis
+        .people
+        .iter()
+        .filter(|p| p.level != Level::Bot)
+        .flat_map(|p| p.reviews.iter().map(move |r| (p, r)))
+        .filter_map(|(p, r)| r.since.map(|s| (p, r, board::days_between(s, now))))
+        .filter(|(_, _, d)| *d >= reminder)
+        .collect();
+    late.sort_by(|a, b| b.2.total_cmp(&a.2));
+    if let Some((p, r, worst)) = late.first() {
+        let mut hint = tn(
+            late.len() as u64,
+            "{n} review waits past the reminder delay",
+            "{n} reviews wait past the reminder delay",
+        );
+        hint.push('\n');
+        hint.push_str(&tf(
+            "The oldest: !{id}, for {name}'s review, {time}",
+            &[
+                ("id", &r.id),
+                ("name", board::first_name(&p.name)),
+                ("time", &board::duration_text(*worst)),
+            ],
+        ));
+        let tone = if *worst >= 2.0 * reminder {
+            tones.red
+        } else {
+            tones.orange
+        };
+        return Some(Badge {
+            n: late.len(),
+            tone,
+            hint,
+        });
+    }
+    let over: Vec<String> = analysis
+        .people
+        .iter()
+        .filter(|p| p.level == Level::Overloaded)
+        .map(|p| board::first_name(&p.name).to_string())
+        .collect();
+    (!over.is_empty()).then(|| Badge {
+        n: over.len(),
+        tone: tones.amber,
+        hint: rail_badges::listed(
+            tn(
+                over.len() as u64,
+                "{n} reviewer overloaded",
+                "{n} reviewers overloaded",
+            ),
+            rail_badges::names(&over, 4),
+        ),
+    })
 }
 
 #[cfg(test)]

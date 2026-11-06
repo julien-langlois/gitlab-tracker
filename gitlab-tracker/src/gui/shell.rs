@@ -762,7 +762,7 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
             // What waits on each page: my reviews, the blocked MRs, the tickets
             // over their estimate.
             let today = super::today::waiting_count(g);
-            let badges = [
+            let fixed = [
                 (Page::Today, today, tones.amber, tl("waiting for you")),
                 (
                     Page::MergeRequests,
@@ -778,6 +778,27 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     tl("over their estimate"),
                 ),
             ];
+            // The pages under the rule count what their own page flags.
+            let badges: Vec<(Page, usize, bevel_theme::Tone, String)> = fixed
+                .iter()
+                .filter(|b| b.1 > 0)
+                .map(|(page, n, tone, what)| (*page, *n, *tone, format!("{n} {what}")))
+                .chain(
+                    [
+                        Page::Team,
+                        Page::Journal,
+                        Page::Environments,
+                        Page::Ci,
+                        Page::Milestones,
+                        Page::Overlaps,
+                    ]
+                    .into_iter()
+                    .filter_map(|page| {
+                        let b = g.rail_badges.get(page).filter(|b| b.n > 0)?;
+                        Some((page, b.n, b.tone, b.hint.clone()))
+                    }),
+                )
+                .collect();
             ui.vertical_centered(|ui| {
                 let mut items = vec![
                     (
@@ -881,15 +902,15 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     };
                     let badge = badges
                         .iter()
-                        .find(|b| b.0 == target && b.1 > 0)
-                        .map(|b| (b.1, b.2));
-                    let hint = match badges.iter().find(|b| b.0 == target && b.1 > 0) {
-                        Some((_, n, _, what)) => format!("{hint} · {n} {what}"),
+                        .find(|b| b.0 == target)
+                        .map(|b| (b.1, b.2, b.3.clone()));
+                    let hint = match &badge {
+                        Some((_, _, what)) => format!("{hint}\n{what}"),
                         None => hint,
                     };
                     let response =
                         rail_item(ui, &theme, icon, label, size.height(), page == target);
-                    if let Some((n, tone)) = badge {
+                    if let Some((n, tone, _)) = badge {
                         rail_badge(ui, &theme, response.rect, n, tone);
                     }
                     if response.on_hover_text(hint).clicked() {
@@ -916,30 +937,62 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
 
 /// A count on a rail entry's top-right corner, in `tone`.
 fn rail_badge(ui: &Ui, theme: &Theme, item: Rect, n: usize, tone: bevel_theme::Tone) {
-    let text = if n > 99 {
-        "99+".to_string()
-    } else {
-        n.to_string()
-    };
-    let galley = ui
-        .painter()
-        .layout_no_wrap(text, fonts::semibold(9.5), Color32::WHITE);
-    let width = (galley.size().x + 8.0).max(16.0);
-    let rect = Rect::from_center_size(
-        egui::pos2(item.right() - 6.0, item.top() + 6.0),
-        Vec2::new(width, 16.0),
-    );
-    ui.painter()
-        .rect_filled(rect.expand(1.5), CornerRadius::same(10), theme.palette.rail);
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(8), tone.fg);
+    let text = badge_text(n);
     let text_color = if theme.mode == bevel_theme::Mode::Dark {
         theme.palette.rail
     } else {
         Color32::WHITE
     };
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text, fonts::semibold(9.5), text_color);
+    let ink = ink_rect(&galley);
+    let width = (ink.map_or(galley.size().x, |r| r.width()) + 9.0).max(16.0);
+    // A wider number grows the badge leftwards: its right edge stays inside
+    // the rail.
+    let rect = Rect::from_min_max(
+        egui::pos2(item.right() + 2.0 - width, item.top() - 2.0),
+        egui::pos2(item.right() + 2.0, item.top() + 14.0),
+    );
     ui.painter()
-        .galley(rect.center() - galley.size() / 2.0, galley, text_color);
+        .rect_filled(rect.expand(1.5), CornerRadius::same(10), theme.palette.rail);
+    ui.painter()
+        .rect_filled(rect, CornerRadius::same(8), tone.fg);
+    // Centred on the glyphs' ink, not on the line box: the line box has room
+    // under the baseline that digits never use, which pushed them up.
+    let at = rect.center() - ink.map_or(galley.size() / 2.0, |r| r.center().to_vec2());
+    let ppp = ui.ctx().pixels_per_point();
+    let at = egui::pos2((at.x * ppp).round() / ppp, (at.y * ppp).round() / ppp);
+    ui.painter().galley(at, galley, text_color);
+}
+
+/// A badge's number: "99+" past 99.
+fn badge_text(n: usize) -> String {
+    if n > 99 {
+        "99+".to_string()
+    } else {
+        n.to_string()
+    }
+}
+
+/// Where `galley`'s glyphs draw, relative to its top-left corner.
+fn ink_rect(galley: &egui::Galley) -> Option<Rect> {
+    galley
+        .rows
+        .iter()
+        .flat_map(|row| {
+            row.row
+                .glyphs
+                .iter()
+                .filter(|g| !g.uv_rect.is_nothing())
+                .map(move |g| {
+                    Rect::from_min_size(
+                        row.pos + g.pos.to_vec2() + g.uv_rect.offset,
+                        g.uv_rect.size,
+                    )
+                })
+        })
+        .reduce(|a, b| a.union(b))
 }
 
 /// How the rail's entries fit the window's height.

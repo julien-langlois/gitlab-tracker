@@ -12,6 +12,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 
 use super::board::{self, GAP};
 use super::promote::{self, Row, Stage};
+use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::widgets::{button, muted, primary_button};
 use super::GuiApp;
@@ -1516,6 +1517,81 @@ fn state_text(model: &Model, now: DateTime<Utc>) -> String {
         out.push('\n');
     }
     out
+}
+
+/// Waiting this long on a branch already shows.
+const SLOW_DAYS: f64 = 3.0;
+
+/// The rail's badge: the environments whose last deployment failed (red), and
+/// the MRs waiting to go one branch further for [`LATE_DAYS`] (orange) or
+/// [`SLOW_DAYS`] (amber).
+pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
+    let overview = g.details.project_ready();
+    let mut failed: Vec<String> = Vec::new();
+    let mut seen: Vec<&str> = Vec::new();
+    // The deployments come newest first: an environment's first is its last.
+    for d in overview.map_or(&[][..], |o| o.deployments.as_slice()) {
+        if seen.contains(&d.environment.as_str()) {
+            continue;
+        }
+        seen.push(&d.environment);
+        if d.status == "failed" {
+            failed.push(d.environment.clone());
+        }
+    }
+    let model = model(&g.app, overview);
+    let mut waiting: Vec<(&str, f64)> = Vec::new();
+    for i in 0..model.branches.len().saturating_sub(1) {
+        for (id, _, since) in model.gap(i, i + 1) {
+            let Some(days) = since.map(|s| board::days_between(s, now)) else {
+                continue;
+            };
+            if days >= SLOW_DAYS && !waiting.iter().any(|w| w.0 == id) {
+                waiting.push((id, days));
+            }
+        }
+    }
+    let late = waiting.iter().filter(|w| w.1 >= LATE_DAYS).count();
+    let tones = &g.theme.tones;
+    let tone = if !failed.is_empty() {
+        tones.red
+    } else if late > 0 {
+        tones.orange
+    } else if !waiting.is_empty() {
+        tones.amber
+    } else {
+        return None;
+    };
+    let mut lines = Vec::new();
+    if !failed.is_empty() {
+        lines.push(rail_badges::listed(
+            tn(
+                failed.len() as u64,
+                "{n} environment whose last deployment failed",
+                "{n} environments whose last deployment failed",
+            ),
+            rail_badges::names(&failed, 3),
+        ));
+    }
+    if late > 0 {
+        lines.push(tn(
+            late as u64,
+            "{n} MR waits for a week or more to go one branch further",
+            "{n} MRs wait for a week or more to go one branch further",
+        ));
+    }
+    if waiting.len() > late {
+        lines.push(tn(
+            (waiting.len() - late) as u64,
+            "{n} MR waits for 3 days or more to go one branch further",
+            "{n} MRs wait for 3 days or more to go one branch further",
+        ));
+    }
+    Some(Badge {
+        n: failed.len() + waiting.len(),
+        tone,
+        hint: lines.join("\n"),
+    })
 }
 
 #[cfg(test)]

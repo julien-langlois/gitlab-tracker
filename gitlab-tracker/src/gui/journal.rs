@@ -10,6 +10,7 @@ use chrono::{DateTime, Datelike, Duration, Local, Timelike, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Ui, Vec2};
 
 use super::board::{self, GAP};
+use super::rail_badges::Badge;
 use super::shell::Sizes;
 use super::widgets::{button, muted, primary_button, split_person, FieldLook};
 use super::{GuiApp, SlotState};
@@ -1214,6 +1215,54 @@ fn inspector(
         g.activate(event.tab);
         g.show_mr(&event.id);
     }
+}
+
+/// The rail's badge: the events since the journal was last marked as read (the
+/// last day at most when it never was), others' and not the bots'; red when a
+/// pipeline failed among them, else blue.
+pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
+    let floor = now - Duration::days(PERIODS[1].0);
+    let since = match g.feed_seen_at {
+        Some(seen) => seen.with_timezone(&Utc).max(floor),
+        None => now - Duration::days(1),
+    };
+    let me = g.app.config.gitlab_username.as_deref();
+    let (all, _) = collect(g, since);
+    let new: Vec<&Event> = all
+        .iter()
+        .filter(|e| e.when > since)
+        .filter(|e| {
+            e.people
+                .first()
+                .is_none_or(|who| !board::is_bot(who) && me.is_none_or(|me| login(who) != me))
+        })
+        .collect();
+    if new.is_empty() {
+        return None;
+    }
+    let failed = new
+        .iter()
+        .filter(|e| e.kind == Kind::Pipeline && e.glyph == "✕")
+        .count();
+    let tones = &g.theme.tones;
+    let mut hint = tn(
+        new.len() as u64,
+        "{n} new event since the journal was last read",
+        "{n} new events since the journal was last read",
+    );
+    if failed > 0 {
+        hint.push('\n');
+        hint.push_str(&tn(
+            failed as u64,
+            "{n} failed pipeline among them",
+            "{n} failed pipelines among them",
+        ));
+    }
+    Some(Badge {
+        n: new.len(),
+        tone: if failed > 0 { tones.red } else { tones.blue },
+        hint,
+    })
 }
 
 #[cfg(test)]

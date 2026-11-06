@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, GAP};
+use super::rail_badges::Badge;
 use super::shell::Sizes;
 use super::widgets::{avatar, button, muted, primary_button, semibold, split_person};
 use super::GuiApp;
@@ -1289,6 +1290,74 @@ fn release_notes(m: &Milestone, last: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+/// The rail's badge: the MRs left in the next milestone with a due date, in the
+/// tone of its outlook: red when past due or projected late, orange when due
+/// within 3 days with MRs back on their author or in draft, amber when the
+/// projection lands 2 days or less before the date (or cannot be made), green
+/// when on schedule.
+pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
+    let all = milestones(&g.app);
+    // Sorted by due date: the first undone with a date is the next.
+    let m = all
+        .iter()
+        .find(|m| !m.title.is_empty() && !m.done() && m.due.is_some())?;
+    let due = m.due?;
+    let left = m.items.len() - m.delivered();
+    let today = now.date_naive();
+    let days = (due - today).num_days();
+    let slip = projection(m, pace(&g.app, now), now).map(|p| (p - due).num_days());
+    let stuck = m
+        .items
+        .iter()
+        .filter(|i| matches!(i.stand, Stand::OnAuthor | Stand::Draft))
+        .count();
+    let tones = &g.theme.tones;
+    let tone = if days < 0 || slip.is_some_and(|s| s > 0) {
+        tones.red
+    } else if days <= 3 && stuck > 0 {
+        tones.orange
+    } else if slip.is_none_or(|s| s >= -2) {
+        tones.amber
+    } else {
+        tones.green
+    };
+    let (due_text, _) = due_text(m.due, now, false, &g.theme);
+    let mut hint = format!(
+        "{} · {} · {}",
+        m.title,
+        tn(left as u64, "{n} MR left", "{n} MRs left"),
+        due_text
+    );
+    hint.push('\n');
+    hint.push_str(&match slip {
+        None => tl("No delivery in the last 4 weeks: no projection").to_string(),
+        Some(s) if s > 0 => tn(
+            s as u64,
+            "Projected {n} day late",
+            "Projected {n} days late",
+        ),
+        Some(0) => tl("Projected on its due date").to_string(),
+        Some(s) => tn(
+            (-s) as u64,
+            "Projected {n} day early",
+            "Projected {n} days early",
+        ),
+    });
+    if stuck > 0 {
+        hint.push('\n');
+        hint.push_str(&tn(
+            stuck as u64,
+            "{n} MR back on its author or in draft",
+            "{n} MRs back on their author or in draft",
+        ));
+    }
+    Some(Badge {
+        n: left,
+        tone,
+        hint,
+    })
 }
 
 #[cfg(test)]

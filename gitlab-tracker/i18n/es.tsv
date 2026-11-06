@@ -1498,3 +1498,24 @@ rail	Overlaps	Solapes
 @plural	day early|days early	día de adelanto|días de adelanto
 	Activity by hour	Actividad por hora
 	Activity by day	Actividad por día
+
+# Rail badges of the pages under the rule
+@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} revisión espera más allá del plazo de recordatorio|{n} revisiones esperan más allá del plazo de recordatorio
+	The oldest: !{id}, for {name}'s review, {time}	La más antigua: !{id}, revisión de {name}, {time}
+@plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} revisor sobrecargado|{n} revisores sobrecargados
+@plural	{n} new event since the journal was last read|{n} new events since the journal was last read	{n} evento nuevo desde la última lectura del diario|{n} eventos nuevos desde la última lectura del diario
+@plural	{n} failed pipeline among them|{n} failed pipelines among them	entre ellos {n} pipeline fallido|entre ellos {n} pipelines fallidos
+@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} entorno cuyo último despliegue falló|{n} entornos cuyo último despliegue falló
+@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR espera una semana o más para pasar a la siguiente rama|{n} MR esperan una semana o más para pasar a la siguiente rama
+@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR espera 3 días o más para pasar a la siguiente rama|{n} MR esperan 3 días o más para pasar a la siguiente rama
+@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR abierto bloqueado por un pipeline fallido|{n} MR abiertos bloqueados por un pipeline fallido
+@plural	{n} of them failed on a flaky job: a rerun may do|{n} of them failed on a flaky job: a rerun may do	{n} falló en un job inestable: volver a lanzarlo puede bastar|{n} fallaron en un job inestable: volver a lanzarlo puede bastar
+@plural	{n} job fails more often than before|{n} jobs fail more often than before	{n} job falla más a menudo que antes|{n} jobs fallan más a menudo que antes
+	No delivery in the last 4 weeks: no projection	Ninguna entrega en las últimas 4 semanas: sin proyección
+	Projected on its due date	Proyectado para su fecha límite
+@plural	Projected {n} day late|Projected {n} days late	Proyectado con {n} día de retraso|Proyectado con {n} días de retraso
+@plural	Projected {n} day early|Projected {n} days early	Proyectado con {n} día de adelanto|Proyectado con {n} días de adelanto
+@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} MR devuelto a su autor o en borrador|{n} MR devueltos a su autor o en borrador
+@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} par de MR abiertos, uno tuyo, cambia los mismos archivos|{n} pares de MR abiertos, uno tuyo, cambian los mismos archivos
+@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} par de MR abiertos cambia los mismos archivos|{n} pares de MR abiertos cambian los mismos archivos
+	{what}: {list}	{what}: {list}

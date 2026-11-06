@@ -11,6 +11,7 @@ use chrono::{DateTime, Duration, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
+use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::widgets::{button, muted, primary_button, split_person};
 use super::GuiApp;
@@ -1614,6 +1615,46 @@ fn report(overlaps: &Overlaps) -> String {
         out.push_str(&format!("- !{} × !{} · {files}\n", p.a, p.b));
     }
     out
+}
+
+/// The rail's badge: the pairs of open MRs changing the same files (only those
+/// with one of mine when the username is known), in the tone of the worst: the
+/// same lines, close lines, the same file.
+pub fn badge(g: &GuiApp) -> Option<Badge> {
+    let overlaps = analyze(&g.app, g.overlaps.lockfiles, g.overlaps.drafts);
+    let known = me(&g.app).is_some();
+    let pairs: Vec<Level> = overlaps
+        .pairs
+        .iter()
+        .filter(|p| !known || mine(&g.app, &overlaps, p))
+        .map(Pair::level)
+        .collect();
+    let worst = pairs.iter().min()?;
+    let mut hint = if known {
+        tn(
+            pairs.len() as u64,
+            "{n} pair of open MRs, one of them yours, change the same files",
+            "{n} pairs of open MRs, one of them yours, change the same files",
+        )
+    } else {
+        tn(
+            pairs.len() as u64,
+            "{n} pair of open MRs change the same files",
+            "{n} pairs of open MRs change the same files",
+        )
+    };
+    for level in [Level::SameLines, Level::Near, Level::SameFile] {
+        let n = pairs.iter().filter(|l| **l == level).count();
+        if n > 0 {
+            hint.push('\n');
+            hint.push_str(&rail_badges::listed(level.label(), n.to_string()));
+        }
+    }
+    Some(Badge {
+        n: pairs.len(),
+        tone: worst.tone(&g.theme),
+        hint,
+    })
 }
 
 #[cfg(test)]

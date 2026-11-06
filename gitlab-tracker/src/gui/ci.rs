@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
+use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::widgets::{button, muted, primary_button};
 use super::GuiApp;
@@ -1256,6 +1257,62 @@ fn inspector(
     if let Some(id) = open {
         g.show_mr(&id);
     }
+}
+
+/// The rail's badge: the open MRs held back by a failed pipeline (red, orange
+/// when each failed on a flaky job: a rerun may do), else the jobs failing more
+/// often than in the first half of the period (amber).
+pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
+    let days = PERIODS[g.ci.period.min(PERIODS.len() - 1)].0;
+    let ci = analyze(&g.app, now, days);
+    let tones = &g.theme.tones;
+    if !ci.blocked.is_empty() {
+        let flaky = ci.blocked.iter().filter(|b| b.flaky).count();
+        let mut hint = tn(
+            ci.blocked.len() as u64,
+            "{n} open MR held back by a failed pipeline",
+            "{n} open MRs held back by a failed pipeline",
+        );
+        if flaky > 0 {
+            hint.push('\n');
+            hint.push_str(&tn(
+                flaky as u64,
+                "{n} of them failed on a flaky job: a rerun may do",
+                "{n} of them failed on a flaky job: a rerun may do",
+            ));
+        }
+        return Some(Badge {
+            n: ci.blocked.len(),
+            tone: if flaky == ci.blocked.len() {
+                tones.orange
+            } else {
+                tones.red
+            },
+            hint,
+        });
+    }
+    let rising: Vec<String> = ci
+        .jobs
+        .iter()
+        .filter(|j| {
+            j.failure_rate >= 0.2
+                && j.rate_before
+                    .is_some_and(|before| j.failure_rate >= before + 0.1)
+        })
+        .map(|j| j.name.clone())
+        .collect();
+    (!rising.is_empty()).then(|| Badge {
+        n: rising.len(),
+        tone: tones.amber,
+        hint: rail_badges::listed(
+            tn(
+                rising.len() as u64,
+                "{n} job fails more often than before",
+                "{n} jobs fail more often than before",
+            ),
+            rail_badges::names(&rising, 3),
+        ),
+    })
 }
 
 #[cfg(test)]

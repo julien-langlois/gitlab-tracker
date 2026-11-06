@@ -654,7 +654,7 @@ gitlab-tracker gui            # the active project, as the TUI
 gitlab-tracker --demo gui     # demo data, read-only
 ```
 
-The window never prompts in the terminal. With no project configured it opens a setup window; a project whose token is not in the OS keyring (or `GITLAB_TOKEN` / `REDMINE_TOKEN`) asks for it in the window, then saves it to the keyring.
+On Linux the window is borderless: it draws its own title bar and buttons, laid out as the desktop sets them (`GITLAB_TRACKER_TITLEBAR=system` keeps the desktop's frame instead). The window never prompts in the terminal. With no project configured it opens a setup window; a project whose token is not in the OS keyring (or `GITLAB_TOKEN` / `REDMINE_TOKEN`) asks for it in the window, then saves it to the keyring.
 
 **Projects in tabs.** Each project opens in its own title-bar tab and keeps refreshing while hidden (its notifications, state saves and automatic tracker transitions go on); a dot on a hidden tab says something changed, red when a fetch failed. `+` (or `W`) lists the projects of `projects.toml` and offers **New project…**: GitLab URL, project (id or path), optional name and branches, the token and, with Redmine, the tracker's URL and API key. When another project already uses the same GitLab (or Redmine) instance, the form says a token is saved and needs not be typed again. The project and the tokens are checked against GitLab and Redmine before anything is saved; an empty name or branch list takes GitLab's name and default branch, and your username is read from the token (`gitlab_username`). The open tabs come back at the next launch. Keys: `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+1…9`, `Ctrl+W` (or a middle click) closes a tab.
 

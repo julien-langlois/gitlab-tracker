@@ -1498,3 +1498,24 @@ rail	Overlaps	Conflitos
 @plural	day early|days early	dia adiantado|dias adiantados
 	Activity by hour	Atividade por hora
 	Activity by day	Atividade por dia
+
+# Rail badges of the pages under the rule
+@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} revisão espera além do prazo de lembrete|{n} revisões esperam além do prazo de lembrete
+	The oldest: !{id}, for {name}'s review, {time}	A mais antiga: !{id}, revisão de {name}, {time}
+@plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} revisor sobrecarregado|{n} revisores sobrecarregados
+@plural	{n} new event since the journal was last read|{n} new events since the journal was last read	{n} evento novo desde a última leitura do diário|{n} eventos novos desde a última leitura do diário
+@plural	{n} failed pipeline among them|{n} failed pipelines among them	entre eles {n} pipeline com falha|entre eles {n} pipelines com falha
+@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} ambiente cujo último deploy falhou|{n} ambientes cujo último deploy falhou
+@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR espera há uma semana ou mais para ir ao próximo branch|{n} MRs esperam há uma semana ou mais para ir ao próximo branch
+@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR espera há 3 dias ou mais para ir ao próximo branch|{n} MRs esperam há 3 dias ou mais para ir ao próximo branch
+@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR aberto bloqueado por um pipeline com falha|{n} MRs abertos bloqueados por um pipeline com falha
+@plural	{n} of them failed on a flaky job: a rerun may do|{n} of them failed on a flaky job: a rerun may do	{n} falhou em um job instável: rodar de novo pode bastar|{n} falharam em um job instável: rodar de novo pode bastar
+@plural	{n} job fails more often than before|{n} jobs fail more often than before	{n} job falha com mais frequência que antes|{n} jobs falham com mais frequência que antes
+	No delivery in the last 4 weeks: no projection	Nenhuma entrega nas últimas 4 semanas: sem projeção
+	Projected on its due date	Projetado para a data prevista
+@plural	Projected {n} day late|Projected {n} days late	Projetado com {n} dia de atraso|Projetado com {n} dias de atraso
+@plural	Projected {n} day early|Projected {n} days early	Projetado com {n} dia de antecedência|Projetado com {n} dias de antecedência
+@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} MR de volta ao autor ou em rascunho|{n} MRs de volta ao autor ou em rascunho
+@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} par de MRs abertos, um deles seu, altera os mesmos arquivos|{n} pares de MRs abertos, um deles seu, alteram os mesmos arquivos
+@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} par de MRs abertos altera os mesmos arquivos|{n} pares de MRs abertos alteram os mesmos arquivos
+	{what}: {list}	{what}: {list}

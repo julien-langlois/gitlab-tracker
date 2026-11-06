@@ -28,6 +28,7 @@ mod overlaps;
 mod palette;
 mod prefs;
 mod promote;
+mod rail_badges;
 mod setup;
 mod shell;
 mod sidebar;
@@ -163,7 +164,15 @@ struct Launch {
 
 /// Opens the window and runs until it is closed.
 fn open_window(launch: Launch) -> anyhow::Result<()> {
-    let frame = bevel_window::Choice::probe(TITLEBAR_PREFIX).into_frame();
+    let choice = bevel_window::Choice::probe(TITLEBAR_PREFIX);
+    // Borderless on Linux, as VS Code: the window draws its own title bar and
+    // buttons whatever the desktop offers, so a slow or skipped Wayland probe
+    // never falls back to winit's grey frame. `GITLAB_TRACKER_TITLEBAR=system`
+    // keeps the desktop's frame.
+    let frame = match (choice.overridden(), cfg!(target_os = "linux")) {
+        (None, true) => bevel_window::Frame::App(bevel_window::Layout::from_desktop()),
+        _ => choice.into_frame(),
+    };
     let viewport = bevel_window::decorate(
         egui::ViewportBuilder::default()
             .with_title("GitLab Tracker")
@@ -314,6 +323,8 @@ struct GuiApp {
     /// The ids of the listed MRs behind each cockpit counter (focus aside),
     /// computed once per frame: the cockpit, the rail badges and the focus use it.
     members: HashMap<String, Vec<String>>,
+    /// The rail's badges of the pages under its rule, kept for a moment.
+    rail_badges: rail_badges::Cache,
     /// The counters when the list was first complete: the cockpit's trends.
     baseline: Option<Baseline>,
     /// The cockpit hides its counters at zero.
@@ -458,6 +469,7 @@ impl GuiApp {
             language_draft: language.clone(),
             language,
             members,
+            rail_badges: rail_badges::Cache::default(),
             baseline,
             hide_zeros: false,
             group_by: table::GroupBy::None,
@@ -1685,6 +1697,7 @@ impl eframe::App for GuiApp {
         tour::drive(self, ui.ctx());
         self.dispatch_pending();
         self.count_members();
+        rail_badges::refresh(self, ui.ctx());
         self.track_sync();
         self.poll_tracker();
         self.window_size = ui

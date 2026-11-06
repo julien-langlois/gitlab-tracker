@@ -210,6 +210,14 @@ impl Details {
         }
     }
 
+    /// The project's overview as last read, without asking for a newer one.
+    pub fn project_ready(&self) -> Option<&crate::gitlab_detail::ProjectOverview> {
+        match self.project.as_ref()? {
+            (_, Fetch::Ready(data)) => Some(data),
+            _ => None,
+        }
+    }
+
     /// Unfolds the first file of the MR's diff when none is (the MR page shows
     /// a patch at once).
     pub fn open_first_file(&mut self, mr_id: &str) {

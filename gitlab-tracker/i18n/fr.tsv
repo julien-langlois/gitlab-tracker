@@ -1498,3 +1498,24 @@ rail	Overlaps	Conflits
 @plural	day early|days early	jour d'avance|jours d'avance
 	Activity by hour	Activité par heure
 	Activity by day	Activité par jour
+
+# Rail badges of the pages under the rule
+@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} revue attend au-delà du délai de relance|{n} revues attendent au-delà du délai de relance
+	The oldest: !{id}, for {name}'s review, {time}	La plus ancienne : !{id}, revue de {name}, {time}
+@plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} relecteur surchargé|{n} relecteurs surchargés
+@plural	{n} new event since the journal was last read|{n} new events since the journal was last read	{n} nouvel événement depuis la dernière lecture du journal|{n} nouveaux événements depuis la dernière lecture du journal
+@plural	{n} failed pipeline among them|{n} failed pipelines among them	dont {n} pipeline en échec|dont {n} pipelines en échec
+@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} environnement dont le dernier déploiement a échoué|{n} environnements dont le dernier déploiement a échoué
+@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR attend depuis une semaine ou plus de passer à la branche suivante|{n} MRs attendent depuis une semaine ou plus de passer à la branche suivante
+@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR attend depuis 3 jours ou plus de passer à la branche suivante|{n} MRs attendent depuis 3 jours ou plus de passer à la branche suivante
+@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR ouverte bloquée par un pipeline en échec|{n} MRs ouvertes bloquées par un pipeline en échec
+@plural	{n} of them failed on a flaky job: a rerun may do|{n} of them failed on a flaky job: a rerun may do	{n} a échoué sur un job instable : une relance peut suffire|{n} ont échoué sur un job instable : une relance peut suffire
+@plural	{n} job fails more often than before|{n} jobs fail more often than before	{n} job échoue plus souvent qu'avant|{n} jobs échouent plus souvent qu'avant
+	No delivery in the last 4 weeks: no projection	Aucune livraison ces 4 dernières semaines : pas de projection
+	Projected on its due date	Projeté à sa date d'échéance
+@plural	Projected {n} day late|Projected {n} days late	Projeté avec {n} jour de retard|Projeté avec {n} jours de retard
+@plural	Projected {n} day early|Projected {n} days early	Projeté avec {n} jour d'avance|Projeté avec {n} jours d'avance
+@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} MR revenue à son auteur ou en brouillon|{n} MRs revenues à leur auteur ou en brouillon
+@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} paire de MRs ouvertes, dont une à toi, modifie les mêmes fichiers|{n} paires de MRs ouvertes, dont une à toi, modifient les mêmes fichiers
+@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} paire de MRs ouvertes modifie les mêmes fichiers|{n} paires de MRs ouvertes modifient les mêmes fichiers
+	{what}: {list}	{what} : {list}

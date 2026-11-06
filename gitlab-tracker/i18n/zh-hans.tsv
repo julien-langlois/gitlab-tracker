@@ -1498,3 +1498,24 @@ rail	Overlaps	重叠
 @plural	day early|days early	天提前
 	Activity by hour	按小时的活动
 	Activity by day	按天的活动
+
+# Rail badges of the pages under the rule
+@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} 个评审等待超过提醒期限
+	The oldest: !{id}, for {name}'s review, {time}	最早的：!{id}，等待 {name} 评审，{time}
+@plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} 位评审人负担过重
+@plural	{n} new event since the journal was last read|{n} new events since the journal was last read	自上次阅读日志以来有 {n} 个新事件
+@plural	{n} failed pipeline among them|{n} failed pipelines among them	其中 {n} 个流水线失败
+@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} 个环境最近一次部署失败
+@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} 个 MR 已等待一周或更久才能进入下一分支
+@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} 个 MR 已等待 3 天或更久才能进入下一分支
+@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} 个打开的 MR 被失败的流水线阻塞
+@plural	{n} of them failed on a flaky job: a rerun may do|{n} of them failed on a flaky job: a rerun may do	其中 {n} 个因不稳定的作业失败：重跑或许就行
+@plural	{n} job fails more often than before|{n} jobs fail more often than before	{n} 个作业比以前更常失败
+	No delivery in the last 4 weeks: no projection	过去 4 周没有交付：无法预测
+	Projected on its due date	预计在截止日期完成
+@plural	Projected {n} day late|Projected {n} days late	预计延迟 {n} 天
+@plural	Projected {n} day early|Projected {n} days early	预计提前 {n} 天
+@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} 个 MR 退回作者或处于草稿
+@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} 对打开的 MR（其中一个是你的）修改了相同文件
+@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} 对打开的 MR 修改了相同文件
+	{what}: {list}	{what}：{list}
