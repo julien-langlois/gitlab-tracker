@@ -269,7 +269,7 @@ impl Details {
 
     fn load_diff(&mut self, app: &App, mr_id: &str, ctx: &egui::Context) {
         let fetch = if app.read_only {
-            Fetch::Ready(crate::demo::demo_file_diffs())
+            Fetch::Ready(crate::demo::demo_file_diffs(app, mr_id))
         } else {
             let (url, token, project, mr) = (
                 app.base_url.clone(),
@@ -286,7 +286,7 @@ impl Details {
 
     fn load_log(&mut self, app: &App, job_id: u64, ctx: &egui::Context) {
         let fetch = if app.read_only {
-            Fetch::Ready(crate::demo::demo_job_log())
+            Fetch::Ready(crate::demo::demo_job_log(app, job_id))
         } else {
             let (url, token, project) = (
                 app.base_url.clone(),
@@ -331,17 +331,27 @@ impl Details {
 }
 
 impl Details {
-    /// Development aid (debug builds): the demo's diff and log, unfolded.
+    /// Development aid (debug builds): the demo MR's diff, unfolded, and the
+    /// log of its last pipeline's first job.
     #[cfg(debug_assertions)]
-    pub fn show_demo(&mut self, mr_id: &str) {
-        let files = crate::demo::demo_file_diffs();
+    pub fn show_demo(&mut self, app: &App, mr_id: &str) {
+        let files = crate::demo::demo_file_diffs(app, mr_id);
         if let Some(first) = files.first() {
             self.open_files
                 .insert((mr_id.to_string(), first.new_path.clone()));
         }
         self.diffs.insert(mr_id.to_string(), Fetch::Ready(files));
-        self.logs
-            .insert(0, Fetch::Ready(crate::demo::demo_job_log()));
+        let failed = app
+            .mrs
+            .iter()
+            .find(|mr| mr.id == mr_id)
+            .and_then(|mr| mr.pipelines.first())
+            .and_then(|p| p.jobs.iter().find(|j| j.status == "failed"))
+            .map(|j| j.id);
+        if let Some(job) = failed {
+            self.logs
+                .insert(job, Fetch::Ready(crate::demo::demo_job_log(app, job)));
+        }
     }
 }
 

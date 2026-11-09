@@ -96,18 +96,14 @@ pub fn open(g: &mut GuiApp, ctx: &egui::Context, config: CliffConfig, milestone:
 fn generate(g: &GuiApp, ctx: &egui::Context, dialog: &mut Dialog) {
     let version = Some(dialog.version.trim().to_string()).filter(|v| !v.is_empty());
     if g.app.read_only {
-        // The demo's merged MRs, as if squashed onto the branch.
-        let titles: Vec<String> = g
-            .app
-            .mrs
-            .iter()
-            .filter(|mr| mr.state == crate::models::GitlabMrState::Merged)
-            .map(|mr| mr.title.clone())
-            .collect();
-        dialog.result = Some(match crate::changelog::demo(&titles, version.as_deref()) {
-            Ok(done) => Fetch::Ready(done),
-            Err(e) => Fetch::Failed(e),
-        });
+        // The MRs merged into the default branch since the last release.
+        let (previous, titles) = crate::demo::demo_changelog(&g.app);
+        dialog.result = Some(
+            match crate::changelog::demo(&titles, &previous, version.as_deref()) {
+                Ok(done) => Fetch::Ready(done),
+                Err(e) => Fetch::Failed(e),
+            },
+        );
         return;
     }
     dialog.result = Some(Fetch::spawn(

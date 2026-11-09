@@ -653,6 +653,7 @@ pub fn days_text(days: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::demo::iid;
     use crate::models::ReviewActivity;
 
     async fn demo() -> App {
@@ -668,7 +669,7 @@ mod tests {
     #[tokio::test]
     async fn my_conflicting_mr_waits_on_me() {
         let app = demo().await;
-        let step = of(&app, mr(&app, "102"), Some("thomas_db"));
+        let step = of(&app, mr(&app, &iid("pool-deadlock")), Some("thomas_db"));
         assert_eq!(step.actor, Actor::Author);
         assert!(step.mine);
         assert_eq!(step.bucket(), Bucket::OnMe);
@@ -680,7 +681,7 @@ mod tests {
             })
         ));
         // Someone else sees it as the author's.
-        let other = of(&app, mr(&app, "102"), Some("nobody"));
+        let other = of(&app, mr(&app, &iid("pool-deadlock")), Some("nobody"));
         assert_eq!(other.bucket(), Bucket::OnAuthor);
     }
 
@@ -688,7 +689,7 @@ mod tests {
     async fn a_merged_mr_waits_on_the_deployment_until_the_last_branch() {
         let app = demo().await;
         // On main and staging, not production.
-        let step = of(&app, mr(&app, "101"), None);
+        let step = of(&app, mr(&app, &iid("oauth-pkce")), None);
         assert_eq!(step.actor, Actor::Deploy);
         assert_eq!(
             step.todos,
@@ -697,9 +698,15 @@ mod tests {
             }]
         );
         // On every branch: done.
-        assert_eq!(of(&app, mr(&app, "104"), None).actor, Actor::Nobody);
+        assert_eq!(
+            of(&app, mr(&app, &iid("eta-timezone")), None).actor,
+            Actor::Nobody
+        );
         // Closed: nothing left.
-        assert_eq!(of(&app, mr(&app, "105"), None).actor, Actor::Nobody);
+        assert_eq!(
+            of(&app, mr(&app, &iid("juniper-prototype")), None).actor,
+            Actor::Nobody
+        );
     }
 
     #[tokio::test]
@@ -707,7 +714,11 @@ mod tests {
         let mut app = demo().await;
         let now = Utc::now();
         let at = |days: i64| (now - chrono::Duration::days(days)).to_rfc3339();
-        let m = app.mrs.iter_mut().find(|m| m.id == "106").unwrap();
+        let m = app
+            .mrs
+            .iter_mut()
+            .find(|m| m.id == iid("tokio-ecosystem"))
+            .unwrap();
         m.reviewers = vec!["Thomas Dubosc (@thomas_db)".into()];
         m.mergeability = MergeabilityStatus::NotApproved;
         m.review = Some(ReviewActivity {
@@ -715,7 +726,7 @@ mod tests {
             last_activity_by: [("thomas_db".to_string(), at(3))].into(),
             ..Default::default()
         });
-        let step = of(&app, mr(&app, "106"), Some("thomas_db"));
+        let step = of(&app, mr(&app, &iid("tokio-ecosystem")), Some("thomas_db"));
         assert_eq!(step.actor, Actor::Reviewers);
         assert!(step.mine);
         assert_eq!(step.todos, vec![Todo::Review { again: true }]);
@@ -728,7 +739,11 @@ mod tests {
         let mut app = demo().await;
         let now = Utc::now();
         let at = |days: i64| (now - chrono::Duration::days(days)).to_rfc3339();
-        let m = app.mrs.iter_mut().find(|m| m.id == "106").unwrap();
+        let m = app
+            .mrs
+            .iter_mut()
+            .find(|m| m.id == iid("tokio-ecosystem"))
+            .unwrap();
         m.reviewers = vec!["Alex Devries (@alex_dev)".into()];
         m.mergeability = MergeabilityStatus::NotApproved;
         let thread = |answered: bool| MrThread {
@@ -742,16 +757,20 @@ mod tests {
         };
         m.threads = vec![thread(true)];
         m.review = Some(ReviewActivity {
-            last_activity_by: [("bot_renovate".to_string(), at(2))].into(),
+            last_activity_by: [("renovate_bot".to_string(), at(2))].into(),
             ..Default::default()
         });
-        let step = of(&app, mr(&app, "106"), None);
+        let step = of(&app, mr(&app, &iid("tokio-ecosystem")), None);
         assert_eq!(step.actor, Actor::Reviewers);
         assert!(step.todos.contains(&Todo::ReadAnswers { count: 1 }));
         // A later note from the reviewer: the author's turn again.
-        let m = app.mrs.iter_mut().find(|m| m.id == "106").unwrap();
+        let m = app
+            .mrs
+            .iter_mut()
+            .find(|m| m.id == iid("tokio-ecosystem"))
+            .unwrap();
         m.threads = vec![thread(false)];
-        let step = of(&app, mr(&app, "106"), None);
+        let step = of(&app, mr(&app, &iid("tokio-ecosystem")), None);
         assert_eq!(step.actor, Actor::Author);
         assert!(
             matches!(&step.todos[0], Todo::AnswerThreads { count: 1, from } if from[0].contains("Alex"))

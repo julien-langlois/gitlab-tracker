@@ -651,13 +651,16 @@ mod tests {
         let stages = stages_now(&app);
         let total: usize = stages.iter().map(|s| s.count).sum();
         assert!(total > 0);
-        // Review, author, merge, then !101 from staging to production.
-        assert_eq!(stages.len(), 4);
-        assert_eq!(stages[3].name, "On staging, not on production");
-        assert_eq!(
-            stage_members(&app, &stages[3].stage.key()).map(|v| v.len()),
-            Some(1)
-        );
+        // Review, author, merge, main to staging, staging to production.
+        assert_eq!(stages.len(), 5);
+        assert_eq!(stages[4].name, "On staging, not on production");
+        let mut ready = stage_members(&app, &stages[4].stage.key()).unwrap();
+        ready.sort();
+        let mut expected: Vec<String> = ["oauth-pkce", "csv-export", "volumetric"]
+            .map(crate::demo::iid)
+            .to_vec();
+        expected.sort();
+        assert_eq!(ready, expected);
         assert!(stage_members(&app, "Blocked").is_none());
     }
 }

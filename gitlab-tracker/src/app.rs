@@ -1588,6 +1588,40 @@ fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> 
     })
 }
 
+/// What an MR looked like when the app was last closed: its id, state,
+/// branches and last pipeline.
+pub(crate) type LastSeen = (
+    String,
+    GitlabMrState,
+    HashSet<String>,
+    Option<PipelineState>,
+);
+
+impl App {
+    /// The startup's "since last session" changes, against what the MRs looked
+    /// like at the last session (the demo's history gives it).
+    pub(crate) fn changes_since(&mut self, before: Vec<LastSeen>) {
+        let baseline: HashMap<String, MrBaseline> = before
+            .into_iter()
+            .map(|(id, state, branches, pipeline)| {
+                (
+                    id,
+                    MrBaseline {
+                        state,
+                        branches,
+                        pipeline,
+                    },
+                )
+            })
+            .collect();
+        self.last_changes = session_changes(&baseline, &self.mrs);
+        if let Some(digest) = session_digest(&baseline, &self.mrs) {
+            self.last_digest = Some(digest.clone());
+            self.flash_for(digest, false, DIGEST_TICKS);
+        }
+    }
+}
+
 /// A transient status-bar message: the result of an action that has no other
 /// visible effect (clipboard copy, failed project switch…).
 #[derive(Debug, Clone, PartialEq)]

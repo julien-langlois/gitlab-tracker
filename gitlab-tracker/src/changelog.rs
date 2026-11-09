@@ -403,8 +403,8 @@ pub fn demo_config() -> CliffConfig {
     }
 }
 
-/// The demo's changelog: its MR titles as the commits since `v1.3.0`.
-pub fn demo(titles: &[String], version: Option<&str>) -> Result<Generated, String> {
+/// The demo's changelog: its MR titles as the commits since the `previous` tag.
+pub fn demo(titles: &[String], previous: &str, version: Option<&str>) -> Result<Generated, String> {
     let commits: Vec<ApiCommit> = titles
         .iter()
         .enumerate()
@@ -415,7 +415,7 @@ pub fn demo(titles: &[String], version: Option<&str>) -> Result<Generated, Strin
         })
         .collect();
     let previous = ApiTag {
-        name: "v1.3.0".into(),
+        name: previous.into(),
         message: None,
         commit: ApiTagCommit {
             id: "demo-tag".into(),
@@ -535,7 +535,7 @@ sort_commits = "oldest"
             "Add dark mode".to_string(),
             "Fix login redirect".to_string(),
         ];
-        let out = demo(&titles, Some("1.4.0")).unwrap().markdown;
+        let out = demo(&titles, "1.3.0", Some("1.4.0")).unwrap().markdown;
         assert!(out.starts_with("## [1.4.0] - "), "{out}");
         assert!(out.contains("### 🚀 Features\n\n- Add dark mode"), "{out}");
         assert!(

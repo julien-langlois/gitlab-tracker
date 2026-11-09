@@ -1717,9 +1717,14 @@ mod tests {
             .filter(|i| i.stand == Stand::Delivered)
             .map(|i| i.id.as_str())
             .collect();
-        assert!(delivered.contains(&"104"), "{delivered:?}");
+        let eta = crate::demo::iid("eta-timezone");
+        assert!(delivered.contains(&eta.as_str()), "{delivered:?}");
         // The closed MR is left out.
-        assert!(list.iter().all(|m| m.items.iter().all(|i| i.id != "105")));
+        let closed = crate::demo::iid("juniper-prototype");
+        assert!(list.iter().all(|m| m.items.iter().all(|i| i.id != closed)));
+        // The security audit is past its date with an MR still open.
+        let audit = list.iter().find(|m| m.title == "Security audit").unwrap();
+        assert!(audit.items.iter().any(|i| i.stand != Stand::Delivered));
     }
 
     #[test]

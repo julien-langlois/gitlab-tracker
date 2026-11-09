@@ -1945,8 +1945,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_demo_has_a_delivery_to_show() {
-        let mut app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
-        crate::demo::enrich_for_window(&mut app);
+        let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
         let now = Utc::now();
         let overview = crate::demo::demo_project_overview(&app);
         let d = analyze(&app, Some(&overview), now, 30);

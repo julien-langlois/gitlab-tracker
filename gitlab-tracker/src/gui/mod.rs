@@ -95,21 +95,61 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
     })
 }
 
+/// The demo's notifications of the last hours, kept for the bell (no toast:
+/// they came before the window opened).
+fn seed_demo_bell(toasts: &mut toasts::Toasts, app: &App, tones: &bevel_theme::Tones) {
+    use crate::demo::Notice;
+    for (id, title, notice, at, read) in crate::demo::demo_notifications(app) {
+        let state = app
+            .mrs
+            .iter()
+            .find(|mr| mr.id == id)
+            .map(|mr| (mr.state, mr.mergeability));
+        let (kind, text, tone) = match notice {
+            Notice::PipelineFailed => (
+                toasts::Kind::PipelineFailed,
+                tf("!{id} · pipeline failed", &[("id", &id)]),
+                tones.red,
+            ),
+            Notice::PipelinePassed => (
+                toasts::Kind::PipelinePassed,
+                tf("!{id} · pipeline passed", &[("id", &id)]),
+                tones.green,
+            ),
+            Notice::Merged | Notice::Closed => {
+                let (state, mergeability) = state.unwrap_or_default();
+                let (status, tone) = tones::status(state, &mergeability, tones);
+                let kind = if matches!(notice, Notice::Merged) {
+                    toasts::Kind::Merged
+                } else {
+                    toasts::Kind::Status
+                };
+                (
+                    kind,
+                    tf("!{id} · now {status}", &[("id", &id), ("status", status)]),
+                    tone,
+                )
+            }
+        };
+        toasts.history.push(toasts::Past {
+            id,
+            title,
+            kind,
+            text,
+            tone,
+            when: at.with_timezone(&chrono::Local),
+            read,
+        });
+    }
+}
+
 /// The window on the demo project (`gitlab-tracker --demo gui`): mock data,
 /// no token, no network and no disk writes.
 pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
-    let mut first = crate::demo::demo_app(global_config.clone()).await;
-    crate::demo::enrich_for_window(&mut first);
-    // "Me", for the Today page and the reviews waiting for me.
-    first.config.gitlab_username = Some("thomas_db".into());
+    let first = crate::demo::demo_app(global_config.clone()).await;
     let session = demo_session(first);
-    // A second project, in a tab of its own, to show the tabs.
-    let mut second = crate::demo::demo_app(global_config.clone()).await;
-    second.project_id = "654321".into();
-    second.project_name = Some("Mobile app".into());
-    crate::demo::enrich_for_window(&mut second);
-    second.mrs.truncate(5);
-    second.config.gitlab_username = Some("thomas_db".into());
+    // A second project, in a tab of its own: the mobile app of the same team.
+    let second = crate::demo::mobile_app(global_config.clone()).await;
     let shared = Shared {
         palette: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
         #[cfg(feature = "stats")]
@@ -535,6 +575,15 @@ impl GuiApp {
             gui.tabs.push(slot);
         }
         gui.set_theme(bevel_theme::Mode::Dark);
+        if gui.demo {
+            let tones = gui.theme.tones;
+            seed_demo_bell(&mut gui.toasts, &gui.app, &tones);
+            for slot in &mut gui.tabs {
+                if let SlotState::Parked(tab) = &mut slot.state {
+                    seed_demo_bell(&mut tab.toasts, &tab.app, &tones);
+                }
+            }
+        }
         if !gui.demo {
             let prefs = prefs::load();
             prefs::apply(&mut gui, &prefs);
@@ -1521,6 +1570,14 @@ impl eframe::App for GuiApp {
         // `GITLAB_TRACKER_GUI_THEME=light` the light theme.
         #[cfg(debug_assertions)]
         if ui.ctx().cumulative_pass_nr() == 3 {
+            // `GITLAB_TRACKER_GUI_TAB=1` brings the second open project forward.
+            if let Some(tab) = std::env::var("GITLAB_TRACKER_GUI_TAB")
+                .ok()
+                .and_then(|t| t.parse::<usize>().ok())
+                .filter(|t| *t < self.tabs.len())
+            {
+                self.activate(tab);
+            }
             for c in std::env::var("GITLAB_TRACKER_GUI_KEYS")
                 .unwrap_or_default()
                 .chars()
@@ -1549,69 +1606,8 @@ impl eframe::App for GuiApp {
                 Ok("overlaps") => self.open_page(Page::Overlaps),
                 Ok("delivery") => self.open_page(Page::Delivery),
                 Ok("stacks") => self.open_page(Page::Stacks),
-                // The bell's panel, with notifications in both tabs.
-                Ok("bell") => {
-                    use toasts::Kind;
-                    let now = self.ctx.input(|i| i.time);
-                    let t = self.theme.tones;
-                    let items = [
-                        (
-                            "106",
-                            "chore(deps): Bump tokio to 1.37 and update async ecosystem",
-                            Kind::PipelineFailed,
-                            "!106 · pipeline failed",
-                            t.red,
-                        ),
-                        (
-                            "104",
-                            "feat(api): Introduce GraphQL endpoint for MR metadata",
-                            Kind::Merged,
-                            "!104 · now MERGED",
-                            t.purple,
-                        ),
-                        (
-                            "102",
-                            "fix(db): Resolve connection pool deadlocks under heavy load",
-                            Kind::Status,
-                            "!102 · now CONFLICT",
-                            t.red,
-                        ),
-                        (
-                            "101",
-                            "feat(auth): Add OAuth2 PKCE flow for mobile clients",
-                            Kind::PipelinePassed,
-                            "!101 · pipeline passed",
-                            t.green,
-                        ),
-                    ];
-                    for (id, title, kind, text, tone) in items {
-                        self.toasts.push(id, title, kind, text.into(), tone, now);
-                    }
-                    // Seen earlier: read.
-                    if let Some(first) = self.toasts.history.first_mut() {
-                        first.read = true;
-                        first.when -= chrono::Duration::minutes(48);
-                    }
-                    if let Some(second) = self.toasts.history.get_mut(1) {
-                        second.read = true;
-                        second.when -= chrono::Duration::minutes(12);
-                    }
-                    for slot in &mut self.tabs {
-                        if let SlotState::Parked(tab) = &mut slot.state {
-                            tab.toasts.push(
-                                "103",
-                                "refactor(ui): Optimize Ratatui render loop",
-                                Kind::Status,
-                                "!103 · now APPROVED".into(),
-                                t.green,
-                                now,
-                            );
-                            if let Some(p) = tab.toasts.history.last_mut() {
-                                p.when -= chrono::Duration::days(1);
-                            }
-                        }
-                    }
-                }
+                // The bell's panel stays open (see `toasts`): the demo fills it.
+                Ok("bell") => {}
                 Ok("mr") => {
                     // The demo's MR with the most to show: open, a conflict, threads.
                     let id = self
@@ -1655,7 +1651,7 @@ impl eframe::App for GuiApp {
                             .is_some_and(|p| p.jobs.iter().any(|j| j.status == "failed"))
                     });
                     if let Some(id) = failing.map(|mr| mr.id.clone()) {
-                        self.details.show_demo(&id);
+                        self.details.show_demo(&self.app, &id);
                         if self.app.selected_mr().map(|mr| &mr.id) != Some(&id) {
                             self.select_id = Some(id);
                         }

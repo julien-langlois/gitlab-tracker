@@ -308,7 +308,7 @@ pub trait CountApiCalls {
 /// `+++` / `---` are file headers only before the first `@@` hunk (GitLab's `diff`
 /// field usually has none); inside hunks they are real changes such as `++i` or a
 /// SQL `-- comment`, which a plain prefix filter would drop.
-fn count_diff_lines(diff: &str) -> (u32, u32) {
+pub(crate) fn count_diff_lines(diff: &str) -> (u32, u32) {
     let (mut added, mut deleted, mut in_hunk) = (0, 0, false);
     for line in diff.lines() {
         if line.starts_with("@@") {
@@ -920,7 +920,7 @@ fn changed_files(body: &MrChanges) -> Vec<crate::models::ChangedFile> {
 /// The lines of the old file (first, last) each `@@ -a,b +c,d @@` hunk of a
 /// unified patch replaces. A pure insertion (`b == 0`) covers line `a`, the
 /// one it comes after.
-fn hunk_ranges(diff: &str) -> Vec<(u32, u32)> {
+pub(crate) fn hunk_ranges(diff: &str) -> Vec<(u32, u32)> {
     diff.lines()
         .filter_map(|line| {
             let rest = line.strip_prefix("@@ -")?;
