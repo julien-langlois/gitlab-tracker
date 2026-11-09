@@ -592,16 +592,26 @@ fn sync_state(g: &GuiApp, ui: &mut Ui) {
         ui.add_space(2.0);
         dot(ui, color, 7.0);
         if let Some(at) = g.last_sync {
-            let minutes = (chrono::Local::now() - at).num_minutes();
-            let ago = if minutes < 1 {
-                tl("Updated just now").to_string()
-            } else {
-                tn(minutes as u64, "Updated {n} min ago", "Updated {n} min ago")
-            };
+            let ago = updated_ago((chrono::Local::now() - at).num_minutes());
             ui.add_space(6.0);
             ui.label(muted(theme, format!("{ago} ·")))
                 .on_hover_text(at.format("%H:%M:%S").to_string());
         }
+    }
+}
+
+/// "Updated just now", "… 12 min ago", "… 3h ago", or "… 2 days ago": a window
+/// left open over a weekend reads in days, not thousands of minutes.
+fn updated_ago(minutes: i64) -> String {
+    let n = minutes.max(0) as u64;
+    if n < 1 {
+        tl("Updated just now").to_string()
+    } else if n < 60 {
+        tn(n, "Updated {n} min ago", "Updated {n} min ago")
+    } else if n < 24 * 60 {
+        tn(n / 60, "Updated {n}h ago", "Updated {n}h ago")
+    } else {
+        tn(n / (24 * 60), "Updated {n} day ago", "Updated {n} days ago")
     }
 }
 
@@ -1121,6 +1131,17 @@ fn rail_item(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn last_update_reads_in_hours_then_days() {
+        assert_eq!(updated_ago(0), "Updated just now");
+        assert_eq!(updated_ago(59), "Updated 59 min ago");
+        assert_eq!(updated_ago(60), "Updated 1h ago");
+        assert_eq!(updated_ago(23 * 60 + 59), "Updated 23h ago");
+        assert_eq!(updated_ago(24 * 60), "Updated 1 day ago");
+        // A window left open over a weekend.
+        assert_eq!(updated_ago(3785), "Updated 2 days ago");
+    }
 
     #[test]
     fn side_panels_follow_the_window_width() {

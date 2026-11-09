@@ -854,6 +854,8 @@ date	Merged	Fusionada
 @plural	{n} merged MR|{n} merged MRs	{n} MR fusionada|{n} MR fusionadas
 @plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} MR no se pudo actualizar|{n} MR no se pudieron actualizar
 @plural	Updated {n} min ago|Updated {n} min ago	Actualizado hace {n} min|Actualizado hace {n} min
+@plural	Updated {n}h ago|Updated {n}h ago	Actualizado hace {n} h|Actualizado hace {n} h
+@plural	Updated {n} day ago|Updated {n} days ago	Actualizado hace {n} día|Actualizado hace {n} días
 	Projects	Proyectos
 	Each project opens in its own tab, and keeps refreshing while another one is shown.	Cada proyecto se abre en su propia pestaña y se sigue actualizando mientras se muestra otro.
 	Shown	Mostrado

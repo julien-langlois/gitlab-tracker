@@ -854,6 +854,8 @@ date	Merged	合并时间
 @plural	{n} merged MR|{n} merged MRs	{n} 个已合并的 MR
 @plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} 个 MR 无法刷新
 @plural	Updated {n} min ago|Updated {n} min ago	{n} 分钟前更新
+@plural	Updated {n}h ago|Updated {n}h ago	{n} 小时前更新
+@plural	Updated {n} day ago|Updated {n} days ago	{n} 天前更新
 	Projects	项目
 	Each project opens in its own tab, and keeps refreshing while another one is shown.	每个项目在自己的标签页中打开，显示其他项目时仍会继续刷新。
 	Shown	显示中

@@ -854,6 +854,8 @@ date	Merged	Gemergt
 @plural	{n} merged MR|{n} merged MRs	{n} gemergte MR|{n} gemergte MRs
 @plural	{n} MR could not be refreshed|{n} MRs could not be refreshed	{n} MR konnte nicht aktualisiert werden|{n} MRs konnten nicht aktualisiert werden
 @plural	Updated {n} min ago|Updated {n} min ago	Vor {n} Min. aktualisiert|Vor {n} Min. aktualisiert
+@plural	Updated {n}h ago|Updated {n}h ago	Vor {n} Std. aktualisiert|Vor {n} Std. aktualisiert
+@plural	Updated {n} day ago|Updated {n} days ago	Vor {n} Tag aktualisiert|Vor {n} Tagen aktualisiert
 	Projects	Projekte
 	Each project opens in its own tab, and keeps refreshing while another one is shown.	Jedes Projekt öffnet sich in einem eigenen Tab und wird weiter aktualisiert, während ein anderes angezeigt wird.
 	Shown	Angezeigt
