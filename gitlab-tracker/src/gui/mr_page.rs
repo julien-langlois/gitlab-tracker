@@ -216,7 +216,8 @@ fn crumbs(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     });
 }
 
-fn key(ui: &mut Ui, theme: &Theme, text: &str) {
+/// A key's cap, as the shortcuts show it.
+pub(super) fn key(ui: &mut Ui, theme: &Theme, text: &str) {
     egui::Frame::new()
         .fill(theme.palette.raised)
         .stroke(egui::Stroke::new(1.0, theme.palette.border))

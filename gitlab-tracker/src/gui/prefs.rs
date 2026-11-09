@@ -70,7 +70,7 @@ fn page_name(page: Page) -> &'static str {
         Page::Tracker => "tracker",
         #[cfg(feature = "stats")]
         Page::Stats => "stats",
-        Page::Team => "team",
+        Page::Team | Page::Person => "team",
         Page::Journal => "journal",
         Page::Environments => "environments",
         Page::Ci => "ci",

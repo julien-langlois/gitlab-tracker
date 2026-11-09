@@ -28,6 +28,7 @@ mod mr_pipelines;
 mod next;
 mod overlaps;
 mod palette;
+mod person;
 mod prefs;
 mod promote;
 mod rail_badges;
@@ -282,6 +283,9 @@ enum Page {
     Stats,
     /// Who waits on whom: reviews, load, who reviews whom.
     Team,
+    /// The person picked on the team page, on a page of their own (double
+    /// click, Enter).
+    Person,
     /// What happened, in order, across the open tabs.
     Journal,
     /// The tracked branches from feature to production, and their deployments.
@@ -1046,6 +1050,7 @@ impl GuiApp {
         match self.page {
             Page::Tracker if self.app.tracker.is_none() => Page::MergeRequests,
             Page::Mr if self.app.selected_mr().is_none() => Page::MergeRequests,
+            Page::Person if self.team.selected.is_none() => Page::Team,
             page => page,
         }
     }
@@ -1127,6 +1132,14 @@ impl GuiApp {
         }
         self.select_id = Some(id.to_string());
         self.open_page(Page::Mr);
+    }
+
+    /// The page of the team member `login`.
+    fn open_person(&mut self, login: &str) {
+        history::visit_person(self, login);
+        self.team.selected = Some(login.to_string());
+        self.team.step = 0;
+        self.open_page(Page::Person);
     }
 
     /// Deep link across tabs: the MR `id` of the tab `tab`, on its page.
@@ -1599,6 +1612,13 @@ impl eframe::App for GuiApp {
                 Ok("today") => self.open_page(Page::Today),
                 Ok("promote") => self.open_page(Page::Promote),
                 Ok("team") => self.open_page(Page::Team),
+                // A person's page: `GITLAB_TRACKER_GUI_PERSON=<login>`, else
+                // the one the team page shows first (the most loaded).
+                Ok("person") => {
+                    self.open_page(Page::Team);
+                    self.team.selected = std::env::var("GITLAB_TRACKER_GUI_PERSON").ok();
+                    self.team.open = true;
+                }
                 Ok("journal") => self.open_page(Page::Journal),
                 Ok("environments") => self.open_page(Page::Environments),
                 Ok("ci") => self.open_page(Page::Ci),

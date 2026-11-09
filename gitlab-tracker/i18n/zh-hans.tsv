@@ -1716,3 +1716,57 @@ state	Draft	草稿
 	Merged ({n})	已合并 ({n})
 	Adds them to the MRs selected, among the MRs shown	将其加入已选的 MR（仅限显示的 MR）
 	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	批量模式：勾选多个 MR 以标记、复制或停止跟踪
+	Open their page	打开其页面
+	Or double click their row, or press Enter	或双击该行，或按 Enter
+	last asked for a review {when}	上次被请求评审：{when}
+	no review asked lately	最近没有评审请求
+	the oldest: {time}	最早的：{time}
+	team: {d}	团队：{d}
+	Their MRs merged	已合并的 MR
+	period before: {n}	上一周期：{n}
+	Created → merged	创建 → 合并
+	Now	当前
+	12 weeks	12 周
+	Week of {date}	{date} 当周
+	12 weeks ago	12 周前
+	this week	本周
+	reviews given	已做评审
+	their MRs merged	其 MR 已合并
+	reviews asked of them	收到的评审请求
+	Over the last 4 weeks, {asked} reviews were asked of them and they gave {given}: the queue grows.	过去 4 周收到 {asked} 个评审请求，完成 {given} 个：队列在增长。
+	Over the last 4 weeks: {given} reviews given for {asked} asked.	过去 4 周：收到 {asked} 个请求，完成 {given} 个评审。
+	Who they work with	与谁协作
+	review requests in the period	本周期内的评审请求
+	Ask them for a review	请其评审
+	They ask for a review	其请求评审
+	{share} of {author}'s review requests go to {name}.	{author} 的评审请求中有 {share} 发给了 {name}。
+	{other} already reviews {author} and is less loaded: they could take some.	{other} 已评审过 {author} 且负载较低：可以分担一些。
+	{other} is less loaded and could take some.	{other} 负载较低，可以分担一些。
+	Their MRs: where the time goes	其 MR：时间花在哪里
+	to the first review	到首次评审
+	pushes after a review, on average	评审后平均推送次数
+	pipelines failed	流水线失败
+	Review to approval	评审 → 批准
+	Approval to merge	批准 → 合并
+	Size:	规模：
+	Labels:	标签：
+	As a reviewer	作为评审人
+	reviews asked in the period	本周期收到的评审请求
+	approved by them	由其批准
+	threads opened on others' MRs	在他人 MR 上发起的讨论
+	Time to answer a review request	评审请求的响应时间
+	under 4 h	4 小时内
+	4 h to 1 d	4 小时至 1 天
+	1 to 3 d	1 至 3 天
+	over 3 d	超过 3 天
+	Their latest MRs	其最新 MR
+	No tracked MR of theirs.	没有跟踪其任何 MR。
+state	Open	开放
+state	Closed	已关闭
+@plural	{n} waits on them|{n} wait on them	{n} 个等待其处理
+@plural	{n} review given|{n} reviews given	完成 {n} 个评审
+@plural	{n} MR of theirs merged|{n} MRs of theirs merged	合并了 {n} 个其 MR
+@plural	{n} review asked of them|{n} reviews asked of them	收到 {n} 个评审请求
+@plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	各阶段：本周期内合并的 {n} 个 MR 的中位数
+@plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	本周期有 {n} 个请求尚未回复。
+@plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	基于其出现的 {n} 个已跟踪 MR：未跟踪的 MR 不计入。

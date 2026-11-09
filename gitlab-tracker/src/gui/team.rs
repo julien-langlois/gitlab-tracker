@@ -48,8 +48,12 @@ pub struct State {
     pub period: usize,
     pub sort: Sort,
     pub bots: bool,
-    /// The person shown in the inspector, by login.
+    /// The person shown in the inspector, and on their page, by login.
     pub selected: Option<String>,
+    /// Enter was pressed: open the page of the person shown.
+    pub open: bool,
+    /// J / K on a person's page: people to move by, in the list's order.
+    pub step: i32,
 }
 
 impl Default for State {
@@ -60,12 +64,14 @@ impl Default for State {
             sort: Sort::default(),
             bots: false,
             selected: None,
+            open: false,
+            step: 0,
         }
     }
 }
 
 /// The periods the response times and the matrix look at, in days.
-const PERIODS: [(i64, &str); 3] = [(7, "7 d"), (30, "30 d"), (90, "90 d")];
+pub(super) const PERIODS: [(i64, &str); 3] = [(7, "7 d"), (30, "30 d"), (90, "90 d")];
 
 /// How loaded someone is, from their [`Person::load`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +84,7 @@ pub enum Level {
 }
 
 impl Level {
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         tl(match self {
             Level::Overloaded => "Overloaded",
             Level::Busy => "Busy",
@@ -88,7 +94,7 @@ impl Level {
         })
     }
 
-    fn tone(self, theme: &Theme) -> Tone {
+    pub(super) fn tone(self, theme: &Theme) -> Tone {
         let t = &theme.tones;
         match self {
             Level::Overloaded => t.red,
@@ -139,8 +145,24 @@ pub struct Person {
 }
 
 impl Person {
+    /// Someone the tracked MRs say nothing about yet.
+    pub fn blank(login: &str) -> Self {
+        Self {
+            login: login.to_string(),
+            name: String::new(),
+            reviews: Vec::new(),
+            mrs: Vec::new(),
+            threads: 0,
+            response: None,
+            load: 0.0,
+            level: Level::Normal,
+            weeks: [0; 8],
+            last_request: None,
+        }
+    }
+
     /// The oldest review waiting on them.
-    fn oldest(&self) -> Option<DateTime<Utc>> {
+    pub(super) fn oldest(&self) -> Option<DateTime<Utc>> {
         self.reviews.iter().filter_map(|r| r.since).min()
     }
 }
@@ -180,18 +202,7 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64, bots: bool) -> Analysis
         key
     };
     let mut people: BTreeMap<String, Person> = BTreeMap::new();
-    let blank = |key: &str| Person {
-        login: key.to_string(),
-        name: String::new(),
-        reviews: Vec::new(),
-        mrs: Vec::new(),
-        threads: 0,
-        response: None,
-        load: 0.0,
-        level: Level::Normal,
-        weeks: [0; 8],
-        last_request: None,
-    };
+    let blank = Person::blank;
     let mut responses: HashMap<String, Vec<f64>> = HashMap::new();
     let mut now_period = Vec::new();
     let mut before_period = Vec::new();
@@ -389,7 +400,7 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64, bots: bool) -> Analysis
 }
 
 /// The reviewers' share of the requests: the busiest's login and share.
-fn busiest(matrix: &BTreeMap<String, BTreeMap<String, u32>>) -> Option<(String, f64)> {
+pub(super) fn busiest(matrix: &BTreeMap<String, BTreeMap<String, u32>>) -> Option<(String, f64)> {
     let mut by_reviewer: BTreeMap<&str, u32> = BTreeMap::new();
     for row in matrix.values() {
         for (reviewer, n) in row {
@@ -422,6 +433,12 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                 .max_by(|a, b| a.load.total_cmp(&b.load))
                 .map(|p| p.login.clone())
         });
+    if std::mem::take(&mut g.team.open) {
+        if let Some(login) = &shown {
+            g.open_person(login);
+            return;
+        }
+    }
     board::screen(
         g,
         ui,
@@ -645,22 +662,9 @@ fn main(
     board::figures(ui, &theme, &figures);
 
     // The people.
-    let mut list: Vec<&Person> = analysis
-        .people
-        .iter()
-        .filter(|p| shows(p, g.team.view))
-        .collect();
-    match g.team.sort {
-        Sort::Load => list.sort_by(|a, b| b.load.total_cmp(&a.load).then(a.name.cmp(&b.name))),
-        Sort::Wait => list.sort_by(|a, b| {
-            a.oldest()
-                .unwrap_or(now)
-                .cmp(&b.oldest().unwrap_or(now))
-                .then(a.name.cmp(&b.name))
-        }),
-        Sort::Name => list.sort_by_key(|p| p.name.to_lowercase()),
-    }
+    let list = ordered(analysis, &g.team, now);
     let mut picked = None;
+    let mut opened = None;
     let mut open_mr = None;
     board::card(ui, &theme, "", "", 0.0, |ui| {
         if list.is_empty() {
@@ -675,6 +679,7 @@ fn main(
             now,
             reminder,
             &mut picked,
+            &mut opened,
             &mut open_mr,
         );
     });
@@ -701,9 +706,36 @@ fn main(
     if let Some(login) = picked {
         g.team.selected = Some(login);
     }
-    if let Some(id) = open_mr {
+    if let Some(login) = opened {
+        g.open_person(&login);
+    } else if let Some(id) = open_mr {
         g.open_mr(&id);
     }
+}
+
+/// The people of the view picked, in the order picked: the list's order, and
+/// the one J / K follow on a person's page.
+pub(super) fn ordered<'a>(
+    analysis: &'a Analysis,
+    state: &State,
+    now: DateTime<Utc>,
+) -> Vec<&'a Person> {
+    let mut list: Vec<&Person> = analysis
+        .people
+        .iter()
+        .filter(|p| shows(p, state.view))
+        .collect();
+    match state.sort {
+        Sort::Load => list.sort_by(|a, b| b.load.total_cmp(&a.load).then(a.name.cmp(&b.name))),
+        Sort::Wait => list.sort_by(|a, b| {
+            a.oldest()
+                .unwrap_or(now)
+                .cmp(&b.oldest().unwrap_or(now))
+                .then(a.name.cmp(&b.name))
+        }),
+        Sort::Name => list.sort_by_key(|p| p.name.to_lowercase()),
+    }
+    list
 }
 
 /// The table's columns: their left edges, from the row's left, and the widths.
@@ -769,6 +801,7 @@ fn people_table(
     now: DateTime<Utc>,
     reminder: f64,
     picked: &mut Option<String>,
+    opened: &mut Option<String>,
     open_mr: &mut Option<String>,
 ) {
     let c = cols(ui.available_width());
@@ -966,7 +999,9 @@ fn people_table(
                     .rect_filled(fill, CornerRadius::same(3), tone.fg);
             }
         }
-        if response.clicked() {
+        if response.double_clicked() {
+            *opened = Some(person.login.clone());
+        } else if response.clicked() {
             *picked = Some(person.login.clone());
         }
     }
@@ -1315,12 +1350,7 @@ struct Signal {
 
 /// What stands out, in sentences: late reviews, an unbalanced load, someone
 /// free, the trend.
-fn signals(
-    analysis: &Analysis,
-    now: DateTime<Utc>,
-    reminder: f64,
-    theme: &Theme,
-) -> Vec<Signal> {
+fn signals(analysis: &Analysis, now: DateTime<Utc>, reminder: f64, theme: &Theme) -> Vec<Signal> {
     let line = |color: Color32, text: String| Signal {
         color,
         text,
@@ -1419,8 +1449,9 @@ fn signals_card(
 ) {
     board::card(ui, theme, tl("Signals"), "", 250.0, |ui| {
         ui.spacing_mut().item_spacing.y = 8.0;
-        for (index, Signal { color, text, mr }) in
-            signals(analysis, now, reminder, theme).into_iter().enumerate()
+        for (index, Signal { color, text, mr }) in signals(analysis, now, reminder, theme)
+            .into_iter()
+            .enumerate()
         {
             let frame = egui::Frame::new()
                 .fill(theme.palette.raised.gamma_multiply(0.7))
@@ -1606,6 +1637,7 @@ fn inspector(
             });
         });
     });
+    let mut page = false;
     let mut show = false;
     let mut remind = false;
     egui::Frame::new()
@@ -1614,7 +1646,10 @@ fn inspector(
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
-                show = primary_button(ui, &theme, tl("Show their MRs")).clicked();
+                page = primary_button(ui, &theme, tl("Open their page"))
+                    .on_hover_text(tl("Or double click their row, or press Enter"))
+                    .clicked();
+                show = button(ui, &theme, None, tl("Show their MRs"), false).clicked();
                 remind = button(
                     ui,
                     &theme,
@@ -1625,35 +1660,45 @@ fn inspector(
                 .clicked();
             });
         });
-    if show {
-        let ids = person
-            .mrs
-            .iter()
-            .map(|m| m.id.clone())
-            .chain(person.reviews.iter().map(|r| r.id.clone()))
-            .collect();
-        g.next_focus = Some(Some(Focus {
-            key: String::new(),
-            label: tf("{name}: their MRs and reviews", &[("name", &person.name)]),
-            ids,
-        }));
-        g.open_page(super::Page::MergeRequests);
-    }
-    if remind {
-        ui.ctx()
-            .copy_text(board::Links::of(&g.app).apply(&reminder_text(person, now)));
-        g.app.flash(
-            tl("Reminder copied: paste it in a chat or a comment"),
-            false,
-        );
-    }
-    if let Some(id) = open_mr {
+    if page {
+        g.open_person(&person.login);
+    } else if show {
+        show_mrs(g, person);
+    } else if remind {
+        copy_reminder(g, ui, person, now);
+    } else if let Some(id) = open_mr {
         g.open_mr(&id);
     }
 }
 
+/// The MRs list, narrowed to `person`'s MRs and the reviews waiting on them.
+pub(super) fn show_mrs(g: &mut GuiApp, person: &Person) {
+    let ids = person
+        .mrs
+        .iter()
+        .map(|m| m.id.clone())
+        .chain(person.reviews.iter().map(|r| r.id.clone()))
+        .collect();
+    g.next_focus = Some(Some(Focus {
+        key: String::new(),
+        label: tf("{name}: their MRs and reviews", &[("name", &person.name)]),
+        ids,
+    }));
+    g.open_page(super::Page::MergeRequests);
+}
+
+/// Copies the reminder of the reviews waiting on `person`.
+pub(super) fn copy_reminder(g: &mut GuiApp, ui: &Ui, person: &Person, now: DateTime<Utc>) {
+    ui.ctx()
+        .copy_text(board::Links::of(&g.app).apply(&reminder_text(person, now)));
+    g.app.flash(
+        tl("Reminder copied: paste it in a chat or a comment"),
+        false,
+    );
+}
+
 /// The reviews waiting on `person`, oldest first.
-fn waiting_list(
+pub(super) fn waiting_list(
     ui: &mut Ui,
     theme: &Theme,
     person: &Person,
@@ -1690,7 +1735,7 @@ fn waiting_list(
 
 /// A two-line entry of the inspector: the id and the title, a detail under
 /// it (its leading dot in `color`); whether it was clicked.
-fn line(
+pub(super) fn line(
     ui: &mut Ui,
     theme: &Theme,
     id: &str,

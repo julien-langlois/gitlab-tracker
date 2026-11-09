@@ -1716,3 +1716,57 @@ state	Draft	Entwurf
 	Merged ({n})	Gemergt ({n})
 	Adds them to the MRs selected, among the MRs shown	Fügt sie den ausgewählten MRs hinzu, unter den angezeigten MRs
 	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	Mehrfachauswahl: mehrere MRs ankreuzen, um sie zu markieren, zu kopieren oder nicht mehr zu verfolgen
+	Open their page	Seite öffnen
+	Or double click their row, or press Enter	Oder Zeile doppelklicken oder Enter drücken
+	last asked for a review {when}	zuletzt um ein Review gebeten {when}
+	no review asked lately	in letzter Zeit kein Review angefragt
+	the oldest: {time}	das älteste: {time}
+	team: {d}	Team: {d}
+	Their MRs merged	Gemergte MRs
+	period before: {n}	Zeitraum davor: {n}
+	Created → merged	Erstellt → gemergt
+	Now	Jetzt
+	12 weeks	12 Wochen
+	Week of {date}	Woche vom {date}
+	12 weeks ago	vor 12 Wochen
+	this week	diese Woche
+	reviews given	gegebene Reviews
+	their MRs merged	eigene MRs gemergt
+	reviews asked of them	angefragte Reviews
+	Over the last 4 weeks, {asked} reviews were asked of them and they gave {given}: the queue grows.	In den letzten 4 Wochen wurden {asked} Reviews angefragt und {given} gegeben: die Warteschlange wächst.
+	Over the last 4 weeks: {given} reviews given for {asked} asked.	In den letzten 4 Wochen: {given} Reviews gegeben bei {asked} angefragten.
+	Who they work with	Mit wem
+	review requests in the period	Review-Anfragen im Zeitraum
+	Ask them for a review	Bitten um ein Review
+	They ask for a review	Bittet um ein Review
+	{share} of {author}'s review requests go to {name}.	{share} der Review-Anfragen von {author} gehen an {name}.
+	{other} already reviews {author} and is less loaded: they could take some.	{other} reviewt {author} bereits und ist weniger ausgelastet: könnte einige übernehmen.
+	{other} is less loaded and could take some.	{other} ist weniger ausgelastet und könnte einige übernehmen.
+	Their MRs: where the time goes	Eigene MRs: wohin die Zeit geht
+	to the first review	bis zum ersten Review
+	pushes after a review, on average	Pushes nach einem Review, im Schnitt
+	pipelines failed	fehlgeschlagene Pipelines
+	Review to approval	Review → Freigabe
+	Approval to merge	Freigabe → Merge
+	Size:	Größe:
+	Labels:	Labels:
+	As a reviewer	Als Reviewer
+	reviews asked in the period	angefragte Reviews im Zeitraum
+	approved by them	von ihnen freigegeben
+	threads opened on others' MRs	Threads in fremden MRs eröffnet
+	Time to answer a review request	Zeit bis zur Antwort auf eine Review-Anfrage
+	under 4 h	unter 4 h
+	4 h to 1 d	4 h bis 1 T
+	1 to 3 d	1 bis 3 T
+	over 3 d	über 3 T
+	Their latest MRs	Neueste eigene MRs
+	No tracked MR of theirs.	Keine eigene MR verfolgt.
+state	Open	Offen
+state	Closed	Geschlossen
+@plural	{n} waits on them|{n} wait on them	{n} wartet auf sie|{n} warten auf sie
+@plural	{n} review given|{n} reviews given	{n} Review gegeben|{n} Reviews gegeben
+@plural	{n} MR of theirs merged|{n} MRs of theirs merged	{n} eigene MR gemergt|{n} eigene MRs gemergt
+@plural	{n} review asked of them|{n} reviews asked of them	{n} Review angefragt|{n} Reviews angefragt
+@plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	Jeder Schritt, Median ihrer {n} im Zeitraum gemergten MR|Jeder Schritt, Median ihrer {n} im Zeitraum gemergten MRs
+@plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	{n} Anfrage des Zeitraums noch unbeantwortet.|{n} Anfragen des Zeitraums noch unbeantwortet.
+@plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	Aus der {n} verfolgten MR, in der sie vorkommt: nicht verfolgte MRs zählen nicht.|Aus den {n} verfolgten MRs, in denen sie vorkommt: nicht verfolgte MRs zählen nicht.

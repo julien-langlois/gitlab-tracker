@@ -1716,3 +1716,57 @@ state	Draft	Borrador
 	Merged ({n})	Fusionadas ({n})
 	Adds them to the MRs selected, among the MRs shown	Las añade a las MR seleccionadas, entre las MR mostradas
 	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	Modo masivo: marque varias MR para destacarlas, copiarlas o dejar de seguirlas
+	Open their page	Abrir su página
+	Or double click their row, or press Enter	O haz doble clic en su fila, o pulsa Intro
+	last asked for a review {when}	última solicitud de revisión {when}
+	no review asked lately	sin revisiones solicitadas últimamente
+	the oldest: {time}	la más antigua: {time}
+	team: {d}	equipo: {d}
+	Their MRs merged	Sus MR fusionadas
+	period before: {n}	periodo anterior: {n}
+	Created → merged	Creada → fusionada
+	Now	Ahora
+	12 weeks	12 semanas
+	Week of {date}	Semana del {date}
+	12 weeks ago	hace 12 semanas
+	this week	esta semana
+	reviews given	revisiones hechas
+	their MRs merged	sus MR fusionadas
+	reviews asked of them	revisiones solicitadas
+	Over the last 4 weeks, {asked} reviews were asked of them and they gave {given}: the queue grows.	En las últimas 4 semanas se le pidieron {asked} revisiones e hizo {given}: la cola crece.
+	Over the last 4 weeks: {given} reviews given for {asked} asked.	En las últimas 4 semanas: {given} revisiones hechas de {asked} solicitadas.
+	Who they work with	Con quién trabaja
+	review requests in the period	solicitudes de revisión en el periodo
+	Ask them for a review	Le piden una revisión
+	They ask for a review	Pide una revisión a
+	{share} of {author}'s review requests go to {name}.	El {share} de las solicitudes de revisión de {author} van a {name}.
+	{other} already reviews {author} and is less loaded: they could take some.	{other} ya revisa a {author} y tiene menos carga: podría encargarse de algunas.
+	{other} is less loaded and could take some.	{other} tiene menos carga y podría encargarse de algunas.
+	Their MRs: where the time goes	Sus MR: en qué se va el tiempo
+	to the first review	hasta la primera revisión
+	pushes after a review, on average	pushes tras una revisión, de media
+	pipelines failed	pipelines fallidas
+	Review to approval	Revisión → aprobación
+	Approval to merge	Aprobación → fusión
+	Size:	Tamaño:
+	Labels:	Etiquetas:
+	As a reviewer	Como revisor
+	reviews asked in the period	revisiones solicitadas en el periodo
+	approved by them	aprobadas por esta persona
+	threads opened on others' MRs	hilos abiertos en MR ajenas
+	Time to answer a review request	Tiempo de respuesta a una solicitud de revisión
+	under 4 h	menos de 4 h
+	4 h to 1 d	de 4 h a 1 d
+	1 to 3 d	de 1 a 3 d
+	over 3 d	más de 3 d
+	Their latest MRs	Sus últimas MR
+	No tracked MR of theirs.	Ninguna de sus MR está seguida.
+state	Open	Abierta
+state	Closed	Cerrada
+@plural	{n} waits on them|{n} wait on them	{n} espera a esta persona|{n} esperan a esta persona
+@plural	{n} review given|{n} reviews given	{n} revisión hecha|{n} revisiones hechas
+@plural	{n} MR of theirs merged|{n} MRs of theirs merged	{n} MR suya fusionada|{n} MR suyas fusionadas
+@plural	{n} review asked of them|{n} reviews asked of them	{n} revisión solicitada|{n} revisiones solicitadas
+@plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	Cada paso, mediana de su {n} MR fusionada en el periodo|Cada paso, mediana de sus {n} MR fusionadas en el periodo
+@plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	{n} solicitud del periodo aún sin respuesta.|{n} solicitudes del periodo aún sin respuesta.
+@plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	Según la {n} MR seguida en la que aparece: las MR no seguidas no cuentan.|Según las {n} MR seguidas en las que aparece: las MR no seguidas no cuentan.

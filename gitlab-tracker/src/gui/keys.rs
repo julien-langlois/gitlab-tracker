@@ -102,7 +102,14 @@ fn named_key(g: &mut GuiApp, key: Key, modifiers: Modifiers) {
         return;
     }
     let on_mr = g.page() == Page::Mr;
+    let on_person = g.page() == Page::Person;
     match key {
+        // Enter opens the page of the person shown, Esc goes back to the team,
+        // the arrows move to the next or previous person.
+        Key::Enter if g.page() == Page::Team => g.team.open = true,
+        Key::Escape if on_person => g.open_page(Page::Team),
+        Key::ArrowDown if on_person => g.team.step += 1,
+        Key::ArrowUp if on_person => g.team.step -= 1,
         // Enter opens the selected MR's page, Esc goes back to the list.
         Key::Enter
             if !on_mr && g.page() == Page::MergeRequests && g.app.selected_mr().is_some() =>
@@ -132,6 +139,10 @@ pub(super) fn character(g: &mut GuiApp, c: char) {
         return;
     }
     if g.app.input_mode != InputMode::Normal {
+        return;
+    }
+    if g.page() == Page::Person && matches!(c, 'j' | 'k') {
+        g.team.step += if c == 'j' { 1 } else { -1 };
         return;
     }
     let action = match c {

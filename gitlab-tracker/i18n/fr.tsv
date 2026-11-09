@@ -1716,3 +1716,57 @@ state	Draft	Brouillon
 	Merged ({n})	Fusionnées ({n})
 	Adds them to the MRs selected, among the MRs shown	Les ajoute aux MR sélectionnées, parmi les MR affichées
 	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	Mode groupé : cochez plusieurs MR pour les marquer, les copier ou arrêter leur suivi
+	Open their page	Ouvrir sa page
+	Or double click their row, or press Enter	Ou double-cliquez sur sa ligne, ou appuyez sur Entrée
+	last asked for a review {when}	dernière demande de relecture {when}
+	no review asked lately	aucune relecture demandée récemment
+	the oldest: {time}	la plus ancienne : {time}
+	team: {d}	équipe : {d}
+	Their MRs merged	Ses MR fusionnées
+	period before: {n}	période précédente : {n}
+	Created → merged	Création → fusion
+	Now	Maintenant
+	12 weeks	12 semaines
+	Week of {date}	Semaine du {date}
+	12 weeks ago	il y a 12 semaines
+	this week	cette semaine
+	reviews given	relectures faites
+	their MRs merged	ses MR fusionnées
+	reviews asked of them	relectures demandées
+	Over the last 4 weeks, {asked} reviews were asked of them and they gave {given}: the queue grows.	Sur les 4 dernières semaines, {asked} relectures demandées et {given} faites : la file d'attente grossit.
+	Over the last 4 weeks: {given} reviews given for {asked} asked.	Sur les 4 dernières semaines : {given} relectures faites pour {asked} demandées.
+	Who they work with	Avec qui
+	review requests in the period	demandes de relecture sur la période
+	Ask them for a review	Lui demandent une relecture
+	They ask for a review	Demande une relecture à
+	{share} of {author}'s review requests go to {name}.	{share} des demandes de relecture de {author} vont à {name}.
+	{other} already reviews {author} and is less loaded: they could take some.	{other} relit déjà {author} et est moins chargé·e : il ou elle pourrait en prendre.
+	{other} is less loaded and could take some.	{other} est moins chargé·e et pourrait en prendre.
+	Their MRs: where the time goes	Ses MR : où passe le temps
+	to the first review	jusqu'à la première relecture
+	pushes after a review, on average	pushes après relecture, en moyenne
+	pipelines failed	pipelines en échec
+	Review to approval	Relecture → approbation
+	Approval to merge	Approbation → fusion
+	Size:	Taille :
+	Labels:	Labels :
+	As a reviewer	Comme relecteur·rice
+	reviews asked in the period	relectures demandées sur la période
+	approved by them	approuvées par cette personne
+	threads opened on others' MRs	fils ouverts sur les MR des autres
+	Time to answer a review request	Délai de réponse à une demande de relecture
+	under 4 h	moins de 4 h
+	4 h to 1 d	4 h à 1 j
+	1 to 3 d	1 à 3 j
+	over 3 d	plus de 3 j
+	Their latest MRs	Ses dernières MR
+	No tracked MR of theirs.	Aucune de ses MR n'est suivie.
+state	Open	Ouverte
+state	Closed	Fermée
+@plural	{n} waits on them|{n} wait on them	{n} attend son action|{n} attendent son action
+@plural	{n} review given|{n} reviews given	{n} relecture faite|{n} relectures faites
+@plural	{n} MR of theirs merged|{n} MRs of theirs merged	{n} de ses MR fusionnée|{n} de ses MR fusionnées
+@plural	{n} review asked of them|{n} reviews asked of them	{n} relecture demandée|{n} relectures demandées
+@plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	Chaque étape, médiane de sa {n} MR fusionnée sur la période|Chaque étape, médiane de ses {n} MR fusionnées sur la période
+@plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	{n} demande de la période sans réponse pour l'instant.|{n} demandes de la période sans réponse pour l'instant.
+@plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	D'après la {n} MR suivie où cette personne apparaît : les MR non suivies ne comptent pas.|D'après les {n} MR suivies où cette personne apparaît : les MR non suivies ne comptent pas.

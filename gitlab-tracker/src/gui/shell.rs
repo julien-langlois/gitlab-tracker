@@ -23,14 +23,14 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     }
     title_bar(g, ui, &sizes, page);
     status_bar(g, ui);
-    // The MR page belongs to the merge requests.
+    // The MR page belongs to the merge requests, a person's page to the team.
     rail(
         g,
         ui,
-        if page == Page::Mr {
-            Page::MergeRequests
-        } else {
-            page
+        match page {
+            Page::Mr => Page::MergeRequests,
+            Page::Person => Page::Team,
+            page => page,
         },
     );
 
@@ -59,6 +59,11 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
                 .show(ui, |ui| super::today::page(g, ui));
         }
         Page::Team => super::team::screen(g, ui, &sizes),
+        Page::Person => {
+            egui::CentralPanel::default()
+                .frame(content.inner_margin(Margin::symmetric(24, 16)))
+                .show(ui, |ui| super::person::page(g, ui));
+        }
         Page::Journal => super::journal::screen(g, ui, &sizes),
         Page::Environments => super::environments::screen(g, ui, &sizes),
         Page::Ci => super::ci::screen(g, ui, &sizes),
@@ -1053,7 +1058,7 @@ fn items_label(page: Page) -> &'static str {
         Page::Tracker => tl("Linked tickets"),
         #[cfg(feature = "stats")]
         Page::Stats => tl("Statistics"),
-        Page::Team => tl("Team"),
+        Page::Team | Page::Person => tl("Team"),
         Page::Journal => tl("Journal"),
         Page::Environments => tl("Environments"),
         Page::Ci => tl("CI / Pipelines"),

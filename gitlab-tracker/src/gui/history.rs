@@ -7,11 +7,12 @@ use super::{GuiApp, Page};
 const DEPTH: usize = 50;
 
 /// A page visited, and the MR it showed (the MR page, or the one selected in
-/// the list), to bring back with it.
+/// the list) or the person (a person's page), to bring back with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Visit {
     page: Page,
     mr: Option<String>,
+    person: Option<String>,
 }
 
 #[derive(Default)]
@@ -36,7 +37,10 @@ fn here(g: &GuiApp) -> Visit {
     let mr = matches!(page, Page::Mr | Page::MergeRequests)
         .then(|| g.app.selected_mr().map(|mr| mr.id.clone()))
         .flatten();
-    Visit { page, mr }
+    let person = (page == Page::Person)
+        .then(|| g.team.selected.clone())
+        .flatten();
+    Visit { page, mr, person }
 }
 
 /// Called by [`GuiApp::open_page`] before it moves to `page`: the page left
@@ -53,6 +57,24 @@ pub fn visit(g: &mut GuiApp, page: Page) {
     if from.page == page && !mr_changes {
         return;
     }
+    push(g, from);
+}
+
+/// Called by [`GuiApp::open_person`] before it shows `login`'s page: another
+/// person's page is a new visit too.
+pub fn visit_person(g: &mut GuiApp, login: &str) {
+    if g.history.replaying {
+        return;
+    }
+    let from = here(g);
+    if from.page == Page::Person && from.person.as_deref() == Some(login) {
+        return;
+    }
+    push(g, from);
+}
+
+/// `from` as the step back, the steps forward forgotten.
+fn push(g: &mut GuiApp, from: Visit) {
     let history = &mut g.history;
     if history.back.last() != Some(&from) {
         history.back.push(from);
@@ -82,6 +104,9 @@ pub fn forward(g: &mut GuiApp) {
 fn go(g: &mut GuiApp, to: Visit) {
     if let Some(id) = to.mr {
         g.select_id = Some(id);
+    }
+    if let Some(login) = to.person {
+        g.team.selected = Some(login);
     }
     g.history.replaying = true;
     g.open_page(to.page);
