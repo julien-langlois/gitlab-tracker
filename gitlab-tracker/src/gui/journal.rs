@@ -804,15 +804,31 @@ fn event_row(
     let tone = event.tone.unwrap_or_else(|| event.kind.tone(theme));
     let center = egui::pos2(left + 64.0, cy);
     ui.painter().circle_filled(center, 13.0, tone.bg);
-    board::paint_text(
-        ui,
-        center,
-        Align2::CENTER_CENTER,
-        event.glyph,
-        fonts::semibold(theme.text_size - 1.0),
-        tone.fg,
-        24.0,
-    );
+    if event.glyph == "▸" {
+        // The font's triangle sits low and left in its box: drawn as a shape,
+        // centred on its centroid, it sits in the middle of the circle.
+        let (w, h) = (6.0, 8.0);
+        let left = center.x - w / 3.0;
+        ui.painter().add(egui::Shape::convex_polygon(
+            vec![
+                egui::pos2(left, center.y - h / 2.0),
+                egui::pos2(left + w, center.y),
+                egui::pos2(left, center.y + h / 2.0),
+            ],
+            tone.fg,
+            egui::Stroke::NONE,
+        ));
+    } else {
+        board::paint_text(
+            ui,
+            center,
+            Align2::CENTER_CENTER,
+            event.glyph,
+            fonts::semibold(theme.text_size - 1.0),
+            tone.fg,
+            24.0,
+        );
+    }
     // On the right: the ago, the project.
     let ago_w = 76.0;
     board::paint_text(
