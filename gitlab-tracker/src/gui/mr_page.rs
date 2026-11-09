@@ -361,11 +361,16 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
         (open_threads > 0).then_some(t.amber),
         data.and_then(|d| d.threads.as_ref().ok())
             .map(|threads| {
-                tn(
-                    threads.len() as u64,
+                let all = tn(
+                    threads.iter().filter(|t| t.resolvable).count() as u64,
                     "{n} thread in all",
                     "{n} threads in all",
-                )
+                );
+                // Plain comments are never open, but may still ask for something.
+                match threads.iter().filter(|t| !t.resolvable).count() {
+                    0 => all,
+                    n => format!("{all} · {}", tn(n as u64, "{n} comment", "{n} comments")),
+                }
             })
             .unwrap_or_default(),
     ));
@@ -706,7 +711,7 @@ fn commit_row(g: &GuiApp, ui: &mut Ui, commit: &crate::gitlab_detail::BehindComm
 /// Open threads: the page's count once read, else the list's.
 fn unresolved(mr: &TrackedMr, data: Option<&PageData>) -> usize {
     match data.and_then(|d| d.threads.as_ref().ok()) {
-        Some(threads) => threads.iter().filter(|t| !t.resolved).count(),
+        Some(threads) => threads.iter().filter(|t| t.is_open()).count(),
         None => mr.user_notes_count as usize,
     }
 }
@@ -814,7 +819,7 @@ pub fn checks(
         _ => {}
     }
     let open = match threads {
-        Some(threads) => threads.iter().filter(|t| !t.resolved).count(),
+        Some(threads) => threads.iter().filter(|t| t.is_open()).count(),
         None => mr.user_notes_count as usize,
     };
     if open > 0 {
@@ -842,6 +847,30 @@ pub fn checks(
             Verdict::Met,
             tl("Every thread resolved").into(),
             String::new(),
+        );
+    }
+    // Plain comments cannot be resolved and never block, but one the author
+    // has not answered yet may still ask for something.
+    let unanswered = threads.map_or(0, |threads| {
+        threads
+            .iter()
+            .filter(|t| !t.resolvable)
+            .filter(|t| {
+                t.notes.last().is_some_and(|last| {
+                    !crate::utils::matches_gitlab_username(&mr.author, &last.username)
+                })
+            })
+            .count()
+    });
+    if unanswered > 0 {
+        push(
+            Verdict::Warns,
+            tn(
+                unanswered as u64,
+                "{n} general comment unanswered",
+                "{n} general comments unanswered",
+            ),
+            tl("They do not block the merge, but may ask for something.").into(),
         );
     }
     match rules {
@@ -1342,19 +1371,24 @@ fn discussions(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageDa
         }
         Some(Ok(threads)) => threads,
     };
-    let open = threads.iter().filter(|t| !t.resolved).count();
-    let resolved = threads.len() - open;
+    let open = threads.iter().filter(|t| t.is_open()).count();
+    let resolved = threads.iter().filter(|t| t.resolved).count();
+    let comments = threads.iter().filter(|t| !t.resolvable).count();
     ui.horizontal(|ui| {
-        ui.label(muted(
-            &theme,
-            tf(
-                "{open} open · {resolved} resolved",
-                &[
-                    ("open", &open.to_string()),
-                    ("resolved", &resolved.to_string()),
-                ],
-            ),
-        ));
+        let mut summary = tf(
+            "{open} open · {resolved} resolved",
+            &[
+                ("open", &open.to_string()),
+                ("resolved", &resolved.to_string()),
+            ],
+        );
+        if comments > 0 {
+            summary = format!(
+                "{summary} · {}",
+                tn(comments as u64, "{n} comment", "{n} comments")
+            );
+        }
+        ui.label(muted(&theme, summary));
         if resolved > 0 {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if super::widgets::switch(ui, &theme, g.show_resolved, tl("Show resolved"))
@@ -1373,7 +1407,7 @@ fn discussions(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageDa
     let me = g.app.config.gitlab_username.clone();
     // The threads waiting for me first, then the other open ones, then the rest.
     let waits_for_me = |t: &Thread| {
-        !t.resolved
+        t.is_open()
             && t.notes
                 .last()
                 .is_some_and(|last| me.as_deref().is_some_and(|u| last.username != u))
@@ -1382,7 +1416,7 @@ fn discussions(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageDa
         .iter()
         .filter(|t| g.show_resolved || !t.resolved)
         .collect();
-    shown.sort_by_key(|t| (!waits_for_me(t), t.resolved));
+    shown.sort_by_key(|t| (!waits_for_me(t), t.resolved, !t.resolvable));
     for thread in shown {
         // The code it is about, from the diff once read.
         let code: Vec<String> = match (&thread.path, thread.line, g.details.diff(&mr.id)) {
@@ -1423,7 +1457,7 @@ fn thread_card(ui: &mut Ui, theme: &Theme, thread: &Thread, code: &[String], me:
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if let Some(last) = last {
                                 let waiting =
-                                    !thread.resolved && me.is_some_and(|u| last.username != u);
+                                    thread.is_open() && me.is_some_and(|u| last.username != u);
                                 let when = format_relative_date(&last.created_at);
                                 if waiting {
                                     ui.label(muted(theme, when));
@@ -1434,7 +1468,9 @@ fn thread_card(ui: &mut Ui, theme: &Theme, thread: &Thread, code: &[String], me:
                                 }
                             }
                             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                                let (label, tone) = if thread.resolved {
+                                let (label, tone) = if !thread.resolvable {
+                                    (tl("Comment"), theme.tones.gray)
+                                } else if thread.resolved {
                                     (tl("Resolved"), theme.tones.green)
                                 } else {
                                     (tl("Unresolved"), theme.tones.amber)

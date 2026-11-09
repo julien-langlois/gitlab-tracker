@@ -153,6 +153,7 @@ impl World {
             .threads
             .iter()
             .map(|t| Thread {
+                resolvable: true,
                 resolved: t.resolved.is_some(),
                 path: t.place.map(|(path, _)| path.to_string()),
                 line: t.place.map(|(_, line)| line),

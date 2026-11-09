@@ -1031,6 +1031,9 @@ date	Merged	Fusionnée
 @plural	needs {n}|needs {n}	il en faut {n}|il en faut {n}
 @plural	{n} line|{n} lines	{n} ligne|{n} lignes
 @plural	{n} thread in all|{n} threads in all	{n} discussion au total|{n} discussions au total
+@plural	{n} comment|{n} comments	{n} commentaire|{n} commentaires
+@plural	{n} general comment unanswered|{n} general comments unanswered	{n} commentaire général sans réponse|{n} commentaires généraux sans réponse
+	They do not block the merge, but may ask for something.	Ils ne bloquent pas le merge, mais peuvent demander quelque chose.
 	Where it is	Où elle en est
 	{n} missing	{n} manquant(s)
 	deployed on {env}	déployée sur {env}

@@ -1031,6 +1031,9 @@ date	Merged	Gemergt
 @plural	needs {n}|needs {n}	braucht {n}|braucht {n}
 @plural	{n} line|{n} lines	{n} Zeile|{n} Zeilen
 @plural	{n} thread in all|{n} threads in all	{n} Thread insgesamt|{n} Threads insgesamt
+@plural	{n} comment|{n} comments	{n} Kommentar|{n} Kommentare
+@plural	{n} general comment unanswered|{n} general comments unanswered	{n} allgemeiner Kommentar unbeantwortet|{n} allgemeine Kommentare unbeantwortet
+	They do not block the merge, but may ask for something.	Sie blockieren den Merge nicht, könnten aber etwas verlangen.
 	Where it is	Wo er steht
 	{n} missing	{n} fehlen
 	deployed on {env}	auf {env} deployt

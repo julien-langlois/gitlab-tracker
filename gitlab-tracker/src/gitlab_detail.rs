@@ -53,11 +53,21 @@ pub struct User {
 /// A thread with all its notes.
 #[derive(Debug, Clone)]
 pub struct Thread {
+    /// `false` for a plain comment (GitLab's "Comment", not "Start a thread"):
+    /// it cannot be resolved, so it is never open nor resolved.
+    pub resolvable: bool,
     pub resolved: bool,
     /// The file and line it is about; `None` for a general thread.
     pub path: Option<String>,
     pub line: Option<u32>,
     pub notes: Vec<Note>,
+}
+
+impl Thread {
+    /// A thread waiting to be resolved (a plain comment never is).
+    pub fn is_open(&self) -> bool {
+        self.resolvable && !self.resolved
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -407,7 +417,8 @@ async fn fetch_rules(target: &Target) -> Option<Vec<Rule>> {
     (!rules.is_empty()).then_some(rules)
 }
 
-/// The resolvable threads, every note but GitLab's system notes; unresolved first.
+/// The threads and plain comments, every note but GitLab's system notes;
+/// unresolved threads first.
 async fn fetch_threads(target: &Target) -> Result<Vec<Thread>, String> {
     #[derive(serde::Deserialize)]
     struct Discussion {
@@ -449,16 +460,19 @@ async fn fetch_threads(target: &Target) -> Result<Vec<Thread>, String> {
             let Some(first) = discussion.notes.first() else {
                 continue;
             };
-            if first.system || !first.resolvable {
+            if first.system {
                 continue;
             }
             let position = first.position.as_ref();
+            let resolvable = discussion.notes.iter().any(|n| n.resolvable);
             threads.push(Thread {
-                resolved: discussion
-                    .notes
-                    .iter()
-                    .filter(|n| n.resolvable)
-                    .all(|n| n.resolved),
+                resolvable,
+                resolved: resolvable
+                    && discussion
+                        .notes
+                        .iter()
+                        .filter(|n| n.resolvable)
+                        .all(|n| n.resolved),
                 path: position.and_then(|p| p.new_path.clone().or_else(|| p.old_path.clone())),
                 line: position.and_then(|p| p.new_line.or(p.old_line)),
                 notes: discussion
@@ -482,7 +496,7 @@ async fn fetch_threads(target: &Target) -> Result<Vec<Thread>, String> {
             break;
         }
     }
-    threads.sort_by_key(|t| t.resolved);
+    threads.sort_by_key(|t| (t.resolved, !t.resolvable));
     Ok(threads)
 }
 

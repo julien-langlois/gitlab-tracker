@@ -1031,6 +1031,9 @@ date	Merged	合并时间
 @plural	needs {n}|needs {n}	还需 {n} 个
 @plural	{n} line|{n} lines	{n} 行
 @plural	{n} thread in all|{n} threads in all	共 {n} 个讨论
+@plural	{n} comment|{n} comments	{n} 条备注
+@plural	{n} general comment unanswered|{n} general comments unanswered	{n} 条一般备注未回复
+	They do not block the merge, but may ask for something.	它们不会阻止合并，但可能提出了要求。
 	Where it is	所在位置
 	{n} missing	缺少 {n} 个
 	deployed on {env}	已部署到 {env}
