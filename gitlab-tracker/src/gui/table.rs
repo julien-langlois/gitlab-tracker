@@ -51,18 +51,45 @@ pub enum Bulk {
     StopTracking,
 }
 
-/// The MRs picked with Ctrl / Shift + click, and what to do with them all.
+/// A quick pick of the bulk bar, among the MRs shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuickPick {
+    All,
+    State(GitlabMrState),
+    None,
+}
+
+/// The ids of the MRs shown that `pick` takes.
+fn quick_pick(app: &App, pick: QuickPick) -> Vec<String> {
+    app.visible_mrs()
+        .filter(|mr| match pick {
+            QuickPick::All => true,
+            QuickPick::State(state) => mr.state == state,
+            QuickPick::None => false,
+        })
+        .map(|mr| mr.id.clone())
+        .collect()
+}
+
+/// The MRs picked (in bulk mode, or with Ctrl / Shift + click), and what to do
+/// with them all.
 fn bulk_bar(g: &mut GuiApp, ui: &mut Ui) {
     // Gone from the list: no longer picked.
     let ids: std::collections::HashSet<String> = g.app.mrs.iter().map(|m| m.id.clone()).collect();
     g.marked.retain(|id| ids.contains(id));
-    if g.marked.is_empty() {
+    if g.marked.is_empty() && !g.bulk_mode {
         return;
     }
     let theme = g.theme;
     let n = g.marked.len();
+    let closed = quick_pick(&g.app, QuickPick::State(GitlabMrState::Closed)).len();
+    let merged = quick_pick(&g.app, QuickPick::State(GitlabMrState::Merged)).len();
+    let shown = g.app.visible_mrs().count();
     let mut picked = None;
+    let mut quick = None;
     let mut clear = false;
+    let read_only = g.app.read_only;
+    let bulk_mode = g.bulk_mode;
     egui::Frame::new()
         .fill(theme.palette.selection)
         .corner_radius(CornerRadius::same(theme.radii.medium))
@@ -76,45 +103,109 @@ fn bulk_bar(g: &mut GuiApp, ui: &mut Ui) {
                     theme.text_size,
                 ))
                 .on_hover_text(tl("Ctrl+click adds one · Shift+click a range"));
+                if bulk_mode {
+                    ui.add_space(4.0);
+                    ui.label(muted(&theme, tl("Pick:")));
+                    let picks = [
+                        (
+                            QuickPick::All,
+                            tf("All shown ({n})", &[("n", &shown.to_string())]),
+                            shown,
+                        ),
+                        (
+                            QuickPick::State(GitlabMrState::Closed),
+                            tf("Closed ({n})", &[("n", &closed.to_string())]),
+                            closed,
+                        ),
+                        (
+                            QuickPick::State(GitlabMrState::Merged),
+                            tf("Merged ({n})", &[("n", &merged.to_string())]),
+                            merged,
+                        ),
+                    ];
+                    for (pick, label, count) in picks {
+                        let r = ui.add_enabled_ui(count > 0, |ui| {
+                            button(ui, &theme, None, &label, false)
+                        });
+                        if r.inner
+                            .on_hover_text(tl("Adds them to the MRs selected, among the MRs shown"))
+                            .clicked()
+                        {
+                            quick = Some(pick);
+                        }
+                    }
+                    let none =
+                        ui.add_enabled_ui(n > 0, |ui| button(ui, &theme, None, tl("None"), false));
+                    if none.inner.clicked() {
+                        quick = Some(QuickPick::None);
+                    }
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if button(ui, &theme, Some(Icon::Close), tl("Clear"), false).clicked() {
+                    let label = tl(if bulk_mode { "Done" } else { "Clear" });
+                    if button(ui, &theme, Some(Icon::Close), label, false).clicked() {
                         clear = true;
                     }
-                    let stop = button(ui, &theme, None, tl("Stop tracking…"), false);
-                    egui::Popup::menu(&stop).show(|ui| {
-                        ui.label(tn(
-                            n as u64,
-                            "Stop tracking {n} MR?",
-                            "Stop tracking these {n} MRs?",
-                        ));
-                        if ui.button(tl("Stop tracking")).clicked() {
-                            picked = Some(Bulk::StopTracking);
-                        }
-                    });
-                    if button(
-                        ui,
-                        &theme,
-                        Some(Icon::Clipboard),
-                        tl("Copy checklist"),
-                        false,
-                    )
-                    .clicked()
-                    {
-                        picked = Some(Bulk::CopyChecklist);
-                    }
-                    if button(ui, &theme, Some(Icon::StarOutline), tl("Unflag"), false).clicked() {
-                        picked = Some(Bulk::Flag(false));
-                    }
-                    if button(ui, &theme, Some(Icon::Star), tl("Flag"), false).clicked() {
-                        picked = Some(Bulk::Flag(true));
+                    if !bulk_mode {
+                        bulk_actions(ui, &theme, n, read_only, &mut picked);
                     }
                 });
             });
+            // Bulk mode: the actions on a line of their own, under the picks.
+            if bulk_mode {
+                ui.add_space(4.0);
+                let line = Vec2::new(ui.available_width(), theme.spacing.control_height + 2.0);
+                ui.allocate_ui_with_layout(line, Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    bulk_actions(ui, &theme, n, read_only, &mut picked);
+                });
+            }
         });
+    match quick {
+        Some(QuickPick::None) => g.marked.clear(),
+        Some(pick) => g.marked.extend(quick_pick(&g.app, pick)),
+        None => {}
+    }
     if clear {
         g.marked.clear();
+        g.bulk_mode = false;
     }
     g.bulk = picked.or(g.bulk);
+}
+
+/// The bulk bar's actions, right to left; disabled while nothing is picked.
+fn bulk_actions(ui: &mut Ui, theme: &Theme, n: usize, read_only: bool, picked: &mut Option<Bulk>) {
+    ui.add_enabled_ui(n > 0 && !read_only, |ui| {
+        let stop = button(ui, theme, None, tl("Stop tracking…"), false);
+        egui::Popup::menu(&stop).show(|ui| {
+            ui.label(tn(
+                n as u64,
+                "Stop tracking {n} MR?",
+                "Stop tracking these {n} MRs?",
+            ));
+            if ui.button(tl("Stop tracking")).clicked() {
+                *picked = Some(Bulk::StopTracking);
+            }
+        });
+    });
+    ui.add_enabled_ui(n > 0, |ui| {
+        if button(
+            ui,
+            theme,
+            Some(Icon::Clipboard),
+            tl("Copy checklist"),
+            false,
+        )
+        .clicked()
+        {
+            *picked = Some(Bulk::CopyChecklist);
+        }
+        if button(ui, theme, Some(Icon::StarOutline), tl("Unflag"), false).clicked() {
+            *picked = Some(Bulk::Flag(false));
+        }
+        if button(ui, theme, Some(Icon::Star), tl("Flag"), false).clicked() {
+            *picked = Some(Bulk::Flag(true));
+        }
+    });
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -218,6 +309,17 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         .clicked()
         {
             g.pending.push(Action::CopyChecklist);
+        }
+        if button(ui, &theme, Some(Icon::List), tl("Select"), g.bulk_mode)
+            .on_hover_text(tl(
+                "Bulk mode: tick several MRs to flag them, copy them or stop tracking them",
+            ))
+            .clicked()
+        {
+            g.bulk_mode = !g.bulk_mode;
+            if !g.bulk_mode {
+                g.marked.clear();
+            }
         }
         let outlined = theme.outlined_icon_button();
         let height = theme.spacing.control_height + 2.0;
@@ -1258,6 +1360,8 @@ struct RowView {
     selected: bool,
     /// Picked with Ctrl / Shift + click, for the bulk bar.
     marked: bool,
+    /// Bulk mode: a box replaces the flag, a click picks the row.
+    bulk_mode: bool,
     status: (&'static str, Tone),
     effort: Option<(&'static str, Tone)>,
     threads: u32,
@@ -1416,6 +1520,7 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 fresh: mr.recently_updated && fresh_window,
                 selected: selected == Some(index),
                 marked: g.marked.contains(&mr.id),
+                bulk_mode: g.bulk_mode,
                 status: tones::status(mr.state, &mr.mergeability, tones),
                 effort: mr.diff_stats.as_ref().map(|s| {
                     let effort = Effort::from_score(s.difficulty(&app.config.complexity_profile));
@@ -1713,7 +1818,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
         }
         Some(RowAction::Toggle(index)) => {
             let ids: Vec<String> = g.app.visible_mrs().map(|m| m.id.clone()).collect();
-            if g.marked.is_empty() {
+            if g.marked.is_empty() && !g.bulk_mode {
                 if let Some(current) = g.app.table_state.selected().and_then(|i| ids.get(i)) {
                     g.marked.insert(current.clone());
                 }
@@ -2027,6 +2132,11 @@ fn row(
         ui.set_clip_rect(cell_rect.intersect(ui.clip_rect()));
         ui.spacing_mut().item_spacing.x = 6.0;
         match cell {
+            Cell::Flag if r.bulk_mode => {
+                if tick(&mut ui, theme, r.marked).clicked() {
+                    action = Some(RowAction::Toggle(r.index));
+                }
+            }
             Cell::Flag => {
                 if flag(&mut ui, theme, r.flagged).clicked() {
                     action = Some(RowAction::Then(r.index, Action::ToggleFlagSelected));
@@ -2069,7 +2179,7 @@ fn row(
     let modifiers = ui.input(|i| i.modifiers);
     if response.double_clicked() {
         action = Some(RowAction::Open(r.index));
-    } else if response.clicked() && modifiers.command {
+    } else if response.clicked() && (modifiers.command || (r.bulk_mode && !modifiers.shift)) {
         action.get_or_insert(RowAction::Toggle(r.index));
     } else if response.clicked() && modifiers.shift {
         action.get_or_insert(RowAction::Range(r.index));
@@ -2375,6 +2485,38 @@ fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
         .on_hover_text(label)
 }
 
+/// Bulk mode's box, ticked when the row is picked.
+fn tick(ui: &mut Ui, theme: &Theme, ticked: bool) -> egui::Response {
+    let style = theme.icon_button();
+    let label = tl(if ticked { "Unselect" } else { "Select" });
+    IconButton::new(label, Vec2::splat(18.0), &style)
+        .show(ui, |ui, rect, tint| {
+            let square = Rect::from_center_size(rect.center(), Vec2::splat(13.0));
+            let radius = CornerRadius::same(3);
+            if ticked {
+                ui.painter()
+                    .rect_filled(square, radius, theme.palette.accent_fill);
+                let s = square.shrink(3.0);
+                ui.painter().line(
+                    vec![
+                        egui::pos2(s.left(), s.center().y),
+                        egui::pos2(s.left() + s.width() * 0.38, s.bottom()),
+                        egui::pos2(s.right(), s.top()),
+                    ],
+                    Stroke::new(1.6, Color32::WHITE),
+                );
+            } else {
+                ui.painter().rect_stroke(
+                    square,
+                    radius,
+                    Stroke::new(1.2, tint.gamma_multiply(0.8)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        })
+        .on_hover_text(label)
+}
+
 /// The title over "@author · when" and the scoped labels (unless they have
 /// their own column); returns the label clicked, if any.
 fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) -> Option<String> {
@@ -2583,6 +2725,34 @@ mod tests {
         Col::Behind,
         Col::Ticket,
     ];
+
+    #[tokio::test]
+    async fn quick_picks_take_the_shown_mrs_in_that_state() {
+        let mut app = crate::app::tests::app_with_mrs(&[
+            ("a", "None"),
+            ("b", "None"),
+            ("c", "None"),
+            ("d", "None"),
+        ])
+        .await;
+        app.config.hide_merged = false;
+        app.mrs[0].state = GitlabMrState::Closed;
+        app.mrs[1].state = GitlabMrState::Merged;
+        app.mrs[3].state = GitlabMrState::Closed;
+        let mut closed = quick_pick(&app, QuickPick::State(GitlabMrState::Closed));
+        closed.sort();
+        assert_eq!(closed, ["1", "4"]);
+        assert_eq!(
+            quick_pick(&app, QuickPick::State(GitlabMrState::Merged)),
+            ["2"]
+        );
+        assert_eq!(quick_pick(&app, QuickPick::All).len(), 4);
+        assert!(quick_pick(&app, QuickPick::None).is_empty());
+        // Hidden by "Hide merged": not picked.
+        app.config.hide_merged = true;
+        assert!(quick_pick(&app, QuickPick::State(GitlabMrState::Merged)).is_empty());
+        assert_eq!(quick_pick(&app, QuickPick::All).len(), 3);
+    }
 
     #[test]
     fn narrow_tables_drop_the_least_useful_columns_first() {

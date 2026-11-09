@@ -1705,3 +1705,11 @@ state	Draft	Brouillon
 	Changelog copied	Changelog copié
 	Preview	Aperçu
 	Markdown	Markdown
+	Select	Sélectionner
+	Unselect	Désélectionner
+	Pick:	Cocher :
+	All shown ({n})	Toutes les affichées ({n})
+	Closed ({n})	Fermées ({n})
+	Merged ({n})	Fusionnées ({n})
+	Adds them to the MRs selected, among the MRs shown	Les ajoute aux MR sélectionnées, parmi les MR affichées
+	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	Mode groupé : cochez plusieurs MR pour les marquer, les copier ou arrêter leur suivi

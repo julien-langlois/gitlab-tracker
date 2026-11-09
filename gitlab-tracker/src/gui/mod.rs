@@ -369,6 +369,8 @@ struct GuiApp {
     /// MRs picked with Ctrl / Shift + click, by id, and what the bulk bar asked for.
     marked: HashSet<String>,
     bulk: Option<table::Bulk>,
+    /// The table's bulk mode: a box on each row, a click picks it.
+    bulk_mode: bool,
     /// The window's inner size, saved with the preferences.
     window_size: Option<egui::Vec2>,
     /// Picked while drawing, applied once the frame is drawn: a focus to show
@@ -501,6 +503,7 @@ impl GuiApp {
             trend_period: flow::Period::Month,
             marked,
             bulk: None,
+            bulk_mode: false,
             window_size: None,
             next_focus: None,
             select_id: None,
@@ -840,6 +843,7 @@ impl GuiApp {
     fn after_swap(&mut self) {
         self.set_theme(self.theme.mode);
         self.bulk = None;
+        self.bulk_mode = false;
         self.next_focus = None;
         self.select_id = None;
         self.scroll_to = None;

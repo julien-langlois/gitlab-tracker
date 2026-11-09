@@ -2562,7 +2562,7 @@ pub(crate) mod tests {
     }
 
     /// Tracks MRs "1".."n" with the given `(title, milestone)` pairs.
-    async fn app_with_mrs(mrs: &[(&str, &str)]) -> App {
+    pub(crate) async fn app_with_mrs(mrs: &[(&str, &str)]) -> App {
         let mut app = test_app();
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         for (i, _) in mrs.iter().enumerate() {

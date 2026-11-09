@@ -1705,3 +1705,11 @@ state	Draft	Borrador
 	Changelog copied	Changelog copiado
 	Preview	Vista previa
 	Markdown	Markdown
+	Select	Seleccionar
+	Unselect	Deseleccionar
+	Pick:	Elegir:
+	All shown ({n})	Todas las mostradas ({n})
+	Closed ({n})	Cerradas ({n})
+	Merged ({n})	Fusionadas ({n})
+	Adds them to the MRs selected, among the MRs shown	Las añade a las MR seleccionadas, entre las MR mostradas
+	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	Modo masivo: marque varias MR para destacarlas, copiarlas o dejar de seguirlas

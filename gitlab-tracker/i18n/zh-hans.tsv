@@ -1705,3 +1705,11 @@ state	Draft	草稿
 	Changelog copied	已复制变更日志
 	Preview	预览
 	Markdown	Markdown
+	Select	选择
+	Unselect	取消选择
+	Pick:	选取：
+	All shown ({n})	全部显示的 ({n})
+	Closed ({n})	已关闭 ({n})
+	Merged ({n})	已合并 ({n})
+	Adds them to the MRs selected, among the MRs shown	将其加入已选的 MR（仅限显示的 MR）
+	Bulk mode: tick several MRs to flag them, copy them or stop tracking them	批量模式：勾选多个 MR 以标记、复制或停止跟踪
