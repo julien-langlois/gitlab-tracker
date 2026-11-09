@@ -686,7 +686,7 @@ fn main(
         300.0,
         260.0,
         |ui| matrix_card(ui, &theme, analysis, PERIODS[g.team.period.min(2)].1),
-        |ui| signals_card(ui, &theme, analysis, now, reminder),
+        |ui| signals_card(ui, &theme, analysis, now, reminder, &mut open_mr),
     );
 
     if narrow {
@@ -702,7 +702,7 @@ fn main(
         g.team.selected = Some(login);
     }
     if let Some(id) = open_mr {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -1305,6 +1305,14 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
     });
 }
 
+/// A line of the Signals card: its dot, its sentence, and the MR it names
+/// (id, title), shown on hover and opened on a click.
+struct Signal {
+    color: Color32,
+    text: String,
+    mr: Option<(String, String)>,
+}
+
 /// What stands out, in sentences: late reviews, an unbalanced load, someone
 /// free, the trend.
 fn signals(
@@ -1312,7 +1320,12 @@ fn signals(
     now: DateTime<Utc>,
     reminder: f64,
     theme: &Theme,
-) -> Vec<(Color32, String)> {
+) -> Vec<Signal> {
+    let line = |color: Color32, text: String| Signal {
+        color,
+        text,
+        mr: None,
+    };
     let t = &theme.tones;
     let mut out = Vec::new();
     let oldest = analysis
@@ -1322,17 +1335,20 @@ fn signals(
         .filter_map(|(p, r)| r.since.map(|s| (p, r, board::days_between(s, now))))
         .max_by(|a, b| a.2.total_cmp(&b.2));
     if let Some((p, r, days)) = oldest.filter(|o| o.2 >= reminder) {
-        out.push((
-            t.red.fg,
-            tf(
-                "!{id} has waited for {name}'s review for {time}, past the reminder delay.",
-                &[
-                    ("id", &r.id),
-                    ("name", board::first_name(&p.name)),
-                    ("time", &board::duration_text(days)),
-                ],
-            ),
-        ));
+        out.push(Signal {
+            mr: Some((r.id.clone(), r.title.clone())),
+            ..line(
+                t.red.fg,
+                tf(
+                    "!{id} has waited for {name}'s review for {time}, past the reminder delay.",
+                    &[
+                        ("id", &r.id),
+                        ("name", board::first_name(&p.name)),
+                        ("time", &board::duration_text(days)),
+                    ],
+                ),
+            )
+        });
     }
     if let Some((who, share)) = busiest(&analysis.matrix).filter(|b| b.1 >= 0.4) {
         let name = analysis
@@ -1340,7 +1356,7 @@ fn signals(
             .iter()
             .find(|p| p.login == who)
             .map_or(who.clone(), |p| p.name.clone());
-        out.push((
+        out.push(line(
             t.amber.fg,
             tf(
                 "{name} gets {share} of the review requests.",
@@ -1357,7 +1373,7 @@ fn signals(
         .filter(|p| p.level == Level::Available)
         .min_by(|a, b| a.load.total_cmp(&b.load))
     {
-        out.push((
+        out.push(line(
             t.green.fg,
             tf(
                 "{name} has no review waiting: they can take the next one.",
@@ -1373,7 +1389,7 @@ fn signals(
         .max_by(|a, b| a.1.total_cmp(&b.1))
         .filter(|(_, r)| analysis.response.is_some_and(|m| *r > m * 1.5))
     {
-        out.push((
+        out.push(line(
             t.blue.fg,
             tf(
                 "{name} answers a review request in {time}, the slowest of the team.",
@@ -1385,7 +1401,7 @@ fn signals(
         ));
     }
     if out.is_empty() {
-        out.push((
+        out.push(line(
             t.green.fg,
             tl("Nothing stands out: the reviews flow.").to_string(),
         ));
@@ -1399,11 +1415,14 @@ fn signals_card(
     analysis: &Analysis,
     now: DateTime<Utc>,
     reminder: f64,
+    open_mr: &mut Option<String>,
 ) {
     board::card(ui, theme, tl("Signals"), "", 250.0, |ui| {
         ui.spacing_mut().item_spacing.y = 8.0;
-        for (color, text) in signals(analysis, now, reminder, theme) {
-            egui::Frame::new()
+        for (index, Signal { color, text, mr }) in
+            signals(analysis, now, reminder, theme).into_iter().enumerate()
+        {
+            let frame = egui::Frame::new()
                 .fill(theme.palette.raised.gamma_multiply(0.7))
                 .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
                 .corner_radius(CornerRadius::same(theme.radii.medium))
@@ -1418,10 +1437,30 @@ fn signals_card(
                         });
                         ui.add(
                             egui::Label::new(RichText::new(text).size(theme.text_size - 0.5))
-                                .wrap(),
+                                .wrap()
+                                .selectable(false),
                         );
                     });
                 });
+            let Some((id, title)) = mr else {
+                continue;
+            };
+            let rect = frame.response.rect;
+            let response = ui
+                .interact(rect, ui.scope_id().with(("signal", index)), Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .on_hover_text(format!("!{id} · {title}\n{}", tl("Open its page")));
+            if response.hovered() {
+                ui.painter().rect_stroke(
+                    rect,
+                    CornerRadius::same(theme.radii.medium),
+                    egui::Stroke::new(1.0, theme.palette.text_muted),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if response.clicked() {
+                *open_mr = Some(id);
+            }
         }
     });
 }
@@ -1609,7 +1648,7 @@ fn inspector(
         );
     }
     if let Some(id) = open_mr {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -1703,7 +1742,7 @@ fn line(
     );
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Show it on the merge requests page"))
+        .on_hover_text(tl("Open its page"))
         .clicked()
 }
 

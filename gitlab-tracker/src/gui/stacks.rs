@@ -44,6 +44,16 @@ pub enum Problem {
 }
 
 impl Problem {
+    /// The parent MR the problem names.
+    fn parent(&self) -> &str {
+        match self {
+            Problem::Retarget { parent, .. }
+            | Problem::Rebase { parent }
+            | Problem::HeldBy { parent, .. }
+            | Problem::LandsInParent { parent } => parent,
+        }
+    }
+
     fn text(&self) -> String {
         match self {
             Problem::Retarget { parent, base } => tf(
@@ -122,6 +132,14 @@ pub struct Stack {
 impl Stack {
     fn root(&self) -> &Node {
         &self.nodes[0]
+    }
+
+    /// An MR of the stack named by its id and title: "!12 · its title".
+    fn named(&self, id: &str) -> String {
+        self.nodes
+            .iter()
+            .find(|n| n.id == id)
+            .map_or_else(|| format!("!{id}"), |n| format!("!{id} · {}", n.title))
     }
 
     fn open(&self) -> usize {
@@ -648,7 +666,7 @@ fn stack_body(
             } else {
                 problem.text()
             };
-            board::paint_text(
+            let w = board::paint_text(
                 ui,
                 egui::pos2(left, y3),
                 Align2::LEFT_CENTER,
@@ -657,6 +675,13 @@ fn stack_body(
                 problem.tone(theme).fg,
                 rect.right() - 10.0 - left,
             );
+            // The parent it names, by its title.
+            ui.interact(
+                egui::Rect::from_min_size(egui::pos2(left, y3 - 9.0), Vec2::new(w, 18.0)),
+                ui.scope_id().with(("problem", node.id.as_str())),
+                Sense::hover(),
+            )
+            .on_hover_text(stack.named(problem.parent()));
         }
         if response.double_clicked() {
             *open = Some(node.id.clone());
@@ -756,7 +781,7 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
                     tl("Sits on"),
                     node.parent
                         .as_ref()
-                        .map_or_else(|| stack.base.clone(), |p| format!("!{p}")),
+                        .map_or_else(|| stack.base.clone(), |p| stack.named(p)),
                 ),
             ],
         );
@@ -779,7 +804,8 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
                                 }),
                         )
                         .wrap(),
-                    );
+                    )
+                    .on_hover_text(stack.named(problem.parent()));
                 });
                 ui.add_space(4.0);
             }

@@ -1089,6 +1089,16 @@ fn projection_banner(
         detail,
         theme.palette.text_secondary,
     );
+    // The MRs named by their id only: their titles on hover.
+    if !held.is_empty() {
+        let titles = held
+            .iter()
+            .map(|i| format!("!{} · {}", i.id, i.title))
+            .collect::<Vec<_>>()
+            .join("\n");
+        ui.interact(banner, ui.scope_id().with("held_titles"), Sense::hover())
+            .on_hover_text(titles);
+    }
     let tile = if side_by_side {
         Rect::from_min_max(egui::pos2(banner.right() + GAP, row.top()), row.max)
     } else {

@@ -157,8 +157,18 @@ fn lifecycle(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 /// Back to the list, where this MR is in it, and the keys to move.
 fn crumbs(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
-    let ids: Vec<String> = g.app.visible_mrs().map(|m| m.id.clone()).collect();
-    let at = ids.iter().position(|id| id == &mr.id);
+    let mrs: Vec<(String, String)> = g
+        .app
+        .visible_mrs()
+        .map(|m| (m.id.clone(), m.title.clone()))
+        .collect();
+    let ids: Vec<&String> = mrs.iter().map(|(id, _)| id).collect();
+    let at = ids.iter().position(|id| **id == mr.id);
+    // The next and previous MRs, their titles on hover.
+    let neighbour = |ui: &mut Ui, (id, title): &(String, String)| {
+        ui.label(muted(&theme, format!("!{id}")))
+            .on_hover_text(format!("!{id} · {title}"));
+    };
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         let back = ui
@@ -191,15 +201,15 @@ fn crumbs(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             ui.label(muted(&theme, tl("back")));
             key(ui, &theme, "Esc");
             ui.label(muted(&theme, "·"));
-            if let Some(next) = at.and_then(|i| ids.get(i + 1)) {
+            if let Some(next) = at.and_then(|i| mrs.get(i + 1)) {
                 key(ui, &theme, "J");
-                ui.label(muted(&theme, format!("!{next}")));
+                neighbour(ui, next);
             }
-            if let Some(prev) = at.and_then(|i| i.checked_sub(1)).and_then(|i| ids.get(i)) {
-                if at.and_then(|i| ids.get(i + 1)).is_some() {
+            if let Some(prev) = at.and_then(|i| i.checked_sub(1)).and_then(|i| mrs.get(i)) {
+                if at.and_then(|i| mrs.get(i + 1)).is_some() {
                     ui.label(muted(&theme, "·"));
                 }
-                ui.label(muted(&theme, format!("!{prev}")));
+                neighbour(ui, prev);
                 key(ui, &theme, "K");
             }
         });

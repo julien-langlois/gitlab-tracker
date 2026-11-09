@@ -61,6 +61,8 @@ pub struct Run {
     pub duration: Option<f64>,
     pub sha: Option<String>,
     pub mr: String,
+    /// The MR's title, for its id's hover.
+    pub mr_title: String,
     /// A failure followed by a pass of the same job on the same commit.
     pub flaky: bool,
 }
@@ -227,6 +229,7 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64) -> Ci {
                         duration: job.duration,
                         sha: p.sha.clone(),
                         mr: mr.id.clone(),
+                        mr_title: mr.title.clone(),
                         flaky: false,
                     });
                     if job.status == "failed" {
@@ -1016,8 +1019,9 @@ fn jobs_table(
                     status_color(&run.status, run.flaky, theme),
                 );
                 let tip = format!(
-                    "!{} · {}{}\n{}",
+                    "!{} · {}\n{}{}\n{}",
                     run.mr,
+                    run.mr_title,
                     run.status,
                     if run.flaky {
                         format!(" · {}", tl("passed on a rerun"))
@@ -1490,11 +1494,11 @@ fn inspector(
                 ),
             ],
         );
-        let mut mrs: Vec<&str> = job
+        let mut mrs: Vec<(&str, &str)> = job
             .runs
             .iter()
             .filter(|r| r.status == "failed")
-            .map(|r| r.mr.as_str())
+            .map(|r| (r.mr.as_str(), r.mr_title.as_str()))
             .collect();
         mrs.sort_unstable();
         mrs.dedup();
@@ -1505,8 +1509,8 @@ fn inspector(
             let mut clicked = None;
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
-                for id in &mrs {
-                    if board::mr_pill(ui, &theme, id, "").clicked() {
+                for (id, title) in &mrs {
+                    if board::mr_pill(ui, &theme, id, title).clicked() {
                         clicked = Some(id.to_string());
                     }
                 }

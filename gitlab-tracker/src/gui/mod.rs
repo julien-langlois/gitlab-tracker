@@ -1743,6 +1743,28 @@ impl eframe::App for GuiApp {
         screenshot_for_development(ui.ctx());
     }
 
+    /// Development aid (debug builds): `GITLAB_TRACKER_GUI_HOVER=x,y` puts the
+    /// pointer there once the page is up, tooltips at once, so a screenshot
+    /// shows what hovering says.
+    #[cfg(debug_assertions)]
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        let Ok(at) = std::env::var("GITLAB_TRACKER_GUI_HOVER") else {
+            return;
+        };
+        let Some((x, y)) = at
+            .split_once(',')
+            .and_then(|(x, y)| Some((x.trim().parse().ok()?, y.trim().parse().ok()?)))
+        else {
+            return;
+        };
+        if ctx.cumulative_pass_nr() == 5 {
+            ctx.global_style_mut(|style| style.interaction.tooltip_delay = 0.0);
+            raw_input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(x, y)));
+        }
+    }
+
     /// Writes the last state queued before the window closed, and the window's
     /// preferences.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

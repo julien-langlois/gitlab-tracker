@@ -619,6 +619,12 @@ fn matrix_card(
         let font = egui::FontId::monospace(theme.text_size - 3.0);
         let (head, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
+        // An id alone says little: its title on hover.
+        let title = |id: &str| {
+            overlaps
+                .mr(id)
+                .map_or_else(|| format!("!{id}"), |m| format!("!{id} · {}", m.title))
+        };
         for (j, id) in ids.iter().enumerate().take(n) {
             let cx = head.left() + label_w + j as f32 * (cell + 4.0) + cell / 2.0;
             board::paint_text(
@@ -630,6 +636,15 @@ fn matrix_card(
                 theme.palette.text_secondary,
                 cell + 4.0,
             );
+            ui.interact(
+                Rect::from_center_size(
+                    egui::pos2(cx, head.center().y),
+                    Vec2::new(cell + 4.0, head.height()),
+                ),
+                ui.scope_id().with(("matrix_col", *id)),
+                Sense::hover(),
+            )
+            .on_hover_text(title(id));
         }
         // A lower triangle: no first row, no last column.
         for (i, a) in ids.iter().enumerate().skip(1) {
@@ -644,6 +659,12 @@ fn matrix_card(
                 theme.palette.text_secondary,
                 label_w - 4.0,
             );
+            ui.interact(
+                Rect::from_min_size(line.min, Vec2::new(label_w - 4.0, line.height())),
+                ui.scope_id().with(("matrix_row", *a)),
+                Sense::hover(),
+            )
+            .on_hover_text(title(a));
             for (j, b) in ids.iter().enumerate().take(i) {
                 let r = Rect::from_min_size(
                     egui::pos2(
@@ -659,7 +680,9 @@ fn matrix_card(
                             .interact(r, ui.scope_id().with(("pair", *a, *b)), Sense::click())
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
                             .on_hover_text(format!(
-                                "!{a} × !{b} · {}",
+                                "{}\n{}\n{}",
+                                title(a),
+                                title(b),
                                 tn(p.files.len() as u64, "{n} file", "{n} files")
                             ));
                         let fill = if response.hovered() {
