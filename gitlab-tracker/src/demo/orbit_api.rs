@@ -1251,7 +1251,13 @@ impl Page {
 
 /// The schema snapshot the GraphQL MR adds, as `async-graphql` prints it.
 fn schema_snapshot() -> FileChange {
-    const TYPES: [(&str, &str, &[(&str, &str, &str)]); 9] = [
+    /// `(kind, name, fields)`, each field `(name, signature, doc)`.
+    type SchemaType = (
+        &'static str,
+        &'static str,
+        &'static [(&'static str, &'static str, &'static str)],
+    );
+    const TYPES: [SchemaType; 9] = [
         ("type", "Query", &[
             ("shipments", "(first: Int, after: String, status: ShipmentStatus): ShipmentConnection!", "A page of the caller's shipments, newest first."),
             ("shipment", "(number: String!): Shipment", "One shipment by its tracking number."),
@@ -1836,7 +1842,7 @@ fn openapi_spec() -> FileChange {
                 .rsplit('{')
                 .next()
                 .unwrap_or("id}")
-                .trim_end_matches(|c| c == '}' || c == '/')
+                .trim_end_matches(['}', '/'])
                 .split('}')
                 .next()
                 .unwrap_or("id");
@@ -1906,7 +1912,7 @@ fn snapshots() -> FileChange {
     .into_iter()
     .enumerate()
     {
-        text.push_str(&format!("---\nsource: tests/api_v2.rs\nexpression: shipment_{status}\n---\n{{\n  \"id\": \"shp_01J8{:04}\",\n  \"number\": \"OR{:09}FR\",\n  \"status\": \"{status}\",\n  \"createdAt\": \"[date]\",\n  \"carrier\": {{\n    \"code\": \"{carrier}\",\n    \"trackingUrl\": \"https://track.orbit-logistics.dev/OR{:09}FR\"\n  }},\n  \"weightKg\": {:.1},\n  \"recipient\": {{\n    \"city\": \"{city}\",\n    \"country\": \"FR\"\n  }},\n  \"lastScan\": {{\n    \"kind\": \"depot_in\",\n    \"scannedAt\": \"[date]\",\n    \"depot\": \"{}\"\n  }}\n}}\n", 1200 + k, 482_115_300 + k * 7, 482_115_300 + k * 7, 0.8 + k as f64 * 1.7, &city[..3].to_uppercase()));
+        text.push_str(&format!("---\nsource: tests/api_v2.rs\nexpression: shipment_{status}\n---\n{{\n  \"id\": \"shp_01J8{:04}\",\n  \"number\": \"OR{:09}FR\",\n  \"status\": \"{status}\",\n  \"createdAt\": \"[date]\",\n  \"carrier\": {{\n    \"code\": \"{carrier}\",\n    \"trackingUrl\": \"https://track.orbit-logistics.dev/OR{:09}FR\"\n  }},\n  \"weightKg\": {:.1},\n  \"recipient\": {{\n    \"city\": \"{city}\",\n    \"country\": \"FR\"\n  }},\n  \"lastScan\": {{\n    \"kind\": \"depot_in\",\n    \"scannedAt\": \"[date]\",\n    \"depot\": \"{}\"\n  }}\n}}\n", 1200 + k, 482_115_300 + k * 7, 482_115_300 + k * 7, 0.8 + k as f64 * 1.7, city[..3].to_uppercase()));
     }
     added("tests/snapshots/api_v2__shipments.snap", &text)
 }

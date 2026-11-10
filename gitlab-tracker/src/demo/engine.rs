@@ -310,7 +310,7 @@ impl World {
         let mut iid = world.spec.first_iid;
         for i in order {
             world.mrs[i].iid = iid.to_string();
-            iid += 1 + u32::from(hash(&[world.mrs[i].spec.key]) % 3 == 0);
+            iid += 1 + u32::from(hash(&[world.mrs[i].spec.key]).is_multiple_of(3));
         }
 
         world.branches_play();
@@ -546,8 +546,8 @@ impl World {
                     let to = self.present.entry(sync.to).or_default();
                     let mut arrived = Vec::new();
                     for (mr, _) in from {
-                        if !to.contains_key(&mr) {
-                            to.insert(mr, at);
+                        if let std::collections::hash_map::Entry::Vacant(slot) = to.entry(mr) {
+                            slot.insert(at);
                             arrived.push(mr);
                         }
                     }
@@ -706,7 +706,7 @@ impl World {
                 }
             }
         }
-        self.deployments.sort_by(|a, b| b.at.cmp(&a.at));
+        self.deployments.sort_by_key(|d| std::cmp::Reverse(d.at));
     }
 
     /// GitLab's ids, growing with time: pipelines, jobs, notes.
@@ -816,7 +816,7 @@ impl World {
             .iter()
             .filter(|p| p.owner == Owner::Mr(i))
             .collect();
-        list.sort_by(|a, b| b.created.cmp(&a.created));
+        list.sort_by_key(|p| std::cmp::Reverse(p.created));
         list
     }
 

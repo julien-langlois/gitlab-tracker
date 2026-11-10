@@ -1038,7 +1038,7 @@ fn activity_card(ui: &mut Ui, theme: &Theme, events: &[&Event], days: i64, now: 
         let every = ((room / (w + gap)).ceil() as usize).max(1);
         let mut right_edge = f32::NEG_INFINITY;
         let last_cx = labels.left() + (n - 1) as f32 * (w + gap) + w / 2.0;
-        for i in (0..n).filter(|i| (n - 1 - i) % every == 0) {
+        for i in (0..n).filter(|i| (n - 1 - i).is_multiple_of(every)) {
             let cx = labels.left() + i as f32 * (w + gap) + w / 2.0;
             let text = label(i);
             let galley = board::one_line(ui, &text, font.clone(), theme.palette.text_muted, room);

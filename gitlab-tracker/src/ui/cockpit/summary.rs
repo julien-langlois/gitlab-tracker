@@ -321,7 +321,7 @@ impl DashboardSummary {
 
 impl DashboardSummary {
     /// The counters of the MRs listed, by key (the English label of the cockpit
-    /// row; see [`super::metric_key`]).
+    /// row; see [`super::metric_members`]).
     pub(super) fn counters(self) -> [(&'static str, usize); 31] {
         [
             ("Open", self.open),
