@@ -138,6 +138,31 @@ no state of its own beyond what the views need (page, panels, text being edited)
 
 ---
 
+## GitLab and Redmine requests
+
+What keeps the request count low (details, figures and the GraphQL roadmap in
+[`GRAPHQL.md`](GRAPHQL.md)):
+
+* **Batched refresh.** `gitlab::spawn_mr_fetches` reads the MRs of a cycle through
+  `merge_requests?iids[]=` lists, then the pipelines due through one GraphQL query
+  per batch (`gitlab_graphql`), then lets each MR read only what its cache cannot
+  vouch for (`fetch_gitlab_data`, fed a `Prefetched`). A single added MR still goes
+  through `spawn_mr_fetch`.
+* **Review cache.** Discussions and approvals of an open MR are read again only on
+  a sign of change in its list entry, and at least every `REVIEW_MAX_AGE`
+  (`gitlab::review_stale`).
+* **Incremental branch scans.** `gitlab::plan_branch_scan` reads `<old head>..<branch>`
+  and `BranchCommits::absorb` merges it; a full scan rebuilds the index daily.
+* **Tracker bulk reads.** A cycle hands every linked ticket to
+  `TrackerProvider::fetch_tickets` at once (`app::spawn_tickets_fetch`).
+* **Pacing per instance.** Every request goes through
+  `gitlab_tracker_core::pacing::SendPaced`; projects on the same server share
+  `pacing::permits` and the pauses a `429` sets.
+* **Counter.** `App::recompute_api_call_estimate` mirrors these rules: requests of
+  the next cycle and those saved (`saved_*`), shown in the status bar.
+
+---
+
 ## Crate boundaries
 
 ```text

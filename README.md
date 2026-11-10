@@ -308,6 +308,10 @@ Settings edited from the TUI (columns `C`, branches in Insert mode, settings das
 >
 > **Migrating from legacy env vars?** The old bare variable names (`DEFAULT_BRANCHES`, `ACTIVITY_STALE_DAYS`, etc.) are no longer supported. Rename them with the `GITLAB_TRACKER_` prefix in your `.env` or shell profile.
 
+#### Load on your GitLab / Redmine
+
+A refresh reads the tracked MRs in lists (100 per request), their pipelines and jobs with one GraphQL query per batch, and a branch's new commits only; linked Redmine tickets are read 100 per request. Projects on the same instance share one limit of 3 simultaneous requests, and every request to it pauses when the server answers `429` (or `503` with `Retry-After`). The status bar shows the requests the next refresh should send and the share saved (`−X%`). Set `GITLAB_TRACKER_GRAPHQL=off` to keep every read on REST (an older GitLab whose schema lacks a field falls back to REST by itself). Details and figures: [`GRAPHQL.md`](GRAPHQL.md).
+
 ---
 
 ### Step 2: First-Run Interactive Onboarding & Keyring PAT Security Layer

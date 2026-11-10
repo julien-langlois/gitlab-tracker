@@ -1474,18 +1474,34 @@ pub fn spawn_mr_fetch(
     semaphore: Arc<Semaphore>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
-    tokio::spawn(fetch_and_report(ctx, mr_id, cached, None, semaphore, tx));
+    tokio::spawn(fetch_and_report(
+        ctx,
+        mr_id,
+        cached,
+        Prefetched::default(),
+        semaphore,
+        tx,
+    ));
+}
+
+/// What a batched refresh already read for one MR, so its own fetch skips it.
+#[derive(Default)]
+pub struct Prefetched {
+    /// Its entry in the MR list read (`list_mrs`).
+    pub mr: Option<GitLabMr>,
+    /// Its pipelines with their jobs, from the GraphQL read (`gitlab_graphql`).
+    pub pipelines: Option<Vec<Pipeline>>,
 }
 
 async fn fetch_and_report(
     ctx: FetchContext,
     mr_id: String,
     cached: CachedMrData,
-    listed: Option<GitLabMr>,
+    prefetched: Prefetched,
     semaphore: Arc<Semaphore>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
-    match fetch_gitlab_data(&ctx, &mr_id, cached, listed, &semaphore, tx.clone()).await {
+    match fetch_gitlab_data(&ctx, &mr_id, cached, prefetched, &semaphore, tx.clone()).await {
         Ok(data) => {
             let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
         }
@@ -1534,9 +1550,19 @@ async fn list_mrs(
     listed
 }
 
+/// Whether a listed MR's pipelines must be read: its cache is not reusable (see
+/// [`pipelines_cache_reusable`]) or the MR changed since. Same rule as the per-MR
+/// fetch, decided ahead so they can be read together.
+fn pipelines_due(cached: &CachedMrData, listed: &GitLabMr) -> bool {
+    !(listed.updated_at.is_some()
+        && listed.updated_at == cached.updated_at
+        && pipelines_cache_reusable(&cached.pipelines))
+}
+
 /// Refreshes many MRs: their base data comes from list reads (one request per
-/// [`MRS_PER_LIST`] MRs instead of one each), then each MR reads only what its
-/// cache cannot vouch for (`fetch_gitlab_data`).
+/// [`MRS_PER_LIST`] MRs instead of one each), the pipelines due from GraphQL
+/// queries (`gitlab_graphql`, one per batch instead of up to 6 requests per MR),
+/// then each MR reads only what its cache cannot vouch for (`fetch_gitlab_data`).
 pub fn spawn_mr_fetches(
     ctx: FetchContext,
     mrs: Vec<(String, CachedMrData)>,
@@ -1549,13 +1575,26 @@ pub fn spawn_mr_fetches(
     tokio::spawn(async move {
         let ids: Vec<&str> = mrs.iter().map(|(id, _)| id.as_str()).collect();
         let mut listed = list_mrs(&ctx, &ids, &semaphore).await;
+        let due: Vec<String> = mrs
+            .iter()
+            .filter(|(id, cached)| listed.get(id).is_some_and(|mr| pipelines_due(cached, mr)))
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut pipelines = if due.is_empty() {
+            HashMap::new()
+        } else {
+            crate::gitlab_graphql::mr_pipelines(&ctx, &due, &semaphore).await
+        };
         for (id, cached) in mrs {
-            let entry = listed.remove(&id);
+            let prefetched = Prefetched {
+                mr: listed.remove(&id),
+                pipelines: pipelines.remove(&id),
+            };
             tokio::spawn(fetch_and_report(
                 ctx.clone(),
                 id,
                 cached,
-                entry,
+                prefetched,
                 semaphore.clone(),
                 tx.clone(),
             ));
@@ -1714,7 +1753,7 @@ pub async fn fetch_gitlab_data(
     ctx: &FetchContext,
     mr_id: &str,
     cached: CachedMrData,
-    listed: Option<GitLabMr>,
+    prefetched: Prefetched,
     semaphore: &Semaphore,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) -> Result<MrLoadedData, GitlabError> {
@@ -1736,7 +1775,7 @@ pub async fn fetch_gitlab_data(
 
     // The list entry stands in for the MR's own page unless that page has more to
     // say (`needs_single_read`): one request saved per MR.
-    let mut mr: GitLabMr = match listed.filter(|mr| !needs_single_read(mr)) {
+    let mut mr: GitLabMr = match prefetched.mr.filter(|mr| !needs_single_read(mr)) {
         Some(mr) => mr,
         None => fetch_single_mr(client, ctx, &mr_url).await?,
     };
@@ -2169,6 +2208,8 @@ pub async fn fetch_gitlab_data(
         && pipelines_cache_reusable(&cached.pipelines)
     {
         cached.pipelines
+    } else if let Some(pipelines) = prefetched.pipelines {
+        pipelines // read with other MRs' over GraphQL
     } else {
         fetch_pipelines(ctx, mr_id).await
     };
@@ -2654,10 +2695,10 @@ mod tests {
         assert_eq!((e.base, e.saved), (0, 1));
     }
 
-    /// A stand-in GitLab answering every request through `route(path)`, and
+    /// A stand-in GitLab answering every request through `route(path, body)`, and
     /// recording the paths it was asked for.
     async fn fake_gitlab(
-        route: fn(&str) -> String,
+        route: fn(&str, &str) -> String,
     ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2673,16 +2714,32 @@ mod tests {
                 tokio::spawn(async move {
                     let mut raw = Vec::new();
                     let mut chunk = [0u8; 4096];
-                    while !raw.windows(4).any(|w| w == b"\r\n\r\n") {
+                    let head_end = loop {
+                        if let Some(end) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+                            break end + 4;
+                        }
                         let read = socket.read(&mut chunk).await.unwrap_or(0);
                         if read == 0 {
                             return;
                         }
                         raw.extend_from_slice(&chunk[..read]);
+                    };
+                    let head = String::from_utf8_lossy(&raw[..head_end]).to_lowercase();
+                    let length = head
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .map_or(0, |v| v.trim().parse::<usize>().unwrap_or(0));
+                    while raw.len() < head_end + length {
+                        let read = socket.read(&mut chunk).await.unwrap_or(0);
+                        if read == 0 {
+                            break;
+                        }
+                        raw.extend_from_slice(&chunk[..read]);
                     }
-                    let head = String::from_utf8_lossy(&raw);
+                    let head = String::from_utf8_lossy(&raw[..head_end]).to_string();
                     let path = head.split(' ').nth(1).unwrap_or_default().to_string();
-                    let body = route(&path);
+                    let request = String::from_utf8_lossy(&raw[head_end..]).to_string();
+                    let body = route(&path, &request);
                     log.lock().unwrap().push(path);
                     let response = format!(
                         "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\
@@ -2699,7 +2756,7 @@ mod tests {
     #[tokio::test]
     async fn a_refresh_reads_the_mrs_in_one_list_and_skips_unchanged_reviews() {
         const UPDATED: &str = "2026-11-10T08:00:00Z";
-        fn route(path: &str) -> String {
+        fn route(path: &str, _body: &str) -> String {
             let p = path.split('?').next().unwrap();
             if p.ends_with("/merge_requests") {
                 serde_json::json!([
@@ -2786,7 +2843,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_mr_missing_from_the_list_reads_its_own_page() {
-        fn route(path: &str) -> String {
+        fn route(path: &str, _body: &str) -> String {
             let p = path.split('?').next().unwrap();
             if p.ends_with("/merge_requests") {
                 "[]".into() // e.g. not visible through the list
@@ -2815,6 +2872,148 @@ mod tests {
         assert!(
             seen.iter().any(|p| p.contains("/merge_requests/9?")),
             "{seen:#?}"
+        );
+    }
+
+    // ── Pipelines over GraphQL ───────────────────────────────────────────────
+
+    /// The iids a GraphQL request asks for.
+    fn asked_iids(body: &str) -> Vec<String> {
+        let body: serde_json::Value = serde_json::from_str(body).unwrap();
+        body["variables"]["iids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// A GraphQL answer giving each MR one finished pipeline with one job.
+    fn pipelines_answer(iids: &[String]) -> String {
+        let nodes: Vec<_> = iids
+            .iter()
+            .map(|iid| {
+                serde_json::json!({ "iid": iid, "pipelines": { "nodes": [{
+                    "id": format!("gid://gitlab/Ci::Pipeline/{iid}0"), "status": "SUCCESS",
+                    "createdAt": "2026-11-10T08:00:00Z", "updatedAt": "2026-11-10T08:05:00Z",
+                    "sha": "abc", "jobs": { "nodes": [{
+                        "id": format!("gid://gitlab/Ci::Build/{iid}00"), "name": "test",
+                        "status": "SUCCESS", "duration": 30, "queuedDuration": 2.0,
+                        "stage": { "name": "test" } }] } }] } })
+            })
+            .collect();
+        serde_json::json!({ "data": { "project": { "mergeRequests": { "nodes": nodes } } } })
+            .to_string()
+    }
+
+    /// Common answers for a refresh of closed MRs 1..=3 (no page read needed).
+    fn closed_mrs_route(path: &str) -> Option<String> {
+        let p = path.split('?').next().unwrap();
+        if p.ends_with("/merge_requests") {
+            Some(
+                serde_json::json!([1, 2, 3]
+                    .map(|iid| serde_json::json!({"iid": iid, "title": "t", "state": "closed"})))
+                .to_string(),
+            )
+        } else if p.ends_with("/changes") {
+            Some(r#"{"changes": []}"#.into())
+        } else if p.ends_with("/api/graphql") {
+            None
+        } else {
+            Some("[]".into())
+        }
+    }
+
+    async fn refresh_three(
+        route: fn(&str, &str) -> String,
+    ) -> (String, Vec<String>, Vec<MrLoadedData>) {
+        let (url, seen) = fake_gitlab(route).await;
+        let mrs = ["1", "2", "3"]
+            .map(|id| (id.to_string(), CachedMrData::default()))
+            .to_vec();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_mr_fetches(ctx(&url), mrs, Arc::new(Semaphore::new(3)), tx);
+        let mut loaded = Vec::new();
+        while loaded.len() < 3 {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .expect("every MR is loaded")
+                .unwrap();
+            if let AppEvent::MrLoaded(data) = event {
+                loaded.push(*data);
+            }
+        }
+        let seen = seen.lock().unwrap().clone();
+        (url, seen, loaded)
+    }
+
+    fn rest_pipeline_reads(seen: &[String]) -> usize {
+        seen.iter()
+            .filter(|p| p.contains("/pipelines") || p.contains("/jobs"))
+            .count()
+    }
+
+    #[tokio::test]
+    async fn the_pipelines_of_a_refresh_come_in_one_graphql_query() {
+        fn route(path: &str, body: &str) -> String {
+            closed_mrs_route(path).unwrap_or_else(|| pipelines_answer(&asked_iids(body)))
+        }
+        let (_, seen, loaded) = refresh_three(route).await;
+        assert_eq!(
+            seen.iter().filter(|p| *p == "/api/graphql").count(),
+            1,
+            "{seen:#?}"
+        );
+        assert_eq!(rest_pipeline_reads(&seen), 0, "{seen:#?}");
+        for mr in &loaded {
+            let pipeline = &mr.data.pipelines[0];
+            assert_eq!(pipeline.id, format!("{}0", mr.id).parse::<u64>().unwrap());
+            assert_eq!(pipeline.status, crate::models::PipelineState::Success);
+            assert_eq!(pipeline.jobs[0].stage, "test");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_query_too_complex_is_split_and_the_size_remembered() {
+        fn route(path: &str, body: &str) -> String {
+            closed_mrs_route(path).unwrap_or_else(|| {
+                let iids = asked_iids(body);
+                if iids.len() > 1 {
+                    r#"{"errors": [{"message": "Query has complexity of 400, which exceeds max complexity of 250"}]}"#.into()
+                } else {
+                    pipelines_answer(&iids)
+                }
+            })
+        }
+        let (url, seen, loaded) = refresh_three(route).await;
+        assert_eq!(rest_pipeline_reads(&seen), 0, "{seen:#?}");
+        assert!(loaded.iter().all(|mr| mr.data.pipelines.len() == 1));
+        // 3 → 2 + 1 → 1 + 1 + 1: five queries, then single-MR batches from now on.
+        assert_eq!(seen.iter().filter(|p| *p == "/api/graphql").count(), 5);
+        assert_eq!(
+            crate::gitlab_graphql::support(&url),
+            crate::gitlab_graphql::Support::Batch(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn an_older_gitlab_falls_back_to_rest_for_good() {
+        fn route(path: &str, _body: &str) -> String {
+            closed_mrs_route(path).unwrap_or_else(|| {
+                r#"{"errors": [{"message": "Field 'queuedDuration' doesn't exist on type 'CiJob'"}]}"#.into()
+            })
+        }
+        let (url, seen, _) = refresh_three(route).await;
+        assert_eq!(seen.iter().filter(|p| *p == "/api/graphql").count(), 1);
+        // Each MR read its pipelines list over REST instead.
+        let rest = seen
+            .iter()
+            .filter(|p| p.contains("/merge_requests/") && p.contains("/pipelines"))
+            .count();
+        assert_eq!(rest, 3, "{seen:#?}");
+        assert_eq!(
+            crate::gitlab_graphql::support(&url),
+            crate::gitlab_graphql::Support::Off
         );
     }
 }

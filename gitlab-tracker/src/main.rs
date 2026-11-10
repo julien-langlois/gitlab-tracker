@@ -12,6 +12,7 @@ mod filters_core;
 mod gitlab;
 #[cfg(feature = "gui")]
 mod gitlab_detail;
+mod gitlab_graphql;
 #[cfg(feature = "gui")]
 mod gui;
 mod i18n;

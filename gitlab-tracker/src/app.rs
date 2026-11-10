@@ -1681,7 +1681,8 @@ impl App {
     /// For each MR that is *not* fully frozen (merged into all branches with a known SHA):
     ///   - GitLab calls: `TrackedMr::estimate()` (mirrors the fetch logic), plus once per
     ///     cycle the list reads (`MRS_PER_LIST` MRs each), the branch scans and the
-    ///     discovery poll.
+    ///     discovery poll. The pipelines due count one GraphQL query per batch
+    ///     (`gitlab_graphql::queries_for`) instead of their REST reads.
     ///   - Tracker calls: `estimate_calls_for_tickets()` over the distinct linked tickets
     ///     (read in bulk). New MRs (no linked ticket yet) cost 0 tracker calls — the
     ///     ticket is only discovered after `MrLoaded` fires and `detect_ticket_id` succeeds.
@@ -1694,6 +1695,9 @@ impl App {
         let mut refreshed: usize = 0;
         let mut tickets = HashSet::new();
         let mut linked_mrs: usize = 0;
+        // MRs whose pipelines are due, and what reading them over REST costs.
+        let mut pipeline_mrs: usize = 0;
+        let mut rest_pipelines: usize = 0;
 
         for mr in &self.mrs {
             // Mirror the freeze guard from the Tick handler — skip fully-frozen MRs.
@@ -1711,6 +1715,10 @@ impl App {
             let estimate = mr.estimate(&mr.state, has_merge_sha);
             gitlab_total += estimate.total();
             gitlab_saved += estimate.saved;
+            if estimate.pipelines > 0 {
+                pipeline_mrs += 1;
+                rest_pipelines += estimate.pipelines;
+            }
 
             // Tracker calls only for MRs that already have a linked ticket resolved.
             if let Some(ticket) = &mr.linked_ticket {
@@ -1719,6 +1727,11 @@ impl App {
             }
         }
 
+        // Pipelines due are read together over GraphQL when the instance allows it.
+        if let Some(queries) = crate::gitlab_graphql::queries_for(&self.base_url, pipeline_mrs) {
+            gitlab_total = gitlab_total - rest_pipelines + queries;
+            gitlab_saved += rest_pipelines.saturating_sub(queries);
+        }
         // The pages read one by one before are now list reads.
         let lists = refreshed.div_ceil(crate::gitlab::MRS_PER_LIST);
         gitlab_total += lists;
@@ -3730,9 +3743,9 @@ pub(crate) mod tests {
         app.tracker = Some(Arc::new(FakeTracker::default()));
         app.recompute_api_call_estimate();
 
-        // Three closed MRs: one list read instead of three pages (+ one pipelines
-        // list each, no cache), no branch scan, no discovery.
-        assert_eq!(app.saved_gitlab_calls, 2);
+        // Three closed MRs: one list read instead of three pages, and one GraphQL
+        // query instead of 3 × (pipelines + jobs) REST reads (no cache yet).
+        assert_eq!(app.saved_gitlab_calls, 2 + 5);
         assert_eq!(app.estimated_tracker_calls, 2);
         assert_eq!(app.saved_tracker_calls, 1);
         assert_eq!(saved_percent(2, 1), 33);
