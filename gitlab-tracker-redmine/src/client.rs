@@ -1,3 +1,4 @@
+use gitlab_tracker_core::pacing::SendPaced;
 use gitlab_tracker_core::{
     Activity, TicketTransitionTarget, TimeEntry, TimeEntryRequest, TrackerError,
 };
@@ -61,6 +62,12 @@ pub struct RedmineStatus {
 #[derive(Debug, Deserialize)]
 struct IssueEnvelope {
     issue: RedmineIssue,
+}
+
+/// Envelope returned by `GET /issues.json` (the list endpoint).
+#[derive(Debug, Deserialize)]
+struct IssuesEnvelope {
+    issues: Vec<RedmineIssue>,
 }
 
 /// Envelope returned by `GET /issue_statuses.json`.
@@ -185,7 +192,7 @@ async fn get_json<T: serde::de::DeserializeOwned>(
     let resp = http
         .get(url)
         .header("X-Redmine-API-Key", token)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| TrackerError::Network(e.to_string()))?;
     if !resp.status().is_success() {
@@ -278,6 +285,43 @@ pub async fn fetch_issue(
 /// Fetches the list of time-tracking activity categories from Redmine.
 ///
 /// Calls `GET /enumerations/time_entry_activities.json`.
+/// Most issues Redmine returns in one list page (its `limit` cap).
+pub const ISSUES_PER_REQUEST: usize = 100;
+
+/// `GET /issues.json` for `ids` (at most [`ISSUES_PER_REQUEST`]): every status
+/// (`status_id=*`, closed tickets included — the default lists open ones only).
+fn issues_url(base_url: &str, ids: &[&str]) -> String {
+    format!(
+        "{}/issues.json?issue_id={}&status_id=*&limit={ISSUES_PER_REQUEST}",
+        base_url.trim_end_matches('/'),
+        ids.join(",")
+    )
+}
+
+/// Reads several issues with one request per [`ISSUES_PER_REQUEST`] ids instead of
+/// one per issue. Invalid and duplicate ids are dropped; an id Redmine does not
+/// return (deleted, not visible) is simply missing from the result.
+pub async fn fetch_issues(
+    http: &reqwest::Client,
+    base_url: &str,
+    token: &str,
+    ticket_ids: &[String],
+) -> Result<Vec<RedmineIssue>, TrackerError> {
+    let mut ids: Vec<&str> = ticket_ids
+        .iter()
+        .map(String::as_str)
+        .filter(|id| is_valid_ticket_id(id))
+        .collect();
+    ids.sort_unstable();
+    ids.dedup();
+    let mut issues = Vec::with_capacity(ids.len());
+    for chunk in ids.chunks(ISSUES_PER_REQUEST) {
+        let url = issues_url(base_url, chunk);
+        issues.extend(get_json::<IssuesEnvelope>(http, &url, token).await?.issues);
+    }
+    Ok(issues)
+}
+
 pub async fn fetch_activities(
     http: &reqwest::Client,
     base_url: &str,
@@ -401,7 +445,7 @@ pub async fn update_issue_status(
         .put(&url)
         .header("X-Redmine-API-Key", token)
         .json(&body)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| TrackerError::Network(e.to_string()))?;
 
@@ -470,7 +514,7 @@ pub async fn log_time(
         .post(&url)
         .header("X-Redmine-API-Key", token)
         .json(&body)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| TrackerError::Network(e.to_string()))?;
 
@@ -504,6 +548,14 @@ mod tests {
             status_error(StatusCode::INTERNAL_SERVER_ERROR),
             TrackerError::Other(_)
         ));
+    }
+
+    #[test]
+    fn issues_list_url_includes_closed_tickets() {
+        assert_eq!(
+            issues_url("https://redmine.test/", &["12", "34"]),
+            "https://redmine.test/issues.json?issue_id=12,34&status_id=*&limit=100"
+        );
     }
 
     #[test]

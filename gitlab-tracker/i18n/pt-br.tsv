@@ -34,6 +34,7 @@
 	Auto-polling	Busca automática
 	({n} at startup)	({n} ao iniciar)
 	{name}: about {n} API requests at the next refresh	{name}: cerca de {n} requisições à API na próxima atualização
+	{saved} fewer than reading each item on its own ({n} instead of {before})	{saved} a menos do que lendo cada item separadamente ({n} em vez de {before})
 	{n} at startup, from the saved state	{n} ao iniciar, a partir do estado salvo
 	Another project is still loading	Outro projeto ainda está carregando
 	Loading {project}…	Carregando {project}…

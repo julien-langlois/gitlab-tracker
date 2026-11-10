@@ -21,7 +21,7 @@ static TRACKER_PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_n
 ///
 /// On failure nothing is sent: the MR keeps its cached ticket (a network blip or
 /// an expired token must not blank the Tracker pane) and the error is logged.
-pub fn spawn_ticket_fetch(
+pub(super) fn spawn_ticket_fetch(
     provider: Arc<dyn gitlab_tracker_core::TrackerProvider>,
     ticket_id: String,
     mr_id: String,
@@ -42,6 +42,65 @@ pub fn spawn_ticket_fetch(
             }
         }
     });
+}
+
+/// Re-reads every linked ticket of a refresh cycle at once (`links`: ticket id →
+/// MR id): one [`TrackerProvider::fetch_tickets`] call for the distinct tickets,
+/// then one `TrackerTicketLoaded` per MR. A ticket shared by several MRs is read
+/// once. Tickets the tracker does not return keep their cached copy.
+///
+/// [`TrackerProvider::fetch_tickets`]: gitlab_tracker_core::TrackerProvider::fetch_tickets
+pub fn spawn_tickets_fetch(
+    provider: Arc<dyn gitlab_tracker_core::TrackerProvider>,
+    links: Vec<(String, String)>,
+    tx: &UnboundedSender<AppEvent>,
+) {
+    if links.is_empty() {
+        return;
+    }
+    let tx = tx.clone();
+    tokio::spawn(async move {
+        let _permit = TRACKER_PERMITS.acquire().await;
+        let ids = distinct_tickets(&links);
+        match provider.fetch_tickets(&ids).await {
+            Ok(tickets) => {
+                for (ticket, mr_id) in pair_tickets(tickets, &links) {
+                    let _ = tx.send(AppEvent::TrackerTicketLoaded {
+                        mr_id,
+                        ticket: Box::new(ticket),
+                    });
+                }
+            }
+            Err(error) => {
+                tracing::warn!(tickets = ids.len(), error = %error, "Tracker tickets fetch failed; keeping cached copies");
+            }
+        }
+    });
+}
+
+/// The distinct ticket ids of `links`, in first-seen order.
+pub(crate) fn distinct_tickets(links: &[(String, String)]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    links
+        .iter()
+        .filter(|(ticket, _)| seen.insert(ticket.as_str()))
+        .map(|(ticket, _)| ticket.clone())
+        .collect()
+}
+
+/// Each fetched ticket with every MR linked to it (ids compared without leading
+/// zeros: `#042` and `42` are the same ticket).
+fn pair_tickets(
+    tickets: Vec<gitlab_tracker_core::LinkedTicket>,
+    links: &[(String, String)],
+) -> Vec<(gitlab_tracker_core::LinkedTicket, String)> {
+    let norm = |id: &str| id.trim_start_matches('0').to_string();
+    let by_id: HashMap<String, gitlab_tracker_core::LinkedTicket> =
+        tickets.into_iter().map(|t| (norm(&t.id), t)).collect();
+    links
+        .iter()
+        .filter_map(|(ticket, mr)| Some((by_id.get(&norm(ticket))?.clone(), mr.clone())))
+        .collect()
 }
 
 pub(super) fn transition_target_for_state(
@@ -242,5 +301,125 @@ impl App {
             // Ticket reference was removed from the MR — clear the cache.
             mr.linked_ticket = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gitlab_tracker_core::{LinkedTicket, TrackerError, TrackerProvider};
+
+    fn ticket(id: &str) -> LinkedTicket {
+        serde_json::from_value(serde_json::json!({
+            "schema_version": gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION,
+            "id": id, "subject": "s", "status": "New", "url": "u"
+        }))
+        .unwrap()
+    }
+
+    fn links(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(t, m)| (t.to_string(), m.to_string()))
+            .collect()
+    }
+
+    /// Bulk tracker double: records each `fetch_tickets` call, returns `known`.
+    struct BulkTracker {
+        calls: std::sync::Mutex<Vec<Vec<String>>>,
+        known: Vec<&'static str>,
+    }
+
+    #[async_trait::async_trait]
+    impl TrackerProvider for BulkTracker {
+        fn name(&self) -> &'static str {
+            "Bulk"
+        }
+        fn detect_ticket_id(&self, _: &str, _: &str) -> Option<String> {
+            None
+        }
+        async fn fetch_ticket(&self, id: &str) -> Result<LinkedTicket, TrackerError> {
+            panic!("ticket {id} read on its own during a refresh cycle")
+        }
+        async fn fetch_tickets(&self, ids: &[String]) -> Result<Vec<LinkedTicket>, TrackerError> {
+            self.calls.lock().unwrap().push(ids.to_vec());
+            Ok(self.known.iter().map(|id| ticket(id)).collect())
+        }
+        fn ticket_url(&self, id: &str) -> String {
+            id.into()
+        }
+    }
+
+    #[test]
+    fn a_ticket_shared_by_several_mrs_is_asked_once_and_given_to_each() {
+        let l = links(&[("42", "1"), ("7", "2"), ("042", "3"), ("42", "4")]);
+        assert_eq!(distinct_tickets(&l), ["42", "7", "042"]);
+        let paired: Vec<_> = pair_tickets(vec![ticket("42")], &l)
+            .into_iter()
+            .map(|(t, mr)| (t.id, mr))
+            .collect();
+        let expected =
+            [("42", "1"), ("42", "3"), ("42", "4")].map(|(t, m)| (t.to_string(), m.to_string()));
+        assert_eq!(paired, expected);
+    }
+
+    #[tokio::test]
+    async fn a_refresh_reads_every_ticket_in_one_call() {
+        let tracker = Arc::new(BulkTracker {
+            calls: Default::default(),
+            known: vec!["42"], // "7" is gone: its MR keeps its cached copy
+        });
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_tickets_fetch(
+            tracker.clone(),
+            links(&[("42", "1"), ("7", "2"), ("42", "3")]),
+            &tx,
+        );
+        drop(tx);
+        let mut loaded = Vec::new();
+        while let Some(event) = rx.recv().await {
+            if let AppEvent::TrackerTicketLoaded { mr_id, ticket } = event {
+                loaded.push((mr_id, ticket.id));
+            }
+        }
+        assert_eq!(
+            *tracker.calls.lock().unwrap(),
+            [vec!["42".to_string(), "7".to_string()]]
+        );
+        let expected = [("1", "42"), ("3", "42")].map(|(m, t)| (m.to_string(), t.to_string()));
+        assert_eq!(loaded, expected);
+    }
+
+    #[tokio::test]
+    async fn the_default_bulk_read_goes_ticket_by_ticket() {
+        struct OneByOne;
+        #[async_trait::async_trait]
+        impl TrackerProvider for OneByOne {
+            fn name(&self) -> &'static str {
+                "One"
+            }
+            fn detect_ticket_id(&self, _: &str, _: &str) -> Option<String> {
+                None
+            }
+            async fn fetch_ticket(&self, id: &str) -> Result<LinkedTicket, TrackerError> {
+                match id {
+                    "1" => Ok(ticket("1")),
+                    _ => Err(TrackerError::NotFound(id.into())),
+                }
+            }
+            fn ticket_url(&self, id: &str) -> String {
+                id.into()
+            }
+        }
+        let read = OneByOne
+            .fetch_tickets(&["1".into(), "2".into()])
+            .await
+            .unwrap();
+        assert_eq!(read.len(), 1);
+        assert!(matches!(
+            OneByOne.fetch_tickets(&["2".into()]).await,
+            Err(TrackerError::NotFound(_))
+        ));
+        assert_eq!(OneByOne.estimate_calls_for_tickets(5), 5);
     }
 }

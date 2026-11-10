@@ -34,6 +34,7 @@
 	Auto-polling	Découverte auto
 	({n} at startup)	({n} au démarrage)
 	{name}: about {n} API requests at the next refresh	{name} : environ {n} requêtes API au prochain rafraîchissement
+	{saved} fewer than reading each item on its own ({n} instead of {before})	{saved} de moins qu'en lisant chaque élément séparément ({n} au lieu de {before})
 	{n} at startup, from the saved state	{n} au démarrage, depuis l'état enregistré
 	Another project is still loading	Un autre projet est encore en cours de chargement
 	Loading {project}…	Chargement de {project}…

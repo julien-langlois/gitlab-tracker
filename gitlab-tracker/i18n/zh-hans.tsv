@@ -34,6 +34,7 @@
 	Auto-polling	自动轮询
 	({n} at startup)	（启动时 {n}）
 	{name}: about {n} API requests at the next refresh	{name}：下次刷新约 {n} 个 API 请求
+	{saved} fewer than reading each item on its own ({n} instead of {before})	比逐个读取少 {saved} 个（{n} 个，而非 {before} 个）
 	{n} at startup, from the saved state	启动时 {n} 个，来自已保存的状态
 	Another project is still loading	另一个项目仍在加载
 	Loading {project}…	正在加载 {project}…

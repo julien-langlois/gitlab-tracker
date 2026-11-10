@@ -3,8 +3,9 @@ use crate::models::{
     GitLabMr, GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, MrThread,
     Pipeline, PipelineJob, ReviewActivity,
 };
+use gitlab_tracker_core::pacing::SendPaced;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::time::{sleep, Duration};
@@ -85,7 +86,7 @@ pub async fn check_project(
     let res = http_client()
         .get(&url)
         .header("PRIVATE-TOKEN", token)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| ProjectCheckError::Network(e.without_url().to_string()))?;
     match res.status() {
@@ -113,7 +114,7 @@ pub async fn current_username(base_url: &str, token: &str) -> Option<String> {
     let res = http_client()
         .get(&url)
         .header("PRIVATE-TOKEN", token)
-        .send()
+        .send_paced()
         .await
         .ok()
         .filter(|r| r.status().is_success())?;
@@ -159,7 +160,7 @@ pub async fn fetch_file_diffs(
     let res = http_client()
         .get(&url)
         .header("PRIVATE-TOKEN", token)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| e.without_url().to_string())?;
     if !res.status().is_success() {
@@ -189,7 +190,7 @@ pub async fn fetch_job_log(
     let res = http_client()
         .get(&url)
         .header("PRIVATE-TOKEN", token)
-        .send()
+        .send_paced()
         .await
         .map_err(|e| e.without_url().to_string())?;
     if !res.status().is_success() {
@@ -257,7 +258,8 @@ fn strip_ansi(line: &str) -> String {
 /// Adding a new network call inside those functions should be reflected here.
 #[derive(Debug, Clone, Default)]
 pub struct ApiCallEstimate {
-    /// Always-present calls: `GET /merge_requests/:id` (1 per MR).
+    /// `GET /merge_requests/:id`: only for an open MR that cannot merge as is (the
+    /// others come from the shared list reads).
     pub base: usize,
     /// Discussions endpoint calls (always fired for open MRs, skipped for
     /// closed/merged with a cached non-zero count). Minimum 1 page per MR.
@@ -272,6 +274,10 @@ pub struct ApiCallEstimate {
     /// Pipeline list call (1) + job calls (1 per pipeline, up to 5).
     /// Fired when cache is missing, stale, or any pipeline is in a transient state.
     pub pipelines: usize,
+    /// Calls this MR no longer makes compared with reading it alone (its own page,
+    /// and an open MR's discussions and approvals at every refresh). Not in
+    /// `total`; the list reads replacing the pages are counted by the caller.
+    pub saved: usize,
 }
 
 impl ApiCallEstimate {
@@ -389,6 +395,11 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
             review: mr.review.clone(),
             approved_by: mr.approved_by.clone(),
             approvers: mr.approvers.clone(),
+            // Unknown until the first fetch of the session (reset at startup).
+            mergeability: (mr.mergeability != MergeabilityStatus::Unknown)
+                .then_some(mr.mergeability),
+            review_read_at: mr.review_read_at.clone(),
+            notes_seen: mr.notes_seen,
         }
     }
 }
@@ -399,20 +410,38 @@ impl CountApiCalls for crate::models::TrackedMr {
         state: &crate::models::GitlabMrState,
         has_merge_sha: bool,
     ) -> ApiCallEstimate {
-        // ── 1. Base MR fetch — always 1 call ─────────────────────────────────
-        let base = 1;
+        let open = *state == crate::models::GitlabMrState::Opened;
 
-        // ── 2. Discussions (+ approvals) — always fired for open MRs; skipped for
-        //       closed/merged once fetched ───────────────────────────────────────
+        // ── 1. Base MR read — shared list reads (counted once per cycle by the
+        //       caller, `MRS_PER_LIST` MRs each); its own page only for an open MR
+        //       that cannot merge as is (`needs_single_read`) ─────────────────────
+        let base = usize::from(open && self.mergeability != MergeabilityStatus::Mergeable);
+
+        // ── 2. Discussions (+ approvals). Open MRs: read again when the list shows
+        //       a change or the last read is older than `REVIEW_MAX_AGE` — assumed
+        //       unchanged otherwise, like the other caches. Closed / merged: once.
         // We pessimistically assume 1 page (the common case). Extra pages are
         // rare and impossible to predict without knowing the actual count.
-        let discussions = if *state == crate::models::GitlabMrState::Opened {
-            2 // One discussions page + the approvals call.
+        let review_recent = self.review.is_some()
+            && self
+                .review_read_at
+                .as_deref()
+                .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                .is_some_and(|at| chrono::Utc::now().signed_duration_since(at) < REVIEW_MAX_AGE);
+        let discussions = if open {
+            if review_recent {
+                0
+            } else {
+                2 // One discussions page + the approvals call.
+            }
         } else if self.review.is_some() {
             0 // Served from cache — no network call.
         } else {
             1 // At least one page fetched.
         };
+        // Before list reads and review caching, every MR read its own page and an
+        // open one its discussions and approvals at every refresh.
+        let saved = (1 - base) + if open { 2 - discussions } else { 0 };
 
         // ── 3. Branch detection via /refs — only when a merge SHA is present,
         //       plus the one-off fetch of the merge / squash commit fingerprint ──
@@ -489,6 +518,7 @@ impl CountApiCalls for crate::models::TrackedMr {
             // and avoids adding a dedicated field to ApiCallEstimate for a rare edge case.
             diff_stats: diff_stats + compare_fallback,
             pipelines,
+            saved,
         }
     }
 }
@@ -546,6 +576,12 @@ pub struct CachedMrData {
     pub review: Option<ReviewActivity>,
     pub approved_by: Vec<String>,
     pub approvers: Vec<String>,
+    /// Mergeability at the previous fetch (`None`: unknown): a change triggers a
+    /// fresh read of the approvals.
+    pub mergeability: Option<MergeabilityStatus>,
+    /// When discussions and approvals were last read, and GitLab's note count then.
+    pub review_read_at: Option<String>,
+    pub notes_seen: Option<u32>,
 }
 
 /// Controls which cached fields are bypassed during a fetch cycle.
@@ -587,7 +623,7 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
     let res = match client
         .get(&pipelines_url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
     {
         Ok(r) if r.status().is_success() => r,
@@ -613,7 +649,7 @@ async fn fetch_pipelines(ctx: &FetchContext, mr_id: &str) -> Vec<Pipeline> {
                 let res = client
                     .get(&jobs_url)
                     .header("PRIVATE-TOKEN", token.as_str())
-                    .send()
+                    .send_paced()
                     .await
                     .ok()?;
                 if res.status().is_success() {
@@ -804,7 +840,7 @@ async fn fetch_approved_by(
     let res = http_client()
         .get(url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
         .ok()
         .filter(|r| r.status().is_success())?;
@@ -837,7 +873,7 @@ async fn fetch_commits_behind(
     let res = client
         .get(&url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
         .ok()?;
 
@@ -991,7 +1027,7 @@ async fn fetch_diff_stats(
     let res = client
         .get(&url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
         .ok()?;
 
@@ -1045,7 +1081,7 @@ async fn get_all_pages<T: serde::de::DeserializeOwned>(
         let res = client
             .get(format!("{url}&per_page={PAGE_SIZE}&page={page}"))
             .header("PRIVATE-TOKEN", ctx.token.as_str())
-            .send()
+            .send_paced()
             .await
             .ok()
             .filter(|r| r.status().is_success())?;
@@ -1133,34 +1169,106 @@ fn index_branch_commits(commits: &[CommitJson]) -> BranchCommits {
     index
 }
 
-/// Spawns a scan of the commits on `branch` since `since` (RFC 3339) and emits
-/// `AppEvent::BranchCommitsLoaded` with their index, or `None` when a page failed.
+/// How a branch scan reads the branch's commits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BranchScan {
+    /// Every commit since `since` (RFC 3339): the index is rebuilt.
+    Full { since: String },
+    /// Only the commits reachable from the branch and not from `from` (its head at
+    /// the previous scan): added to the index kept in memory. Unlike a date filter,
+    /// this also catches old commits that just arrived through a merge.
+    Range { from: String },
+}
+
+/// What the kept index of a branch covers, to plan the next scan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchScanScope {
+    /// Oldest commit date the index covers.
+    pub floor: chrono::DateTime<chrono::Utc>,
+    /// Branch head at the last scan (`None`: no commit in range, rescan in full).
+    pub head: Option<String>,
+    /// Last full rebuild.
+    pub full_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// An incremental index is rebuilt from scratch this often, which also drops
+/// commits a force-push removed.
+pub const BRANCH_FULL_RESCAN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
+
+/// The scan to run for a branch whose index must reach back to `floor`.
+pub fn plan_branch_scan(
+    scope: Option<&BranchScanScope>,
+    floor: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> BranchScan {
+    match scope {
+        Some(scope) if scope.floor <= floor && now - scope.full_at < BRANCH_FULL_RESCAN => {
+            match &scope.head {
+                Some(head) => BranchScan::Range { from: head.clone() },
+                None => BranchScan::Full {
+                    since: floor.to_rfc3339(),
+                },
+            }
+        }
+        _ => BranchScan::Full {
+            since: floor.to_rfc3339(),
+        },
+    }
+}
+
+/// `repository/commits` URL for `scan` of `branch` (query string open for paging).
+fn branch_scan_url(ctx: &FetchContext, branch: &str, scan: &BranchScan) -> String {
+    let filter = match scan {
+        BranchScan::Full { since } => format!(
+            "ref_name={}&since={}",
+            urlencoding::encode(branch),
+            urlencoding::encode(since)
+        ),
+        BranchScan::Range { from } => {
+            format!(
+                "ref_name={}",
+                urlencoding::encode(&format!("{from}..{branch}"))
+            )
+        }
+    };
+    format!(
+        "{}/api/v4/projects/{}/repository/commits?{filter}",
+        ctx.base_url, ctx.project_id
+    )
+}
+
+/// Spawns `scan` of `branch` and emits `AppEvent::BranchCommitsLoaded` with the
+/// commits read (`None` when a page failed) and the branch head.
 pub fn spawn_branch_commits_fetch(
     ctx: FetchContext,
     branch: String,
-    since: String,
+    scan: BranchScan,
+    previous_head: Option<String>,
     semaphore: Arc<Semaphore>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
     tokio::spawn(async move {
-        // Same budget as the MR fetches: `git log` over weeks of history is one of
-        // the heaviest calls for the GitLab server.
         let _permit = semaphore.acquire().await;
-        let url = format!(
-            "{}/api/v4/projects/{}/repository/commits?ref_name={}&since={}",
-            ctx.base_url,
-            ctx.project_id,
-            urlencoding::encode(&branch),
-            urlencoding::encode(&since)
-        );
-        let commits = get_all_pages::<CommitJson>(&ctx, &url)
-            .await
-            .map(|commits| index_branch_commits(&commits));
-        let _ = tx.send(AppEvent::BranchCommitsLoaded { branch, commits });
+        let url = branch_scan_url(&ctx, &branch, &scan);
+        let commits = get_all_pages::<CommitJson>(&ctx, &url).await;
+        // The branch tip comes first; an empty range leaves the head where it was.
+        let head = match &commits {
+            Some(list) => list.first().map(|c| c.id.clone()).or(match &scan {
+                BranchScan::Range { .. } => previous_head,
+                BranchScan::Full { .. } => None,
+            }),
+            None => previous_head,
+        };
+        let commits = commits.map(|list| index_branch_commits(&list));
+        let _ = tx.send(AppEvent::BranchCommitsLoaded {
+            branch,
+            commits,
+            scan,
+            head,
+        });
     });
 }
 
-/// The MR's commits with their fingerprints (`None` when a page failed).
 async fn fetch_mr_commits(ctx: &FetchContext, mr_id: &str) -> Option<Vec<MrCommit>> {
     let url = format!(
         "{}/api/v4/projects/{}/merge_requests/{}/commits?",
@@ -1190,7 +1298,7 @@ async fn fetch_commit_fingerprint(ctx: &FetchContext, sha: &str) -> Option<Commi
     let res = http_client()
         .get(url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
         .ok()
         .filter(|r| r.status().is_success())?;
@@ -1366,16 +1474,133 @@ pub fn spawn_mr_fetch(
     semaphore: Arc<Semaphore>,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) {
+    tokio::spawn(fetch_and_report(ctx, mr_id, cached, None, semaphore, tx));
+}
+
+async fn fetch_and_report(
+    ctx: FetchContext,
+    mr_id: String,
+    cached: CachedMrData,
+    listed: Option<GitLabMr>,
+    semaphore: Arc<Semaphore>,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    match fetch_gitlab_data(&ctx, &mr_id, cached, listed, &semaphore, tx.clone()).await {
+        Ok(data) => {
+            let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
+        }
+        Err(error) => {
+            let _ = tx.send(AppEvent::MrFailed { id: mr_id, error });
+        }
+    }
+}
+
+/// Most MRs read per list request (GitLab's page size cap).
+pub const MRS_PER_LIST: usize = 100;
+
+/// `merge_requests?iids[]=…` for `ids` (query string open for paging). Asks GitLab
+/// to recheck mergeability like the single read does.
+fn mr_list_url(ctx: &FetchContext, ids: &[&str]) -> String {
+    let iids: String = ids.iter().map(|id| format!("&iids[]={id}")).collect();
+    format!(
+        "{}/api/v4/projects/{}/merge_requests?with_merge_status_recheck=true{iids}",
+        ctx.base_url, ctx.project_id
+    )
+}
+
+/// Reads the MRs `ids` with one request per [`MRS_PER_LIST`] MRs. An MR missing
+/// from the result (failed request, deleted MR) is read on its own afterwards.
+async fn list_mrs(
+    ctx: &FetchContext,
+    ids: &[&str],
+    semaphore: &Semaphore,
+) -> HashMap<String, GitLabMr> {
+    let mut listed = HashMap::new();
+    for chunk in ids.chunks(MRS_PER_LIST) {
+        let Ok(_permit) = semaphore.acquire().await else {
+            break;
+        };
+        match get_all_pages::<GitLabMr>(ctx, &mr_list_url(ctx, chunk)).await {
+            Some(mrs) => listed.extend(
+                mrs.into_iter()
+                    .filter_map(|mr| Some((mr.iid?.to_string(), mr))),
+            ),
+            None => tracing::warn!(
+                mrs = chunk.len(),
+                "MR list read failed — reading them one by one"
+            ),
+        }
+    }
+    listed
+}
+
+/// Refreshes many MRs: their base data comes from list reads (one request per
+/// [`MRS_PER_LIST`] MRs instead of one each), then each MR reads only what its
+/// cache cannot vouch for (`fetch_gitlab_data`).
+pub fn spawn_mr_fetches(
+    ctx: FetchContext,
+    mrs: Vec<(String, CachedMrData)>,
+    semaphore: Arc<Semaphore>,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    if mrs.is_empty() {
+        return;
+    }
     tokio::spawn(async move {
-        match fetch_gitlab_data(&ctx, &mr_id, cached, &semaphore, tx.clone()).await {
-            Ok(data) => {
-                let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
-            }
-            Err(error) => {
-                let _ = tx.send(AppEvent::MrFailed { id: mr_id, error });
-            }
+        let ids: Vec<&str> = mrs.iter().map(|(id, _)| id.as_str()).collect();
+        let mut listed = list_mrs(&ctx, &ids, &semaphore).await;
+        for (id, cached) in mrs {
+            let entry = listed.remove(&id);
+            tokio::spawn(fetch_and_report(
+                ctx.clone(),
+                id,
+                cached,
+                entry,
+                semaphore.clone(),
+                tx.clone(),
+            ));
         }
     });
+}
+
+/// Whether an MR's list entry is not enough and its own page must be read: an
+/// open MR that cannot merge as is needs `diverged_commits_count` (single read
+/// only), and a mergeability still being computed goes through the retries.
+fn needs_single_read(mr: &GitLabMr) -> bool {
+    let open = mr.state.unwrap_or_default() == GitlabMrState::Opened;
+    is_transient_mergeability_status(mr.detailed_merge_status.as_deref())
+        || (open && mr.detailed_merge_status.as_deref() != Some("mergeable"))
+}
+
+/// Discussions and approvals of an open MR with no sign of change are still read
+/// again past this age: a safety net for changes GitLab reports nowhere in the
+/// list entry (an optional approval may leave `updated_at` as it was).
+pub const REVIEW_MAX_AGE: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
+/// Whether an open MR's discussions and approvals must be read again.
+///
+/// `unchanged`: same `updated_at` and same GitLab note count as at the last read
+/// (a new comment moves the count). Resolving a thread moves neither, so the
+/// blocking-threads flag is compared with the cached unresolved count; an
+/// approval may only show in the mergeability (an approval rule now met).
+fn review_stale(
+    cached: &CachedMrData,
+    unchanged: bool,
+    blocking_resolved: Option<bool>,
+    mergeability: MergeabilityStatus,
+    read_age: Option<chrono::TimeDelta>,
+) -> bool {
+    if cached.cache_policy.notes_stale() || cached.review.is_none() || !unchanged {
+        return true;
+    }
+    let threads_moved = match blocking_resolved {
+        Some(true) => cached.user_notes_count > 0,
+        Some(false) => cached.user_notes_count == 0,
+        None => false,
+    };
+    threads_moved
+        || cached.mergeability != Some(mergeability)
+        || read_age.is_none_or(|age| age >= REVIEW_MAX_AGE)
 }
 
 async fn fetch_single_mr(
@@ -1386,7 +1611,7 @@ async fn fetch_single_mr(
     let mr_res = client
         .get(mr_url)
         .header("PRIVATE-TOKEN", ctx.token.as_str())
-        .send()
+        .send_paced()
         .await
         .map_err(GitlabError::Network)?;
 
@@ -1430,7 +1655,7 @@ async fn branches_containing(
         let res = match client
             .get(format!("{refs_url}&page={page}"))
             .header("PRIVATE-TOKEN", ctx.token.as_str())
-            .send()
+            .send_paced()
             .await
         {
             Ok(res) => res,
@@ -1489,6 +1714,7 @@ pub async fn fetch_gitlab_data(
     ctx: &FetchContext,
     mr_id: &str,
     cached: CachedMrData,
+    listed: Option<GitLabMr>,
     semaphore: &Semaphore,
     tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
 ) -> Result<MrLoadedData, GitlabError> {
@@ -1508,7 +1734,12 @@ pub async fn fetch_gitlab_data(
         ctx.base_url, ctx.project_id, mr_id
     );
 
-    let mut mr: GitLabMr = fetch_single_mr(client, ctx, &mr_url).await?;
+    // The list entry stands in for the MR's own page unless that page has more to
+    // say (`needs_single_read`): one request saved per MR.
+    let mut mr: GitLabMr = match listed.filter(|mr| !needs_single_read(mr)) {
+        Some(mr) => mr,
+        None => fetch_single_mr(client, ctx, &mr_url).await?,
+    };
 
     for attempt in 0..MERGEABILITY_RETRY_ATTEMPTS {
         if !is_transient_mergeability_status(mr.detailed_merge_status.as_deref()) {
@@ -1537,83 +1768,6 @@ pub async fn fetch_gitlab_data(
     let created_at = mr.created_at.clone();
     // Always read the state fresh from the API response — never served from cache.
     let state = mr.state.unwrap_or_default();
-    // Count the unresolved review threads from the discussions endpoint (see
-    // `fetch_notes_count`). The native `user_notes_count` field of the MR API is
-    // unreliable: it counts ALL notes, system events and resolved threads included.
-    //
-    // NOTE: intentionally NOT cached on `updated_at`. GitLab does NOT update the MR's
-    // `updated_at` timestamp when a discussion thread is resolved or a note is added.
-    // Caching on `updated_at` would therefore silently serve a stale count after a
-    // reviewer resolves a thread. We always refetch — one extra paginated request per
-    // MR per refresh cycle, which is acceptable for correctness.
-    //
-    // Exception: merged/closed MRs with a known count are frozen — their discussion
-    // history is immutable and will never change.
-    // Reuse the cached notes count only when ALL of these conditions hold:
-    //   1. The MR is currently non-Open (Merged or Closed) — discussion history is frozen.
-    //   2. A non-zero count was already recorded — zero could mean "never fetched".
-    //   3. The cached state matches the fresh state — if the MR just transitioned from
-    //      Open → Merged we must refetch, because threads may have been resolved or added
-    //      between the last Open refresh and the merge event.
-    let state_unchanged = cached.cached_state.as_ref().is_some_and(|s| s == &state);
-    // Reuse the cached discussions (threads, review timeline) only when ALL hold:
-    //   1. The cache policy does not demand a forced re-fetch (e.g. manual [R]).
-    //   2. The MR is non-Open — discussion history is frozen once merged/closed.
-    //   3. They were fetched before (`review` is `None` until then).
-    //   4. The cached state matches the fresh state — guards against Open → Merged
-    //      transitions where threads may have been resolved just before the merge.
-    let discussions_frozen = !cached.cache_policy.notes_stale()
-        && state != GitlabMrState::Opened
-        && cached.review.is_some()
-        && state_unchanged;
-    let (user_notes_count, threads, review) = if discussions_frozen {
-        (
-            cached.user_notes_count,
-            cached.threads.clone(),
-            cached.review.clone(),
-        )
-    } else {
-        match fetch_discussions(ctx, mr_id).await {
-            Some(discussions) => {
-                let threads = review_threads(&discussions);
-                let unresolved = threads.iter().filter(|t| !t.resolved).count();
-                let author = mr.author.as_ref().map_or("", |a| a.username.as_str());
-                (
-                    u32::try_from(unresolved).unwrap_or(u32::MAX),
-                    threads,
-                    Some(review_activity(&discussions, author)),
-                )
-            }
-            // A failed page says nothing about the threads: keep what was known.
-            None => (
-                cached.user_notes_count,
-                cached.threads.clone(),
-                cached.review.clone(),
-            ),
-        }
-    };
-    // Approvers change while the MR is open (approvals, resets on push): refetched
-    // then, frozen afterwards.
-    let fetched = if state == GitlabMrState::Opened {
-        fetch_approved_by(ctx, mr_id).await
-    } else {
-        None
-    };
-    let (approved_by, approvers) = match fetched {
-        Some(users) => users
-            .into_iter()
-            .map(|u| {
-                let display = if u.name.trim().is_empty() {
-                    u.username.clone()
-                } else {
-                    format!("{} (@{})", u.name, u.username)
-                };
-                (u.username, display)
-            })
-            .unzip(),
-        None => (cached.approved_by.clone(), cached.approvers.clone()),
-    };
-
     // Resolve mergeability with the following priority:
     //   1. `has_conflicts: true` always wins — manual intervention is required regardless
     //      of what `detailed_merge_status` says. GitLab can return "need_rebase" AND
@@ -1696,6 +1850,87 @@ pub async fn fetch_gitlab_data(
         }
     };
 
+    let state_unchanged = cached.cached_state.as_ref().is_some_and(|s| s == &state);
+    let updated_at_unchanged = updated_at.is_some() && updated_at == cached.updated_at;
+    // Discussions (unresolved threads, review timeline) and approvers. Once the MR
+    // is merged or closed they are frozen (read once more on the transition). While
+    // it is open they are read again only when something says they moved: see
+    // `review_stale` — `updated_at` alone is not enough (resolving a thread does not
+    // touch it), hence GitLab's note count, the blocking-threads flag, the
+    // mergeability and, as a safety net, their age.
+    let read_age = cached
+        .review_read_at
+        .as_deref()
+        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+        .map(|at| chrono::Utc::now().signed_duration_since(at));
+    let review_fresh = if state == GitlabMrState::Opened {
+        !review_stale(
+            &cached,
+            updated_at_unchanged && mr.user_notes_count == cached.notes_seen,
+            mr.blocking_discussions_resolved,
+            mergeability,
+            read_age,
+        )
+    } else {
+        !cached.cache_policy.notes_stale() && cached.review.is_some() && state_unchanged
+    };
+    let (user_notes_count, threads, review, review_read_at) = if review_fresh {
+        (
+            cached.user_notes_count,
+            cached.threads.clone(),
+            cached.review.clone(),
+            cached.review_read_at.clone(),
+        )
+    } else {
+        match fetch_discussions(ctx, mr_id).await {
+            Some(discussions) => {
+                let threads = review_threads(&discussions);
+                let unresolved = threads.iter().filter(|t| !t.resolved).count();
+                let author = mr.author.as_ref().map_or("", |a| a.username.as_str());
+                (
+                    u32::try_from(unresolved).unwrap_or(u32::MAX),
+                    threads,
+                    Some(review_activity(&discussions, author)),
+                    Some(chrono::Utc::now().to_rfc3339()),
+                )
+            }
+            // A failed page says nothing about the threads: keep what was known.
+            None => (
+                cached.user_notes_count,
+                cached.threads.clone(),
+                cached.review.clone(),
+                cached.review_read_at.clone(),
+            ),
+        }
+    };
+    // Approvers change while the MR is open (approvals, resets on push): read with
+    // the discussions, frozen afterwards.
+    let fetched = if state == GitlabMrState::Opened && !review_fresh {
+        fetch_approved_by(ctx, mr_id).await
+    } else {
+        None
+    };
+    let (approved_by, approvers) = match fetched {
+        Some(users) => users
+            .into_iter()
+            .map(|u| {
+                let display = if u.name.trim().is_empty() {
+                    u.username.clone()
+                } else {
+                    format!("{} (@{})", u.name, u.username)
+                };
+                (u.username, display)
+            })
+            .unzip(),
+        None => (cached.approved_by.clone(), cached.approvers.clone()),
+    };
+    // Recorded only with a successful read, so a failed one is retried next cycle.
+    let notes_seen = if review_read_at != cached.review_read_at {
+        mr.user_notes_count
+    } else {
+        cached.notes_seen
+    };
+
     // Milestone is always read fresh from the GitLab API response — never served from cache.
     // This is the authoritative source: a MR may be attached or detached from a milestone
     // at any time, and the cache would silently hold a stale value.
@@ -1757,8 +1992,6 @@ pub async fn fetch_gitlab_data(
     // (GitLab bumps `updated_at` on any edit to these fields), refresh otherwise.
     // This avoids holding a stale "Draft: TITLE" after the draft prefix is removed,
     // while still saving the extra JSON parsing work on unchanged MRs.
-    let updated_at_unchanged = updated_at.is_some() && updated_at == cached.updated_at;
-
     let title = if updated_at_unchanged {
         cached
             .title
@@ -1974,6 +2207,8 @@ pub async fn fetch_gitlab_data(
             review,
             approved_by,
             approvers,
+            review_read_at,
+            notes_seen,
         },
     })
 }
@@ -2224,6 +2459,362 @@ mod tests {
         assert_eq!(
             next_discovery_anchor("garbage", at("2026-09-30T10:00:00Z")),
             "garbage"
+        );
+    }
+
+    // ── Request batching ─────────────────────────────────────────────────────
+
+    fn ctx(base_url: &str) -> FetchContext {
+        FetchContext {
+            base_url: base_url.to_string(),
+            token: Arc::new(zeroize::Zeroizing::new("t".to_string())),
+            project_id: "1".into(),
+            branches: vec!["main".into()],
+        }
+    }
+
+    fn listed(json: serde_json::Value) -> GitLabMr {
+        serde_json::from_value(json).unwrap()
+    }
+
+    #[test]
+    fn mrs_are_listed_by_iid_with_a_mergeability_recheck() {
+        assert_eq!(
+            mr_list_url(&ctx("https://gl.test"), &["4", "17"]),
+            "https://gl.test/api/v4/projects/1/merge_requests?with_merge_status_recheck=true&iids[]=4&iids[]=17"
+        );
+    }
+
+    #[test]
+    fn only_open_mrs_that_cannot_merge_read_their_own_page() {
+        let mr = |state: &str, status: &str| {
+            listed(serde_json::json!({
+                "title": "t", "state": state, "detailed_merge_status": status
+            }))
+        };
+        assert!(!needs_single_read(&mr("merged", "not_open")));
+        assert!(!needs_single_read(&mr("closed", "not_open")));
+        assert!(!needs_single_read(&mr("opened", "mergeable")));
+        // `diverged_commits_count` (commits behind) comes with the page only.
+        assert!(needs_single_read(&mr("opened", "need_rebase")));
+        assert!(needs_single_read(&mr("opened", "draft_status")));
+        // Still computing: the page read retries.
+        assert!(needs_single_read(&mr("opened", "checking")));
+    }
+
+    fn reviewed(unresolved: u32) -> CachedMrData {
+        CachedMrData {
+            review: Some(ReviewActivity::default()),
+            user_notes_count: unresolved,
+            mergeability: Some(MergeabilityStatus::Mergeable),
+            ..CachedMrData::default()
+        }
+    }
+
+    #[test]
+    fn an_open_mr_rereads_its_review_only_on_a_sign_of_change() {
+        let recent = Some(chrono::TimeDelta::minutes(10));
+        let ok = MergeabilityStatus::Mergeable;
+        // Nothing moved: cache kept.
+        assert!(!review_stale(&reviewed(0), true, Some(true), ok, recent));
+        assert!(!review_stale(&reviewed(2), true, Some(false), ok, recent));
+        // updated_at or the note count moved.
+        assert!(review_stale(&reviewed(0), false, Some(true), ok, recent));
+        // A thread was resolved / opened without any new note.
+        assert!(review_stale(&reviewed(2), true, Some(true), ok, recent));
+        assert!(review_stale(&reviewed(0), true, Some(false), ok, recent));
+        // The mergeability moved (an approval rule may now be met).
+        assert!(review_stale(
+            &reviewed(0),
+            true,
+            Some(true),
+            MergeabilityStatus::NotApproved,
+            recent
+        ));
+        // Safety net: read again once an hour whatever happens.
+        assert!(review_stale(
+            &reviewed(0),
+            true,
+            Some(true),
+            ok,
+            Some(REVIEW_MAX_AGE)
+        ));
+        assert!(review_stale(&reviewed(0), true, Some(true), ok, None));
+        // Never read, or a manual [R].
+        assert!(review_stale(
+            &CachedMrData::default(),
+            true,
+            None,
+            ok,
+            recent
+        ));
+        let forced = CachedMrData {
+            cache_policy: CachePolicy::ForceAll,
+            ..reviewed(0)
+        };
+        assert!(review_stale(&forced, true, Some(true), ok, recent));
+    }
+
+    fn at(rfc3339: &str) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::parse_from_rfc3339(rfc3339)
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    }
+
+    #[test]
+    fn a_branch_scan_reads_only_what_arrived_since_the_last_one() {
+        let now = at("2026-11-10T12:00:00Z");
+        let floor = at("2026-10-01T00:00:00Z");
+        let full = BranchScan::Full {
+            since: floor.to_rfc3339(),
+        };
+        assert_eq!(plan_branch_scan(None, floor, now), full);
+        let scope = BranchScanScope {
+            floor,
+            head: Some("abc".into()),
+            full_at: now - chrono::TimeDelta::hours(2),
+        };
+        assert_eq!(
+            plan_branch_scan(Some(&scope), floor, now),
+            BranchScan::Range { from: "abc".into() }
+        );
+        // A newer floor is still covered by the index.
+        assert_eq!(
+            plan_branch_scan(Some(&scope), floor + chrono::TimeDelta::days(3), now),
+            BranchScan::Range { from: "abc".into() }
+        );
+        // Older MRs to cover, no known head, or a day old: rebuilt in full.
+        let older = floor - chrono::TimeDelta::days(1);
+        assert!(matches!(
+            plan_branch_scan(Some(&scope), older, now),
+            BranchScan::Full { .. }
+        ));
+        let headless = BranchScanScope {
+            head: None,
+            ..scope.clone()
+        };
+        assert_eq!(plan_branch_scan(Some(&headless), floor, now), full);
+        let stale = BranchScanScope {
+            full_at: now - BRANCH_FULL_RESCAN,
+            ..scope
+        };
+        assert_eq!(plan_branch_scan(Some(&stale), floor, now), full);
+    }
+
+    #[test]
+    fn a_range_scan_asks_gitlab_for_a_revision_range() {
+        let url = branch_scan_url(
+            &ctx("https://gl.test"),
+            "release/1.2",
+            &BranchScan::Range { from: "abc".into() },
+        );
+        assert_eq!(
+            url,
+            "https://gl.test/api/v4/projects/1/repository/commits?ref_name=abc..release%2F1.2"
+        );
+        let url = branch_scan_url(
+            &ctx("https://gl.test"),
+            "main",
+            &BranchScan::Full {
+                since: "2026-10-01T00:00:00+00:00".into(),
+            },
+        );
+        assert!(url.ends_with("ref_name=main&since=2026-10-01T00%3A00%3A00%2B00%3A00"));
+    }
+
+    fn tracked(
+        id: &str,
+        state: GitlabMrState,
+        mergeability: MergeabilityStatus,
+    ) -> crate::models::TrackedMr {
+        let mut mr = crate::models::TrackedMr::placeholder(id.into(), "t".into(), None);
+        mr.state = state;
+        mr.mergeability = mergeability;
+        mr
+    }
+
+    #[test]
+    fn the_estimate_counts_what_list_reads_and_review_caching_save() {
+        use GitlabMrState::{Merged, Opened};
+        // Open, mergeable, reviewed a minute ago: no page, no discussions, no approvals.
+        let mut mr = tracked("1", Opened, MergeabilityStatus::Mergeable);
+        mr.review = Some(ReviewActivity::default());
+        mr.review_read_at = Some(chrono::Utc::now().to_rfc3339());
+        let e = mr.estimate(&Opened, false);
+        assert_eq!((e.base, e.discussions, e.saved), (0, 0, 3));
+        // Same MR reviewed two hours ago: discussions + approvals again.
+        mr.review_read_at = Some((chrono::Utc::now() - chrono::TimeDelta::hours(2)).to_rfc3339());
+        let e = mr.estimate(&Opened, false);
+        assert_eq!((e.base, e.discussions, e.saved), (0, 2, 1));
+        // Needs a rebase: its page is read for the commits behind.
+        let e = tracked("2", Opened, MergeabilityStatus::NeedsRebase).estimate(&Opened, false);
+        assert_eq!((e.base, e.saved), (1, 0));
+        // Merged: its page comes from the list.
+        let e = tracked("3", Merged, MergeabilityStatus::NotOpen).estimate(&Merged, true);
+        assert_eq!((e.base, e.saved), (0, 1));
+    }
+
+    /// A stand-in GitLab answering every request through `route(path)`, and
+    /// recording the paths it was asked for.
+    async fn fake_gitlab(
+        route: fn(&str) -> String,
+    ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = seen.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                let log = log.clone();
+                tokio::spawn(async move {
+                    let mut raw = Vec::new();
+                    let mut chunk = [0u8; 4096];
+                    while !raw.windows(4).any(|w| w == b"\r\n\r\n") {
+                        let read = socket.read(&mut chunk).await.unwrap_or(0);
+                        if read == 0 {
+                            return;
+                        }
+                        raw.extend_from_slice(&chunk[..read]);
+                    }
+                    let head = String::from_utf8_lossy(&raw);
+                    let path = head.split(' ').nth(1).unwrap_or_default().to_string();
+                    let body = route(&path);
+                    log.lock().unwrap().push(path);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\
+                         content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = socket.write_all(response.as_bytes()).await;
+                });
+            }
+        });
+        (url, seen)
+    }
+
+    #[tokio::test]
+    async fn a_refresh_reads_the_mrs_in_one_list_and_skips_unchanged_reviews() {
+        const UPDATED: &str = "2026-11-10T08:00:00Z";
+        fn route(path: &str) -> String {
+            let p = path.split('?').next().unwrap();
+            if p.ends_with("/merge_requests") {
+                serde_json::json!([
+                    {"iid": 1, "title": "merged", "state": "merged",
+                     "detailed_merge_status": "not_open", "merge_commit_sha": "m1"},
+                    {"iid": 2, "title": "ready", "state": "opened",
+                     "detailed_merge_status": "mergeable", "updated_at": UPDATED,
+                     "user_notes_count": 3, "blocking_discussions_resolved": true},
+                    {"iid": 3, "title": "behind", "state": "opened",
+                     "detailed_merge_status": "need_rebase"},
+                ])
+                .to_string()
+            } else if p.ends_with("/merge_requests/3") {
+                serde_json::json!({"iid": 3, "title": "behind", "state": "opened",
+                    "detailed_merge_status": "need_rebase", "diverged_commits_count": 2})
+                .to_string()
+            } else if p.ends_with("/approvals") {
+                r#"{"approved_by": []}"#.into()
+            } else if p.ends_with("/changes") {
+                r#"{"changes": []}"#.into()
+            } else {
+                "[]".into()
+            }
+        }
+        let (url, seen) = fake_gitlab(route).await;
+        let unchanged_review = CachedMrData {
+            updated_at: Some(UPDATED.into()),
+            cached_state: Some(GitlabMrState::Opened),
+            review: Some(ReviewActivity::default()),
+            review_read_at: Some(chrono::Utc::now().to_rfc3339()),
+            notes_seen: Some(3),
+            mergeability: Some(MergeabilityStatus::Mergeable),
+            ..CachedMrData::default()
+        };
+        let mrs = vec![
+            ("1".to_string(), CachedMrData::default()),
+            ("2".to_string(), unchanged_review),
+            ("3".to_string(), CachedMrData::default()),
+        ];
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_mr_fetches(ctx(&url), mrs, Arc::new(Semaphore::new(3)), tx);
+
+        let mut loaded = HashMap::new();
+        while loaded.len() < 3 {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .expect("every MR is loaded")
+                .unwrap();
+            if let AppEvent::MrLoaded(data) = event {
+                loaded.insert(data.id.clone(), data);
+            }
+        }
+        let seen = seen.lock().unwrap().clone();
+        let count = |suffix: &str| {
+            seen.iter()
+                .filter(|p| p.split('?').next().unwrap().ends_with(suffix))
+                .count()
+        };
+        assert_eq!(count("/merge_requests"), 1, "{seen:#?}");
+        // Pages: only the open MR that cannot merge, for its commits behind.
+        assert_eq!(
+            count("/merge_requests/1") + count("/merge_requests/2"),
+            0,
+            "{seen:#?}"
+        );
+        assert_eq!(count("/merge_requests/3"), 1);
+        let behind = loaded["3"]
+            .data
+            .diff_stats
+            .as_ref()
+            .and_then(|d| d.commits_behind);
+        assert_eq!(behind, Some(2));
+        // Unchanged open MR: review kept. Never-read open MR: read. Merged: no approvals.
+        assert_eq!(
+            count("/merge_requests/2/discussions") + count("/merge_requests/2/approvals"),
+            0
+        );
+        assert_eq!(count("/merge_requests/3/discussions"), 1);
+        assert_eq!(count("/merge_requests/3/approvals"), 1);
+        assert_eq!(count("/merge_requests/1/approvals"), 0);
+        assert_eq!(loaded["3"].data.notes_seen, None); // the list gave no count for it
+        assert!(loaded["3"].data.review_read_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn an_mr_missing_from_the_list_reads_its_own_page() {
+        fn route(path: &str) -> String {
+            let p = path.split('?').next().unwrap();
+            if p.ends_with("/merge_requests") {
+                "[]".into() // e.g. not visible through the list
+            } else if p.ends_with("/merge_requests/9") {
+                r#"{"iid": 9, "title": "alone", "state": "closed"}"#.into()
+            } else if p.ends_with("/changes") {
+                r#"{"changes": []}"#.into()
+            } else {
+                "[]".into()
+            }
+        }
+        let (url, seen) = fake_gitlab(route).await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_mr_fetches(
+            ctx(&url),
+            vec![("9".to_string(), CachedMrData::default())],
+            Arc::new(Semaphore::new(3)),
+            tx,
+        );
+        let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(event, AppEvent::MrLoaded(data) if data.data.title == "alone"));
+        let seen = seen.lock().unwrap();
+        assert!(
+            seen.iter().any(|p| p.contains("/merge_requests/9?")),
+            "{seen:#?}"
         );
     }
 }

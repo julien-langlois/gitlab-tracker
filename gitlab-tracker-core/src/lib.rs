@@ -1,6 +1,8 @@
 pub mod columns;
 pub mod domain;
 pub mod filters;
+#[cfg(feature = "pacing")]
+pub mod pacing;
 pub mod provider;
 #[cfg(feature = "secrets")]
 pub mod secrets;

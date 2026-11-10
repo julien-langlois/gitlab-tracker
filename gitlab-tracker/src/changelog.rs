@@ -16,6 +16,7 @@ use git_cliff_core::release::Release;
 
 use crate::gitlab::http_client;
 use crate::gitlab_detail::ProjectTarget;
+use gitlab_tracker_core::pacing::SendPaced;
 
 /// git-cliff's own config files, in its order.
 const CONFIG_FILES: &[&str] = &["cliff.toml", ".cliff.toml", ".config/cliff.toml"];
@@ -110,7 +111,7 @@ impl Api<'_> {
         let res = http_client()
             .get(self.url(path))
             .header("PRIVATE-TOKEN", self.0.token.as_str())
-            .send()
+            .send_paced()
             .await
             .map_err(|e| e.without_url().to_string())?;
         if res.status() == reqwest::StatusCode::NOT_FOUND {

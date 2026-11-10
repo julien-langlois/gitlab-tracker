@@ -29,10 +29,10 @@ use mr_changes::branches_to_notify;
 pub use stats_view::StatsWindow;
 #[cfg(feature = "stats")]
 pub use stats_view::{StatsTab, StatsViewState};
-pub use tracker_sync::{spawn_ticket_fetch, TimeLogState};
 use tracker_sync::{
     spawn_ticket_transition_if_needed, transition_target_for_state, TicketTransitionRequest,
 };
+pub use tracker_sync::{spawn_tickets_fetch, TimeLogState};
 
 /// Shared handle to the active tracker provider (Redmine, Jira, Trello, …).
 ///
@@ -413,6 +413,10 @@ pub struct App {
     /// Kept separate from GitLab calls so the UI can display them independently.
     /// `0` when no tracker provider is configured.
     pub estimated_tracker_calls: usize,
+    /// Requests the next refresh avoids compared with reading each MR and each
+    /// ticket on its own (list reads, review caching, tracker bulk reads).
+    pub saved_gitlab_calls: usize,
+    pub saved_tracker_calls: usize,
     /// GitLab call estimate computed once from the saved state on the very first load.
     /// Shown in parentheses in the table title to give cold-start context.
     pub startup_gitlab_estimate: Option<usize>,
@@ -454,6 +458,9 @@ pub struct App {
     /// Recent commits of each tracked branch (`BranchCommitsLoaded`), to recognise
     /// MRs copied there under other SHAs; rescanned after every refresh cycle.
     pub branch_commits: HashMap<String, BranchCommits>,
+    /// What each `branch_commits` index covers, so the next scan only reads the
+    /// commits that arrived since (`gitlab::plan_branch_scan`).
+    pub branch_scan_scopes: HashMap<String, crate::gitlab::BranchScanScope>,
     /// Branches added in this session whose MRs have not all been re-fetched yet:
     /// an MR already on such a branch did not just "arrive" there, so it is neither
     /// notified nor recorded as a branch arrival.
@@ -612,6 +619,8 @@ impl App {
             refresh_cycle: None,
             estimated_gitlab_calls: 0,
             estimated_tracker_calls: 0,
+            saved_gitlab_calls: 0,
+            saved_tracker_calls: 0,
             startup_gitlab_estimate: None,
             startup_tracker_estimate: None,
             // Initialised to None — main.rs injects the provider after keyring lookup.
@@ -626,6 +635,7 @@ impl App {
             quit_confirm: false,
             read_only: false,
             branch_commits: HashMap::new(),
+            branch_scan_scopes: HashMap::new(),
             pending_branch_scans: 0,
             just_added_branches: HashSet::new(),
             review_reminders: HashMap::new(),
@@ -1409,6 +1419,12 @@ impl App {
     }
 }
 
+/// Share of the requests `saved` represents out of the `next + saved` that reading
+/// each MR and ticket on its own would send, in percent (status bar counters).
+pub fn saved_percent(next: usize, saved: usize) -> usize {
+    (saved * 100).checked_div(next + saved).unwrap_or(0)
+}
+
 /// A refresh cycle being timed (see `App::start_refresh_cycle`).
 #[derive(Debug)]
 struct RefreshCycle {
@@ -1663,21 +1679,21 @@ impl App {
     ///
     /// # Breakdown
     /// For each MR that is *not* fully frozen (merged into all branches with a known SHA):
-    ///   - GitLab calls: estimated via `CachedMrData::estimate()` (mirrors fetch logic exactly).
-    ///   - Tracker calls: `estimate_calls_per_ticket()` per MR that already has a linked ticket.
-    ///     New MRs (no linked ticket yet) cost 0 tracker calls — the ticket is only discovered
-    ///     after `MrLoaded` fires and `detect_ticket_id` succeeds.
+    ///   - GitLab calls: `TrackedMr::estimate()` (mirrors the fetch logic), plus once per
+    ///     cycle the list reads (`MRS_PER_LIST` MRs each), the branch scans and the
+    ///     discovery poll.
+    ///   - Tracker calls: `estimate_calls_for_tickets()` over the distinct linked tickets
+    ///     (read in bulk). New MRs (no linked ticket yet) cost 0 tracker calls — the
+    ///     ticket is only discovered after `MrLoaded` fires and `detect_ticket_id` succeeds.
+    ///   - `saved_*`: what reading each MR and ticket on its own would have added.
     ///
     /// The two counters are kept separate so the UI can display them independently.
     pub fn recompute_api_call_estimate(&mut self) {
-        let tracker_calls_per_ticket = self
-            .tracker
-            .as_ref()
-            .map(|p| p.estimate_calls_per_ticket())
-            .unwrap_or(0);
-
         let mut gitlab_total: usize = 0;
-        let mut tracker_total: usize = 0;
+        let mut gitlab_saved: usize = 0;
+        let mut refreshed: usize = 0;
+        let mut tickets = HashSet::new();
+        let mut linked_mrs: usize = 0;
 
         for mr in &self.mrs {
             // Mirror the freeze guard from the Tick handler — skip fully-frozen MRs.
@@ -1690,17 +1706,53 @@ impl App {
                 }
             }
 
+            refreshed += 1;
             let has_merge_sha = mr.sha.is_some() || mr.state == GitlabMrState::Merged;
-            gitlab_total += mr.estimate(&mr.state, has_merge_sha).total();
+            let estimate = mr.estimate(&mr.state, has_merge_sha);
+            gitlab_total += estimate.total();
+            gitlab_saved += estimate.saved;
 
             // Tracker calls only for MRs that already have a linked ticket resolved.
-            if mr.linked_ticket.is_some() {
-                tracker_total += tracker_calls_per_ticket;
+            if let Some(ticket) = &mr.linked_ticket {
+                tickets.insert(ticket.id.as_str());
+                linked_mrs += 1;
             }
         }
 
+        // The pages read one by one before are now list reads.
+        let lists = refreshed.div_ceil(crate::gitlab::MRS_PER_LIST);
+        gitlab_total += lists;
+        gitlab_saved = gitlab_saved.saturating_sub(lists);
+        // After the cycle: one scan per branch some MR is missing from (a single
+        // page once the scan is incremental), and the discovery poll.
+        gitlab_total += self.branches_to_scan() + usize::from(self.discovery_enabled);
+
+        let (tracker_total, tracker_saved) = match &self.tracker {
+            Some(provider) => {
+                let total = provider.estimate_calls_for_tickets(tickets.len());
+                let one_by_one = linked_mrs * provider.estimate_calls_per_ticket();
+                (total, one_by_one.saturating_sub(total))
+            }
+            None => (0, 0),
+        };
+
         self.estimated_gitlab_calls = gitlab_total;
         self.estimated_tracker_calls = tracker_total;
+        self.saved_gitlab_calls = gitlab_saved;
+        self.saved_tracker_calls = tracker_saved;
+    }
+
+    /// Branches the next branch scan reads (see `spawn_branch_scans`): those some
+    /// tracked merged MR is not on by SHA.
+    fn branches_to_scan(&self) -> usize {
+        self.branches
+            .iter()
+            .filter(|branch| {
+                self.mrs.iter().any(
+                    |mr| matches!(&mr.status, MrStatus::MergedIn(found) if !found.contains(*branch)),
+                )
+            })
+            .count()
     }
 }
 
@@ -1823,6 +1875,56 @@ impl App {
             .collect()
     }
 
+    /// The index `branch` has after a scan: rebuilt (`Full`) or grown by the
+    /// commits read (`Range`), with its scope updated. `None` keeps the previous
+    /// index; a failed range read also forgets the scope, so the next scan is full
+    /// (the old head may be gone after a force-push).
+    fn scanned_index(
+        &mut self,
+        branch: &str,
+        commits: Option<BranchCommits>,
+        scan: crate::gitlab::BranchScan,
+        head: Option<String>,
+    ) -> Option<BranchCommits> {
+        use crate::gitlab::{BranchScan, BranchScanScope};
+        let Some(commits) = commits else {
+            if matches!(scan, BranchScan::Range { .. }) {
+                self.branch_scan_scopes.remove(branch);
+            }
+            return None;
+        };
+        match scan {
+            BranchScan::Full { since } => {
+                let now = chrono::Utc::now();
+                let floor = chrono::DateTime::parse_from_rfc3339(&since)
+                    .map_or(now, |at| at.with_timezone(&chrono::Utc));
+                self.branch_scan_scopes.insert(
+                    branch.to_string(),
+                    BranchScanScope {
+                        floor,
+                        head,
+                        full_at: now,
+                    },
+                );
+                Some(commits)
+            }
+            BranchScan::Range { .. } => {
+                let (Some(before), Some(scope)) = (
+                    self.branch_commits.get(branch),
+                    self.branch_scan_scopes.get_mut(branch),
+                ) else {
+                    // The index was dropped meanwhile: rebuild it next time.
+                    self.branch_scan_scopes.remove(branch);
+                    return None;
+                };
+                scope.head = head;
+                let mut index = before.clone();
+                index.absorb(commits);
+                Some(index)
+            }
+        }
+    }
+
     /// Scans the recent commits of each tracked branch that some MR is missing from
     /// by SHA (any state: an open MR's commits can be cherry-picked early), from the
     /// oldest such MR's creation on, at most [`BRANCH_SCAN_LOOKBACK_DAYS`] back.
@@ -1847,10 +1949,18 @@ impl App {
                 .min();
             match oldest {
                 Some(oldest) => {
+                    let scope = self.branch_scan_scopes.get(&branch);
+                    let scan = crate::gitlab::plan_branch_scan(
+                        scope,
+                        oldest.max(floor),
+                        chrono::Utc::now(),
+                    );
+                    let previous_head = scope.and_then(|s| s.head.clone());
                     crate::gitlab::spawn_branch_commits_fetch(
                         self.fetch_context(),
                         branch,
-                        oldest.max(floor).to_rfc3339(),
+                        scan,
+                        previous_head,
                         semaphore.clone(),
                         tx.clone(),
                     );
@@ -1858,6 +1968,7 @@ impl App {
                 }
                 None => {
                     self.branch_commits.remove(&branch);
+                    self.branch_scan_scopes.remove(&branch);
                 }
             }
         }
@@ -1876,6 +1987,7 @@ impl App {
         tx: UnboundedSender<AppEvent>,
     ) {
         let ctx = self.fetch_context();
+        let mut batch = Vec::new();
 
         for saved in saved_mrs {
             let initial_status = if !saved.found_branches.is_empty()
@@ -1921,16 +2033,11 @@ impl App {
                         pipeline: mr.pipelines.first().map(|p| p.status),
                     },
                 );
-                spawn_mr_fetch(
-                    ctx.clone(),
-                    mr.id.clone(),
-                    cached,
-                    semaphore.clone(),
-                    tx.clone(),
-                );
+                batch.push((mr.id.clone(), cached));
             }
             self.mrs.push(mr);
         }
+        crate::gitlab::spawn_mr_fetches(ctx, batch, semaphore, tx);
 
         if !self.mrs.is_empty() {
             self.table_state.select(Some(0));
@@ -2045,6 +2152,8 @@ impl App {
         // counter reflects the actual cache state at trigger time.
         self.recompute_api_call_estimate();
 
+        let mut ticket_links = Vec::new();
+        let mut batch = Vec::new();
         for mr in &mut self.mrs {
             if let MrStatus::MergedIn(ref found) = mr.status {
                 // Skip refresh for MRs that are fully merged into all branches —
@@ -2058,26 +2167,20 @@ impl App {
             }
 
             mr.status = MrStatus::Loading;
-            let cached = CachedMrData::from(&*mr);
-            spawn_mr_fetch(
-                ctx.clone(),
-                mr.id.clone(),
-                cached,
-                semaphore.clone(),
-                tx.clone(),
-            );
+            batch.push((mr.id.clone(), CachedMrData::from(&*mr)));
             // Track pending auto-refresh fetches to drive the spinner.
             self.pending_refresh_fetches.insert(mr.id.clone());
 
-            // Re-fetch the tracker ticket unconditionally on each auto-refresh cycle,
-            // mirroring the manual [R] refresh behaviour. The GitLab MR may not have
-            // changed (was_updated = false) while the tracker ticket status, spent time,
-            // or priority did — the conditional re-fetch inside MrLoaded would miss this.
-            if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
-                if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
-                    spawn_ticket_fetch(provider, ticket_id, mr.id.clone(), tx);
-                }
+            // Re-read the linked ticket on each auto-refresh cycle, mirroring the manual
+            // [R] refresh: the MR may not have changed while the ticket's status, spent
+            // time or priority did. All of them are read together after the loop.
+            if let Some(ticket) = &mr.linked_ticket {
+                ticket_links.push((ticket.id.clone(), mr.id.clone()));
             }
+        }
+        crate::gitlab::spawn_mr_fetches(ctx, batch, semaphore.clone(), tx.clone());
+        if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
+            spawn_tickets_fetch(provider, ticket_links, tx);
         }
         self.start_refresh_cycle("auto");
 
@@ -2467,9 +2570,14 @@ impl App {
                 }
             }
 
-            AppEvent::BranchCommitsLoaded { branch, commits } => {
+            AppEvent::BranchCommitsLoaded {
+                branch,
+                commits,
+                scan,
+                head,
+            } => {
                 self.pending_branch_scans = self.pending_branch_scans.saturating_sub(1);
-                let Some(index) = commits else {
+                let Some(index) = self.scanned_index(&branch, commits, scan, head) else {
                     return false; // failed scan: keep the previous index
                 };
                 // The first scan of a branch in a session only records: restarting must
@@ -3539,5 +3647,95 @@ pub(crate) mod tests {
         assert_eq!(app.complete_fetch("2"), done(false, true, false));
         // Refresh-cycle fetch: its ticket was already re-fetched by the cycle.
         assert_eq!(app.complete_fetch("3"), done(true, false, true));
+    }
+
+    fn scanned(
+        app: &mut App,
+        commits: Option<BranchCommits>,
+        scan: crate::gitlab::BranchScan,
+        head: &str,
+    ) {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        app.pending_branch_scans = 1;
+        app.apply_event(
+            AppEvent::BranchCommitsLoaded {
+                branch: "prod".into(),
+                commits,
+                scan,
+                head: Some(head.into()),
+            },
+            Arc::new(Semaphore::new(1)),
+            &tx,
+            &mut HashMap::new(),
+        );
+    }
+
+    fn shas(list: &[&str]) -> BranchCommits {
+        BranchCommits {
+            shas: list.iter().map(|s| s.to_string()).collect(),
+            ..BranchCommits::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_range_scan_grows_the_index_a_full_one_replaces_it() {
+        use crate::gitlab::BranchScan;
+        let mut app = test_app();
+        let full = BranchScan::Full {
+            since: "2026-10-01T00:00:00+00:00".into(),
+        };
+        scanned(&mut app, Some(shas(&["a", "b"])), full.clone(), "b");
+        let scope = &app.branch_scan_scopes["prod"];
+        assert_eq!(scope.head.as_deref(), Some("b"));
+        assert_eq!(scope.floor.to_rfc3339(), "2026-10-01T00:00:00+00:00");
+
+        // Only the new commits were read: added to what is known.
+        scanned(
+            &mut app,
+            Some(shas(&["c"])),
+            BranchScan::Range { from: "b".into() },
+            "c",
+        );
+        assert_eq!(app.branch_commits["prod"].shas.len(), 3);
+        assert_eq!(app.branch_scan_scopes["prod"].head.as_deref(), Some("c"));
+
+        // A failed range read (head gone after a force-push?): next scan is full.
+        scanned(&mut app, None, BranchScan::Range { from: "c".into() }, "c");
+        assert_eq!(app.branch_commits["prod"].shas.len(), 3); // index kept meanwhile
+        assert!(!app.branch_scan_scopes.contains_key("prod"));
+
+        // A full scan rebuilds the index from scratch.
+        scanned(&mut app, Some(shas(&["z"])), full, "z");
+        assert_eq!(app.branch_commits["prod"], shas(&["z"]));
+    }
+
+    #[tokio::test]
+    async fn the_request_counter_shows_what_bulk_reads_save() {
+        let mut app = app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None")]).await;
+        let ticket = |id: &str| -> gitlab_tracker_core::LinkedTicket {
+            serde_json::from_value(serde_json::json!({
+                "schema_version": gitlab_tracker_core::LINKED_TICKET_SCHEMA_VERSION,
+                "id": id, "subject": "s", "status": "New", "url": "u"
+            }))
+            .unwrap()
+        };
+        // Two MRs on the same ticket: one read for both.
+        app.mrs[0].linked_ticket = Some(ticket("42"));
+        app.mrs[1].linked_ticket = Some(ticket("42"));
+        app.mrs[2].linked_ticket = Some(ticket("7"));
+        for mr in &mut app.mrs {
+            mr.state = GitlabMrState::Closed;
+            mr.review = Some(Default::default());
+        }
+        app.tracker = Some(Arc::new(FakeTracker::default()));
+        app.recompute_api_call_estimate();
+
+        // Three closed MRs: one list read instead of three pages (+ one pipelines
+        // list each, no cache), no branch scan, no discovery.
+        assert_eq!(app.saved_gitlab_calls, 2);
+        assert_eq!(app.estimated_tracker_calls, 2);
+        assert_eq!(app.saved_tracker_calls, 1);
+        assert_eq!(saved_percent(2, 1), 33);
+        assert_eq!(saved_percent(0, 0), 0);
     }
 }

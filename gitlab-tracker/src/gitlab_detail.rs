@@ -8,6 +8,7 @@
 //! endpoint answers 403/404 and the page falls back to the approvers.
 
 use crate::gitlab::http_client;
+use gitlab_tracker_core::pacing::SendPaced;
 
 /// The MR as GitLab sees it now: the merge checks the list does not keep.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
@@ -165,7 +166,7 @@ impl Target {
         let res = http_client()
             .get(self.url(path))
             .header("PRIVATE-TOKEN", self.token.as_str())
-            .send()
+            .send_paced()
             .await
             .map_err(|e| e.without_url().to_string())?;
         if !res.status().is_success() {

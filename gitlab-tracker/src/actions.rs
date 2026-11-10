@@ -334,6 +334,8 @@ fn refresh(app: &mut App, api_semaphore: &Arc<Semaphore>, tx: &UnboundedSender<A
         app.spawn_discovery(ctx.clone(), tx);
     }
 
+    let mut ticket_links = Vec::new();
+    let mut batch = Vec::new();
     for mr in &mut app.mrs {
         mr.status = MrStatus::Loading;
         let mut cached = CachedMrData::from(&*mr);
@@ -341,24 +343,20 @@ fn refresh(app: &mut App, api_semaphore: &Arc<Semaphore>, tx: &UnboundedSender<A
         // so the user always gets an up-to-date snapshot, even for
         // already-merged MRs whose caches would otherwise be permanent.
         cached.cache_policy = CachePolicy::ForceAll;
-        spawn_mr_fetch(
-            ctx.clone(),
-            mr.id.clone(),
-            cached,
-            api_semaphore.clone(),
-            tx.clone(),
-        );
+        batch.push((mr.id.clone(), cached));
         // Track pending fetches to drive the spinner in the table title.
         app.pending_refresh_fetches.insert(mr.id.clone());
 
-        // Re-fetch the tracker ticket so that spent_hours and time entries
-        // reflect any change logged since the last refresh, regardless of
-        // whether the GitLab MR itself was updated.
-        if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
-            if let Some(ticket_id) = mr.linked_ticket.as_ref().map(|t| t.id.clone()) {
-                crate::app::spawn_ticket_fetch(provider, ticket_id, mr.id.clone(), tx);
-            }
+        // Re-read the linked ticket so that spent_hours and time entries reflect
+        // any change logged since the last refresh, regardless of whether the
+        // GitLab MR itself was updated (all tickets in one go, after the loop).
+        if let Some(ticket) = &mr.linked_ticket {
+            ticket_links.push((ticket.id.clone(), mr.id.clone()));
         }
+    }
+    crate::gitlab::spawn_mr_fetches(ctx, batch, api_semaphore.clone(), tx.clone());
+    if let Some(provider) = app.tracker.as_ref().map(Arc::clone) {
+        crate::app::spawn_tickets_fetch(provider, ticket_links, tx);
     }
     app.start_refresh_cycle("manual");
 }

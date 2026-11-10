@@ -13,6 +13,7 @@ use gitlab_tracker_core::{
     Activity, LabelColorMaps, LinkedTicket, TicketTransitionProvider, TicketTransitionTarget,
     TimeEntry, TimeEntryRequest, TrackerError, TrackerProvider,
 };
+use std::sync::atomic::{AtomicU8, Ordering};
 use zeroize::Zeroizing;
 
 pub use config::RedmineConfig;
@@ -41,7 +42,14 @@ pub struct RedmineProvider {
     ticket_patterns: Vec<regex::Regex>,
     /// Pre-built HTTP client — reused across all requests (connection pooling).
     http: reqwest::Client,
+    /// Whether `GET /issues.json` carries `spent_hours` on this instance
+    /// (`LIST_*`), learnt on the first ticket listed without it.
+    list_spent_hours: AtomicU8,
 }
+
+const LIST_UNKNOWN: u8 = 0;
+const LIST_IS_COMPLETE: u8 = 1;
+const LIST_LACKS_SPENT_HOURS: u8 = 2;
 
 /// Why [`RedmineProvider::from_tracker_section`] could not build a provider.
 #[derive(Debug, thiserror::Error)]
@@ -79,6 +87,30 @@ impl RedmineProvider {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap_or_default(),
+            list_spent_hours: AtomicU8::new(LIST_UNKNOWN),
+        }
+    }
+
+    /// Maps a Redmine issue onto the generic ticket contract.
+    fn linked_ticket(&self, issue: client::RedmineIssue) -> LinkedTicket {
+        let id = issue.id.to_string();
+        LinkedTicket {
+            schema_version: LINKED_TICKET_SCHEMA_VERSION,
+            url: self.ticket_url(&id),
+            id,
+            subject: issue.subject,
+            status: issue.status.name,
+            author: issue.author.map(|u| u.name),
+            assignee: issue.assigned_to.map(|u| u.name),
+            // Redmine returns hours — convert to seconds for the generic LinkedTicket contract.
+            time_estimate: issue.estimated_hours.map(|h| (h * 3600.0).round() as u32),
+            time_spent: issue.spent_hours.map(|h| (h * 3600.0).round() as u32),
+            time_remaining: issue.remaining_hours.map(|h| (h * 3600.0).round() as u32),
+            tracker_type: issue.tracker.map(|t| t.name),
+            priority: issue.priority.map(|p| p.name),
+            version: issue.fixed_version.map(|v| v.name),
+            start_date: issue.start_date,
+            done_ratio: issue.done_ratio,
         }
     }
 }
@@ -154,25 +186,60 @@ impl TrackerProvider for RedmineProvider {
     async fn fetch_ticket(&self, ticket_id: &str) -> Result<LinkedTicket, TrackerError> {
         let issue =
             client::fetch_issue(&self.http, &self.config.url, &self.token, ticket_id).await?;
+        Ok(self.linked_ticket(issue))
+    }
 
-        Ok(LinkedTicket {
-            schema_version: LINKED_TICKET_SCHEMA_VERSION,
-            id: issue.id.to_string(),
-            subject: issue.subject,
-            status: issue.status.name,
-            url: self.ticket_url(ticket_id),
-            author: issue.author.map(|u| u.name),
-            assignee: issue.assigned_to.map(|u| u.name),
-            // Redmine returns hours — convert to seconds for the generic LinkedTicket contract.
-            time_estimate: issue.estimated_hours.map(|h| (h * 3600.0).round() as u32),
-            time_spent: issue.spent_hours.map(|h| (h * 3600.0).round() as u32),
-            time_remaining: issue.remaining_hours.map(|h| (h * 3600.0).round() as u32),
-            tracker_type: issue.tracker.map(|t| t.name),
-            priority: issue.priority.map(|p| p.name),
-            version: issue.fixed_version.map(|v| v.name),
-            start_date: issue.start_date,
-            done_ratio: issue.done_ratio,
-        })
+    /// One `GET /issues.json` per 100 tickets. Redmine versions whose list leaves
+    /// out `spent_hours` are detected on the first such ticket (its own page has
+    /// it): their tickets lacking it are then read one by one, so spent time stays
+    /// right everywhere.
+    async fn fetch_tickets(
+        &self,
+        ticket_ids: &[String],
+    ) -> Result<Vec<LinkedTicket>, TrackerError> {
+        let issues =
+            client::fetch_issues(&self.http, &self.config.url, &self.token, ticket_ids).await?;
+        let mut tickets = Vec::with_capacity(issues.len());
+        for issue in issues {
+            let needs_page = issue.spent_hours.is_none()
+                && self.list_spent_hours.load(Ordering::Relaxed) != LIST_IS_COMPLETE;
+            if !needs_page {
+                tickets.push(self.linked_ticket(issue));
+                continue;
+            }
+            let id = issue.id.to_string();
+            match client::fetch_issue(&self.http, &self.config.url, &self.token, &id).await {
+                Ok(full) => {
+                    // The page has the time and the list did not: the list is lacking.
+                    let verdict = if full.spent_hours.is_some() {
+                        LIST_LACKS_SPENT_HOURS
+                    } else {
+                        LIST_IS_COMPLETE // not shown at all (permission): same as the list
+                    };
+                    let _ = self.list_spent_hours.compare_exchange(
+                        LIST_UNKNOWN,
+                        verdict,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    );
+                    tickets.push(self.linked_ticket(full));
+                }
+                Err(e) => {
+                    tracing::warn!(ticket_id = %id, error = %e, "Redmine issue page failed; using its list entry");
+                    tickets.push(self.linked_ticket(issue));
+                }
+            }
+        }
+        Ok(tickets)
+    }
+
+    fn estimate_calls_for_tickets(&self, tickets: usize) -> usize {
+        let pages = tickets.div_ceil(client::ISSUES_PER_REQUEST);
+        if self.list_spent_hours.load(Ordering::Relaxed) == LIST_LACKS_SPENT_HOURS {
+            pages + tickets
+        } else {
+            pages
+        }
     }
 
     fn ticket_url(&self, ticket_id: &str) -> String {
@@ -681,5 +748,77 @@ mod tests {
         );
         assert!(colors.tracker_type.contains_key("*") && !colors.tracker_type.contains_key("Bug"));
         assert_eq!(colors.priority["haute"].0, "yellow");
+    }
+
+    fn listed(id: u64, spent: Option<f32>) -> String {
+        let spent = spent.map_or(String::new(), |h| format!(r#", "spent_hours": {h}"#));
+        format!(
+            r#"{{"id": {id}, "subject": "T{id}", "status": {{"id": 1, "name": "New"}}{spent}}}"#
+        )
+    }
+
+    #[tokio::test]
+    async fn tickets_are_read_in_one_request() {
+        let body = format!(
+            r#"{{"issues": [{}, {}], "total_count": 2}}"#,
+            listed(12, Some(1.0)),
+            listed(34, Some(0.0))
+        );
+        let stub = Stub::start(&[(200, &body)]).await;
+        let provider = stub.provider();
+        let ids = ["34", "12", "12", "not-a-ticket"].map(String::from);
+
+        let tickets = provider.fetch_tickets(&ids).await.unwrap();
+        let read: Vec<_> = tickets
+            .iter()
+            .map(|t| (t.id.as_str(), t.time_spent))
+            .collect();
+        assert_eq!(read, [("12", Some(3_600)), ("34", Some(0))]);
+        assert_eq!(tickets[0].url, format!("{}issues/12", stub.url));
+        // Duplicates and invalid ids dropped, closed tickets included.
+        assert_eq!(provider.estimate_calls_for_tickets(2), 1);
+        assert_eq!(provider.estimate_calls_for_tickets(101), 2);
+        let requests = stub.requests().await;
+        assert_eq!(
+            requests[0].line,
+            "GET /issues.json?issue_id=12,34&status_id=*&limit=100"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_list_without_spent_time_falls_back_to_each_page() {
+        let first = format!(r#"{{"issues": [{}]}}"#, listed(12, None));
+        let page = format!(r#"{{"issue": {}}}"#, listed(12, Some(2.0)));
+        let second = format!(r#"{{"issues": [{}]}}"#, listed(34, None));
+        let page2 = format!(r#"{{"issue": {}}}"#, listed(34, Some(0.5)));
+        let stub = Stub::start(&[(200, &first), (200, &page), (200, &second), (200, &page2)]).await;
+        let provider = stub.provider();
+
+        let tickets = provider.fetch_tickets(&["12".into()]).await.unwrap();
+        assert_eq!(tickets[0].time_spent, Some(7_200));
+        // Learnt: this Redmine's list lacks spent time — every such ticket gets its page.
+        let tickets = provider.fetch_tickets(&["34".into()]).await.unwrap();
+        assert_eq!(tickets[0].time_spent, Some(1_800));
+        assert_eq!(provider.estimate_calls_for_tickets(3), 4);
+
+        let lines: Vec<_> = stub.requests().await.into_iter().map(|r| r.line).collect();
+        assert_eq!(lines[1], "GET /issues/12.json");
+        assert_eq!(lines[3], "GET /issues/34.json");
+    }
+
+    #[tokio::test]
+    async fn hidden_spent_time_is_not_read_page_by_page() {
+        // No permission to see time: neither the list nor the page shows it.
+        let list = format!(r#"{{"issues": [{}]}}"#, listed(12, None));
+        let page = format!(r#"{{"issue": {}}}"#, listed(12, None));
+        let stub = Stub::start(&[(200, &list), (200, &page), (200, &list)]).await;
+        let provider = stub.provider();
+
+        provider.fetch_tickets(&["12".into()]).await.unwrap();
+        let again = provider.fetch_tickets(&["12".into()]).await.unwrap();
+        assert_eq!(again[0].time_spent, None);
+        assert_eq!(provider.estimate_calls_for_tickets(3), 1);
+        let lines: Vec<_> = stub.requests().await.into_iter().map(|r| r.line).collect();
+        assert!(lines[2].starts_with("GET /issues.json"), "{lines:?}");
     }
 }

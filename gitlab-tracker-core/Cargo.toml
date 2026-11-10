@@ -21,6 +21,13 @@ keyring = { workspace = true, optional = true }
 rpassword = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 zeroize = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 
 [features]
 secrets = ["dep:keyring", "dep:rpassword", "dep:tracing", "dep:zeroize"]
+# Per-instance request pacing (shared concurrency limit, 429 / Retry-After pauses).
+pacing = ["dep:reqwest", "dep:tokio", "dep:tracing"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "net", "io-util", "time"] }

@@ -672,6 +672,7 @@ fn status_bar(g: &mut GuiApp, ui: &mut Ui) {
                             &theme,
                             tracker.name(),
                             g.app.estimated_tracker_calls,
+                            g.app.saved_tracker_calls,
                             g.app.startup_tracker_estimate,
                         );
                     }
@@ -680,6 +681,7 @@ fn status_bar(g: &mut GuiApp, ui: &mut Ui) {
                         &theme,
                         "GitLab",
                         g.app.estimated_gitlab_calls,
+                        g.app.saved_gitlab_calls,
                         g.app.startup_gitlab_estimate,
                     );
                 });
@@ -721,16 +723,31 @@ fn auto_polling(ui: &mut Ui, theme: &Theme, on: bool) {
 }
 
 /// "GitLab ~12" — the requests the next refresh should send, the count in the
-/// accent — with the estimate at startup when it differs, as in the TUI. Laid
-/// out right to left.
-fn request_estimate(ui: &mut Ui, theme: &Theme, name: &str, next: usize, startup: Option<usize>) {
+/// accent — with the share bulk reads and caching save ("−60%") and the estimate
+/// at startup when it differs, as in the TUI. Laid out right to left.
+fn request_estimate(
+    ui: &mut Ui,
+    theme: &Theme,
+    name: &str,
+    next: usize,
+    saved: usize,
+    startup: Option<usize>,
+) {
     let size = theme.text_size - 1.0;
+    let percent = crate::app::saved_percent(next, saved);
     let response = ui
         .scope(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             if let Some(startup) = startup.filter(|s| *s != next) {
                 let text = tf("({n} at startup)", &[("n", &startup.to_string())]);
                 ui.label(muted(theme, text).size(size - 0.5));
+            }
+            if percent > 0 {
+                ui.label(
+                    RichText::new(format!("−{percent}%"))
+                        .size(size - 0.5)
+                        .color(theme.tones.green.fg),
+                );
             }
             ui.label(muted(theme, tl("req.")).size(size));
             ui.label(
@@ -745,6 +762,17 @@ fn request_estimate(ui: &mut Ui, theme: &Theme, name: &str, next: usize, startup
         "{name}: about {n} API requests at the next refresh",
         &[("name", name), ("n", &next.to_string())],
     );
+    if saved > 0 {
+        hint.push('\n');
+        hint.push_str(&tf(
+            "{saved} fewer than reading each item on its own ({n} instead of {before})",
+            &[
+                ("saved", &saved.to_string()),
+                ("n", &next.to_string()),
+                ("before", &(next + saved).to_string()),
+            ],
+        ));
+    }
     if let Some(s) = startup {
         hint.push('\n');
         hint.push_str(&tf(

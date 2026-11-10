@@ -114,6 +114,13 @@ pub struct GitLabMr {
     /// (GitLab API parameter). `None` when not requested, not yet computed by GitLab
     /// or when the MR is already merged/closed.
     pub diverged_commits_count: Option<u32>,
+    /// Project-scoped MR id (`!123`): matches a list entry to its tracked MR.
+    pub iid: Option<u64>,
+    /// Every human note of the MR (resolved threads and replies included).
+    pub user_notes_count: Option<u32>,
+    /// `false` while a thread that blocks the merge is unresolved (always `true`
+    /// when the project does not require resolved threads to merge).
+    pub blocking_discussions_resolved: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -244,6 +251,15 @@ pub struct MrData {
     /// The same approvers as "Full Name (@login)", to show them by name.
     #[serde(default)]
     pub approvers: Vec<String>,
+    /// When the discussions and approvals were last read (RFC 3339): an open MR
+    /// whose list entry shows no change still reads them again past
+    /// `gitlab::REVIEW_MAX_AGE`.
+    #[serde(default)]
+    pub review_read_at: Option<String>,
+    /// GitLab's `user_notes_count` (every human note) at that read: a new comment
+    /// changes it, whatever `updated_at` does.
+    #[serde(default)]
+    pub notes_seen: Option<u32>,
 }
 
 /// A resolvable discussion thread of an MR.
@@ -318,6 +334,21 @@ pub struct BranchCommits {
 }
 
 impl BranchCommits {
+    /// Adds the commits of a later, incremental scan: a copy found in both keeps
+    /// its earliest date (when it first reached the branch).
+    pub fn absorb(&mut self, newer: BranchCommits) {
+        fn earliest<K: Eq + std::hash::Hash>(into: &mut HashMap<K, i64>, from: HashMap<K, i64>) {
+            for (key, at) in from {
+                into.entry(key)
+                    .and_modify(|t| *t = (*t).min(at))
+                    .or_insert(at);
+            }
+        }
+        self.shas.extend(newer.shas);
+        earliest(&mut self.picked_from, newer.picked_from);
+        earliest(&mut self.fingerprints, newer.fingerprints);
+    }
+
     /// How an MR absent from this branch by its merge SHA got there anyway:
     /// first through its merge / squash commit (`landed_sha` / `landed`), then
     /// through its own `commits` one by one (some found: [`BranchPresence::Partial`]).
@@ -849,6 +880,10 @@ pub enum AppEvent {
     BranchCommitsLoaded {
         branch: String,
         commits: Option<BranchCommits>,
+        /// What was read: the index to keep (`Full`) or commits to add (`Range`).
+        scan: crate::gitlab::BranchScan,
+        /// The branch head after this scan (the next scan reads from it).
+        head: Option<String>,
     },
     Tick,
 }
@@ -933,5 +968,25 @@ mod tests {
             copied_at(None, None, &[commit("c2"), commit("missing")]),
             None
         ); // partial
+    }
+
+    #[test]
+    fn an_incremental_scan_adds_to_the_index_and_keeps_first_arrivals() {
+        let mut index = BranchCommits {
+            shas: ["a".to_string()].into(),
+            picked_from: [("src".to_string(), 100)].into(),
+            fingerprints: [(fp("Fix"), 100)].into(),
+        };
+        index.absorb(BranchCommits {
+            shas: ["b".to_string()].into(),
+            // Seen again later (overlap): the first arrival date stays.
+            picked_from: [("src".to_string(), 300), ("src2".to_string(), 300)].into(),
+            fingerprints: [(fp("Fix"), 50), (fp("Feat"), 300)].into(),
+        });
+        assert_eq!(index.shas.len(), 2);
+        assert_eq!(index.picked_from["src"], 100);
+        assert_eq!(index.picked_from["src2"], 300);
+        assert_eq!(index.fingerprints[&fp("Fix")], 50);
+        assert_eq!(index.fingerprints[&fp("Feat")], 300);
     }
 }

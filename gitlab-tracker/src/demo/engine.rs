@@ -992,6 +992,8 @@ impl World {
                 review: Some(self.review(i)),
                 approved_by: mr.approved.iter().map(|(p, _)| p.login.into()).collect(),
                 approvers: mr.approved.iter().map(|(p, _)| p.display()).collect(),
+                review_read_at: None,
+                notes_seen: None,
             },
         }
     }

@@ -34,6 +34,7 @@
 	Auto-polling	Auto-Abfrage
 	({n} at startup)	({n} beim Start)
 	{name}: about {n} API requests at the next refresh	{name}: etwa {n} API-Anfragen bei der nächsten Aktualisierung
+	{saved} fewer than reading each item on its own ({n} instead of {before})	{saved} weniger als beim Einzelabruf jedes Elements ({n} statt {before})
 	{n} at startup, from the saved state	{n} beim Start, aus dem gespeicherten Zustand
 	Another project is still loading	Ein anderes Projekt wird noch geladen
 	Loading {project}…	{project} wird geladen…

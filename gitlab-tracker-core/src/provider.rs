@@ -318,6 +318,42 @@ pub trait TrackerProvider: Send + Sync {
         1
     }
 
+    /// Fetches several tickets at once (the refresh cycle's path).
+    ///
+    /// Tickets that cannot be read are left out of the result (the caller keeps its
+    /// cached copy). The default reads them one by one through [`fetch_ticket`];
+    /// override it when the tracker can list many tickets per request, together with
+    /// [`estimate_calls_for_tickets`].
+    ///
+    /// [`fetch_ticket`]: TrackerProvider::fetch_ticket
+    /// [`estimate_calls_for_tickets`]: TrackerProvider::estimate_calls_for_tickets
+    async fn fetch_tickets(
+        &self,
+        ticket_ids: &[String],
+    ) -> Result<Vec<LinkedTicket>, TrackerError> {
+        let mut tickets = Vec::with_capacity(ticket_ids.len());
+        let mut first_error = None;
+        for id in ticket_ids {
+            match self.fetch_ticket(id).await {
+                Ok(ticket) => tickets.push(ticket),
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                }
+            }
+        }
+        match first_error {
+            // Nothing could be read: report why instead of an empty success.
+            Some(e) if tickets.is_empty() => Err(e),
+            _ => Ok(tickets),
+        }
+    }
+
+    /// HTTP calls [`fetch_tickets`](TrackerProvider::fetch_tickets) makes for
+    /// `tickets` distinct tickets (UI request counter).
+    fn estimate_calls_for_tickets(&self, tickets: usize) -> usize {
+        tickets * self.estimate_calls_per_ticket()
+    }
+
     /// Fetches the list of time-tracking activity categories available in the tracker.
     ///
     /// Called once at startup (or on first popup open) and cached in `App`.

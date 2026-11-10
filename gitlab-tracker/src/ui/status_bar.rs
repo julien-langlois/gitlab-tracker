@@ -86,6 +86,13 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
         gl.to_string(),
         Style::default().fg(accent_cyan),
     ));
+    let gl_percent = crate::app::saved_percent(gl, app.saved_gitlab_calls);
+    if gl_percent > 0 {
+        spans.push(Span::styled(
+            format!(" −{gl_percent}%"),
+            Style::default().fg(accent_green),
+        ));
+    }
     if gl != gl_startup {
         spans.push(Span::styled(
             format!(" ({}🚀)", gl_startup),
@@ -107,6 +114,13 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
             tr.to_string(),
             Style::default().fg(accent_cyan),
         ));
+        let tr_percent = crate::app::saved_percent(tr, app.saved_tracker_calls);
+        if tr_percent > 0 {
+            spans.push(Span::styled(
+                format!(" −{tr_percent}%"),
+                Style::default().fg(accent_green),
+            ));
+        }
         if tr != tr_startup {
             spans.push(Span::styled(
                 format!(" ({}🚀)", tr_startup),

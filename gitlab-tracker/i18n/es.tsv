@@ -34,6 +34,7 @@
 	Auto-polling	Sondeo automático
 	({n} at startup)	({n} al iniciar)
 	{name}: about {n} API requests at the next refresh	{name}: unas {n} peticiones a la API en la próxima actualización
+	{saved} fewer than reading each item on its own ({n} instead of {before})	{saved} menos que leyendo cada elemento por separado ({n} en lugar de {before})
 	{n} at startup, from the saved state	{n} al iniciar, desde el estado guardado
 	Another project is still loading	Otro proyecto todavía se está cargando
 	Loading {project}…	Cargando {project}…

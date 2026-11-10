@@ -350,7 +350,9 @@ async fn build_session(
     app.dismissed_mr_ids = dismissed_mr_ids;
 
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<AppEvent>();
-    let api_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+    // One limit per GitLab instance, shared by every project (tab) open on it.
+    let api_semaphore =
+        gitlab_tracker_core::pacing::permits(&app.base_url, MAX_CONCURRENT_REQUESTS);
 
     // Inject the tracker provider and derive colour maps from it.
     // Each provider owns its config and exposes `label_colors()` — main.rs only
