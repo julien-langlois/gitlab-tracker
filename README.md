@@ -248,10 +248,10 @@ The application requires a GitLab project configuration and an API Personal Acce
 
 For teams and CI pipelines, you can still pre-configure everything via a `.env` file to skip the prompts entirely:
 
-1. Copy the provided template to create your local `.env` file:
+1. Copy the provided template to `~/.config/gitlab-tracker/.env` (the only `.env` read: one in the current directory or a parent is ignored, so a cloned repository cannot point the app — and your token — at another server):
 
    ```bash
-   cp .env.example .env
+   cp .env.example ~/.config/gitlab-tracker/.env
    ```
 
 2. Open `.env` and specify your project details:
@@ -290,7 +290,7 @@ Settings edited from the TUI (columns `C`, branches in Insert mode, settings das
 4. **`config.json`** (`~/.config/gitlab-tracker/config.json`) — legacy global file, a default template is written on first run
 5. **Built-in defaults** (`https://gitlab.com`, `["main"]` for default branches, 900 s refresh)
 
-`.env` is read from the current directory, else from `~/.config/gitlab-tracker/.env`. Layers 2, 4 and 5 are merged with [Figment](https://crates.io/crates/figment); each higher-priority source only overrides the keys it explicitly sets.
+`.env` is read from `~/.config/gitlab-tracker/.env` only (made private to your account, `0700`, at startup). Layers 2, 4 and 5 are merged with [Figment](https://crates.io/crates/figment); each higher-priority source only overrides the keys it explicitly sets.
 
 #### `GITLAB_TRACKER_*` — available overrides
 
@@ -330,7 +330,8 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
  │   3. Interactive CLI prompt → saved to projects.toml         │
  ├──────────────────────────────────────────────────────────────┤
  │ GITLAB_TOKEN                                                 │
- │   1. GITLAB_TOKEN environment variable (if set)              │
+ │   1. GITLAB_TOKEN environment variable, only for the         │
+ │      instance GITLAB_URL names (REDMINE_TOKEN: REDMINE_URL)  │
  │   2. Native OS Keyring — keyed per GitLab instance URL       │
  │      (multi-tenant: each instance has its own slot)          │
  │   3. Interactive CLI prompt → saved to OS Keyring            │
@@ -364,6 +365,9 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
 
 4. **No token, no start:**
    If the prompt is left empty (or cannot be read), the app exits with `A GitLab Personal Access Token is required (GITLAB_TOKEN, OS keyring or prompt)` instead of starting a dashboard that cannot fetch anything. The token is kept in zeroized memory and never written to disk by the app.
+
+5. **Sent only where it belongs:**
+   A token is sent over `https://` (an `http://` URL is refused in the window, and warned about in the terminal, unless it points at this machine), and a redirect to another server fails the request instead of handing the token over.
 
 ---
 
@@ -741,7 +745,7 @@ Requirements:
 * the selected project must have a `[project.tracker]` section;
 * the tracker provider must support status discovery through `TicketTransitionProvider`;
 * for Redmine, the binary must be built with `--features redmine`;
-* the Redmine token must be available via `REDMINE_TOKEN`, OS keyring, or the interactive token prompt.
+* the Redmine token must be available via `REDMINE_TOKEN` (used only when `REDMINE_URL` names the same instance), OS keyring, or the interactive token prompt.
 
 ---
 

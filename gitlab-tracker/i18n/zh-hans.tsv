@@ -800,7 +800,8 @@ date	Merged	合并时间
 	Pick several MRs, for the bulk actions	选择多个 MR，用于批量操作
 	Command palette: pages, views, MRs and commands	命令面板：页面、视图、MR 和命令
 	Close a dialog / leave the statistics / unpick the MRs	关闭对话框 / 离开统计 / 取消选择 MR
-	The GitLab URL starts with https:// (or http://), without spaces.	GitLab URL 须以 https://（或 http://）开头，且不含空格。
+	The GitLab URL starts with https:// (http:// only for this machine), without spaces.	GitLab URL 须以 https:// 开头（http:// 仅限本机），且不含空格。
+	The Redmine URL starts with https:// (http:// only for this machine): the token must not cross the network unencrypted.	Redmine URL 须以 https:// 开头（http:// 仅限本机）：令牌不得以明文在网络上传输。
 	The project is its numeric id or its path (group/project), without spaces.	项目为其数字 ID 或路径（组/项目），不含空格。
 	Branch names have no spaces; separate them with commas.	分支名称不含空格；请用逗号分隔。
 	The MRs not on {branch} yet	尚未进入 {branch} 的 MR

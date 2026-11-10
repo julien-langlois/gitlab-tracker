@@ -800,7 +800,8 @@ date	Merged	Gemergt
 	Pick several MRs, for the bulk actions	Mehrere MRs auswählen, für Sammelaktionen
 	Command palette: pages, views, MRs and commands	Befehlspalette: Seiten, Ansichten, MRs und Befehle
 	Close a dialog / leave the statistics / unpick the MRs	Dialog schließen / Statistik verlassen / MR-Auswahl aufheben
-	The GitLab URL starts with https:// (or http://), without spaces.	Die GitLab-URL beginnt mit https:// (oder http://), ohne Leerzeichen.
+	The GitLab URL starts with https:// (http:// only for this machine), without spaces.	Die GitLab-URL beginnt mit https:// (http:// nur für diesen Rechner), ohne Leerzeichen.
+	The Redmine URL starts with https:// (http:// only for this machine): the token must not cross the network unencrypted.	Die Redmine-URL beginnt mit https:// (http:// nur für diesen Rechner): Das Token darf nicht unverschlüsselt durchs Netz gehen.
 	The project is its numeric id or its path (group/project), without spaces.	Das Projekt ist seine numerische ID oder sein Pfad (Gruppe/Projekt), ohne Leerzeichen.
 	Branch names have no spaces; separate them with commas.	Branch-Namen haben keine Leerzeichen; trenne sie mit Kommas.
 	The MRs not on {branch} yet	Die MRs, die noch nicht auf {branch} sind

@@ -24,6 +24,7 @@ pub use keyring::get_or_prompt_token;
 pub async fn check_token(redmine_url: &str, token: &str) -> Result<(), TrackerError> {
     let http = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
+        .redirect(gitlab_tracker_core::http::same_origin_redirects())
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .unwrap_or_default();
@@ -84,6 +85,7 @@ impl RedmineProvider {
             token,
             http: reqwest::Client::builder()
                 .connect_timeout(std::time::Duration::from_secs(10))
+                .redirect(gitlab_tracker_core::http::same_origin_redirects())
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .unwrap_or_default(),

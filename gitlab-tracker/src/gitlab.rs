@@ -40,6 +40,7 @@ pub(crate) fn http_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
+            .redirect(gitlab_tracker_core::http::same_origin_redirects())
             .timeout(Duration::from_secs(30))
             .build()
             .unwrap_or_default()

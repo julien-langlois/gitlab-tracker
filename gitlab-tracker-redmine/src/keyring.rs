@@ -23,7 +23,11 @@ fn account_for(redmine_url: &str) -> String {
 pub fn get_or_prompt_token(redmine_url: &str) -> Option<Zeroizing<String>> {
     let hint = format!("For {redmine_url} — leave empty to disable Redmine for this project.");
     gitlab_tracker_core::secrets::resolve_secret(&gitlab_tracker_core::secrets::SecretSource {
-        env_var: "REDMINE_TOKEN",
+        env: gitlab_tracker_core::secrets::EnvToken {
+            var: "REDMINE_TOKEN",
+            url_var: "REDMINE_URL",
+            instance_url: redmine_url,
+        },
         keyring_service: KEYRING_SERVICE,
         keyring_account: &account_for(redmine_url),
         label: "Redmine API token",
@@ -44,7 +48,11 @@ pub fn delete_token(redmine_url: &str) -> bool {
 /// (`REDMINE_TOKEN` or the keyring). Blocks on the keyring.
 pub fn has_token(redmine_url: &str) -> bool {
     gitlab_tracker_core::secrets::has_secret(
-        "REDMINE_TOKEN",
+        gitlab_tracker_core::secrets::EnvToken {
+            var: "REDMINE_TOKEN",
+            url_var: "REDMINE_URL",
+            instance_url: redmine_url,
+        },
         KEYRING_SERVICE,
         &account_for(redmine_url),
     )

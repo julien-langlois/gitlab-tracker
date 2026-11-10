@@ -574,11 +574,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Load .env before anything else so that all std::env::var() calls below
     // (including inside load_or_create_config_async) already see the env vars.
-    if dotenvy::dotenv().is_err() {
-        if let Some(config_dir) = storage::get_save_dir() {
-            let global_env = config_dir.join(".env");
-            let _ = dotenvy::from_path(global_env);
-        }
+    // Only the one in the config directory: a `.env` in the current directory (or a
+    // parent, as `dotenvy::dotenv()` searches) could come with a cloned repository
+    // and point GITLAB_URL / REDMINE_URL at a server that would receive the token.
+    if let Some(config_dir) = storage::get_save_dir() {
+        storage::restrict_to_owner(&config_dir);
+        let _ = dotenvy::from_path(config_dir.join(".env"));
     }
 
     // Initialise logging right after .env (which may set RUST_LOG) so that config

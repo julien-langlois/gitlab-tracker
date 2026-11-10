@@ -800,7 +800,8 @@ date	Merged	Fusionada
 	Pick several MRs, for the bulk actions	Seleccionar varias MR, para las acciones en bloque
 	Command palette: pages, views, MRs and commands	Paleta de comandos: páginas, vistas, MR y comandos
 	Close a dialog / leave the statistics / unpick the MRs	Cerrar un diálogo / salir de las estadísticas / deseleccionar las MR
-	The GitLab URL starts with https:// (or http://), without spaces.	La URL de GitLab empieza por https:// (o http://), sin espacios.
+	The GitLab URL starts with https:// (http:// only for this machine), without spaces.	La URL de GitLab empieza por https:// (http:// solo para este equipo), sin espacios.
+	The Redmine URL starts with https:// (http:// only for this machine): the token must not cross the network unencrypted.	La URL de Redmine empieza por https:// (http:// solo para este equipo): el token no debe viajar sin cifrar por la red.
 	The project is its numeric id or its path (group/project), without spaces.	El proyecto es su id numérico o su ruta (grupo/proyecto), sin espacios.
 	Branch names have no spaces; separate them with commas.	Los nombres de rama no llevan espacios; sepáralos con comas.
 	The MRs not on {branch} yet	Las MR que aún no están en {branch}

@@ -351,10 +351,17 @@ impl ProjectForm {
                         return;
                     }
                 };
+                let redmine_url = normalize(&self.redmine_url);
+                if !redmine_url.is_empty()
+                    && !gitlab_tracker_core::secrets::is_secure_url(&redmine_url)
+                {
+                    self.errors = vec![tl("The Redmine URL starts with https:// (http:// only for this machine): the token must not cross the network unencrypted.").to_string()];
+                    return;
+                }
                 let request = NewProject {
                     checked,
                     token: std::mem::take(&mut self.token),
-                    redmine_url: normalize(&self.redmine_url),
+                    redmine_url,
                     redmine_token: std::mem::take(&mut self.redmine_token),
                     make_active: self.make_active,
                 };
@@ -367,6 +374,25 @@ impl ProjectForm {
                 if gitlab && self.token.trim().is_empty() {
                     self.errors =
                         vec![tl("Type the GitLab token: nothing can load without it.").to_string()];
+                    return;
+                }
+                // A project saved with http:// before this check existed: refuse to
+                // send it a token typed now, rather than let it cross in clear.
+                let secure = gitlab_tracker_core::secrets::is_secure_url;
+                if !self.token.trim().is_empty() && !secure(&entry.gitlab_url) {
+                    self.errors = vec![tl(
+                        "The GitLab URL starts with https:// (http:// only for this machine), without spaces.",
+                    )
+                    .to_string()];
+                    return;
+                }
+                if !self.redmine_token.trim().is_empty()
+                    && entry.tracker.as_ref().is_some_and(|t| !secure(&t.url))
+                {
+                    self.errors = vec![tl(
+                        "The Redmine URL starts with https:// (http:// only for this machine): the token must not cross the network unencrypted.",
+                    )
+                    .to_string()];
                     return;
                 }
                 let token = std::mem::take(&mut self.token);
@@ -663,7 +689,7 @@ struct Checked {
     branches: Vec<String>,
 }
 
-/// Checks the form: an http(s) URL without spaces (its trailing `/` dropped), a
+/// Checks the form: an https URL (http only to this machine) without spaces (its trailing `/` dropped), a
 /// project id or path without spaces, branch names without spaces, and the name
 /// cleaned like the settings do.
 fn check(
@@ -674,11 +700,13 @@ fn check(
 ) -> Result<Checked, Vec<&'static str>> {
     let mut errors = Vec::new();
     let url = url.trim().trim_end_matches('/').to_string();
-    let url_ok = (url.starts_with("https://") || url.starts_with("http://"))
+    let url_ok = gitlab_tracker_core::secrets::is_secure_url(&url)
         && url.len() > "https://".len()
         && !url.contains(char::is_whitespace);
     if !url_ok {
-        errors.push("The GitLab URL starts with https:// (or http://), without spaces.");
+        errors.push(
+            "The GitLab URL starts with https:// (http:// only for this machine), without spaces.",
+        );
     }
     let project_id = project_id.trim().trim_matches('/').to_string();
     if project_id.is_empty() || project_id.contains(char::is_whitespace) {

@@ -637,7 +637,11 @@ pub async fn add_project(entry: ProjectEntry, active: bool) {
 pub fn has_gitlab_token(gitlab_url: &str) -> bool {
     migrate_legacy_keyring_entry(gitlab_url);
     gitlab_tracker_core::secrets::has_secret(
-        "GITLAB_TOKEN",
+        gitlab_tracker_core::secrets::EnvToken {
+            var: "GITLAB_TOKEN",
+            url_var: "GITLAB_URL",
+            instance_url: gitlab_url,
+        },
         KEYRING_SERVICE,
         &account_for(gitlab_url),
     )
@@ -1011,7 +1015,11 @@ pub fn migrate_legacy_keyring_entry(gitlab_url: &str) {
 /// given — the caller stops, as nothing works without one.
 pub fn get_or_prompt_token(gitlab_url: &str) -> Option<Zeroizing<String>> {
     gitlab_tracker_core::secrets::resolve_secret(&gitlab_tracker_core::secrets::SecretSource {
-        env_var: "GITLAB_TOKEN",
+        env: gitlab_tracker_core::secrets::EnvToken {
+            var: "GITLAB_TOKEN",
+            url_var: "GITLAB_URL",
+            instance_url: gitlab_url,
+        },
         keyring_service: KEYRING_SERVICE,
         keyring_account: &account_for(gitlab_url),
         label: "GitLab Personal Access Token",
@@ -1023,6 +1031,21 @@ pub fn get_or_prompt_token(gitlab_url: &str) -> Option<Zeroizing<String>> {
 pub fn get_save_dir() -> Option<PathBuf> {
     let project_dirs = directories::ProjectDirs::from("com", "gitlab-tracker", "gitlab-tracker")?;
     Some(project_dirs.config_dir().to_path_buf())
+}
+
+/// Creates `dir` if needed and, on Unix, makes it private to its owner (`0700`):
+/// its logs, caches and `.env` describe the user's projects and may hold tokens
+/// (`.env`), so other local accounts must not read them. Best effort: a failure is
+/// logged later by the code that needs the directory.
+pub fn restrict_to_owner(dir: &Path) {
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
 }
 
 /// Under test the real config directory is never used: a test gets the directory
