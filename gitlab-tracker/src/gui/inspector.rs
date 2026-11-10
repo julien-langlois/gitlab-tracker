@@ -14,8 +14,8 @@ use super::widgets::{
 use super::{tones, GuiApp, InspectorSection, Page};
 use crate::actions::Action;
 use crate::app::{TimeLogState, TrackerView};
-use crate::i18n::{tc, tf, tl, tn};
-use crate::models::{BranchPresence, Effort, GitlabMrState, MrStatus, PipelineState, TrackedMr};
+use crate::i18n::{tf, tl, tn};
+use crate::models::{BranchPresence, Effort, MrStatus, PipelineState, TrackedMr};
 use crate::utils::{
     awaiting_review_by, format_relative_date, matches_gitlab_username, review_waiting_since,
 };
@@ -1316,18 +1316,6 @@ pub(super) fn planning_body(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
     }
 }
 
-/// "date time (relative)" for an ISO timestamp.
-fn when(iso: Option<&str>) -> String {
-    match iso {
-        Some(s) => format!(
-            "{} ({})",
-            s.get(..16).unwrap_or(s).replace('T', " "),
-            format_relative_date(s)
-        ),
-        None => tl("Unknown").into(),
-    }
-}
-
 /// One step of the history timeline.
 pub(super) struct Step {
     pub title: String,
@@ -1342,12 +1330,8 @@ pub(super) struct Step {
 
 /// Where a merged MR went after its merge, nearest first: the branches fed by
 /// its target (`sync`, side steps) and those up to production (`promotion`).
-/// `date` writes when it reached a branch, as the timeline dates its steps.
-pub(super) fn flow_steps(
-    g: &GuiApp,
-    mr: &TrackedMr,
-    date: impl Fn(&str) -> String,
-) -> (Vec<Step>, Vec<Step>) {
+/// When it reached a branch is dated as the timeline dates its steps.
+pub(super) fn flow_steps(g: &GuiApp, mr: &TrackedMr) -> (Vec<Step>, Vec<Step>) {
     let tones = &g.theme.tones;
     let path = g.app.branch_flow().path(&mr.target_branch);
     let detail = |branch: &str, label: &str| {
@@ -1357,7 +1341,7 @@ pub(super) fn flow_steps(
             .get(&(mr.id.clone(), branch.to_string()))
             .map(|at| at.with_timezone(&chrono::Local).to_rfc3339());
         match arrived {
-            Some(at) => format!("{label} · {}", date(&at)),
+            Some(at) => format!("{label} · {}", format_relative_date(&at)),
             None => label.to_string(),
         }
     };
@@ -1412,62 +1396,11 @@ pub(super) fn flow_steps(
     (sync, promotion)
 }
 
+/// The same steps as the MR page's Timeline (`mr_page::timeline_steps`), the
+/// commit and the source branch under them.
 fn history(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = &g.theme;
-    let tones = &theme.tones;
-    let mut steps = vec![Step {
-        title: tl("Created").into(),
-        detail: Some(when(mr.created_at.as_deref())),
-        color: tones.blue.fg,
-        pending: false,
-        side: false,
-    }];
-    match mr.state {
-        GitlabMrState::Merged => {
-            let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
-            steps.push(Step {
-                title: match mr.target_branch.as_str() {
-                    "" | "unknown" => tc("date", "Merged").into(),
-                    target => tf("Merged into {branch}", &[("branch", target)]),
-                },
-                detail: Some(tf(
-                    "{when} by {name}",
-                    &[("when", &when(mr.merged_at.as_deref())), ("name", by)],
-                )),
-                color: tones.purple.fg,
-                pending: false,
-                side: false,
-            });
-            let (sync, promotion) = flow_steps(g, mr, |at| when(Some(at)));
-            steps.extend(sync);
-            steps.extend(promotion);
-        }
-        GitlabMrState::Closed => steps.push(Step {
-            title: tl("Closed").into(),
-            detail: Some(when(mr.updated_at.as_deref())),
-            color: tones.gray.fg,
-            pending: false,
-            side: false,
-        }),
-        GitlabMrState::Opened => {
-            steps.push(Step {
-                title: tl("Last update").into(),
-                detail: Some(when(mr.updated_at.as_deref())),
-                color: tones.amber.fg,
-                pending: false,
-                side: false,
-            });
-            steps.push(Step {
-                title: tl("Merge").into(),
-                detail: Some(tl("not merged yet").into()),
-                color: tones.gray.fg,
-                pending: true,
-                side: false,
-            });
-        }
-    }
-    // The newest on top, the steps still to come above all.
-    steps.reverse();
+    let steps = super::mr_page::timeline_steps(g, mr, None);
     section(ui, theme, tl("History"), |ui| {
         timeline(ui, theme, &steps);
         ui.add_space(4.0);

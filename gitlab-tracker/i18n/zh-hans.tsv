@@ -1771,3 +1771,8 @@ state	Closed	已关闭
 @plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	各阶段：本周期内合并的 {n} 个 MR 的中位数
 @plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	本周期有 {n} 个请求尚未回复。
 @plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	基于其出现的 {n} 个已跟踪 MR：未跟踪的 MR 不计入。
+	Milestone set: {milestone}	设置里程碑：{milestone}
+	Milestone changed: {old} → {new}	里程碑变更：{old} → {new}
+	Milestone removed: {milestone}	移除里程碑：{milestone}
+	Merged by {who}	由 {who} 合并
+date	Closed	已关闭

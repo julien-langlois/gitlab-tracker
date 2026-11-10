@@ -2001,6 +2001,7 @@ impl App {
     ) {
         let ctx = self.fetch_context();
         let mut batch = Vec::new();
+        let mut settled = Vec::new();
 
         for saved in saved_mrs {
             let initial_status = if !saved.found_branches.is_empty()
@@ -2047,9 +2048,13 @@ impl App {
                     },
                 );
                 batch.push((mr.id.clone(), cached));
+            } else {
+                // Not read again, but changes made since (milestone…) are looked for.
+                settled.push(crate::gitlab::SettledMr::from(&mr));
             }
             self.mrs.push(mr);
         }
+        crate::gitlab::spawn_settled_check(ctx.clone(), settled, semaphore.clone(), tx.clone());
         crate::gitlab::spawn_mr_fetches(ctx, batch, semaphore, tx);
 
         if !self.mrs.is_empty() {
@@ -2167,14 +2172,17 @@ impl App {
 
         let mut ticket_links = Vec::new();
         let mut batch = Vec::new();
+        let mut settled = Vec::new();
         for mr in &mut self.mrs {
             if let MrStatus::MergedIn(ref found) = mr.status {
-                // Skip refresh for MRs that are fully merged into all branches —
-                // state != Opened ensures we don't skip still-open MRs.
+                // MRs fully merged into all branches are only checked for changes
+                // (milestone, title…) in one list read — state != Opened ensures
+                // we don't skip still-open MRs.
                 if self.branches.iter().all(|b| found.contains(b))
                     && mr.sha.is_some()
                     && mr.state != GitlabMrState::Opened
                 {
+                    settled.push(crate::gitlab::SettledMr::from(&*mr));
                     continue;
                 }
             }
@@ -2191,6 +2199,7 @@ impl App {
                 ticket_links.push((ticket.id.clone(), mr.id.clone()));
             }
         }
+        crate::gitlab::spawn_settled_check(ctx.clone(), settled, semaphore.clone(), tx.clone());
         crate::gitlab::spawn_mr_fetches(ctx, batch, semaphore.clone(), tx.clone());
         if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
             spawn_tickets_fetch(provider, ticket_links, tx);
@@ -2642,6 +2651,29 @@ impl App {
                     // Persist an advanced anchor even when nothing new was found.
                     anchor_moved
                 }
+            }
+
+            AppEvent::SettledMrsChanged(ids) => {
+                let ctx = self.fetch_context();
+                let mut batch = Vec::new();
+                for mr in &mut self.mrs {
+                    // Already being read (a manual refresh since the check): skip.
+                    if !ids.contains(&mr.id)
+                        || self.pending_refresh_fetches.contains(&mr.id)
+                        || self.pending_initial_fetches.contains(&mr.id)
+                    {
+                        continue;
+                    }
+                    mr.status = MrStatus::Loading;
+                    batch.push((mr.id.clone(), CachedMrData::from(&*mr)));
+                    self.pending_refresh_fetches.insert(mr.id.clone());
+                }
+                tracing::info!(
+                    mrs = batch.len(),
+                    "Settled MRs changed on GitLab — refreshing"
+                );
+                crate::gitlab::spawn_mr_fetches(ctx, batch, semaphore.clone(), tx.clone());
+                false
             }
 
             AppEvent::Tick => self.on_tick(&semaphore, tx),

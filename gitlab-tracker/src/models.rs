@@ -260,6 +260,22 @@ pub struct MrData {
     /// changes it, whatever `updated_at` does.
     #[serde(default)]
     pub notes_seen: Option<u32>,
+    /// When the milestone was set, changed or removed, oldest first
+    /// (`resource_milestone_events`); `None`: never read.
+    #[serde(default)]
+    pub milestone_events: Option<Vec<MilestoneEvent>>,
+}
+
+/// One milestone change of an MR, as GitLab records it: `add` when a milestone
+/// is set (a change is an `add` of the new one), `remove` when it is taken off.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct MilestoneEvent {
+    pub at: String,
+    /// The milestone set, or the one removed (`None`: deleted since).
+    pub milestone: Option<String>,
+    pub added: bool,
+    /// Who did it, as "Full Name (@login)".
+    pub by: Option<String>,
 }
 
 /// A resolvable discussion thread of an MR.
@@ -875,6 +891,9 @@ pub enum AppEvent {
         mr_ids: Vec<String>,
         next_anchor: String,
     },
+    /// Settled MRs (merged on every tracked branch, left out of refresh cycles)
+    /// that changed on GitLab since their last read: to refresh.
+    SettledMrsChanged(Vec<String>),
     /// Recent commits of `branch`, scanned to recognise MRs copied there under
     /// other SHAs (`None`: the scan failed, the previous result is kept).
     BranchCommitsLoaded {

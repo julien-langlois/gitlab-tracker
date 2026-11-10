@@ -20,8 +20,10 @@ use super::{details, tones, GuiApp, Page};
 use crate::actions::Action;
 use crate::app::App;
 use crate::gitlab_detail::{ConflictFile, Overview, PageData, Rule, Thread};
-use crate::i18n::{tf, tl, tn};
-use crate::models::{BranchPresence, Effort, GitlabMrState, MrStatus, PipelineState, TrackedMr};
+use crate::i18n::{tc, tf, tl, tn};
+use crate::models::{
+    BranchPresence, Effort, GitlabMrState, MilestoneEvent, MrStatus, PipelineState, TrackedMr,
+};
 use crate::utils::{format_relative_date, matches_gitlab_username};
 use gitlab_tracker_core::MergeabilityStatus;
 
@@ -2147,7 +2149,7 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
 fn context(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     side_card(ui, &theme, tl("Timeline"), |ui| {
-        inspector::timeline(ui, &theme, &steps(g, mr, data))
+        inspector::timeline(ui, &theme, &timeline_steps(g, mr, data))
     });
     approvals(g, ui, mr, data);
     related(g, ui, mr);
@@ -2177,19 +2179,81 @@ fn side_card(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut Ui)
     ui.add_space(12.0);
 }
 
-/// The MR's life, newest first: the branches up to production, then (oldest
-/// last) review requests and reviews, pushes, pipelines, approval and merge,
-/// the branches its changes came down to branching off just above the merge.
-fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
+/// A milestone change as the timeline tells it, oldest first: when, what
+/// (`set`, `changed from`, `removed`) and by whom. GitLab records a change as
+/// the `add` of the new milestone, and some versions as a `remove` then an
+/// `add` at the same moment: both read as one change.
+#[derive(Debug, PartialEq)]
+pub(super) enum MilestoneChange<'a> {
+    Set(&'a str),
+    Changed(&'a str, &'a str),
+    Removed(&'a str),
+}
+
+pub(super) fn milestone_changes(
+    events: &[MilestoneEvent],
+) -> Vec<(&str, MilestoneChange<'_>, Option<&str>)> {
+    const DELETED: &str = "?";
+    let mut changes = Vec::new();
+    let mut current: Option<&str> = None;
+    let mut i = 0;
+    while i < events.len() {
+        let e = &events[i];
+        let title = e.milestone.as_deref().unwrap_or(DELETED);
+        let next = events.get(i + 1);
+        if !e.added {
+            // A remove then an add at the same moment: one change.
+            if let Some(n) = next.filter(|n| n.added && n.at == e.at) {
+                let new = n.milestone.as_deref().unwrap_or(DELETED);
+                changes.push((
+                    n.at.as_str(),
+                    MilestoneChange::Changed(title, new),
+                    n.by.as_deref(),
+                ));
+                current = Some(new);
+                i += 2;
+                continue;
+            }
+            changes.push((
+                e.at.as_str(),
+                MilestoneChange::Removed(title),
+                e.by.as_deref(),
+            ));
+            current = None;
+        } else {
+            let change = match current {
+                Some(old) if old != title => MilestoneChange::Changed(old, title),
+                _ => MilestoneChange::Set(title),
+            };
+            changes.push((e.at.as_str(), change, e.by.as_deref()));
+            current = Some(title);
+        }
+        i += 1;
+    }
+    changes
+}
+
+/// The MR's life, newest first, shared by the MR page's Timeline and the MR
+/// list's History: the steps still to come (the merge of an open MR, the
+/// branches up to production), then (oldest last) review requests and
+/// reviews, pushes, pipelines, milestone changes, approval and merge or
+/// close, the branches its changes came down to branching off just above the
+/// merge. `data` (the MR page's extra reads) only gives fuller names.
+pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
     let t = &g.theme.tones;
     let mut dated: Vec<(String, Step)> = Vec::new();
-    let mut add = |at: Option<&str>, title: String, color: egui::Color32| {
+    let mut add = |at: Option<&str>, title: String, by: Option<&str>, color: egui::Color32| {
         if let Some(at) = at {
+            let when = format_relative_date(at);
+            let detail = match by {
+                Some(name) => tf("{when} by {name}", &[("when", &when), ("name", name)]),
+                None => when,
+            };
             dated.push((
                 at.to_string(),
                 Step {
                     title,
-                    detail: Some(format_relative_date(at)),
+                    detail: Some(detail),
                     color,
                     pending: false,
                     side: false,
@@ -2197,7 +2261,12 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
             ));
         }
     };
-    add(mr.created_at.as_deref(), tl("Created").into(), t.blue.fg);
+    add(
+        mr.created_at.as_deref(),
+        tl("Created").into(),
+        None,
+        t.blue.fg,
+    );
     if let Some(review) = &mr.review {
         for (who, at) in &review.review_requested_at {
             let display = display_of(mr, data, who);
@@ -2205,22 +2274,26 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
             add(
                 Some(at),
                 tf("Review requested from {who}", &[("who", name)]),
+                None,
                 t.gray.fg,
             );
         }
         add(
             review.first_review_at.as_deref(),
             tl("First review").into(),
+            None,
             t.teal.fg,
         );
         add(
             review.last_push_at.as_deref(),
             tl("Last push").into(),
+            None,
             t.blue.fg,
         );
         add(
             review.approved_at.as_deref(),
             tl("Approved").into(),
+            None,
             t.green.fg,
         );
     }
@@ -2232,27 +2305,63 @@ fn steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> Vec<Step> {
                 "Pipeline #{id} · {status}",
                 &[("id", &p.id.to_string()), ("status", label)],
             ),
+            None,
             tone.fg,
         );
     }
-    if mr.state == GitlabMrState::Merged {
-        let by = mr.merged_by.as_deref().unwrap_or("?");
-        add(
-            mr.merged_at.as_deref(),
-            tf(
-                "Merged into {branch} by {who}",
-                &[("branch", &mr.target_branch), ("who", by)],
-            ),
-            t.purple.fg,
-        );
+    match mr.state {
+        GitlabMrState::Merged => {
+            let by = mr.merged_by.as_deref().unwrap_or(tl("Unknown"));
+            let title = match mr.target_branch.as_str() {
+                "" | "unknown" => tf("Merged by {who}", &[("who", by)]),
+                target => tf(
+                    "Merged into {branch} by {who}",
+                    &[("branch", target), ("who", by)],
+                ),
+            };
+            add(mr.merged_at.as_deref(), title, None, t.purple.fg);
+        }
+        // GitLab's close date is not kept: the last update stands for it.
+        GitlabMrState::Closed => add(
+            mr.updated_at.as_deref(),
+            tc("date", "Closed").into(),
+            None,
+            t.gray.fg,
+        ),
+        GitlabMrState::Opened => {}
     }
-    // Built oldest first, then turned over: the newest on top, as in the
-    // History of the MR list's inspector, the steps still to come above all.
+    for (at, change, by) in milestone_changes(mr.milestone_events.as_deref().unwrap_or_default()) {
+        let title = match change {
+            MilestoneChange::Set(m) => tf("Milestone set: {milestone}", &[("milestone", m)]),
+            MilestoneChange::Changed(old, new) => tf(
+                "Milestone changed: {old} → {new}",
+                &[("old", old), ("new", new)],
+            ),
+            MilestoneChange::Removed(m) => {
+                tf("Milestone removed: {milestone}", &[("milestone", m)])
+            }
+        };
+        let name = by.map(|by| split_person(by).0);
+        add(Some(at), title, name, t.orange.fg);
+    }
+    // Built oldest first, then turned over: the newest on top, the steps
+    // still to come above all.
     dated.sort_by(|a, b| a.0.cmp(&b.0));
     if mr.state != GitlabMrState::Merged {
-        return dated.into_iter().rev().map(|(_, s)| s).collect();
+        let mut steps: Vec<Step> = dated.into_iter().map(|(_, s)| s).collect();
+        if mr.state == GitlabMrState::Opened {
+            steps.push(Step {
+                title: tl("Merge").into(),
+                detail: Some(tl("not merged yet").into()),
+                color: t.gray.fg,
+                pending: true,
+                side: false,
+            });
+        }
+        steps.reverse();
+        return steps;
     }
-    let (sync, promotion) = super::inspector::flow_steps(g, mr, format_relative_date);
+    let (sync, promotion) = super::inspector::flow_steps(g, mr);
     // The branches its changes come down to branch off right at the merge.
     let merged_at = mr.merged_at.clone().unwrap_or_default();
     let split = dated.partition_point(|(at, _)| *at <= merged_at);
@@ -2583,6 +2692,40 @@ fn compared(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn milestone_changes_read_as_set_changed_and_removed() {
+        let event = |at: &str, milestone: Option<&str>, added| MilestoneEvent {
+            at: at.into(),
+            milestone: milestone.map(str::to_string),
+            added,
+            by: Some("Bob (@bob)".into()),
+        };
+        let events = [
+            event("1", Some("1.4"), true),
+            event("2", Some("1.5"), true),
+            // A change recorded as a remove then an add at the same moment.
+            event("3", Some("1.5"), false),
+            event("3", Some("1.6"), true),
+            event("4", Some("1.6"), false),
+            // Deleted since: still told.
+            event("5", None, true),
+        ];
+        let changes: Vec<_> = milestone_changes(&events)
+            .into_iter()
+            .map(|(at, change, _)| (at, change))
+            .collect();
+        assert_eq!(
+            changes,
+            [
+                ("1", MilestoneChange::Set("1.4")),
+                ("2", MilestoneChange::Changed("1.4", "1.5")),
+                ("3", MilestoneChange::Changed("1.5", "1.6")),
+                ("4", MilestoneChange::Removed("1.6")),
+                ("5", MilestoneChange::Set("?")),
+            ]
+        );
+    }
 
     #[tokio::test]
     async fn the_checks_put_what_blocks_first() {

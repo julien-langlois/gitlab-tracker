@@ -400,6 +400,8 @@ impl From<&crate::models::TrackedMr> for CachedMrData {
                 .then_some(mr.mergeability),
             review_read_at: mr.review_read_at.clone(),
             notes_seen: mr.notes_seen,
+            milestone: mr.milestone.clone(),
+            milestone_events: mr.milestone_events.clone(),
         }
     }
 }
@@ -442,6 +444,9 @@ impl CountApiCalls for crate::models::TrackedMr {
         // Before list reads and review caching, every MR read its own page and an
         // open one its discussions and approvals at every refresh.
         let saved = (1 - base) + if open { 2 - discussions } else { 0 };
+        // The milestone history: read once, then again only when the milestone
+        // changes (counted with the discussions, the other timeline read).
+        let discussions = discussions + usize::from(self.milestone_events.is_none());
 
         // ── 3. Branch detection via /refs — only when a merge SHA is present,
         //       plus the one-off fetch of the merge / squash commit fingerprint ──
@@ -582,6 +587,10 @@ pub struct CachedMrData {
     /// When discussions and approvals were last read, and GitLab's note count then.
     pub review_read_at: Option<String>,
     pub notes_seen: Option<u32>,
+    /// Milestone at the previous fetch and its history: the history is read
+    /// again only when the milestone changed (`milestone_events_due`).
+    pub milestone: Option<String>,
+    pub milestone_events: Option<Vec<crate::models::MilestoneEvent>>,
 }
 
 /// Controls which cached fields are bypassed during a fetch cycle.
@@ -814,6 +823,49 @@ async fn fetch_discussions(ctx: &FetchContext, mr_id: &str) -> Option<Vec<Discus
         ctx.base_url, ctx.project_id, mr_id
     );
     get_all_pages(ctx, &url).await
+}
+
+/// One entry of `/resource_milestone_events`.
+#[derive(serde::Deserialize)]
+struct GitLabMilestoneEvent {
+    created_at: String,
+    action: String,
+    milestone: Option<GitLabMilestone>,
+    user: Option<crate::models::GitLabUser>,
+}
+
+/// When the MR's milestone was set, changed or removed, oldest first (`None` on
+/// any error).
+async fn fetch_milestone_events(
+    ctx: &FetchContext,
+    mr_id: &str,
+) -> Option<Vec<crate::models::MilestoneEvent>> {
+    let url = format!(
+        "{}/api/v4/projects/{}/merge_requests/{}/resource_milestone_events?",
+        ctx.base_url, ctx.project_id, mr_id
+    );
+    let mut events: Vec<crate::models::MilestoneEvent> =
+        get_all_pages::<GitLabMilestoneEvent>(ctx, &url)
+            .await?
+            .into_iter()
+            .map(|e| crate::models::MilestoneEvent {
+                at: e.created_at,
+                milestone: e.milestone.map(|m| m.title),
+                added: e.action != "remove",
+                by: e.user.map(|u| format!("{} (@{})", u.name, u.username)),
+            })
+            .collect();
+    events.sort_by(|a, b| a.at.cmp(&b.at));
+    Some(events)
+}
+
+/// Whether the milestone events must be read: never read yet, a forced refresh,
+/// or the milestone is no longer the one they were read with. A change undone
+/// between two refreshes (A → B → A) is only seen by a forced refresh.
+fn milestone_events_due(cached: &CachedMrData, milestone: Option<&str>) -> bool {
+    cached.cache_policy.notes_stale()
+        || cached.milestone_events.is_none()
+        || cached.milestone.as_deref() != milestone
 }
 
 /// `/approvals` response: only the current approvers matter.
@@ -1602,6 +1654,68 @@ pub fn spawn_mr_fetches(
     });
 }
 
+/// An MR that refresh cycles leave out (merged on every tracked branch), as it
+/// was last read.
+pub struct SettledMr {
+    pub id: String,
+    pub updated_at: Option<String>,
+    pub milestone: Option<String>,
+    /// Its milestone history was read (`MrData::milestone_events`).
+    pub events_read: bool,
+}
+
+impl From<&crate::models::TrackedMr> for SettledMr {
+    fn from(mr: &crate::models::TrackedMr) -> Self {
+        Self {
+            id: mr.id.clone(),
+            updated_at: mr.updated_at.clone(),
+            milestone: mr.milestone.clone(),
+            events_read: mr.milestone_events.is_some(),
+        }
+    }
+}
+
+/// Whether a settled MR must be read again: GitLab still lets its milestone,
+/// title or labels change after the merge (`updated_at` moves), and its
+/// milestone history may never have been read. Missing from the list (failed
+/// read, deleted MR): nothing to go on, left as it is.
+fn settled_changed(settled: &SettledMr, listed: Option<&GitLabMr>) -> bool {
+    !settled.events_read
+        || listed.is_some_and(|mr| {
+            mr.updated_at != settled.updated_at
+                || mr.milestone.as_ref().map(|m| m.title.as_str()) != settled.milestone.as_deref()
+        })
+}
+
+/// Checks the settled MRs with list reads (one request per [`MRS_PER_LIST`]),
+/// and emits `SettledMrsChanged` with those to refresh.
+pub fn spawn_settled_check(
+    ctx: FetchContext,
+    settled: Vec<SettledMr>,
+    semaphore: Arc<Semaphore>,
+    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+) {
+    if settled.is_empty() {
+        return;
+    }
+    tokio::spawn(async move {
+        let ids: Vec<&str> = settled
+            .iter()
+            .filter(|s| s.events_read)
+            .map(|s| s.id.as_str())
+            .collect();
+        let listed = list_mrs(&ctx, &ids, &semaphore).await;
+        let changed: Vec<String> = settled
+            .iter()
+            .filter(|s| settled_changed(s, listed.get(&s.id)))
+            .map(|s| s.id.clone())
+            .collect();
+        if !changed.is_empty() {
+            let _ = tx.send(AppEvent::SettledMrsChanged(changed));
+        }
+    });
+}
+
 /// Whether an MR's list entry is not enough and its own page must be read: an
 /// open MR that cannot merge as is needs `diverged_commits_count` (single read
 /// only), and a mergeability still being computed goes through the retries.
@@ -1976,6 +2090,12 @@ pub async fn fetch_gitlab_data(
     let milestone_due_date = mr.milestone.as_ref().and_then(|m| m.due_date.clone());
     let milestone_description = mr.milestone.as_ref().and_then(|m| m.description.clone());
     let milestone = mr.milestone.map(|m| m.title);
+    let milestone_events = if milestone_events_due(&cached, milestone.as_deref()) {
+        // `None` on a failed read: read again at the next refresh.
+        fetch_milestone_events(ctx, mr_id).await
+    } else {
+        cached.milestone_events.clone()
+    };
 
     // Reviewers are always read fresh — they can be added or removed at any time.
     // Format: "Full Name (username)" — mirrors the author/assignee display convention.
@@ -2250,6 +2370,7 @@ pub async fn fetch_gitlab_data(
             approvers,
             review_read_at,
             notes_seen,
+            milestone_events,
         },
     })
 }
@@ -2681,8 +2802,13 @@ mod tests {
         let mut mr = tracked("1", Opened, MergeabilityStatus::Mergeable);
         mr.review = Some(ReviewActivity::default());
         mr.review_read_at = Some(chrono::Utc::now().to_rfc3339());
+        mr.milestone_events = Some(Vec::new());
         let e = mr.estimate(&Opened, false);
         assert_eq!((e.base, e.discussions, e.saved), (0, 0, 3));
+        // Its milestone history never read: one read more.
+        mr.milestone_events = None;
+        assert_eq!(mr.estimate(&Opened, false).discussions, 1);
+        mr.milestone_events = Some(Vec::new());
         // Same MR reviewed two hours ago: discussions + approvals again.
         mr.review_read_at = Some((chrono::Utc::now() - chrono::TimeDelta::hours(2)).to_rfc3339());
         let e = mr.estimate(&Opened, false);
@@ -2839,6 +2965,119 @@ mod tests {
         assert_eq!(count("/merge_requests/1/approvals"), 0);
         assert_eq!(loaded["3"].data.notes_seen, None); // the list gave no count for it
         assert!(loaded["3"].data.review_read_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn milestone_history_is_read_again_only_when_the_milestone_moved() {
+        const UPDATED: &str = "2026-11-10T08:00:00Z";
+        fn route(path: &str, _body: &str) -> String {
+            let p = path.split('?').next().unwrap();
+            if p.ends_with("/merge_requests") {
+                serde_json::json!([
+                    {"iid": 1, "title": "moved", "state": "merged", "updated_at": UPDATED,
+                     "milestone": {"title": "1.5"}},
+                    {"iid": 2, "title": "kept", "state": "merged", "updated_at": UPDATED,
+                     "milestone": {"title": "1.4"}},
+                ])
+                .to_string()
+            } else if p.ends_with("/resource_milestone_events") {
+                serde_json::json!([
+                    {"created_at": "2026-11-09T10:00:00Z", "action": "add",
+                     "milestone": {"title": "1.5"}, "user": {"username": "bob", "name": "Bob"}},
+                    {"created_at": "2026-11-01T10:00:00Z", "action": "add",
+                     "milestone": {"title": "1.4"}, "user": {"username": "ann", "name": "Ann"}},
+                ])
+                .to_string()
+            } else if p.ends_with("/changes") {
+                r#"{"changes": []}"#.into()
+            } else {
+                "[]".into()
+            }
+        }
+        let (url, seen) = fake_gitlab(route).await;
+        let read_with_1_4 = CachedMrData {
+            updated_at: Some(UPDATED.into()),
+            cached_state: Some(GitlabMrState::Merged),
+            milestone: Some("1.4".into()),
+            milestone_events: Some(Vec::new()),
+            ..CachedMrData::default()
+        };
+        let mrs = vec![
+            ("1".to_string(), read_with_1_4.clone()),
+            ("2".to_string(), read_with_1_4),
+        ];
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_mr_fetches(ctx(&url), mrs, Arc::new(Semaphore::new(3)), tx);
+        let mut loaded = HashMap::new();
+        while loaded.len() < 2 {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+                .await
+                .expect("every MR is loaded")
+                .unwrap();
+            if let AppEvent::MrLoaded(data) = event {
+                loaded.insert(data.id.clone(), data);
+            }
+        }
+        let seen = seen.lock().unwrap().clone();
+        let events_read = |id: &str| {
+            seen.iter()
+                .filter(|p| p.contains(&format!("/merge_requests/{id}/resource_milestone_events")))
+                .count()
+        };
+        assert_eq!((events_read("1"), events_read("2")), (1, 0), "{seen:#?}");
+        // Read oldest first, the author as "Name (@login)".
+        let events = loaded["1"].data.milestone_events.clone().unwrap();
+        let titles: Vec<_> = events.iter().map(|e| e.milestone.as_deref()).collect();
+        assert_eq!(titles, [Some("1.4"), Some("1.5")]);
+        assert_eq!(events[1].by.as_deref(), Some("Bob (@bob)"));
+        assert_eq!(loaded["2"].data.milestone_events, Some(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn settled_mrs_are_read_again_only_when_they_changed() {
+        fn route(path: &str, _body: &str) -> String {
+            let p = path.split('?').next().unwrap();
+            assert!(p.ends_with("/merge_requests"), "only the list is read: {p}");
+            serde_json::json!([
+                {"iid": 1, "title": "same", "state": "merged", "updated_at": "t1",
+                 "milestone": {"title": "1.4"}},
+                {"iid": 2, "title": "touched", "state": "merged", "updated_at": "t2-new",
+                 "milestone": {"title": "1.4"}},
+                {"iid": 3, "title": "milestone only", "state": "merged", "updated_at": "t3"},
+            ])
+            .to_string()
+        }
+        let (url, seen) = fake_gitlab(route).await;
+        let settled = |id: &str, updated: &str, events_read| SettledMr {
+            id: id.into(),
+            updated_at: Some(updated.into()),
+            milestone: Some("1.4".into()),
+            events_read,
+        };
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        spawn_settled_check(
+            ctx(&url),
+            vec![
+                settled("1", "t1", true),
+                settled("2", "t2", true),
+                settled("3", "t3", true),
+                // History never read: refreshed, without being listed.
+                settled("4", "t4", false),
+            ],
+            Arc::new(Semaphore::new(3)),
+            tx,
+        );
+        let event = tokio::time::timeout(std::time::Duration::from_secs(5), rx.recv())
+            .await
+            .expect("a change is reported")
+            .unwrap();
+        let AppEvent::SettledMrsChanged(ids) = event else {
+            panic!("unexpected event");
+        };
+        assert_eq!(ids, ["2", "3", "4"]);
+        let seen = seen.lock().unwrap().clone();
+        assert_eq!(seen.len(), 1, "{seen:#?}");
+        assert!(!seen[0].contains("iids[]=4"), "{seen:#?}");
     }
 
     #[tokio::test]

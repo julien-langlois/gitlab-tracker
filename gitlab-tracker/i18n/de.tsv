@@ -1771,3 +1771,8 @@ state	Closed	Geschlossen
 @plural	Each step, median of their {n} MR merged in the period|Each step, median of their {n} MRs merged in the period	Jeder Schritt, Median ihrer {n} im Zeitraum gemergten MR|Jeder Schritt, Median ihrer {n} im Zeitraum gemergten MRs
 @plural	{n} request of the period not answered yet.|{n} requests of the period not answered yet.	{n} Anfrage des Zeitraums noch unbeantwortet.|{n} Anfragen des Zeitraums noch unbeantwortet.
 @plural	From the {n} tracked MR they appear in: MRs not tracked are not counted.|From the {n} tracked MRs they appear in: MRs not tracked are not counted.	Aus der {n} verfolgten MR, in der sie vorkommt: nicht verfolgte MRs zählen nicht.|Aus den {n} verfolgten MRs, in denen sie vorkommt: nicht verfolgte MRs zählen nicht.
+	Milestone set: {milestone}	Meilenstein gesetzt: {milestone}
+	Milestone changed: {old} → {new}	Meilenstein geändert: {old} → {new}
+	Milestone removed: {milestone}	Meilenstein entfernt: {milestone}
+	Merged by {who}	Von {who} gemergt
+date	Closed	Geschlossen

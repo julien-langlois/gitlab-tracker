@@ -994,6 +994,18 @@ impl World {
                 approvers: mr.approved.iter().map(|(p, _)| p.display()).collect(),
                 review_read_at: None,
                 notes_seen: None,
+                // Set by its author when the MR was opened.
+                milestone_events: Some(
+                    spec.milestone
+                        .map(|title| crate::models::MilestoneEvent {
+                            at: iso(mr.opened),
+                            milestone: Some(title.into()),
+                            added: true,
+                            by: Some(spec.author.display()),
+                        })
+                        .into_iter()
+                        .collect(),
+                ),
             },
         }
     }
