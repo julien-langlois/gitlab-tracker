@@ -1,0 +1,19 @@
+# cargo-audit settings for this workspace.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0459 (CVE-2026-119375): the SQLite bundled by libsqlite3-sys
+    # < 0.39 can return uninitialized memory when it opens a database together
+    # with a crafted `-wal` file whose page size differs.
+    #
+    # Why it is ignored for now: libsqlite3-sys only comes with the `stats`
+    # feature (sqlx -> gitlab-tracker-stats), and no released sqlx accepts
+    # 0.39 yet: 0.8.6 pins 0.30, 0.9.0 stops below 0.38. The fix is merged
+    # (launchbadge/sqlx#4502) and on its way in sqlx 0.9.1.
+    # Exposure: the only database opened is stats.db, created by the tracker in
+    # the user's own config directory; crafting its `-wal` takes write access
+    # to that directory, i.e. the user's account already.
+    #
+    # Remove once on sqlx >= 0.9.1 with libsqlite3-sys >= 0.39.
+    "RUSTSEC-2026-0459",
+]

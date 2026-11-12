@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker-stats)](https://crates.io/crates/gitlab-tracker-stats)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker-stats)](https://crates.io/crates/gitlab-tracker-stats)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.94+-orange.svg)](https://www.rust-lang.org/)
 
 Optional analytics and velocity-tracking plugin for [gitlab-tracker](../README.md).
 

@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.89+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.94+-orange.svg)](https://www.rust-lang.org/)
 
 **GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification first, then recognising MRs that reached a branch under other SHAs (cherry-pick with or without `-x`, rebase, commit-by-commit ports).
 
@@ -666,7 +666,7 @@ sudo pacman -S dbus pkgconf
 
 ### Recommended — Install from crates.io
 
-The simplest way to install `gitlab-tracker` if you have Rust (1.89+) available:
+The simplest way to install `gitlab-tracker` if you have Rust (1.94+) available:
 
 ```bash
 cargo install gitlab-tracker

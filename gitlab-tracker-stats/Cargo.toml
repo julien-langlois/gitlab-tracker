@@ -5,7 +5,8 @@ readme = "README.md"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+# sqlx 0.9 (the stats database) needs 1.94; the other crates keep the workspace's.
+rust-version = "1.94"
 license.workspace = true
 repository.workspace = true
 
@@ -16,7 +17,10 @@ inventory.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
-sqlx                 = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+# TODO(sqlx 0.9.1): back to `version = "0.9.1"` once published on crates.io
+# (a git dependency cannot be published). 0.9.1 accepts libsqlite3-sys 0.39,
+# which fixes RUSTSEC-2026-0459 (see .cargo/audit.toml).
+sqlx                 = { git = "https://github.com/launchbadge/sqlx", branch = "release/0.9.1", default-features = false, features = ["sqlite-bundled", "runtime-tokio"] }
 thiserror.workspace = true
 tracing.workspace = true
 [dev-dependencies]

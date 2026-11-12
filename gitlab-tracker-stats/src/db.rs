@@ -1,4 +1,4 @@
-use sqlx::SqlitePool;
+use sqlx::{AssertSqlSafe, SqlitePool};
 
 use crate::promotion::{ArrivalKind, BranchArrival};
 use crate::snapshot::MrStatsSnapshot;
@@ -85,11 +85,15 @@ impl SqliteStatsDb {
             .await?;
         for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
             let mut tx = pool.begin().await?;
-            sqlx::query(sql).execute(&mut *tx).await?;
+            // A migration file of this crate (`include_str!`): a literal.
+            sqlx::query(*sql).execute(&mut *tx).await?;
             // PRAGMA arguments cannot be bound: the value is our own integer.
-            sqlx::query(&format!("PRAGMA user_version = {}", version + 1))
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(AssertSqlSafe(format!(
+                "PRAGMA user_version = {}",
+                version + 1
+            )))
+            .execute(&mut *tx)
+            .await?;
             tx.commit().await?;
         }
         Ok(())
@@ -235,7 +239,7 @@ impl SqliteStatsDb {
 
         // Dynamic WHERE clause: the SQL text only contains fixed fragments and `?`
         // placeholders; every value goes through `.bind()`.
-        let mut q = sqlx::query(&sql);
+        let mut q = sqlx::query(AssertSqlSafe(sql));
         for val in &dynamic {
             q = q.bind(val);
         }
@@ -407,7 +411,9 @@ impl SqliteStatsDb {
         project_id: &str,
         backup_path: Option<&str>,
     ) -> Result<RepairSummary, StatsError> {
-        let pending: i64 = sqlx::query_scalar(&repair_pending_sql())
+        // The repair queries are built from this file's constants only; the
+        // project id is bound (`?1`).
+        let pending: i64 = sqlx::query_scalar(AssertSqlSafe(repair_pending_sql()))
             .bind(project_id)
             .fetch_one(&self.pool)
             .await?;
@@ -428,17 +434,17 @@ impl SqliteStatsDb {
         }
 
         let mut tx = self.pool.begin().await?;
-        summary.deleted = sqlx::query(&repair_dedup_sql())
+        summary.deleted = sqlx::query(AssertSqlSafe(repair_dedup_sql()))
             .bind(project_id)
             .execute(&mut *tx)
             .await?
             .rows_affected();
-        summary.redated = sqlx::query(&repair_redate_sql())
+        summary.redated = sqlx::query(AssertSqlSafe(repair_redate_sql()))
             .bind(project_id)
             .execute(&mut *tx)
             .await?
             .rows_affected();
-        summary.normalized = sqlx::query(&repair_normalize_sql())
+        summary.normalized = sqlx::query(AssertSqlSafe(repair_normalize_sql()))
             .bind(project_id)
             .execute(&mut *tx)
             .await?

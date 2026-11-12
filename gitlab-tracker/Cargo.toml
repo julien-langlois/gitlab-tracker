@@ -3,7 +3,8 @@ name = "gitlab-tracker"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-rust-version.workspace = true
+# sqlx 0.9 (the stats database) needs 1.94; the other crates keep the workspace's.
+rust-version = "1.94"
 license.workspace = true
 repository.workspace = true
 readme = "../README.md"

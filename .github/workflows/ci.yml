@@ -76,16 +76,29 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-  # The toolchain is read from `rust-version` in Cargo.toml: one place to bump.
+  # Each group is checked with the `rust-version` its manifest declares: the
+  # libraries keep the workspace's, while the stats database (sqlx 0.9) and the
+  # binary that embeds it need a newer one. Bumping a version is done in the
+  # manifest only.
   msrv:
-    name: MSRV
+    name: MSRV (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core, redmine
+            manifest: Cargo.toml
+            packages: -p gitlab-tracker-core -p gitlab-tracker-redmine
+          - name: stats, binary
+            manifest: gitlab-tracker/Cargo.toml
+            packages: -p gitlab-tracker-stats -p gitlab-tracker
     steps:
       - uses: actions/checkout@v4
 
       - name: Read rust-version
         id: msrv
-        run: echo "version=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' ${{ matrix.manifest }})" >> "$GITHUB_OUTPUT"
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -97,11 +110,11 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: msrv
+          key: msrv-${{ steps.msrv.outputs.version }}
 
       # --locked: the committed lockfile is the one resolved for this toolchain.
       - name: Check (rust ${{ steps.msrv.outputs.version }})
-        run: cargo check --workspace --all-features --locked
+        run: cargo check ${{ matrix.packages }} --all-features --locked
 
   # Informational only: no threshold, the job never gates a merge on a percentage.
   coverage:
