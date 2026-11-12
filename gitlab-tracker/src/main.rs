@@ -13,6 +13,7 @@ mod gitlab;
 #[cfg(feature = "gui")]
 mod gitlab_detail;
 mod gitlab_graphql;
+mod gitlab_signatures;
 #[cfg(feature = "gui")]
 mod gui;
 mod i18n;
@@ -23,6 +24,7 @@ mod notify;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
+mod signatures;
 mod status;
 mod storage;
 mod ui;
@@ -176,6 +178,10 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     // Propagate the per-project GitLab username — drives the "Assigned to me" and
     // "Reviewer: me" filter visibility in the picker popup.
     config.gitlab_username = project.gitlab_username.clone();
+    config.signed_commits = project
+        .signed_commits
+        .as_ref()
+        .and_then(crate::storage::SignedCommitsConfig::policy);
 }
 
 /// Long-lived values shared by every project session.

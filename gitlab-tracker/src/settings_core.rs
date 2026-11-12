@@ -195,6 +195,174 @@ fn review_reminder_setting() -> ProjectSettingDef {
     }
 }
 
+// ── Signed commits: `[project.signed_commits]` ─────────────────────────────
+
+/// The `[project.signed_commits]` table, if any.
+fn signed_commits(project: &toml::Table) -> Option<&toml::Table> {
+    project
+        .get("signed_commits")
+        .and_then(toml::Value::as_table)
+}
+
+fn read_signed_bool(project: &toml::Table, key: &str, default: bool) -> ProjectSettingValue {
+    signed_commits(project).map_or(ProjectSettingValue::Bool(default), |table| {
+        read_bool(table, key, default)
+    })
+}
+
+/// The `[project.signed_commits]` table, created when missing (a value of
+/// another type is replaced).
+fn signed_commits_mut(project: &mut toml::Table) -> &mut toml::Table {
+    let entry = project
+        .entry("signed_commits")
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    if !entry.is_table() {
+        *entry = toml::Value::Table(toml::Table::new());
+    }
+    entry.as_table_mut().expect("just made a table")
+}
+
+fn write_signed_bool(project: &mut toml::Table, key: &str, value: ProjectSettingValue) {
+    // Options of an off check are not written: the table appears once enforced.
+    if signed_commits(project).is_none()
+        && value == ProjectSettingValue::Bool(false)
+        && key == "enforce"
+    {
+        return;
+    }
+    write_bool(signed_commits_mut(project), key, value);
+}
+
+/// A boolean option of `[project.signed_commits]`, written only once the table
+/// exists (the check was turned on), so that saving the settings of a project
+/// that never enforced it leaves `projects.toml` as it was.
+fn write_signed_option(project: &mut toml::Table, key: &str, value: ProjectSettingValue) {
+    if signed_commits(project).is_some() {
+        write_bool(signed_commits_mut(project), key, value);
+    }
+}
+
+fn signed_enforce_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.enforce",
+        section: "Signed commits",
+        label: "Enforce signed commits",
+        help: "Check the signature of every commit of the open MRs, and warn when one is missing \
+               or not verified. Off: nothing is read or shown.",
+        priority: 200,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(false),
+        read: |project| read_signed_bool(project, "enforce", false),
+        write: |project, value| write_signed_bool(project, "enforce", value),
+    }
+}
+
+fn signed_rebase_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.tolerate_gitlab_rebase",
+        section: "Signed commits",
+        label: "Tolerate rebases from GitLab",
+        help: "A commit that lost its signature in a rebase from GitLab's UI counts as signed \
+               when an earlier version of the MR held a signed copy of it.",
+        priority: 210,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(true),
+        read: |project| read_signed_bool(project, "tolerate_gitlab_rebase", true),
+        write: |project, value| write_signed_option(project, "tolerate_gitlab_rebase", value),
+    }
+}
+
+fn signed_patch_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.require_same_patch",
+        section: "Signed commits",
+        label: "…only with the same changes",
+        help: "The signed copy must change the same lines (one diff read per commit compared). \
+               Without it, a commit borrowing the author, date and title of a signed one passes.",
+        priority: 220,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(true),
+        read: |project| read_signed_bool(project, "require_same_patch", true),
+        write: |project, value| write_signed_option(project, "require_same_patch", value),
+    }
+}
+
+fn signed_verified_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.require_verified",
+        section: "Signed commits",
+        label: "Require a verified signature",
+        help: "A signature GitLab cannot verify (unknown or revoked key, another user's, \
+               another e-mail) is reported.",
+        priority: 230,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(true),
+        read: |project| read_signed_bool(project, "require_verified", true),
+        write: |project, value| write_signed_option(project, "require_verified", value),
+    }
+}
+
+fn signed_system_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.accept_system_signed",
+        section: "Signed commits",
+        label: "Accept commits signed by GitLab",
+        help: "Commits made in GitLab's web UI, signed with the instance's own key \
+               (when it has one).",
+        priority: 240,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(false),
+        read: |project| read_signed_bool(project, "accept_system_signed", false),
+        write: |project, value| write_signed_option(project, "accept_system_signed", value),
+    }
+}
+
+fn signed_bots_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "signed_commits.exempt_bots",
+        section: "Signed commits",
+        label: "Exempted bots",
+        help: "`username email` pairs, separated by commas (renovate-bot bot@renovate.example). \
+               An MR is exempted when that account opened it, for the commits with that author \
+               e-mail only. Empty: none.",
+        priority: 250,
+        kind: ProjectSettingKind::Text,
+        default_value: ProjectSettingValue::Text(String::new()),
+        read: |project| {
+            ProjectSettingValue::Text(
+                signed_commits(project)
+                    .and_then(|t| t.get("exempt_bots"))
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+        },
+        write: |project, value| {
+            let ProjectSettingValue::Text(text) = value else {
+                return;
+            };
+            let text = text.trim();
+            match signed_commits(project) {
+                None if text.is_empty() => {}
+                _ if text.is_empty() => {
+                    signed_commits_mut(project).remove("exempt_bots");
+                }
+                _ => {
+                    signed_commits_mut(project)
+                        .insert("exempt_bots".into(), toml::Value::String(text.into()));
+                }
+            }
+        },
+    }
+}
+
+inventory::submit!(ProjectSettingFactory(signed_enforce_setting));
+inventory::submit!(ProjectSettingFactory(signed_rebase_setting));
+inventory::submit!(ProjectSettingFactory(signed_patch_setting));
+inventory::submit!(ProjectSettingFactory(signed_verified_setting));
+inventory::submit!(ProjectSettingFactory(signed_system_setting));
+inventory::submit!(ProjectSettingFactory(signed_bots_setting));
+
 inventory::submit!(ProjectSettingFactory(project_name_setting));
 inventory::submit!(ProjectSettingFactory(show_cockpit_setting));
 inventory::submit!(ProjectSettingFactory(hide_merged_setting));
@@ -256,6 +424,70 @@ mod tests {
         assert!(!table.contains_key("name"));
         let project: ProjectEntry = toml::Value::Table(table).try_into().unwrap();
         assert_eq!(project.name, None);
+    }
+
+    /// Every setting of the registry written into `table`, in registry order.
+    fn write_all(table: &mut toml::Table, values: &[(&str, ProjectSettingValue)]) {
+        let mut defs: Vec<ProjectSettingDef> = inventory::iter::<ProjectSettingFactory>
+            .into_iter()
+            .map(|f| (f.0)())
+            .collect();
+        defs.sort_by_key(|d| d.priority);
+        for def in defs {
+            let value = values
+                .iter()
+                .find(|(id, _)| *id == def.id)
+                .map_or_else(|| (def.read)(table), |(_, v)| v.clone());
+            (def.write)(table, value);
+        }
+    }
+
+    #[test]
+    fn saving_a_project_that_never_enforced_signatures_adds_nothing() {
+        let mut table = entry();
+        write_all(&mut table, &[]);
+        assert!(!table.contains_key("signed_commits"));
+    }
+
+    #[test]
+    fn signed_commits_settings_round_trip_through_projects_toml() {
+        let mut table = entry();
+        write_all(
+            &mut table,
+            &[
+                ("signed_commits.enforce", ProjectSettingValue::Bool(true)),
+                (
+                    "signed_commits.accept_system_signed",
+                    ProjectSettingValue::Bool(true),
+                ),
+                (
+                    "signed_commits.exempt_bots",
+                    ProjectSettingValue::Text(" renovate-bot bot@renovate.example ".into()),
+                ),
+            ],
+        );
+        let project: ProjectEntry = toml::Value::Table(table.clone()).try_into().unwrap();
+        let config = project.signed_commits.clone().unwrap();
+        assert!(config.enforce);
+        assert_eq!(
+            config.exempt_bots.as_deref(),
+            Some("renovate-bot bot@renovate.example")
+        );
+        let policy = config.policy().unwrap();
+        assert!(policy.accept_system_signed && policy.tolerate_gitlab_rebase);
+        assert_eq!(policy.exempt_bots.len(), 1);
+        assert_eq!(
+            (signed_rebase_setting().read)(&table),
+            ProjectSettingValue::Bool(true)
+        );
+
+        // Turned off again: the options stay, the check is off.
+        write_all(
+            &mut table,
+            &[("signed_commits.enforce", ProjectSettingValue::Bool(false))],
+        );
+        let project: ProjectEntry = toml::Value::Table(table).try_into().unwrap();
+        assert_eq!(project.signed_commits.and_then(|c| c.policy()), None);
     }
 
     #[test]

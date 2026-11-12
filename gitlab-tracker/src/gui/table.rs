@@ -1382,6 +1382,81 @@ struct RowView {
     next: Option<NextView>,
     /// The latest pipeline: its state, `None` without one.
     pipeline: Option<crate::models::PipelineState>,
+    /// Commits whose signature the project's policy rejects, when it enforces
+    /// signed commits and there are some.
+    signatures: Option<SignatureBadge>,
+}
+
+/// The shield next to the author: how many commits lack a valid signature.
+#[derive(Debug, Clone)]
+struct SignatureBadge {
+    count: usize,
+    tone: Tone,
+    tip: String,
+}
+
+impl SignatureBadge {
+    fn of(summary: &crate::signatures::Summary, tones: &bevel_theme::Tones) -> Option<Self> {
+        let count = summary.anomalies();
+        if count == 0 {
+            return None;
+        }
+        let mut lines = Vec::new();
+        if !summary.unsigned.is_empty() {
+            lines.push(tn(
+                summary.unsigned.len() as u64,
+                "{n} commit without a signature",
+                "{n} commits without a signature",
+            ));
+        }
+        if !summary.system.is_empty() {
+            lines.push(tn(
+                summary.system.len() as u64,
+                "{n} commit signed by GitLab only",
+                "{n} commits signed by GitLab only",
+            ));
+        }
+        if !summary.unverified.is_empty() {
+            lines.push(tn(
+                summary.unverified.len() as u64,
+                "{n} signature not verified",
+                "{n} signatures not verified",
+            ));
+        }
+        if summary.rebased > 0 {
+            lines.push(tn(
+                summary.rebased as u64,
+                "{n} signed before a rebase from GitLab: tolerated",
+                "{n} signed before a rebase from GitLab: tolerated",
+            ));
+        }
+        let unsigned = summary.unsigned.len() + summary.system.len();
+        Some(Self {
+            count,
+            tone: if unsigned > 0 { tones.red } else { tones.amber },
+            tip: lines.join("\n"),
+        })
+    }
+}
+
+/// The signature badge: a shield and the count, its detail on hover.
+fn signature_chip(ui: &mut Ui, theme: &Theme, badge: &SignatureBadge) {
+    let response = egui::Frame::new()
+        .fill(badge.tone.bg)
+        .corner_radius(CornerRadius::same(theme.radii.small))
+        .inner_margin(Margin::symmetric(5, 1))
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            let (rect, _) = ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
+            icons::paint(ui.painter(), rect, Icon::Shield, badge.tone.fg);
+            ui.label(
+                RichText::new(badge.count.to_string())
+                    .font(fonts::semibold(theme.text_size - 2.5))
+                    .color(badge.tone.fg),
+            );
+        })
+        .response;
+    response.on_hover_text(&badge.tip);
 }
 
 /// The Next step cell: who, what, since when.
@@ -1550,6 +1625,9 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 has_ticket: mr.linked_ticket.is_some() && app.tracker.is_some(),
                 next: NextView::of(&crate::next_step::of(app, mr, me), theme),
                 pipeline: mr.pipelines.first().map(|p| p.status),
+                signatures: app
+                    .signature_report(mr)
+                    .and_then(|report| SignatureBadge::of(&report.summary(), tones)),
             }
         })
         .collect();
@@ -2555,6 +2633,10 @@ fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) -> Option<St
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
             meta_line(ui, theme, r);
+            if let Some(badge) = &r.signatures {
+                ui.add_space(2.0);
+                signature_chip(ui, theme, badge);
+            }
             if !labels_column {
                 ui.add_space(3.0);
                 for (label, tone) in r.labels.iter().filter(|(l, _)| l.contains("::")) {

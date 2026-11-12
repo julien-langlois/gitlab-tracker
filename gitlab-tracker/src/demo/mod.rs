@@ -98,6 +98,8 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         },
         gitlab_username: Some(orbit_api::ME.into()),
         complexity_profile: spec.profile.clone(),
+        // The demo's team signs its commits: the check shows what it reports.
+        signed_commits: Some(crate::signatures::Policy::default()),
         ..config
     };
     let project = crate::storage::ProjectEntry {
@@ -113,6 +115,10 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         activity_recent_days: Some(2),
         show_cockpit: Some(true),
         gitlab_username: Some(orbit_api::ME.into()),
+        signed_commits: Some(crate::storage::SignedCommitsConfig {
+            enforce: true,
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let mut app = App::new(AppInit {

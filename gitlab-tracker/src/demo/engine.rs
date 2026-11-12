@@ -913,6 +913,95 @@ impl World {
             .collect()
     }
 
+    /// What the signature check read for an open MR: every commit signed and
+    /// verified, except in a few MRs that show what the check reports.
+    fn signatures(&self, i: usize) -> Option<crate::signatures::SignatureData> {
+        use crate::signatures::{Facts, Signature, SignatureData, Status, Version, VersionCommit};
+        let mr = &self.mrs[i];
+        if mr.state() != GitlabMrState::Opened {
+            return None;
+        }
+        let mut commits: Vec<&CommitRec> = mr.commits.iter().collect();
+        commits.sort_by_key(|c| c.authored);
+        let entry = |sha: &str, c: &CommitRec| VersionCommit {
+            sha: sha.into(),
+            fingerprint: mr.fingerprint(c),
+        };
+        let current =
+            |list: &[&CommitRec]| list.iter().map(|c| entry(&c.sha, c)).collect::<Vec<_>>();
+        // The signed commit a rebase from GitLab's UI rewrote.
+        let original = |c: &CommitRec| c.sha.chars().rev().collect::<String>();
+        let (base_before, base_after) = (
+            sha(&[mr.spec.key, "base", "1"]),
+            sha(&[mr.spec.key, "base", "2"]),
+        );
+        let verified = Signature::Signed(Status::Verified);
+        let mut facts = Facts::default();
+        let mut signed = |sha: &str, signature: Signature| {
+            facts.signatures.insert(sha.to_string(), signature);
+        };
+        // Rebased from GitLab's UI after the review: the first `rebased` commits
+        // lost their signature, each copy of a signed original.
+        let rebased = match mr.spec.key {
+            "push-notifications" => 4,
+            "courier-ws" => commits.len(),
+            _ => 0,
+        };
+        let versions = if rebased > 0 {
+            let before: Vec<VersionCommit> = commits[..rebased]
+                .iter()
+                .map(|c| entry(&original(c), c))
+                .collect();
+            let mut versions = vec![
+                Version {
+                    base_sha: base_before,
+                    commits: before,
+                },
+                Version {
+                    base_sha: base_after.clone(),
+                    commits: current(&commits[..rebased]),
+                },
+            ];
+            if rebased < commits.len() {
+                versions.push(Version {
+                    base_sha: base_after,
+                    commits: current(&commits),
+                });
+            }
+            for c in &commits[..rebased] {
+                signed(&original(c), verified);
+                signed(&c.sha, Signature::Unsigned);
+                let patch = Some(format!("patch-{}", c.sha));
+                facts.patch_ids.insert(original(c), patch.clone());
+                facts.patch_ids.insert(c.sha.clone(), patch);
+            }
+            versions
+        } else {
+            vec![Version {
+                base_sha: String::new(),
+                commits: current(&commits),
+            }]
+        };
+        let newest = commits.last().map(|c| c.sha.as_str()).unwrap_or_default();
+        for c in &commits[rebased..] {
+            let signature = match mr.spec.key {
+                // Pushed after the rebase, from a machine without the key.
+                "push-notifications" if c.sha == newest => Signature::Unsigned,
+                // Renovate does not sign here (no key configured for it).
+                "tokio-ecosystem" => Signature::Unsigned,
+                // Signed with a key the author never added to GitLab.
+                "rate-limit" if c.sha == newest => Signature::Signed(Status::UnknownKey),
+                _ => verified,
+            };
+            signed(&c.sha, signature);
+        }
+        Some(SignatureData {
+            versions,
+            versions_read: rebased > 0,
+            facts,
+        })
+    }
+
     /// The MR as the app holds it after a refresh.
     pub fn tracked_mr(&self, i: usize, tickets: &super::tracker::Tickets) -> TrackedMr {
         let mr = &self.mrs[i];
@@ -995,6 +1084,7 @@ impl World {
                 review_read_at: None,
                 notes_seen: None,
                 // Set by its author when the MR was opened.
+                signatures: self.signatures(i),
                 milestone_events: Some(
                     spec.milestone
                         .map(|title| crate::models::MilestoneEvent {

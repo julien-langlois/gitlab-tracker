@@ -1777,3 +1777,50 @@ state	Closed	Cerrada
 	Milestone removed: {milestone}	Hito quitado: {milestone}
 	Merged by {who}	Fusionada por {who}
 date	Closed	Cerrada
+# Signed commits
+	Signed commits	Commits firmados
+	Enforce signed commits	Exigir commits firmados
+	Check the signature of every commit of the open MRs, and warn when one is missing or not verified. Off: nothing is read or shown.	Comprueba la firma de cada commit de las MR abiertas y avisa cuando falta o no está verificada. Desactivado: no se lee ni se muestra nada.
+	Tolerate rebases from GitLab	Tolerar los rebases hechos desde GitLab
+	A commit that lost its signature in a rebase from GitLab's UI counts as signed when an earlier version of the MR held a signed copy of it.	Un commit que perdió su firma en un rebase hecho desde la interfaz de GitLab cuenta como firmado si una versión anterior de la MR contenía una copia firmada.
+	…only with the same changes	… solo con los mismos cambios
+	The signed copy must change the same lines (one diff read per commit compared). Without it, a commit borrowing the author, date and title of a signed one passes.	La copia firmada debe cambiar las mismas líneas (un diff leído por commit comparado). Sin esto, pasa un commit que copia el autor, la fecha y el título de uno firmado.
+	Require a verified signature	Exigir una firma verificada
+	A signature GitLab cannot verify (unknown or revoked key, another user's, another e-mail) is reported.	Se avisa de una firma que GitLab no puede verificar (clave desconocida o revocada, de otro usuario, otro correo).
+	Accept commits signed by GitLab	Aceptar los commits firmados por GitLab
+	Commits made in GitLab's web UI, signed with the instance's own key (when it has one).	Commits hechos en la interfaz web de GitLab, firmados con la clave propia de la instancia (si tiene una).
+	Exempted bots	Bots exentos
+	`username email` pairs, separated by commas (renovate-bot bot@renovate.example). An MR is exempted when that account opened it, for the commits with that author e-mail only. Empty: none.	Pares `usuario correo` separados por comas (renovate-bot bot@renovate.example). Una MR queda exenta si esa cuenta la abrió, solo para los commits con ese correo de autor. Vacío: ninguno.
+	Verified	Verificada
+	Signed before a rebase	Firmado antes de un rebase
+	Signed by GitLab	Firmado por GitLab
+	Not verified	No verificada
+	Unsigned	Sin firma
+	Exempted bot	Bot exento
+	Checking	Comprobando
+	Signed, and verified by GitLab.	Firmado y verificado por GitLab.
+	Rebased from GitLab, which does not sign: its copy {sha} in version {version} of the MR was signed and verified, with the same changes.	Rebase hecho desde GitLab, que no firma: su copia {sha} en la versión {version} de la MR estaba firmada y verificada, con los mismos cambios.
+	Signed with the GitLab instance's key, not its author's.	Firmado con la clave de la instancia de GitLab, no con la de su autor.
+	GitLab does not know the key: its author must add it to their profile.	GitLab no conoce la clave: su autor debe añadirla a su perfil.
+	The key was revoked.	La clave fue revocada.
+	The key belongs to another GitLab user.	La clave pertenece a otro usuario de GitLab.
+	The commit's e-mail is not one of the key owner's verified e-mails.	El correo del commit no es uno de los correos verificados del dueño de la clave.
+	The key's e-mail is not verified in GitLab.	El correo de la clave no está verificado en GitLab.
+	The commit carries several signatures.	El commit lleva varias firmas.
+	GitLab cannot verify the signature.	GitLab no puede verificar la firma.
+	No signature, and no earlier version of the MR held a signed copy of it.	Sin firma, y ninguna versión anterior de la MR contenía una copia firmada.
+	From an exempted bot: no signature needed.	De un bot exento: no necesita firma.
+	Being read from GitLab.	Leyendo desde GitLab.
+	Every commit signed	Todos los commits firmados
+	See them in Commits	Verlos en Commits
+	Signature	Firma
+	Signatures	Firmas
+	{shas}: no signature, and no earlier version of the MR held a signed copy. Sign the branch again, then force-push:	{shas}: sin firma, y ninguna versión anterior de la MR contenía una copia firmada. Vuelve a firmar la rama y haz force-push:
+	{shas}: signed with the instance's key, not its author's. Sign the branch again, then force-push:	{shas}: firmados con la clave de la instancia, no con la de su autor. Vuelve a firmar la rama y haz force-push:
+	{shas}: GitLab cannot verify it (unknown or revoked key, another user's, another e-mail). The author's public key must be in their GitLab profile.	{shas}: GitLab no puede verificarla (clave desconocida o revocada, de otro usuario, otro correo). La clave pública del autor debe estar en su perfil de GitLab.
+@plural	{n} commit without a signature|{n} commits without a signature	{n} commit sin firma|{n} commits sin firma
+@plural	{n} commit signed by GitLab only|{n} commits signed by GitLab only	{n} commit firmado solo por GitLab|{n} commits firmados solo por GitLab
+@plural	{n} signature not verified|{n} signatures not verified	{n} firma no verificada|{n} firmas no verificadas
+@plural	{n} signed before a rebase from GitLab: tolerated|{n} signed before a rebase from GitLab: tolerated	{n} firmado antes de un rebase de GitLab: tolerado|{n} firmados antes de un rebase de GitLab: tolerados
+@plural	{n} lost its signature in a rebase from GitLab, signed before it|{n} lost their signature in a rebase from GitLab, signed before it	{n} perdió su firma en un rebase de GitLab, firmado antes|{n} perdieron su firma en un rebase de GitLab, firmados antes
+@plural	{n} from an exempted bot|{n} from an exempted bot	{n} de un bot exento|{n} de un bot exento

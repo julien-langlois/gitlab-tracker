@@ -702,6 +702,37 @@ fn review(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     }
                 }
             });
+            // Only when the project enforces signed commits and one is off.
+            if let Some(summary) = g
+                .app
+                .signature_report(mr)
+                .map(|r| r.summary())
+                .filter(|s| s.anomalies() > 0)
+            {
+                rows.row(tl("Signatures"), |ui| {
+                    let unsigned = summary.unsigned.len() + summary.system.len();
+                    let (text, tone) = if unsigned > 0 {
+                        (
+                            tn(
+                                unsigned as u64,
+                                "{n} commit without a signature",
+                                "{n} commits without a signature",
+                            ),
+                            tones.red,
+                        )
+                    } else {
+                        (
+                            tn(
+                                summary.unverified.len() as u64,
+                                "{n} signature not verified",
+                                "{n} signatures not verified",
+                            ),
+                            tones.amber,
+                        )
+                    };
+                    ui.label(RichText::new(text).color(tone.fg));
+                });
+            }
             rows.row(tl("Threads"), |ui| {
                 if mr.user_notes_count == 0 {
                     ui.label(muted(&theme, tl("None")));

@@ -222,6 +222,7 @@ An experimental **desktop window** (`gitlab-tracker gui`, feature `gui`) shows t
       ✘ 3f9c2a1b fix: #123456 Fix issue.
     main        : 🔴 ABSENT
     ```
+* ✍️ **Signed commits *(optional)*:** with `[project.signed_commits] enforce = true`, every commit of the open MRs is checked for a verified signature. A missing or unverified one is flagged in the MR list, in the MR page's *Why it can't merge* and in a *Signature* column of its Commits tab — a warning, never a block. Signatures lost to a rebase from GitLab's UI are recognised from the MR's earlier versions (same author, date, title **and** changes) and not reported; bots can be exempted. See [docs/signed-commits.md](docs/signed-commits.md).
 
 ---
 
@@ -369,6 +370,62 @@ On first launch, `gitlab-tracker` resolves each required value using the followi
 5. **Sent only where it belongs:**
    A token is sent over `https://` (an `http://` URL is refused in the window, and warned about in the terminal, unless it points at this machine), and a redirect to another server fails the request instead of handing the token over.
 
+#### Which token to create: fine-grained, read-only, one project (recommended)
+
+`gitlab-tracker` only reads. Give it a token that can do nothing else: a [fine-grained personal access token](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/) (GitLab 19.2 and later, all tiers) limited to the projects you track, with **Read** permissions only. If it leaks, it exposes those projects read-only — not every project your account can reach, and nothing it could change.
+
+1. Avatar › **Edit profile** › **Access › Personal access tokens**.
+2. **Generate token** › **Fine-grained token**. Fill in **Name** (e.g. `gitlab-tracker – my-project`) and an **Expiration date** (90 days is a good habit; 365 days by default).
+3. Under **Group and project access**, choose the option that limits the token to **selected groups and projects** — not all your projects.
+4. Under **Add resource permissions** › **Group and project**, select your project(s) and give **Read** to:
+
+   | Resource › Read  | What the app reads with it                                          |
+   | ---------------- | ------------------------------------------------------------------- |
+   | Project          | The project itself (checked when it is added)                       |
+   | Merge Request    | MRs, their changes, commits, approvals, discussions and pipelines   |
+   | Pipeline         | Pipelines and their jobs (REST and GraphQL)                         |
+   | Job              | Job logs                                                            |
+   | Commit           | Commits of the tracked branches, branches containing a commit       |
+   | Repository       | Comparisons between branches, merge base                            |
+   | Repository Tag   | Tags (changelog)                                                    |
+   | Branch           | Branches                                                            |
+   | Label            | Labels                                                              |
+   | Work Item        | Milestones (GitLab files them under Work Item)                      |
+   | Deployment       | Deployments (Environments page)                                     |
+   | Code             | The project's `CHANGELOG.md` (raw file)                             |
+
+   In the **User** tab, give **Read** to **User**: the app reads your own account (`GET /user`) to know which MRs and reviews are yours.
+
+5. **Generate token**, copy it (it is shown only once), and paste it when the app asks for it.
+
+The token never goes beyond your role on the project, and it sees no other project, even one your account can open. A few endpoints the app calls are not mapped to a permission in GitLab's documentation (`repository/merge_base`, `repository/commits/:sha/refs`, `merge_requests/:iid/resource_milestone_events`): the table gives the likely one. If a view stays empty, check the token as below and add the **Read** permission a `403` points to — a token's permissions can be edited without creating a new one.
+
+**Check the token before using it** (it never appears in the shell history or the process list):
+
+```bash
+read -rsp "Token: " T; echo
+G=https://gitlab.example.com/api/v4; P=<project id>
+for path in "/projects/$P" "/projects/$P/merge_requests" "/projects/$P/pipelines" \
+  "/projects/$P/repository/commits" "/projects/$P/repository/tags" "/projects/$P/labels" \
+  "/projects/$P/milestones" "/projects/$P/deployments" "/user" "/projects/<another project id>"; do
+  printf '%-45s %s\n' "$path" "$(curl -s -o /dev/null -w '%{http_code}' \
+    -H @<(printf 'PRIVATE-TOKEN: %s\n' "$T") "$G$path")"
+done
+unset T
+```
+
+Expect `200` everywhere, and `403`/`404` on the last line: the token cannot see another project.
+
+**One token per instance.** The keyring holds one GitLab token per instance URL, shared by every project tracked on that instance. When you track another project on the same GitLab, add it to the token's resources rather than creating a second token.
+
+**Replacing a token** (rotation, expiry, switch to fine-grained): delete the keyring entry, then start the app, which asks for the new one. Revoke the old token in GitLab afterwards.
+
+```bash
+secret-tool clear service gitlab-tracker username 'gitlab_token::https://gitlab.example.com'   # Linux (libsecret-tools)
+```
+
+*Older GitLab (before 19.2):* use a classic personal access token with the single scope `read_api`, or a [project access token](https://docs.gitlab.com/user/project/settings/project_access_tokens/) (role Reporter, scope `read_api`), which is also limited to one project.
+
 ---
 
 ### Step 3: Project Configuration (`projects.toml`)
@@ -479,6 +536,12 @@ commits_behind  = false  # "Behind" column — commits the source branch is behi
 retention_days = 180
 # Sprint duration in weeks — controls the window used in throughput forecasts. Default: 2.
 sprint_weeks = 3
+
+# Signed commits — warn when a commit of an open MR is not signed, or not
+# verified. Off by default. See docs/signed-commits.md for every option.
+[project.signed_commits]
+enforce = true
+# exempt_bots = "renovate-bot bot@renovate.example"
 
 # Add more projects below — only the one with `active = true` is loaded at startup.
 # [[project]]

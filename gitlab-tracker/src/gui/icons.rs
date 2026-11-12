@@ -54,6 +54,8 @@ pub enum Icon {
     Gauge,
     /// Cards on top of each other, joined: the stacked MRs.
     Stack,
+    /// A shield: the commits' signatures.
+    Shield,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -404,6 +406,23 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                     p(14.0, 19.0),
                     p(16.5, 12.0),
                     p(21.5, 12.0),
+                ],
+                stroke,
+            ));
+        }
+        Icon::Shield => {
+            painter.add(Shape::closed_line(
+                vec![
+                    p(12.0, 2.5),
+                    p(19.5, 5.5),
+                    p(19.5, 11.5),
+                    p(18.0, 15.5),
+                    p(15.0, 18.8),
+                    p(12.0, 21.0),
+                    p(9.0, 18.8),
+                    p(6.0, 15.5),
+                    p(4.5, 11.5),
+                    p(4.5, 5.5),
                 ],
                 stroke,
             ));

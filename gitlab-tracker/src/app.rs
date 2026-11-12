@@ -469,6 +469,8 @@ pub struct App {
     review_reminders: HashMap<String, mr_changes::ReviewReminded>,
     /// Branch scans spawned and not answered yet.
     pub pending_branch_scans: usize,
+    /// MRs whose commit signatures are being checked (`SignaturesChecked`).
+    pub signature_checks: HashSet<String>,
     /// Set by `MrLoaded`; consumed once per event drain by [`App::flush_pending_sort`].
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
@@ -637,6 +639,7 @@ impl App {
             branch_commits: HashMap::new(),
             branch_scan_scopes: HashMap::new(),
             pending_branch_scans: 0,
+            signature_checks: HashSet::new(),
             just_added_branches: HashSet::new(),
             review_reminders: HashMap::new(),
             theme,
@@ -1987,6 +1990,58 @@ impl App {
         }
     }
 
+    /// Checks the commit signatures of the open MRs that lack something (new
+    /// commits, a signature or a patch not read yet), when the project enforces
+    /// signed commits. One check per MR at a time.
+    pub fn spawn_signature_checks(
+        &mut self,
+        semaphore: &Arc<Semaphore>,
+        tx: &UnboundedSender<AppEvent>,
+    ) {
+        let Some(policy) = self.config.signed_commits.clone() else {
+            return;
+        };
+        if self.read_only {
+            return;
+        }
+        let ctx = self.fetch_context();
+        for mr in self.mrs.iter() {
+            if mr.state != GitlabMrState::Opened || self.signature_checks.contains(&mr.id) {
+                continue;
+            }
+            let author = crate::signatures::author_username(&mr.author).to_string();
+            if !crate::gitlab_signatures::needs_check(
+                mr.signatures.as_ref(),
+                &mr.commits,
+                &author,
+                &policy,
+            ) {
+                continue;
+            }
+            self.signature_checks.insert(mr.id.clone());
+            crate::gitlab_signatures::spawn_signature_check(
+                ctx.clone(),
+                crate::gitlab_signatures::CheckRequest {
+                    mr_id: mr.id.clone(),
+                    author,
+                    commits: mr.commits.clone(),
+                    data: mr.signatures.clone().unwrap_or_default(),
+                    policy: policy.clone(),
+                },
+                semaphore.clone(),
+                tx.clone(),
+            );
+        }
+    }
+
+    /// `mr`'s commits checked against the project's policy: `None` when the
+    /// project does not enforce signed commits, the MR is not open, or nothing
+    /// was read yet.
+    #[cfg(feature = "gui")]
+    pub fn signature_report(&self, mr: &TrackedMr) -> Option<crate::signatures::Report> {
+        crate::signatures::report_for(mr, self.config.signed_commits.as_ref())
+    }
+
     /// Restores tracked MRs from persisted state on startup.
     ///
     /// For each saved MR:
@@ -2093,6 +2148,7 @@ impl App {
         tx: &UnboundedSender<AppEvent>,
     ) {
         self.spawn_branch_scans(semaphore, tx);
+        self.spawn_signature_checks(semaphore, tx);
         if initial_sync {
             let baseline = std::mem::take(&mut self.startup_baseline);
             self.last_changes = session_changes(&baseline, &self.mrs);
@@ -2448,7 +2504,10 @@ impl App {
                 mr.recently_updated = was_updated;
 
                 // All GitLab fields at once (title, branches, pipelines, diff stats…).
+                // The signatures are read apart from the MR: keep what was known.
+                let signatures = mr.data.signatures.take();
                 mr.data = data.data;
+                mr.data.signatures = signatures;
 
                 if let Some(username) = self.config.gitlab_username.as_deref() {
                     mr_changes::remind_review(
@@ -2592,6 +2651,17 @@ impl App {
                 }
             }
 
+            AppEvent::SignaturesChecked { mr_id, data } => {
+                self.signature_checks.remove(&mr_id);
+                match self.mrs.find_mut(&mr_id) {
+                    Some(mr) => {
+                        mr.data.signatures = Some(*data);
+                        true
+                    }
+                    None => false,
+                }
+            }
+
             AppEvent::BranchCommitsLoaded {
                 branch,
                 commits,
@@ -2717,6 +2787,7 @@ pub(crate) mod tests {
                 stats: None,
                 visible_columns: None,
                 label_colors: None,
+                signed_commits: None,
                 tracker: None,
                 gitlab_username: None,
                 discover_new_mrs: None,

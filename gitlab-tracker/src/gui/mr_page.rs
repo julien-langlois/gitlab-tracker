@@ -740,6 +740,119 @@ pub struct Check {
     pub files: Vec<ConflictFile>,
     /// "N commits behind": a click lists them.
     pub behind: bool,
+    /// A command that fixes it, shown to copy.
+    pub command: Option<String>,
+    /// About the commits: a link opens the Commits tab.
+    pub to_commits: bool,
+}
+
+/// What the commits' signatures warn about, when the project enforces signed
+/// commits: a line per kind of anomaly, never blocking (whether to merge is
+/// the team's call), else a line that every commit is signed.
+pub fn signature_checks(mr: &TrackedMr, report: &crate::signatures::Report) -> Vec<Check> {
+    let summary = report.summary();
+    let shas = |list: &[String]| {
+        list.iter()
+            .map(|s| s.get(..8).unwrap_or(s))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let check = |verdict, what: String, why: String, command: Option<String>| Check {
+        verdict,
+        what,
+        why,
+        who: Vec::new(),
+        files: Vec::new(),
+        behind: false,
+        command,
+        to_commits: true,
+    };
+    let mut list = Vec::new();
+    let resign = format!(
+        "git rebase --exec 'git commit --amend --no-edit -S' origin/{}",
+        mr.target_branch
+    );
+    if !summary.unsigned.is_empty() {
+        list.push(check(
+            Verdict::Warns,
+            tn(
+                summary.unsigned.len() as u64,
+                "{n} commit without a signature",
+                "{n} commits without a signature",
+            ),
+            tf(
+                "{shas}: no signature, and no earlier version of the MR held a signed copy. \
+                 Sign the branch again, then force-push:",
+                &[("shas", &shas(&summary.unsigned))],
+            ),
+            Some(resign.clone()),
+        ));
+    }
+    if !summary.system.is_empty() {
+        list.push(check(
+            Verdict::Warns,
+            tn(
+                summary.system.len() as u64,
+                "{n} commit signed by GitLab only",
+                "{n} commits signed by GitLab only",
+            ),
+            tf(
+                "{shas}: signed with the instance's key, not its author's. \
+                 Sign the branch again, then force-push:",
+                &[("shas", &shas(&summary.system))],
+            ),
+            Some(resign),
+        ));
+    }
+    if !summary.unverified.is_empty() {
+        list.push(check(
+            Verdict::Warns,
+            tn(
+                summary.unverified.len() as u64,
+                "{n} signature not verified",
+                "{n} signatures not verified",
+            ),
+            tf(
+                "{shas}: GitLab cannot verify it (unknown or revoked key, another user's, \
+                 another e-mail). The author's public key must be in their GitLab profile.",
+                &[("shas", &shas(&summary.unverified))],
+            ),
+            None,
+        ));
+    }
+    if summary.anomalies() == 0 && summary.pending == 0 {
+        let mut why = Vec::new();
+        if summary.rebased > 0 {
+            why.push(tn(
+                summary.rebased as u64,
+                "{n} lost its signature in a rebase from GitLab, signed before it",
+                "{n} lost their signature in a rebase from GitLab, signed before it",
+            ));
+        }
+        if summary.exempt > 0 {
+            why.push(tn(
+                summary.exempt as u64,
+                "{n} from an exempted bot",
+                "{n} from an exempted bot",
+            ));
+        }
+        list.push(check(
+            Verdict::Met,
+            tl("Every commit signed").into(),
+            why.join(" · "),
+            None,
+        ));
+    }
+    list
+}
+
+/// Worst first: what blocks, what warns, what is met.
+fn rank(verdict: Verdict) -> u8 {
+    match verdict {
+        Verdict::Blocks => 0,
+        Verdict::Warns => 1,
+        Verdict::Met => 2,
+    }
 }
 
 /// What stands between the MR and its merge, worst first, then what is met.
@@ -760,6 +873,8 @@ pub fn checks(
             who: Vec::new(),
             files: Vec::new(),
             behind: false,
+            command: None,
+            to_commits: false,
         })
     };
 
@@ -974,32 +1089,38 @@ pub fn checks(
     if let Some(check) = list.iter_mut().find(|c| c.what == tl("Approved by")) {
         check.who = mr.approved_by.clone();
     }
-    list.sort_by_key(|c| match c.verdict {
-        Verdict::Blocks => 0,
-        Verdict::Warns => 1,
-        Verdict::Met => 2,
-    });
+    list.sort_by_key(|c| rank(c.verdict));
     list
 }
 
-/// The checks, worst first; the file in conflict picked, to show in Changes,
-/// and the MR picked in the "behind" popup, to open.
-fn blockers(
-    g: &GuiApp,
-    ui: &mut Ui,
-    mr: &TrackedMr,
-    data: Option<&PageData>,
-) -> (Option<String>, Option<String>) {
+/// What a click in the checks asks for.
+#[derive(Default)]
+struct Picked {
+    /// The file in conflict, to show in Changes.
+    file: Option<String>,
+    /// The MR picked in the "behind" popup, to open.
+    mr: Option<String>,
+    /// The Commits tab, for the signatures.
+    commits: bool,
+}
+
+/// The checks, worst first, and what was clicked in them.
+fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Picked {
     let theme = g.theme;
-    let list = checks(
+    let mut list = checks(
         mr,
         data.and_then(|d| d.overview.as_ref()),
         data.and_then(|d| d.rules.as_deref()),
         data.and_then(|d| d.threads.as_deref().ok()),
         data.and_then(|d| d.conflicts.as_deref()),
     );
+    if let Some(report) = g.app.signature_report(mr) {
+        list.extend(signature_checks(mr, &report));
+        list.sort_by_key(|c| rank(c.verdict));
+    }
     let mut picked = None;
     let mut open = None;
+    let mut to_commits = false;
     let ready = !list.iter().any(|c| c.verdict != Verdict::Met);
     let title = if ready {
         tl("Nothing blocks the merge")
@@ -1075,6 +1196,23 @@ fn blockers(
                         if !check.why.is_empty() {
                             ui.label(muted(&theme, &check.why));
                         }
+                        if let Some(command) = &check.command {
+                            command_box(ui, &theme, command);
+                        }
+                        if check.to_commits && check.verdict != Verdict::Met {
+                            ui.add_space(4.0);
+                            if button(
+                                ui,
+                                &theme,
+                                Some(Icon::Shield),
+                                tl("See them in Commits"),
+                                false,
+                            )
+                            .clicked()
+                            {
+                                to_commits = true;
+                            }
+                        }
                         if !check.files.is_empty() {
                             picked = conflict_files(ui, &theme, &mr.id, &check.files);
                         }
@@ -1082,7 +1220,31 @@ fn blockers(
                 });
             }
         });
-    (picked, open)
+    Picked {
+        file: picked,
+        mr: open,
+        commits: to_commits,
+    }
+}
+
+/// A command to copy: monospace in a box, copied on click.
+fn command_box(ui: &mut Ui, theme: &Theme, command: &str) {
+    ui.add_space(2.0);
+    let response = egui::Frame::new()
+        .fill(theme.palette.content)
+        .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
+        .corner_radius(CornerRadius::same(theme.radii.small))
+        .inner_margin(Margin::symmetric(8, 5))
+        .show(ui, |ui| {
+            ui.add(egui::Label::new(mono(command, theme.text_size - 1.5)).wrap());
+        })
+        .response
+        .interact(Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(tl("Copy"));
+    if response.clicked() {
+        ui.ctx().copy_text(command.to_string());
+    }
 }
 
 /// How many files in conflict show at once; the box scrolls past them.
@@ -1270,12 +1432,15 @@ fn tree_row(
 fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     let theme = g.theme;
     if mr.state == GitlabMrState::Opened {
-        let (path, open) = blockers(g, ui, mr, data);
-        if let Some(path) = path {
+        let picked = blockers(g, ui, mr, data);
+        if let Some(path) = picked.file {
             g.mr_tab = Tab::Changes;
             g.details.open_file(&mr.id, &path);
         }
-        if let Some(id) = open {
+        if picked.commits {
+            g.mr_tab = Tab::Commits;
+        }
+        if let Some(id) = picked.mr {
             g.open_mr(&id);
         }
         ui.add_space(16.0);
@@ -1301,6 +1466,17 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         (Tab::Commits, tl("Commits"), mr.commits.len()),
         (Tab::Pipelines, tl("Pipelines"), mr.pipelines.len()),
     ];
+    // A dot on Commits when a signature is missing (red) or not verified (amber).
+    let commits_alert = g.app.signature_report(mr).and_then(|r| {
+        let s = r.summary();
+        if !s.unsigned.is_empty() || !s.system.is_empty() {
+            Some(theme.tones.red.fg)
+        } else if !s.unverified.is_empty() {
+            Some(theme.tones.amber.fg)
+        } else {
+            None
+        }
+    });
     theme.card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -1321,6 +1497,17 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                 let response = ui
                     .add(egui::Label::new(text).sense(Sense::click()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if tab == Tab::Commits {
+                    if let Some(color) = commits_alert {
+                        let r = response.rect;
+                        ui.painter().circle_filled(
+                            egui::pos2(r.right() + 6.0, r.center().y),
+                            3.5,
+                            color,
+                        );
+                        ui.add_space(8.0);
+                    }
+                }
                 if on {
                     let r = response.rect;
                     ui.painter().hline(
@@ -1582,8 +1769,33 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         .iter()
         .map(|d| text_width(ui, d, date_font.clone()).ceil() + 2.0)
         .fold(DATE_MIN, f32::max);
-    let fixed_width =
-        SHA + date_width + branch_widths.iter().sum::<f32>() + GAP * (2 + branches.len()) as f32;
+    // Each commit's signature, when the project enforces signed commits.
+    let report = g.app.signature_report(mr);
+    let signatures: std::collections::HashMap<&str, &crate::signatures::CommitCheck> = report
+        .iter()
+        .flat_map(|r| &r.commits)
+        .map(|c| (c.sha.as_str(), c))
+        .collect();
+    let sig_font = egui::FontId::proportional(theme.text_size - 1.5);
+    let sig_width = report.as_ref().map_or(0.0, |r| {
+        r.commits
+            .iter()
+            .map(|c| {
+                let (glyph, label, _) = tones::signature(c, &theme.tones);
+                text_width(ui, &format!("{glyph} {label}"), sig_font.clone()).ceil() + 16.0
+            })
+            .fold(
+                text_width(ui, &tl("Signature").to_uppercase(), sig_font.clone()),
+                f32::max,
+            )
+    });
+    let sig_gap = if report.is_some() { GAP } else { 0.0 };
+    let fixed_width = SHA
+        + date_width
+        + sig_width
+        + sig_gap
+        + branch_widths.iter().sum::<f32>()
+        + GAP * (2 + branches.len()) as f32;
     let title = (ui.available_width() - fixed_width).max(TITLE_MIN);
     let total = fixed_width + title;
 
@@ -1603,6 +1815,9 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 head(ui, SHA, "SHA");
                 head(ui, title, tl("Title"));
                 head(ui, date_width, tl("Authored"));
+                if report.is_some() {
+                    head(ui, sig_width, tl("Signature"));
+                }
                 for (b, w) in branches.iter().zip(&branch_widths) {
                     centered(ui, *w, |ui| {
                         ui.label(
@@ -1646,6 +1861,13 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 fixed(&mut row, date_width, |ui| {
                     ui.label(muted(&theme, date.as_str()));
                 });
+                if report.is_some() {
+                    fixed(&mut row, sig_width, |ui| {
+                        if let Some(check) = signatures.get(commit.sha.as_str()) {
+                            signature_chip(ui, &theme, check, sig_font.clone());
+                        }
+                    });
+                }
                 for (b, w) in branches.iter().zip(&branch_widths) {
                     let presence = commit_presence(&g.app, mr, b, commit);
                     let (glyph, label, tone) = match presence {
@@ -1666,6 +1888,29 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         });
     ui.add_space(10.0);
     ui.label(muted(&theme, tl("● same SHA · ◆ cherry-picked with -x · ≈ copied (same author, date and title) · ○ absent")));
+}
+
+/// A commit's signature: glyph and label on its tone, why on hover.
+fn signature_chip(
+    ui: &mut Ui,
+    theme: &Theme,
+    check: &crate::signatures::CommitCheck,
+    font: egui::FontId,
+) {
+    let (glyph, label, tone) = tones::signature(check, &theme.tones);
+    egui::Frame::new()
+        .fill(tone.bg)
+        .corner_radius(CornerRadius::same(theme.radii.small))
+        .inner_margin(Margin::symmetric(6, 2))
+        .show(ui, |ui| {
+            ui.label(
+                RichText::new(format!("{glyph} {label}"))
+                    .font(font)
+                    .color(tone.fg),
+            );
+        })
+        .response
+        .on_hover_text(tones::signature_detail(check));
 }
 
 /// A column `width` wide, its content centered.

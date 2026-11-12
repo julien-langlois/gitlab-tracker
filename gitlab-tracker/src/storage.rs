@@ -181,6 +181,63 @@ pub struct ProjectEntry {
     /// ```
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discover_new_mrs: Option<bool>,
+
+    /// Whether every commit of an open MR must be signed, and what is tolerated.
+    /// Off when omitted.
+    ///
+    /// Example in `projects.toml`:
+    /// ```toml
+    /// [project.signed_commits]
+    /// enforce = true
+    /// tolerate_gitlab_rebase = true   # a signature lost in a rebase from GitLab's UI
+    /// require_same_patch = true       # …only for a copy with the same changes
+    /// require_verified = true         # an unknown or revoked key is an anomaly
+    /// accept_system_signed = false    # commits signed by the instance's own key
+    /// exempt_bots = "renovate-bot bot@renovate.example"
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signed_commits: Option<SignedCommitsConfig>,
+}
+
+/// `[project.signed_commits]`: see [`ProjectEntry::signed_commits`]. Each
+/// option left out takes [`crate::signatures::Policy`]'s default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignedCommitsConfig {
+    #[serde(default)]
+    pub enforce: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tolerate_gitlab_rebase: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub require_same_patch: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub require_verified: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accept_system_signed: Option<bool>,
+    /// `username email` pairs, separated by commas.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exempt_bots: Option<String>,
+}
+
+impl SignedCommitsConfig {
+    /// The policy to check MRs against, `None` when not enforced.
+    pub fn policy(&self) -> Option<crate::signatures::Policy> {
+        let default = crate::signatures::Policy::default();
+        self.enforce.then(|| crate::signatures::Policy {
+            tolerate_gitlab_rebase: self
+                .tolerate_gitlab_rebase
+                .unwrap_or(default.tolerate_gitlab_rebase),
+            require_same_patch: self
+                .require_same_patch
+                .unwrap_or(default.require_same_patch),
+            require_verified: self.require_verified.unwrap_or(default.require_verified),
+            accept_system_signed: self
+                .accept_system_signed
+                .unwrap_or(default.accept_system_signed),
+            exempt_bots: crate::signatures::BotAccount::parse_list(
+                self.exempt_bots.as_deref().unwrap_or_default(),
+            ),
+        })
+    }
 }
 
 /// Stats-feature configuration embedded in each `[[project]]` entry.

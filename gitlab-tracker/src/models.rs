@@ -264,6 +264,11 @@ pub struct MrData {
     /// (`resource_milestone_events`); `None`: never read.
     #[serde(default)]
     pub milestone_events: Option<Vec<MilestoneEvent>>,
+    /// The commits' signatures and what was read to check them, when the
+    /// project enforces signed commits (`None`: never checked). Kept across
+    /// loads: the MR fetch does not read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<crate::signatures::SignatureData>,
 }
 
 /// One milestone change of an MR, as GitLab records it: `add` when a milestone
@@ -896,6 +901,12 @@ pub enum AppEvent {
     SettledMrsChanged(Vec<String>),
     /// Recent commits of `branch`, scanned to recognise MRs copied there under
     /// other SHAs (`None`: the scan failed, the previous result is kept).
+    /// What was read to check an MR's commit signatures
+    /// (`gitlab_signatures::spawn_signature_check`).
+    SignaturesChecked {
+        mr_id: String,
+        data: Box<crate::signatures::SignatureData>,
+    },
     BranchCommitsLoaded {
         branch: String,
         commits: Option<BranchCommits>,
@@ -914,7 +925,10 @@ impl AppEvent {
     pub fn persists_state(&self) -> bool {
         matches!(
             self,
-            AppEvent::MrAdded(_) | AppEvent::MrRemovedById(_) | AppEvent::MrLoaded(_)
+            AppEvent::MrAdded(_)
+                | AppEvent::MrRemovedById(_)
+                | AppEvent::MrLoaded(_)
+                | AppEvent::SignaturesChecked { .. }
         )
     }
 }

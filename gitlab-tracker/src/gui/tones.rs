@@ -141,3 +141,64 @@ pub fn ticket_status(status: &str, tones: &Tones) -> Tone {
         tones.gray
     }
 }
+
+/// Glyph, label and tone of a commit's signature. The glyphs differ as well
+/// as the hues, so they read without color.
+pub fn signature(
+    check: &crate::signatures::CommitCheck,
+    tones: &Tones,
+) -> (&'static str, &'static str, Tone) {
+    use crate::signatures::Verdict;
+    match &check.verdict {
+        Verdict::Verified => ("✓", tl("Verified"), tones.green),
+        Verdict::SignedBeforeRebase { .. } => ("↻", tl("Signed before a rebase"), tones.teal),
+        Verdict::SystemSigned if check.accepted => ("✓", tl("Signed by GitLab"), tones.green),
+        Verdict::SystemSigned => ("!", tl("Signed by GitLab"), tones.amber),
+        Verdict::Unverified(_) if check.accepted => ("✓", tl("Not verified"), tones.gray),
+        Verdict::Unverified(_) => ("!", tl("Not verified"), tones.amber),
+        Verdict::Unsigned => ("✕", tl("Unsigned"), tones.red),
+        Verdict::BotExempt => ("–", tl("Exempted bot"), tones.gray),
+        Verdict::Pending => ("…", tl("Checking"), tones.gray),
+    }
+}
+
+/// Why a commit's signature is what it is, for its tooltip.
+pub fn signature_detail(check: &crate::signatures::CommitCheck) -> String {
+    use crate::i18n::tf;
+    use crate::signatures::{Status, Verdict};
+    match &check.verdict {
+        Verdict::Verified => tl("Signed, and verified by GitLab.").into(),
+        Verdict::SignedBeforeRebase { original, version } => tf(
+            "Rebased from GitLab, which does not sign: its copy {sha} in version {version} \
+             of the MR was signed and verified, with the same changes.",
+            &[
+                ("sha", original.get(..8).unwrap_or(original)),
+                ("version", &version.to_string()),
+            ],
+        ),
+        Verdict::SystemSigned => {
+            tl("Signed with the GitLab instance's key, not its author's.").into()
+        }
+        Verdict::Unverified(status) => {
+            let reason = match status {
+                Status::UnknownKey => {
+                    tl("GitLab does not know the key: its author must add it to their profile.")
+                }
+                Status::RevokedKey => tl("The key was revoked."),
+                Status::OtherUser => tl("The key belongs to another GitLab user."),
+                Status::SameUserDifferentEmail => {
+                    tl("The commit's e-mail is not one of the key owner's verified e-mails.")
+                }
+                Status::UnverifiedKey => tl("The key's e-mail is not verified in GitLab."),
+                Status::MultipleSignatures => tl("The commit carries several signatures."),
+                _ => tl("GitLab cannot verify the signature."),
+            };
+            reason.into()
+        }
+        Verdict::Unsigned => {
+            tl("No signature, and no earlier version of the MR held a signed copy of it.").into()
+        }
+        Verdict::BotExempt => tl("From an exempted bot: no signature needed.").into(),
+        Verdict::Pending => tl("Being read from GitLab.").into(),
+    }
+}

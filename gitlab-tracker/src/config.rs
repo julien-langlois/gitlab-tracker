@@ -179,6 +179,10 @@ pub struct AppConfig {
     /// Not serialised — always sourced from `projects.toml` at runtime.
     #[serde(skip)]
     pub gitlab_username: Option<String>,
+    /// What the project requires of its commits' signatures, `None` when it does
+    /// not enforce them. From `[project.signed_commits]` in `projects.toml`.
+    #[serde(skip)]
+    pub signed_commits: Option<crate::signatures::Policy>,
     /// `label_colors` parsed once on first use, instead of re-parsing every colour
     /// on every frame. `label_colors` is only set during startup (`main.rs`),
     /// before the first render.
@@ -257,6 +261,7 @@ impl Default for AppConfig {
             gitlab_label_colors: HashMap::new(),
             // Populated at runtime from projects.toml via apply_project_overrides — None by default.
             gitlab_username: None,
+            signed_commits: None,
             resolved_label_colors: std::sync::OnceLock::new(),
         }
     }

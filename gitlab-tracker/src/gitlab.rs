@@ -1123,7 +1123,7 @@ fn next_page(page: u32, len: usize) -> Option<u32> {
 ///
 /// Returns `None` when any page fails: a partial list must not be mistaken for a
 /// complete one (the discovery poll relies on it).
-async fn get_all_pages<T: serde::de::DeserializeOwned>(
+pub(crate) async fn get_all_pages<T: serde::de::DeserializeOwned>(
     ctx: &FetchContext,
     url: &str,
 ) -> Option<Vec<T>> {
@@ -1166,8 +1166,8 @@ pub fn cherry_pick_sources(message: &str) -> impl Iterator<Item = &str> {
 
 /// A commit as returned by GitLab's commit list / detail endpoints.
 #[derive(serde::Deserialize)]
-struct CommitJson {
-    id: String,
+pub(crate) struct CommitJson {
+    pub(crate) id: String,
     #[serde(default)]
     title: String,
     #[serde(default)]
@@ -1181,7 +1181,7 @@ struct CommitJson {
 
 impl CommitJson {
     /// `None` when GitLab did not return a parsable author date.
-    fn fingerprint(&self) -> Option<CommitFingerprint> {
+    pub(crate) fn fingerprint(&self) -> Option<CommitFingerprint> {
         let authored = chrono::DateTime::parse_from_rfc3339(self.authored_date.as_deref()?).ok()?;
         Some(CommitFingerprint {
             author_email: self.author_email.trim().to_lowercase(),
@@ -2372,12 +2372,13 @@ pub async fn fetch_gitlab_data(
             review_read_at,
             notes_seen,
             milestone_events,
+            signatures: None,
         },
     })
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::HashMap;
 
@@ -2822,9 +2823,12 @@ mod tests {
         assert_eq!((e.base, e.saved), (0, 1));
     }
 
+    /// What a route returns for a 404.
+    pub(crate) const NOT_FOUND: &str = "<404>";
+
     /// A stand-in GitLab answering every request through `route(path, body)`, and
-    /// recording the paths it was asked for.
-    async fn fake_gitlab(
+    /// recording the paths it was asked for. A [`NOT_FOUND`] body answers 404.
+    pub(crate) async fn fake_gitlab(
         route: fn(&str, &str) -> String,
     ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -2868,8 +2872,13 @@ mod tests {
                     let request = String::from_utf8_lossy(&raw[head_end..]).to_string();
                     let body = route(&path, &request);
                     log.lock().unwrap().push(path);
+                    let (status, body) = if body == NOT_FOUND {
+                        ("404 Not Found", "{}".to_string())
+                    } else {
+                        ("200 OK", body)
+                    };
                     let response = format!(
-                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\
+                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\n\
                          content-length: {}\r\nconnection: close\r\n\r\n{body}",
                         body.len()
                     );

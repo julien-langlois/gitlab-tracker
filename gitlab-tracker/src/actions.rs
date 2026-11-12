@@ -277,6 +277,12 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
                 editor.apply_to_app(app);
                 app.settings_editor =
                     crate::settings::SettingsEditorState::from_project_entry(&app.project_settings);
+                app.config.signed_commits = app
+                    .project_settings
+                    .signed_commits
+                    .as_ref()
+                    .and_then(crate::storage::SignedCommitsConfig::policy);
+                app.spawn_signature_checks(ctx.api_semaphore, tx);
             }
         }
 

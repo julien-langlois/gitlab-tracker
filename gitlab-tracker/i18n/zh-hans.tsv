@@ -1777,3 +1777,50 @@ state	Closed	已关闭
 	Milestone removed: {milestone}	移除里程碑：{milestone}
 	Merged by {who}	由 {who} 合并
 date	Closed	已关闭
+# Signed commits
+	Signed commits	签名提交
+	Enforce signed commits	强制要求提交签名
+	Check the signature of every commit of the open MRs, and warn when one is missing or not verified. Off: nothing is read or shown.	检查所有打开的 MR 中每个提交的签名，缺少或未验证时发出警告。关闭：不读取也不显示任何内容。
+	Tolerate rebases from GitLab	容忍在 GitLab 中执行的变基
+	A commit that lost its signature in a rebase from GitLab's UI counts as signed when an earlier version of the MR held a signed copy of it.	在 GitLab 界面中变基时丢失签名的提交，如果 MR 的早期版本中有其已签名的副本，则视为已签名。
+	…only with the same changes	……仅当更改相同时
+	The signed copy must change the same lines (one diff read per commit compared). Without it, a commit borrowing the author, date and title of a signed one passes.	已签名的副本必须修改相同的行（每个比较的提交读取一次 diff）。否则，借用已签名提交的作者、日期和标题的提交也会通过。
+	Require a verified signature	要求签名已验证
+	A signature GitLab cannot verify (unknown or revoked key, another user's, another e-mail) is reported.	报告 GitLab 无法验证的签名（未知或已吊销的密钥、属于其他用户、其他邮箱）。
+	Accept commits signed by GitLab	接受由 GitLab 签名的提交
+	Commits made in GitLab's web UI, signed with the instance's own key (when it has one).	在 GitLab 网页界面中创建、并由实例自身密钥签名的提交（如果实例配置了密钥）。
+	Exempted bots	豁免的机器人
+	`username email` pairs, separated by commas (renovate-bot bot@renovate.example). An MR is exempted when that account opened it, for the commits with that author e-mail only. Empty: none.	`用户名 邮箱` 对，用逗号分隔（renovate-bot bot@renovate.example）。当该账号创建了 MR 时豁免，仅限作者邮箱匹配的提交。留空：无。
+	Verified	已验证
+	Signed before a rebase	变基前已签名
+	Signed by GitLab	由 GitLab 签名
+	Not verified	未验证
+	Unsigned	未签名
+	Exempted bot	豁免的机器人
+	Checking	检查中
+	Signed, and verified by GitLab.	已签名，并已由 GitLab 验证。
+	Rebased from GitLab, which does not sign: its copy {sha} in version {version} of the MR was signed and verified, with the same changes.	在不签名的 GitLab 中变基：其在 MR 第 {version} 版中的副本 {sha} 已签名并验证，且更改相同。
+	Signed with the GitLab instance's key, not its author's.	使用 GitLab 实例的密钥签名，而非作者的密钥。
+	GitLab does not know the key: its author must add it to their profile.	GitLab 不认识该密钥：作者需要将其添加到个人资料中。
+	The key was revoked.	该密钥已被吊销。
+	The key belongs to another GitLab user.	该密钥属于另一个 GitLab 用户。
+	The commit's e-mail is not one of the key owner's verified e-mails.	提交的邮箱不在密钥所有者的已验证邮箱中。
+	The key's e-mail is not verified in GitLab.	密钥的邮箱未在 GitLab 中验证。
+	The commit carries several signatures.	该提交带有多个签名。
+	GitLab cannot verify the signature.	GitLab 无法验证该签名。
+	No signature, and no earlier version of the MR held a signed copy of it.	没有签名，且 MR 的早期版本中也没有其已签名的副本。
+	From an exempted bot: no signature needed.	来自豁免的机器人：无需签名。
+	Being read from GitLab.	正在从 GitLab 读取。
+	Every commit signed	所有提交均已签名
+	See them in Commits	在“提交”中查看
+	Signature	签名
+	Signatures	签名
+	{shas}: no signature, and no earlier version of the MR held a signed copy. Sign the branch again, then force-push:	{shas}：没有签名，且 MR 的早期版本中也没有已签名的副本。请重新签名分支，然后强制推送：
+	{shas}: signed with the instance's key, not its author's. Sign the branch again, then force-push:	{shas}：使用实例密钥而非作者密钥签名。请重新签名分支，然后强制推送：
+	{shas}: GitLab cannot verify it (unknown or revoked key, another user's, another e-mail). The author's public key must be in their GitLab profile.	{shas}：GitLab 无法验证（未知或已吊销的密钥、属于其他用户、其他邮箱）。作者的公钥必须在其 GitLab 个人资料中。
+@plural	{n} commit without a signature|{n} commits without a signature	{n} 个提交没有签名
+@plural	{n} commit signed by GitLab only|{n} commits signed by GitLab only	{n} 个提交仅由 GitLab 签名
+@plural	{n} signature not verified|{n} signatures not verified	{n} 个签名未验证
+@plural	{n} signed before a rebase from GitLab: tolerated|{n} signed before a rebase from GitLab: tolerated	{n} 个在 GitLab 变基前已签名：已容忍
+@plural	{n} lost its signature in a rebase from GitLab, signed before it|{n} lost their signature in a rebase from GitLab, signed before it	{n} 个在 GitLab 变基时丢失签名，变基前已签名
+@plural	{n} from an exempted bot|{n} from an exempted bot	{n} 个来自豁免的机器人

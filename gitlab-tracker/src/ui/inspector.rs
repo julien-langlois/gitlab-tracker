@@ -806,6 +806,32 @@ pub fn render_safe_inspector_text(
         &config.complexity_profile,
         palette,
     ));
+    // Commits without a valid signature, when the project enforces them.
+    if let Some(summary) = crate::signatures::report_for(mr, config.signed_commits.as_ref())
+        .map(|r| r.summary())
+        .filter(|s| s.anomalies() > 0)
+    {
+        let unsigned = summary.unsigned.len() + summary.system.len();
+        let mut parts = Vec::new();
+        if unsigned > 0 {
+            parts.push(format!("{unsigned} unsigned"));
+        }
+        if !summary.unverified.is_empty() {
+            parts.push(format!("{} not verified", summary.unverified.len()));
+        }
+        let color = if unsigned > 0 {
+            palette.accent_red
+        } else {
+            palette.accent_yellow
+        };
+        lines.push(Line::from(vec![
+            Span::raw("Signed   : "),
+            Span::styled(
+                format!(" ✕ {} ", parts.join(", ")),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ),
+        ]));
+    }
 
     // ── SECTION 5: Labels ────────────────────────────────────────────────────
     lines.push(Line::from(vec![Span::raw("")]));
