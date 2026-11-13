@@ -120,6 +120,9 @@ fn card(
                     .max_rect(rect.shrink2(Vec2::new(14.0, 0.0)))
                     .layout(Layout::left_to_right(Align::Center)),
             );
+            // The header takes the click: selectable texts (the id, the date)
+            // would take it over the header, and a click on them folded nothing.
+            row.style_mut().interaction.selectable_labels = false;
             row.spacing_mut().item_spacing.x = 10.0;
             row.label(muted(theme, if open { "▾" } else { "▸" }));
             row.add(Chip::new(label, tone).strong());

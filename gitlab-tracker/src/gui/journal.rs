@@ -906,7 +906,8 @@ fn event_row(
         (right - text_left).max(0.0),
     );
     let response = response.on_hover_text(tl("Double click: show the MR"));
-    if response.double_clicked() {
+    let key = ("journal", event.tab, &event.id, event.when, &event.what);
+    if super::widgets::double_clicked(ui, &response, key) {
         Some(RowClick::Open)
     } else if response.clicked() {
         Some(RowClick::Select)

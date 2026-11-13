@@ -7,6 +7,40 @@ use egui::{Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke,
 use super::icons::{self, Icon};
 use crate::app::App;
 
+/// The most time between the two clicks of a double click, in seconds. egui's
+/// own 0.3 s is shorter than the desktops' (GNOME and Windows take 0.4–0.5 s).
+pub const DOUBLE_CLICK: f64 = 0.5;
+
+/// Whether this click on a row is the second of a double click: the same `row`
+/// clicked twice within [`DOUBLE_CLICK`], wherever on it. egui's own double
+/// click also wants both clicks within 6 points of each other, which a hand
+/// often misses between the two: the first click selected the row, the second
+/// did nothing more. Call it once a frame for each row that opens on a double
+/// click, `row` naming it (an MR id, a login…).
+pub fn double_clicked(
+    ui: &Ui,
+    response: &egui::Response,
+    row: impl std::hash::Hash + std::fmt::Debug,
+) -> bool {
+    if !response.clicked() {
+        return false;
+    }
+    let memory = egui::Id::unique("row_double_click");
+    let row = egui::Id::unique(row);
+    let now = ui.input(|i| i.time);
+    let last: Option<(egui::Id, f64)> = ui.data(|d| d.get_temp(memory));
+    let double = last.is_some_and(|(id, at)| id == row && now - at <= DOUBLE_CLICK);
+    ui.data_mut(|d| {
+        if double {
+            // A third click starts over rather than opening again.
+            d.remove::<(egui::Id, f64)>(memory);
+        } else {
+            d.insert_temp(memory, (row, now));
+        }
+    });
+    double
+}
+
 pub fn icon_button(
     ui: &mut Ui,
     label: &str,

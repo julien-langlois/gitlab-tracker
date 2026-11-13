@@ -2208,6 +2208,10 @@ fn row(
                 .layout(Layout::left_to_right(Align::Center)),
         );
         ui.set_clip_rect(cell_rect.intersect(ui.clip_rect()));
+        // The row takes the click: selectable texts (the id, the title, the
+        // author…) would take it over the row, and a click on them selected
+        // nothing.
+        ui.style_mut().interaction.selectable_labels = false;
         ui.spacing_mut().item_spacing.x = 6.0;
         match cell {
             Cell::Flag if r.bulk_mode => {
@@ -2255,7 +2259,7 @@ fn row(
     }
 
     let modifiers = ui.input(|i| i.modifiers);
-    if response.double_clicked() {
+    if super::widgets::double_clicked(ui, &response, ("mr", &r.id)) {
         action = Some(RowAction::Open(r.index));
     } else if response.clicked() && (modifiers.command || (r.bulk_mode && !modifiers.shift)) {
         action.get_or_insert(RowAction::Toggle(r.index));

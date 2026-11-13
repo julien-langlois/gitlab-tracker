@@ -1198,7 +1198,7 @@ fn waiting_card(
                 );
                 let response =
                     response.on_hover_text(tl("Click: pick the pair · double click: show the MR"));
-                if response.double_clicked() {
+                if super::widgets::double_clicked(ui, &response, ("env", &id, i)) {
                     *open = Some(id.clone());
                 } else if response.clicked() {
                     *picked = Some((i, i + 1));

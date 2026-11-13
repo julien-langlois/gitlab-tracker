@@ -999,7 +999,7 @@ fn people_table(
                     .rect_filled(fill, CornerRadius::same(3), tone.fg);
             }
         }
-        if response.double_clicked() {
+        if super::widgets::double_clicked(ui, &response, ("team", &person.login)) {
             *opened = Some(person.login.clone());
         } else if response.clicked() {
             *picked = Some(person.login.clone());

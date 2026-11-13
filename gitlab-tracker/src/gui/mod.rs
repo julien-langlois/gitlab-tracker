@@ -465,6 +465,12 @@ impl GuiApp {
             demo,
         } = launch;
         bevel_theme::fonts::install(&cc.egui_ctx);
+        // egui's 0.3 s for the second click of a double click is shorter than
+        // the desktops' own: double clicks made at an ordinary pace counted as
+        // two single clicks (the rows use `widgets::double_clicked`).
+        cc.egui_ctx.options_mut(|o| {
+            o.input_options.max_double_click_delay = widgets::DOUBLE_CLICK;
+        });
         let projects_config = block_on(crate::storage::load_projects_toml());
         let language = projects_config.language;
         i18n::install();

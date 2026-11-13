@@ -683,7 +683,7 @@ fn stack_body(
             )
             .on_hover_text(stack.named(problem.parent()));
         }
-        if response.double_clicked() {
+        if super::widgets::double_clicked(ui, &response, ("stack", &node.id)) {
             *open = Some(node.id.clone());
         } else if response.clicked() {
             *picked = Some(node.id.clone());

@@ -118,7 +118,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                             if card.clicked() {
                                 picked = Some(row.index);
                             }
-                            if card.double_clicked() {
+                            if super::widgets::double_clicked(ui, &card, ("ticket", &row.ticket.id))
+                            {
                                 opened = Some(row.index);
                             }
                             let right =
@@ -308,17 +309,38 @@ fn board_view(
                                         ticket: row.ticket.id.clone(),
                                         status: row.ticket.status.clone(),
                                     };
-                                    ui.dnd_drag_source(id, payload, |ui| {
-                                        board_card(ui, theme, row, selected)
-                                    })
-                                    .inner
+                                    if ui.ctx().is_being_dragged(id) {
+                                        // Drawn under the pointer while it moves.
+                                        ui.dnd_drag_source(id, payload, |ui| {
+                                            board_card(ui, theme, row, selected)
+                                        })
+                                        .inner
+                                    } else {
+                                        // Not `dnd_drag_source` here: its drag-only
+                                        // area over the card took the clicks, so a
+                                        // card could not be picked nor opened. One
+                                        // area takes both: a press that moves drags
+                                        // the card, one that does not clicks it.
+                                        let card = board_card(ui, theme, row, selected);
+                                        let card = ui
+                                            .interact(card.rect, id, Sense::click_and_drag())
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                        if card.drag_started() {
+                                            egui::DragAndDrop::set_payload(ui.ctx(), payload);
+                                        }
+                                        card
+                                    }
                                 } else {
                                     board_card(ui, theme, row, selected)
                                 };
                                 if card.clicked() {
                                     *picked = Some(row.index);
                                 }
-                                if card.double_clicked() {
+                                if super::widgets::double_clicked(
+                                    ui,
+                                    &card,
+                                    ("ticket", &row.ticket.id),
+                                ) {
                                     *opened = Some(row.index);
                                 }
                                 if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
