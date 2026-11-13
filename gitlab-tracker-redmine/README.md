@@ -43,7 +43,7 @@ Implements the `TrackerProvider` trait from `gitlab-tracker-core` to detect Redm
   | Target version | ℹ️ `dialog-information` |
   | Progress (`done_ratio`) | ℹ️ `dialog-information` — fires on both increase **and** decrease |
 
-  Notifications are suppressed during the initial sync (see [How Desktop Notifications Work](../README.md#-how-desktop-notifications-work)).
+  Notifications are suppressed during the initial sync (see [Desktop notifications](../docs/how-it-works.md#desktop-notifications)).
 
 * **Time Log view (`p` on the Tracker pane):** focus the Tracker pane (`Tab` or `t`), then press `p` to toggle Ticket Info ↔ **Time Log**:
   * A progress bar comparing time spent vs. the ticket's estimate.

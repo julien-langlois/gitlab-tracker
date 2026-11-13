@@ -34,7 +34,13 @@ defaults:
     values: { title: "Desktop window", nav_order: 2 }
   - scope: { path: "terminal.md" }
     values: { title: "Terminal UI", nav_order: 3 }
+  - scope: { path: "configuration.md" }
+    values: { title: "Configuration", nav_order: 4 }
   - scope: { path: "gitlab-token.md" }
-    values: { title: "GitLab token", nav_order: 4 }
+    values: { title: "GitLab token", nav_order: 5 }
+  - scope: { path: "how-it-works.md" }
+    values: { title: "How it works", nav_order: 6 }
+  - scope: { path: "cli.md" }
+    values: { title: "Command line", nav_order: 7 }
   - scope: { path: "signed-commits.md" }
-    values: { title: "Signed commits", nav_order: 5 }
+    values: { title: "Signed commits", nav_order: 8 }

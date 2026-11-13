@@ -118,7 +118,7 @@ Use a classic personal access token with the single scope `read_api`, or a
 
 *For contributors.* Any change that adds a GitLab call — REST path or GraphQL
 type — updates the [Permissions](#permissions) table in the same commit, and
-the short list in the [README](https://github.com/julien-langlois/gitlab-tracker/blob/main/README.md#which-token-to-create). Look the
+the short list in the [README](https://github.com/julien-langlois/gitlab-tracker/blob/main/README.md#-which-token-to-create). Look the
 endpoint up in GitLab's own tables, which are generated from GitLab's code:
 
 - REST: [Fine-grained permissions for REST API](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens_rest/)

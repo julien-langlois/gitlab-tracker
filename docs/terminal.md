@@ -25,7 +25,7 @@ keyring. Installation, the first run and the configuration are in the
 
 Each branch cell tells how an MR reached that branch — whatever the promotion
 workflow (merge, `reset --hard`, cherry-pick from the CLI, GitLab or SmartGit,
-rebase, commit by commit). See [How Branch Presence Is Detected](https://github.com/julien-langlois/gitlab-tracker/blob/main/README.md#-how-branch-presence-is-detected)
+rebase, commit by commit). See [How it works](how-it-works.md#branch-presence)
 for the details and limits.
 
 ![Branch columns: present, picked, copied, partial and absent MRs](assets/terminal/branch-presence.png)
@@ -50,7 +50,7 @@ toggles the direction. The active sort is shown in the table title bar.
 
 `C` opens a column picker: `↑`/`↓` to move, `Space` to toggle. The selection is
 saved to `projects.toml` at once. All columns are hidden by default; they can
-also be set in `[project.visible_columns]` (see the [configuration](https://github.com/julien-langlois/gitlab-tracker/blob/main/README.md#step-3-project-configuration-projectstoml)).
+also be set in `[project.visible_columns]` (see the [configuration](configuration.md#projectstoml)).
 
 ![Column picker](assets/terminal/column-picker.png)
 

@@ -168,6 +168,87 @@ README) in the same commit.
 
 ---
 
+## Code layout
+
+```text
+gitlab-tracker/                  # Binary crate — desktop window, terminal UI, event loop
+└── src/
+    ├── main.rs          # Entry point: logging, config, project, token, provider wiring, event loop
+    ├── cli.rs           # clap arguments (--demo, --project) and subcommands (tracker-statuses)
+    ├── app.rs           # App state, apply_event dispatcher, navigation, sort, filters, UiLayout
+    ├── app/
+    │   ├── mr_changes.rs     # Change detection on MR loads → log + desktop notifications
+    │   ├── tracker_sync.rs   # Linked-ticket fetches, status transitions, TimeLog cache
+    │   ├── stats_recorder.rs # Stats snapshots on MR loads (feature `stats`)
+    │   └── stats_view.rs     # Stats overlay state: tab, window, report, generation guard
+    ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus, Effort
+    ├── notify.rs        # Desktop notifications: non-blocking notify-rust worker (no-ops without `notifications`)
+    ├── gitlab.rs        # Async GitLab client: pagination, caching guards, rate-limit semaphore
+    ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
+    ├── storage.rs       # projects.toml, config.json layer, state files, token lookup
+    ├── config.rs        # AppConfig, label colours & wildcard matching, VisibleColumns, activity badge
+    ├── settings.rs      # Settings dashboard editor state ([,])
+    ├── settings_core.rs # inventory::submit! — built-in project settings
+    ├── utils.rs         # Fuzzy matching, git clone command, terminal restore
+    ├── demo.rs          # Demo mode (--demo): mock data through the real key handler, read-only
+    ├── actions.rs       # Action + dispatch: what the user asks for, shared by the TUI and the window
+    ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions
+    ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
+    ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
+    ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
+    └── ui/
+        ├── mod.rs             # Root layout renderer & input bar (mode-aware)
+        ├── popups.rs          # Log Time, milestone autocomplete, filter / column pickers, settings
+        ├── help_popup.rs      # [?] help popup built from the shortcut registry
+        ├── theme.rs           # ThemeMode, Palette — dark/light colour sets (OSC 11 detection in main.rs)
+        ├── status_bar.rs      # One-line status bar (project, timer, API counts, sort, filter, spinner)
+        ├── table.rs           # Main MR table widget
+        ├── cockpit.rs         # Lower-left cockpit pane rendering
+        ├── cockpit/summary.rs # Cockpit metrics computed from the visible rows (time-zone aware)
+        ├── inspector.rs       # Upper-right pane: MR metadata, fetch errors & pipeline history
+        ├── tracker.rs         # Lower-right pane: linked ticket details & time log
+        ├── stats.rs           # Stats overlay shell: tabs, status bar, refresh (feature `stats`)
+        └── stats/             # common, overview, flow, quality, forecasts, correlations tabs
+
+gitlab-tracker-core/             # Library crate — shared contracts, zero UI dependency
+└── src/
+    ├── lib.rs           # Re-exports
+    ├── provider.rs      # TrackerProvider, TicketTransitionProvider, TrackerError, LinkedTicket, TicketChange
+    ├── domain.rs        # GitlabMrState, MergeabilityStatus, PipelineState, Requirement
+    ├── filters.rs       # FilterDef + MrSnapshot + inventory registry
+    ├── columns.rs       # ColumnDef + inventory registry
+    ├── shortcuts.rs     # ShortcutBlock / ShortcutFactory + inventory registry
+    ├── settings.rs      # ProjectSettingDef / ProjectSettingFactory + inventory registry
+    └── secrets.rs       # (feature `secrets`) resolve_secret: env var → OS keyring → prompt
+
+gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
+└── src/
+    ├── lib.rs           # RedmineProvider (from_tracker_section: config + token): TrackerProvider + TicketTransitionProvider
+    ├── client.rs        # Async Redmine REST client (issues, paginated time entries, activities, statuses)
+    ├── config.rs        # RedmineConfig ([project.tracker] fields), LabelColorConfig, status transitions
+    ├── detector.rs      # Regex-based ticket ID detector (title & description)
+    ├── keyring.rs       # Redmine token lookup via core::secrets (REDMINE_TOKEN → keyring → prompt)
+    ├── shortcuts.rs     # inventory::submit! — Redmine keyboard shortcut block
+    ├── filters.rs       # inventory::submit! — "Has linked ticket" filter definition
+    └── columns.rs       # inventory::submit! — "Tracker" column definition
+
+gitlab-tracker-stats/            # Library crate — optional analytics & velocity engine
+├── migrations/          # Versioned SQL schema (PRAGMA user_version), embedded with include_str!
+└── src/
+    ├── lib.rs           # Re-exports + crate architecture documentation
+    ├── snapshot.rs      # MrStatsSnapshot + SnapshotTrigger, canonical UTC timestamps
+    ├── db.rs            # SqliteStatsDb: migrations, upsert/query, startup maintenance (purge, repair + backup, backfill)
+    ├── metrics.rs       # PerMrMetrics: cycle_time, pipeline_failure_rate, comment_density (pure fns)
+    ├── aggregator.rs    # TimeWindow (LastDays / Range) + AggregatedStats
+    ├── correlation.rs   # Spearman ρ with tie-handling, p-value via t-distribution
+    ├── poisson.rs       # Forecasts, flow pressure, pressure signals, baseline anomalies
+    ├── report.rs        # StatReport::load / build_with_baseline
+    ├── settings.rs      # inventory::submit! — [project.stats] settings dashboard entries
+    └── shortcuts.rs     # inventory::submit! — Stats keyboard shortcut block
+```
+
+---
+
 ## Crate boundaries
 
 ```text
