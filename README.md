@@ -6,227 +6,32 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.94+-orange.svg)](https://www.rust-lang.org/)
 
-**GitLab MR Tracker** is a fast, asynchronous Terminal User Interface (TUI) dashboard designed for engineering teams. It provides real-time verification of GitLab Merge Requests across target environment branches (`main`, `preproduction`, `staging`, etc.), using strict merge/squash SHA verification first, then recognising MRs that reached a branch under other SHAs (cherry-pick with or without `-x`, rebase, commit-by-commit ports).
+**GitLab MR Tracker** follows your team's GitLab merge requests across your environment branches (`main`, `staging`, `production`…): whether each MR reached each branch — by merge, cherry-pick, rebase or a partial copy — what holds the others back, and who has the next move. It runs as a desktop window, or in the terminal.
 
-An experimental **desktop window** (`gitlab-tracker gui`, feature `gui`) shows the same dashboard with the mouse: see [Desktop window](#️-desktop-window-experimental).
-
-![gitlab-tracker demo](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/demo.gif)
+![The merge requests page: views and filters, each MR with its next step and its presence on every branch, the inspector](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/docs/assets/desktop/merge-requests.png)
 
 ## ✨ Key Features
 
-* 🔐 **OS Keyring Integration (Zero Plain-Text Secrets):** Personal Access Tokens (PAT) can be securely stored directly in your OS secret manager (GNOME Keyring, KWallet, macOS Keychain, or Windows Credential Manager).
-* 🏷️ **Dynamic Scoped Labels & Custom Chips:**
-  * **Smart Filtering:** Configure specific label prefixes (e.g., `deploy::`, `review::`) to display cleanly as colored chips in the main table grid, while keeping **all** attached tags visible in the side inspector panel.
-  * **Customizable Palette:** Map label names or wildcard patterns (e.g., `deploy::*`) to custom terminal colors or standard HEX codes (`#FF5733`) via `[project.label_colors]` in `projects.toml`. Labels without a config override automatically fall back to their **GitLab-side colour** (fetched at startup), with foreground computed for legibility.
-* ⚡ **High Performance & Asynchronous:** Powered by `tokio` and `reqwest`, utilizing non-blocking event loops and bounded concurrent requests to spare the servers: at most 3 GitLab requests (MR fetches and branch scans) and 3 tracker requests at once, and a refresh cycle (automatic or `R`) never starts while the previous one is still running.
-* 🛡️ **`updated_at`-Guarded Caching:** MR metadata (state, assignee, milestone, labels, mergeability) is read fresh on every refresh. The expensive per-MR calls — diff stats and pipelines — are reused while the MR's `updated_at` is unchanged; transient pipelines (running / pending / created) are always refetched because they can finish without touching `updated_at`. Discussions (unresolved threads, plus the review timeline read from them: review requests, first review, approval, pushes) and the current approvers are refetched for open MRs; discussions are frozen once an MR is merged or closed. With `RUST_LOG=info`, each cycle logs a `Refresh cycle complete` line (MR count, estimated GitLab calls, elapsed time).
-* 🔍 **Branch Presence Detection:** Each branch cell tells how an MR reached that branch — whatever the promotion workflow (merge, `reset --hard`, cherry-pick from the CLI, GitLab or SmartGit, rebase, commit by commit). See [How Branch Presence Is Detected](#-how-branch-presence-is-detected) for the details and limits:
+* 🔍 **Branch presence** — on which branch each MR landed, even cherry-picked, rebased or partly copied.
+* 👉 **Next step** — who has the ball on each MR, and what to do: review, fix the CI, answer threads, merge, deploy.
+* 🗂️ **MR page** — why it can't merge, where it is, its discussions, changes, commits, pipelines and timeline.
+* ☀️ **Today** — your reviews, your MRs that need you, and your stand-up in one click.
+* 🚀 **Promote & Environments** — what is ready to go to the next branch, and the commands to bring it there.
+* 📅 **Milestones** — will the release make its date? A forecast from your team's real pace.
+* 📈 **Delivery, CI, Team** — DORA measures, flaky jobs and CI budget, review load and who reviews whom.
+* 🧭 **Journal, Overlaps, Stacked MRs** — what happened, MRs about to conflict, chains of MRs out of step.
+* ✍️ **Signed commits** *(optional)* — warns about unsigned commits, forgives GitLab rebases.
+* 🔐 **Read-only and secure** — tokens in the OS keyring; a read-only fine-grained token is enough.
+* ⌨️ **Terminal UI** — the same dashboard from the keyboard, for terminals and SSH sessions.
 
-  | Cell | Meaning |
-  | :--- | :--- |
-  | `🟢 PRESENT` | The MR's merge / squash commit (or all its commits) is on the branch under the same SHA — merge, fast-forward, `reset --hard`. |
-  | `🍒 PICKED` | Copied with an explicit `(cherry picked from commit <sha>)` trailer — `git cherry-pick -x`, GitLab's *Cherry-pick* button. |
-  | `≈ COPIED` | Copied without trailer: commits with the **same author, author date and title** are on the branch — plain cherry-pick, rebase, SmartGit. Inferred. |
-  | `◐ PARTIAL` | Only some of the MR's commits reached the branch (by any of the above); the Inspector lists the missing ones. |
-  | `🔴 ABSENT` | Nothing of the MR was found on the branch. |
-* 🎨 **Automatic Light/Dark Theme Detection:** The UI palette adapts automatically to your terminal's background colour (dark or light) using OSC 11 escape-sequence probing at startup. Works with any terminal that supports the query (Alacritty, Kitty, WezTerm, iTerm2, GNOME Terminal, …).
-* 🖥️ **Responsive Flexbox TUI Grid:** Features a dynamic layout engine (`Constraint::Fill`) that seamlessly scales table columns and side panels from 1080p laptop displays to ultra-wide 4K monitors without empty trailing spaces.
-* 🔃 **Smart Auto-Sorting by Last Update:** The dashboard defaults to sorting MRs by `updated_at` (most recently pushed to remote first), automatically re-applied after each refresh. Cycle through sort columns (`S`) and toggle direction (`Shift+S`). The active sort is always visible in the table title bar.
-* 📋 **Markdown Release Checklist (`E`):** Copies the rows currently visible (active filter, search and hidden merged MRs applied) to the clipboard as a Markdown table — MR link, title, state, and one column per tracked branch with `✅` present, `🍒` cherry-picked, `≈` copied, `◐` partially copied, `❌` absent or `…` still loading. Paste it into a release ticket, a wiki page or a chat message. Combine with `m` to export only what is left to deploy.
-* 🌐 **Browser Integration:** Open any selected MR directly in your default browser with a single keypress (`O`).
-* 🔔 **Smart Desktop Notifications:** Receives native OS desktop notifications for meaningful GitLab and tracker events — MR branch appearance (including cherry-picks and copies), MR updates, mergeability/milestone changes, linked ticket field changes, and automatic tracker status transitions. Startup anti-spam prevents duplicate alerts on restart or redundant refreshes.
-* 🗞️ **Since Last Session:** Once the startup sync is over, the status bar summarises for ~20 s what changed while the app was closed — e.g. `Since last session: 2 merged · 3 new on a branch · 1 CI failing` (MRs merged or closed, new branch arrivals, pipelines that started failing). Nothing is shown when nothing changed.
-* ✨ **Refresh Highlight:** After each background refresh, any MR whose `updated_at` timestamp has changed since the previous cycle is briefly highlighted in the table with a green tint. The highlight fades out automatically after ~10 seconds.
-* 📁 **XDG-Compliant Persistence:** Saves tracked dashboard state, UI configurations, and last-known branch statuses automatically to platform-standard configuration paths using `directories`.
-* **Customizable Refresh Interval:** Tailor the background polling rate to your needs (defaults to 15 minutes / 900s) via `refresh_interval_secs` in `projects.toml`.
-* 📊 **Activity Badge:** Each MR in the Context Inspector displays a color-coded activity badge based on its `updated_at` timestamp — 🟢 Active, 🟡 Slowing, or 🔴 Stale. Thresholds are fully configurable via `activity_recent_days` / `activity_stale_days` in `projects.toml`.
-* 💬 **Unresolved Threads Indicator:** The number of **unresolved review threads** is computed from the GitLab Discussions API (a thread counts once while at least one of its resolvable notes is unresolved; plain comments, system notes and resolved threads are ignored). It is displayed both in the optional **Notes** table column and in the Context Inspector. A yellow `💬 N` badge signals threads awaiting attention; a dimmed `✔ No comments` confirms there is nothing to address.
-* 🎯 **Review Effort Score:** Each MR's diff is analysed at fetch time (files changed, lines added, lines deleted) and turned into a colour-coded effort indicator calibrated to your tech stack:
-  * In the **table**, the optional **Effort** column shows a colour-coded chip badge — 🟢 Easy, 🟡 Medium, 🔴 Complex — matching the style of the Inspector panel.
-  In the **side Inspector**, the full breakdown is always visible: file/line counts, commit count, a "Behind" line showing how many commits the source branch is behind the target, a 10-block progress bar, and the effort badge with the active profile name in parentheses.
+![An MR page: why it can't merge, where it is on each branch, people, ticket and lifecycle](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/docs/assets/desktop/mr-page.png)
 
-  The score is computed with a weighted formula: `(additions + deletions) × 0.8 + files_changed × 0.2`, interpolated between two configurable thresholds (`easy_threshold` / `hard_threshold`). The profile is set per-project in `projects.toml`:
-
-  ```toml
-  [project.complexity_profile]
-  name           = "Drupal"
-  easy_threshold = 300
-  hard_threshold = 2000
-  ```
-
-  Suggested presets:
-
-  | Tech stack              | `easy_threshold` | `hard_threshold` | Rationale                                                            |
-  | :---------------------- | :--------------- | :--------------- | :------------------------------------------------------------------- |
-  | **Drupal**              | `300`            | `2000`           | Lots of YAML/config files that are verbose but lightweight to review |
-  | **Symfony / PHP**       | `200`            | `1200`           | Denser business logic, typically smaller PRs                         |
-  | **Java / Spring**       | `100`            | `600`            | Highly logic-dense lines; verbosity adds review cost                 |
-  | **TypeScript / React**  | `150`            | `900`            | JSX inflates line counts but remains readable                        |
-  | **Go**                  | `150`            | `800`            | Concise but each line carries weight                                 |
-  | **Generic** *(default)* | `200`            | `1000`           | Conservative baseline for mixed stacks                               |
-
-  Diff data is cached behind the same `updated_at` guard as pipelines — no extra API call when the MR has not changed since the last refresh.
-* 🔀 **Animated Status Badge:** For open MRs, the Status column cycles through three phases every second with no extra column:
-
-  | Phase | Badge                       | Color      | Meaning                                                               |
-  | :---- | :-------------------------- | :--------- | :-------------------------------------------------------------------- |
-  | 1     | `OPEN`                      | 🟩 Green  | Base state                                                            |
-  | 2     | Mergeability                | varies     | Live mergeability from GitLab API                                     |
-  | 3     | `CI RUNNING` / `CI PENDING` | 🟧 Orange | Latest pipeline is active — dimmed to `(n/a)` when no pipeline exists |
-
-  The CI badge only appears when the most recent pipeline is in `Running` or `Pending` state; otherwise phase 3 falls back to the mergeability badge. The animation keeps the layout compact while surfacing both merge-readiness and CI status at a glance.
-
-  GitLab may temporarily return transient mergeability states (`checking`, `unchecked`, `preparing`) while it recomputes whether an MR can be merged. During that bounded retry window, the badge shows `RETRYING`. If GitLab still does not return a resolved status after the retry attempts, the badge shows `SYNC FAILED`; the next manual or automatic refresh will try again.
-* 🗂️ **Toggleable Table Columns (`C`):** Press `C` at any time to open an interactive column picker popup. Use `↑`/`↓` to navigate and `Space` to toggle each optional column on or off. Your selection is **instantly saved** to `projects.toml` and persisted across restarts — no manual file editing required. Available optional columns:
-
-  | Column        | Description                                                                                                                                      |
-  | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------- |
-  | **Activity**  | Color-coded activity badge — 🟢 Active, 🟡 Slowing, 🔴 Stale (same thresholds as the Inspector)                                               |
-  | **Target**    | The branch the MR is intended to merge into                                                                                                      |
-  | **Labels**    | Filtered label chips (respects `table_label_prefixes`)                                                                                           |
-  | **Milestone** | The associated milestone title                                                                                                                   |
-  | **Notes**     | Number of unresolved review threads — `💬 N` in yellow when non-zero, dimmed `✔ 0` otherwise                                                   |
-  | **Effort**    | Review effort chip badge — 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile`                                          |
-  | **Behind**    | Number of commits the source branch is behind the target branch — colour-coded by urgency (green = up to date, yellow = a few behind, red = 10+); may show `RETRYING` or `SYNC FAILED` while GitLab mergeability is unresolved |
-  | **Tracker**   | Linked ticket ID, status and spent / estimated time *(only offered when a tracker plugin such as Redmine is configured)*                         |
-
-  All columns are hidden by default to keep the layout compact. They can also be configured statically via `[project.visible_columns]` in `projects.toml` (see configuration section below).
-* ⚙️ **Project Settings Dashboard (`,`):** Press `,` to open an interactive settings popup for the active `projects.toml` entry. Use `↑`/`↓` to navigate grouped sections, `Space` to toggle booleans, `←`/`→` to adjust numeric values, text keys to edit text settings, `Enter` to save, and `Esc` to cancel. Built-in settings include cockpit visibility, auto-discovery, refresh interval, and activity thresholds. Optional crates can expose their own settings via the same registry; for example the `stats` feature adds a **Stats** section.
-* ⭐ **MR Flagging & Advanced Filters:** Manually flag any MR with `Space` to mark it with a coloured star chevron (★) in the title column. Press `F` to open the **filter picker popup**, which lets you narrow the table by:
-  * `Flagged ★` — only your manually flagged MRs
-  * **GitLab state** — `Opened`, `Merged`, or `Closed`
-  * **Mergeability** — `Mergeable`, `Conflict`, `Needs Rebase`, `Not Approved`, `Requested Changes`, `Draft`, `Discussions`, plus transient sync states `Retrying` and `SyncFailed`
-  * **Has comments** — MRs with at least one unresolved review thread
-  * **CI failing** — MRs whose latest pipeline is in a `Failed` state
-  * **Assigned to me 👤** — MRs assigned to your GitLab account *(only visible when `gitlab_username` is configured — see below)*
-  * **To review: me 👁️** — your review queue: open MRs (not drafts) where you are a reviewer and have not approved yet, **oldest review request first** *(only visible when `gitlab_username` is configured — see below)*. The request date comes from the MR's system notes ("requested review from @you"), else its creation; approvals from the GitLab Approvals API. The Inspector shows `Review : ⏳ waiting for you · requested 2 days ago` on those MRs, and `Approved : ✔ @alice, @bob` on any approved MR
-  * **Effort: Easy 🟢** — MRs whose review-difficulty score is below 0.33 (calibrated to your `complexity_profile`)
-  * **Effort: Complex 🔴** — MRs whose review-difficulty score is at or above 0.66
-  * **Milestone** — free-text search on the milestone title (case-insensitive)
-  * **Assignee** — free-text search on the GitLab assignee and, when a tracker ticket is linked (e.g. Redmine), its assignee as well
-  * **Absent from branch** — type a tracked branch name (e.g. `production`, case-insensitive) to list the MRs known to be missing from it: `🔴 ABSENT` or `◐ PARTIAL` (anything present, picked or copied is excluded). MRs still loading are left out. With `m` and `e`, this gives the Markdown checklist of what is left to deploy
-  * **Label** — type a GitLab label or its start, case-insensitive: `review::ongoing`, or `Project Foo` for both `Project Foo - Sprint 4` and `Project Foo - Sprint 5`. The text must stop at the end of a word, so `Project Foo - Sprint 4` does not pick `Sprint 40`, nor `Project F` `Project Foo`. A scope matches all its labels: `review` (or `review::`) lists `review::ongoing`, `review::done`, … Suggestions list the labels of the tracked MRs and their scopes, narrowed as you type: `Tab` / `Shift+Tab` highlight one and `Enter` applies it (with nothing highlighted, `Enter` applies the text as typed)
-
-  Merged MRs can also be hidden with `m`, on top of any filter. They stay tracked and refreshed, so this only declutters the remaining work; the status bar shows `merged hidden` while the toggle is on.
-
-  The active filter is shown in the table header. Flagged state is **persisted across restarts** via a tenant-scoped state file (`tracker_<hash>.json`, where the hash is derived from your GitLab URL and project ID).
-
-  #### 👤 "Assigned to me" and "To review: me" filters
-
-  These two filters are **only shown in the picker** when `gitlab_username` is set for the active project in `projects.toml`. The value must match the GitLab username exactly (the handle shown after `@` in the GitLab UI).
-
-  The field is **per-project** because you may use a different username on different GitLab instances (e.g. corporate SSO vs personal `gitlab.com` account).
-
-  ```toml
-  [[project]]
-  name       = "My Company — Backend"
-  gitlab_url = "https://gitlab.my-company.com"
-  project_id = "12345678"
-  active     = true
-
-  # Your GitLab username on this instance — enables "Assigned to me" and "To review: me" filters.
-  gitlab_username = "jdoe"
-  ```
-
-  When absent, the two entries simply do not appear in the filter picker — no error, no noop filter.
-
-  #### 🎯 Effort filters
-
-  **Effort: Easy 🟢**, **Effort: Medium 🟡** and **Effort: Complex 🔴** match against the pre-computed review-difficulty score (the same score shown in the Effort column and the Inspector panel). The score is computed using your project's `complexity_profile`:
-
-  | Filter                 | Score band            | Colour     |
-  | :--------------------- | :-------------------- | :--------- |
-  | **Effort: Easy**       | `score < 0.33`        | 🟢 Green  |
-  | **Effort: Medium**     | `0.33 ≤ score < 0.66` | 🟡 Yellow |
-  | **Effort: Complex**    | `score ≥ 0.66`        | 🔴 Red    |
-
-  MRs whose diff stats have not yet been fetched are excluded from every effort filter (they appear in "All" but in no effort band).
-
-* 🧭 **MR Cockpit Pane:** When the left dashboard area has enough vertical space, a cockpit is displayed below the MR table (enabled by default; disable it per project with `show_cockpit = false` in `projects.toml` or from the settings dashboard `,`). Runtime columns are computed from the currently visible rows, so they respect the active filter and search query. When built with `--features stats` and the stats are loaded, the optional **Flow** column is added: its merged / closed counters read from deduplicated SQLite snapshots over the whole retained history (`retention_days`), whatever the window selected in the stats overlay. The **Releases** column is always shown from live milestone data; when built with `--features stats`, its historical merged counts are enriched from the same snapshots. Operational thresholds are configurable per project with `[project.cockpit_thresholds]`.
-
-  | Column              | Signals                                                                                                                                                                                                                                  |
-  | :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | **Flow** *(stats)*  | Open / mergeable / draft MRs from the visible rows; snapshot-backed merged / closed MRs over the whole retained history, plus merge cadence: merged today, current calendar week, current calendar month (local time), rolling last 7 days, and rolling last 30 days. Hidden when the `stats` feature or the stats DB is unavailable. |
-  | **Attention**       | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, reviews waiting for you (`To review (me)`, with the age of the oldest request, e.g. `4 (2d)`), MRs without reviewer, MRs without assignee, and manually flagged MRs                           |
-  | **Delivery Health** | Stale open MRs, oldest open MR age, missing milestones, milestones due soon, overdue milestones, MRs behind their target branch, hot threads, and optional tracker coverage / over-estimate                                              |
-  | **Quality / Scope** | Complex MRs, average diff size, large diffs, many-commit MRs, many-file MRs, missing diff stats, unknown/skipped pipeline status, and recently updated rows                                                                              |
-  | **Releases**        | The closest known milestones by due date, with live merged / WIP / blocked / waiting-review counts from the visible dashboard. When `--features stats` is enabled, merged counts are reconciled from the local stats database. At-risk releases are highlighted with `⚠` when the due date is close or overdue and too many MRs remain unmerged. |
-
-  Example release summary:
-
-  ```text
-  ⚠ Summer Breeze - 1.2.0 (D-2)
-      Merged   4
-      WIP      3
-      Blocked  2
-      Review   1
-  ```
-
-  Tracker-related metrics (`With ticket`, `No ticket`, `Over estimate`) are no-op safe: they are only computed and displayed when a tracker provider is active. Without Redmine or another tracker plugin, the cockpit shows `Tracker n/a` instead.
-
-* 📊 **MR Analytics & Velocity Stats (`G`) *(optional — `--features stats`)*:** Press `G` to open a fullscreen analytics overlay powered by the `gitlab-tracker-stats` crate. Snapshots are recorded automatically into a local SQLite database (`stats.db`) on every merge, close, or daily refresh — no manual action required. Merge/close snapshots are dated at the real GitLab event, not at the refresh that observed it. The schema is versioned; on startup, legacy rows are repaired once (after a `VACUUM INTO` backup to `stats.db.bak`) and snapshots older than `retention_days` are purged.
-
-  The overlay is organised into navigable tabs:
-
-  | Tab | Content |
-  | :--- | :--- |
-  | **Overview** | Throughput, cycle time P50/P75/P90, backlog aging, flow-pressure status, and top delivery signal |
-  | **Flow** | Median cycle time by author, reviewer, and milestone using horizontal bar charts, and the **promotion lead time** per branch (see below) |
-  | **Quality** | Data-confidence indicators, pipeline/reviewer/milestone coverage, and MR size buckets with median cycle time |
-  | **Forecasts** | Poisson throughput forecasts plus pressure signals and historical-baseline anomalies (Poisson test on throughput, ratio test on shares) |
-  | **Correlations** | Spearman metric correlations ranked by \|ρ\| with p-values, strength labels, and sample sizes |
-
-  Use `Tab` / `Shift+Tab` to switch tabs, `1`–`5` to jump directly to a tab, `W` to cycle the time window (Last 30 days → 90 days → 365 days → All time), `R` to refresh, and `↑`/`↓`, `j`/`k`, or `PgUp`/`PgDn` to scroll the active tab. Stats settings are grouped under `[project.stats]` in `projects.toml`: `retention_days` (snapshot retention, default: 365) and `sprint_weeks` (sprint duration for throughput forecasts, default: 2). For team-wide stats coverage, enable `discover_new_mrs = true` at the top project level (not under `[project.stats]`) — this automatically discovers and tracks all newly created MRs at each refresh cycle, including MRs already merged between two cycles, independently of whether the `stats` feature is active.
-
-  **Promotion lead time** — how long a merged MR takes to reach each other tracked branch (e.g. `develop` → `preproduction` → `master`), per branch: number of MRs, median, P90 and max delay since the merge, and the share that arrived by copy (cherry-pick) rather than by merge. An arrival is recorded the first time the tracker sees the MR on a branch other than its target:
-  * by **copy** (`🍒` / `≈`): dated at the copied commit's date — exact, even if the app was closed;
-  * by **same SHA** (merge, fast-forward, `reset --hard`): dated at the refresh that saw it — so within one refresh interval, or at the next launch if it happened while the app was closed;
-  * never for an MR already on the branch when it was first seen, nor for the MRs of a branch you just added to the columns (their arrival date is unknown). Recording starts with this version, so the table fills up over time.
-
-  See [`gitlab-tracker-stats/README.md`](gitlab-tracker-stats/README.md) for full documentation.
-
-* 🏁 **Milestone Bulk-Add (Release Manager Workflow):** In Insert mode, type `@` followed by any part of a milestone name to trigger a live autocomplete dropdown. Active and upcoming milestones are fetched from GitLab on startup and filtered in real time as you type. Selecting a milestone with `Enter` automatically adds **all MRs attached to that milestone** (any state) in a single action — no need to enter IDs one by one. Ideal for release managers preparing a deployment checklist.
-
-  ```text
-  i             → Enter Insert mode
-  @5.2          → filters milestones containing "5.2"
-  ↓ / Tab       → navigate suggestions
-  Enter         → bulk-add all MRs from the selected milestone
-  Esc           → close dropdown without selecting
-  ```
-
-* 🔬 **Pipeline Inspector (`P`):** Press `P` on any selected MR to toggle the side panel between MR metadata and its pipeline history. The last 5 pipeline runs are displayed with per-stage job breakdown, status icons, and execution durations:
-
-  ```text
-  #9981  ✔ passed
-    ▸ test
-      ✔ lint        (18s)
-      ✔ unit-tests  (74s)
-    ▸ build
-      ✔ build       (42s)
-    ▸ deploy
-      ✔ deploy-staging (31s)
-  ```
-
-  Pipeline data is fetched **alongside MR metadata** in the same refresh cycle and **persisted to disk** — so it is immediately available on restart without an extra network call. Re-fetching occurs when GitLab reports a new `updated_at` timestamp, and on every cycle while a pipeline is still running, pending or created (it can finish without changing `updated_at`).
-
-* 🔎 **HEAD SHA & Pipeline Summary in Inspector:** The MR metadata panel (default side panel) surfaces two additional at-a-glance fields without requiring a switch to the Pipeline view:
-  * **HEAD SHA** — the abbreviated commit SHA (8 chars) of the MR's source branch tip, useful for cross-referencing with CI logs or `git log`.
-  * **Pipeline summary** — the latest pipeline status (`✔ passed`, `✘ failed`, `⟳ running`, …) with its total execution time and a `[P] details` hint to open the full pipeline inspector.
-  * **Branches** (after *Diff & Effort* and *Labels*) — the presence of the MR on every tracked branch, with the same badges as the table. For a `◐ PARTIAL` port it shows how many commits arrived (`2/3 commits`) and lists the ones still missing, by short SHA and title:
-
-    ```text
-    ── Branches ──
-    develop       : 🟢 PRESENT
-    preproduction : ◐ PARTIAL  2/3 commits
-      ✘ 3f9c2a1b fix: #123456 Fix issue.
-    main        : 🔴 ABSENT
-    ```
-* ✍️ **Signed commits *(optional)*:** with `[project.signed_commits] enforce = true`, every commit of the open MRs is checked for a verified signature. A missing or unverified one is flagged in the MR list, in the MR page's *Why it can't merge* and in a *Signature* column of its Commits tab — a warning, never a block. Signatures lost to a rebase from GitLab's UI are recognised from the MR's earlier versions (same author, date, title **and** changes) and not reported; bots can be exempted. See [docs/signed-commits.md](docs/signed-commits.md).
-
----
-
-* 🖥️ **Desktop window *(experimental — `--features gui`)*:** `gitlab-tracker gui` opens the dashboard in a native window (egui) instead of the terminal: MR table, views sidebar, inspector, cockpit, tracker and stats pages, light and dark themes. It runs the same state, actions and refresh cycle as the TUI and reads the same `projects.toml`, state files and keyring, so both can be used on the same projects. See [Desktop window](#️-desktop-window-experimental).
+| Page | What it covers |
+| :--- | :--- |
+| [Desktop window](docs/desktop-window.md) | Install and run the window, every page with a screenshot. |
+| [Terminal UI](docs/terminal.md) | The terminal dashboard: table, filters, inspector, cockpit, stats, shortcuts. |
+| [GitLab token](docs/gitlab-token.md) | Which read-only token to create and why. |
+| [Signed commits](docs/signed-commits.md) | Checking that every commit of the open MRs is signed. |
 
 ## 🔑 Authentication & Configuration
 
@@ -661,53 +466,18 @@ gitlab-tracker --demo
 RUST_LOG=info gitlab-tracker
 ```
 
-### 🖥️ Desktop window (experimental)
+### 🖥️ Desktop window
 
-![gitlab-tracker desktop window](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/gui.gif)
-
-The window is behind the `gui` feature and is **not published on crates.io yet**: it depends on the `bevel` UI crates, which are not released. To build it from source:
-
-* Rust **1.95+** (required by `bevel`);
-* the `bevel` repository checked out **next to** this one (`../bevel`, a path dependency for now);
-* on Linux, the usual windowing libraries (Wayland and/or X11, OpenGL) — present on any desktop install.
+The window is behind the `gui` feature and is **not on crates.io yet** (it depends on the unreleased `bevel` UI crates, checked out next to this repository, and needs Rust 1.95+):
 
 ```bash
 cargo install --path gitlab-tracker --features gui      # add stats,redmine as needed
 
-gitlab-tracker gui            # the active project, as the TUI
+gitlab-tracker gui            # the active project
 gitlab-tracker --demo gui     # demo data, read-only
 ```
 
-On Linux the window is borderless: it draws its own title bar and buttons, laid out as the desktop sets them (`GITLAB_TRACKER_TITLEBAR=system` keeps the desktop's frame instead). The window never prompts in the terminal. With no project configured it opens a setup window; a project whose token is not in the OS keyring (or `GITLAB_TOKEN` / `REDMINE_TOKEN`) asks for it in the window, then saves it to the keyring.
-
-**Projects in tabs.** Each project opens in its own title-bar tab and keeps refreshing while hidden (its notifications, state saves and automatic tracker transitions go on); a dot on a hidden tab says something changed, red when a fetch failed. `+` (or `W`) lists the projects of `projects.toml` and offers **New project…**: GitLab URL, project (id or path), optional name and branches, the token and, with Redmine, the tracker's URL and API key. When another project already uses the same GitLab (or Redmine) instance, the form says a token is saved and needs not be typed again. The project and the tokens are checked against GitLab and Redmine before anything is saved; an empty name or branch list takes GitLab's name and default branch, and your username is read from the token (`gitlab_username`). The open tabs come back at the next launch. Keys: `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+1…9`, `Ctrl+W` (or a middle click) closes a tab.
-
-**Pages besides the table, cockpit, tracker and stats:**
-
-* **Today** — across every open tab: the reviews waiting for you, your MRs that need you (CI failed, conflicts, threads to answer, changes requested), those ready to merge, those waiting on others, and what you merged today. A click shows the MR in its tab. **Copy my stand-up** puts what you did since the last working day (merged, reviewed, pushed, opened), what is on today and what waits on others in the clipboard, for the daily meeting.
-* **Promote** — between two tracked branches (the last two by default, e.g. `staging → production`): what is ready to go, what is not on the first branch yet and what holds it back, and what already went. The ready list copies as a release checklist or shows in the table.
-* **Team** — per person: the reviews waiting on them (red past the review reminder delay), their open MRs and what each waits on, the threads they have to answer, how fast they answer a review request, and a load against the most loaded person; who reviews whom over 7, 30 or 90 days, and what stands out. The summary and a reminder copy to paste in a chat. A double click on a person (or `Enter`, or **Open their page** in the inspector) opens their page: `Esc` goes back, `J` / `K` move to the next or previous person. Besides what waits on them, it shows twelve weeks of activity (reviews given, MRs merged, reviews asked of them), who asks them for reviews and whom they ask (with who could take some when one author leans on them), where their MRs spend their time (to the first review, pushes after a review, failed pipelines, each step's median, sizes and labels), how fast they answer a review request, and their latest MRs. Their figures are compared with the team's median, never ranked.
-* **Journal** — what happened on the MRs of every open tab, newest first and by day: opened, review asked, approved, threads, pipelines, merged, arrived on a branch (and how). Rebuilt from what the MRs already carry, so it has a past from the first launch; filters by type, tab, period, and "only what concerns me".
-* **Environments** — the tracked branches from feature to production as cards: the environment deployed from each, its last deployment, its branch's latest pipeline, and what it has that the next branch lacks; every gap between two branches (fixes to bring back upstream included), two weeks of deployments, and the pair picked, with a way into Promote. Reads the project's deployments and one pipeline per tracked branch, again once older than the refresh interval, and the project's merges for the milestones' forecast: the whole eight weeks once, then only the MRs updated since, kept in `merges_<hash>.json` beside the state file so that a new launch goes on from there.
-* **CI / Pipelines** — how often the tracked MRs' pipelines pass and how long they take, each job's last 20 runs with its failure rate and trend, the flaky jobs (a failure, then a pass on the same commit), the failures by stage, the MRs held back by the CI and the tracked branches' latest pipeline. A **CI budget** adds up the runner time (against the period before), what failed pipelines spent, the wait for a runner (GitLab's `queued_duration`), the runner time by day and the costliest jobs.
-* **Milestones** — for each milestone: its MRs by where they stand (on production, on the way, to merge, in review, back on their author, drafts), whether it makes its due date — a Monte Carlo forecast replaying, 2,000 times, the project's merges of the last eight weeks (every MR, tracked or not; three weeks of history at least) until every MR of the milestone is merged: the chance to make the date and the 50 / 85 / 95 % dates —, a burn-up, its tickets' time and its people. Copies as release notes.
-* **Overlaps** — the open MRs that change the same files, on the same lines, a few lines apart, or only in the same file, from the files and hunks the review-effort fetch already reads; a matrix of the pairs, the files changed by the most recent MRs, and for the pair picked where the two meet and which one to merge first.
-* **Delivery** — the four DORA measures (deployment frequency, lead time from the first commit to production, change failure rate with failed deployments, reverts and hotfixes, time to restore), each in its band from Elite to Low; where the time goes, each merged MR's path cut into before the review, waiting for a review, in review, waiting for the merge and waiting for production; the review rounds (pushes after the first review, share approved at the first round); and the open MRs by step and age against the P50 / P85 of the time to merge. **Copy the weekly report** puts it all, with the CI and the milestones' forecasts, in the clipboard as Markdown.
-* **Stacked MRs** — the MRs opened on another MR's branch, as chains down to the branch they end in, in merge order; flags a parent merged while its child still targets its branch (retarget), a parent pushed to after its child (rebase), a parent holding its children back, and a child ready before its parent.
-
-* **MR page** — a double click on a row (or `Enter`, or the inspector's ⤢ button) opens the MR on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR. Under its figures, three tiles: **where it is** (each tracked branch, and whether the environment deployed from it includes the MR), **people**, and the **ticket** (status, time spent against the estimate, Log time). Left: **why it can't merge** (conflicts, pipeline, threads, approval rules, commits behind — a click, there, on the **behind target** figure or on the list's **Behind** count, lists the merges and pushes on the target the MR lacks — draft), then tabs for the **discussions** in full (with the code each thread is about), the **changes**, the **commits** (where each one is, branch by branch) and the **pipelines**. Right: a **timeline**, approval rules, **related MRs** (same ticket, same branch, mentions) and how the MR compares with the other tracked ones. The merge checks, approval rules (GitLab Premium; left out otherwise), threads and deployments are read when the page opens, again once the MR changes.
-
-The **inspector** also reads, on demand, the MR's changed files with their patches (**Changes**) and, for a failed job, the end of its log (**Log**, in Pipelines). A click on a desktop notification brings the window forward on that MR, in its tab.
-
-**Dock icon and launcher (Linux).** GNOME (Ubuntu) and KDE take the icon of a running window from a desktop entry named after its app id (`gitlab-tracker`). Install it once for the current user:
-
-```bash
-sh assets/linux/install-desktop-entry.sh
-```
-
-This copies the icon into `~/.local/share/icons/hicolor/` and a `gitlab-tracker.desktop` launcher (pointing at the installed binary) into `~/.local/share/applications/`. Then start *GitLab Tracker* from the applications menu and pin it to the dock.
-
-The icon is generated by `assets/icon/make_icons.py` (Pillow) in every format: SVG and PNG (Linux, window icon), `.ico` (Windows) and `.icns` (macOS, for an `.app` bundle).
+Requirements, projects in tabs, every page and the Linux dock icon: **[docs/desktop-window.md](docs/desktop-window.md)**.
 
 ---
 
@@ -777,77 +547,6 @@ gitlab-tracker --project backend checklist --milestone "1.2.0" --absent-from pro
 ```
 
 The project is loaded exactly like the TUI loads it (same settings, branches and token lookup). The command waits for every MR fetch and branch scan, so cells are never `…`; MRs that failed to load are shown with `…`. It is read-only: no state file, stats snapshot or tracker status transition is written, and merged MRs are listed even when `hide_merged` is on. `--absent-from` must name a tracked branch.
-
-## ⌨️ Dashboard Navigation & Shortcuts
-
-The dashboard operates in two keyboard modes, inspired by vim:
-
-### 🟦 Normal Mode (default)
-
-Shortcut keys are active. The input field is passive. Letter shortcuts are case-insensitive, except `s` / `S` (sort column / sort direction).
-
-| Shortcut               | Action                                                                                                                     |
-| :--------------------- | :------------------------------------------------------------------------------------------------------------------------- |
-| `?`                    | **Open help popup** — lists all registered shortcuts by section (any key to close)                                         |
-| `i` or `/`             | **Enter Insert mode** — focus the input field                                                                              |
-| `▲` / `▼` or `k` / `j` | Navigate rows in the table                                                                                                 |
-| `Tab`                  | Cycle focus between panes: **Dashboard → Inspector → Tracker** → Dashboard (Tracker pane only when a ticket is linked)     |
-| `t`                    | When focus is on Dashboard or Inspector: **jump to Tracker pane**. When already on Tracker: **open ticket URL** in browser |
-| `p`                    | **Inspector pane focused**: cycle MR Info ↔ Pipelines. **Tracker pane focused**: toggle Ticket Info ↔ Time Log             |
-| `l`                    | **Log time** on the linked tracker ticket *(only when a tracker plugin is configured)*                                     |
-| `c`                    | **Open column picker** — toggle optional columns on/off                                                                    |
-| `,`                    | **Open project settings dashboard** (cockpit, auto-discovery, refresh interval, thresholds, stats…)                        |
-| `o`                    | Open selected MR in your default web browser                                                                               |
-| `y`                    | **Copy** `git clone -b <source branch> <ssh url>` for the selected MR to the clipboard                                     |
-| `r`                    | Force immediate network refresh for all MRs                                                                                |
-| `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
-| `S`                    | Toggle sort direction (ascending / descending)                                                                             |
-| `w`                    | **Switch project** — pick another `projects.toml` entry; the current state is saved and the chosen project loads in place |
-| `e`                    | **Copy a Markdown release checklist** of the visible rows (MR link, title, state, ✅ / 🍒 / ≈ / ◐ / ❌ per branch)                  |
-| `m`                    | **Hide / show merged MRs** — they stay tracked; saved per project (`hide_merged`)                                          |
-| `Space`                | **Toggle flag ★** on the selected MR — persisted across restarts                                                          |
-| `f`                    | Open filter picker (state, mergeability, notes, milestone, assignee…)                                                      |
-| `g`                    | **Open Stats overlay** — velocity metrics & Spearman correlations *(requires `--features stats`)*                          |
-| `Del`                  | Delete selected MR row                                                                                                     |
-| `Esc`                  | Quit dashboard — asks for confirmation (`Esc` or `y` again to quit, any other key to cancel)                              |
-
-### 🟩 Column Picker Mode
-
-Opened with `c`. The table border turns **cyan** as a visual indicator.
-
-| Shortcut               | Action                                                              |
-| :--------------------- | :------------------------------------------------------------------ |
-| `▲` / `▼` or `k` / `j` | Navigate the column list                                            |
-| `Space`                | Toggle the highlighted column on/off                                |
-| `Enter` or `Esc`       | Close the picker — changes are saved immediately to `projects.toml` |
-
-### 🟨 Insert Mode
-
-The input field has exclusive focus. All printable keys feed the field — shortcuts are suspended. The input bar turns **yellow** as a visual indicator.
-
-| Shortcut             | Action                                                           |
-| :------------------- | :--------------------------------------------------------------- |
-| `142` + `Enter`      | Add MR ID `!142` to tracking                                     |
-| `staging` + `Enter`  | Add branch `staging` to target columns                           |
-| `-142` + `Enter`     | Remove MR ID `!142` from tracking                                |
-| `-staging` + `Enter` | Remove branch column `staging`                                   |
-| `@name`              | Filter milestones matching `name` — opens autocomplete dropdown  |
-| `Enter`              | Submit input, or confirm highlighted milestone suggestion        |
-| `Esc`                | Close autocomplete dropdown, or cancel and return to Normal mode |
-
-#### 🏁 Milestone Autocomplete (Insert Mode)
-
-When the input starts with `@`, a dropdown appears above the input bar listing all active/upcoming milestones fetched from GitLab. The list is filtered in real time as you type.
-
-| Shortcut                         | Action                                                        |
-| :------------------------------- | :------------------------------------------------------------ |
-| `↑` / `↓` or `Shift+Tab` / `Tab` | Navigate suggestions                                          |
-| `Enter`                          | Confirm selection — bulk-adds all MRs from the milestone      |
-| `Esc`                            | Close dropdown without selecting                              |
-
-> **Why two modes?** Branch names starting with `s`, `S`, `p`, `P`, `o`, `O`, `r` or `R` would otherwise collide with shortcut keys. Insert mode guarantees the full branch name is captured without interference.
-
----
 
 ## 🏗️ Project Architecture
 
@@ -937,7 +636,7 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
 | `notifications` | ✅ enabled  | Desktop notifications via `notify-rust` (module `notify.rs`; without it, notifications are no-ops and `notify-rust` is not built)|
 | `redmine`       | ❌ disabled | Redmine ticket & time-tracking integration (see [`gitlab-tracker-redmine`](gitlab-tracker-redmine/README.md))            |
 | `stats`         | ❌ disabled | MR analytics, velocity metrics, and Spearman correlations (see [`gitlab-tracker-stats`](gitlab-tracker-stats/README.md)) |
-| `gui`           | ❌ disabled | Experimental desktop window, `gitlab-tracker gui` (see [Desktop window](#️-desktop-window-experimental); source builds only, Rust 1.95+) |
+| `gui`           | ❌ disabled | Experimental desktop window, `gitlab-tracker gui` (see [Desktop window](docs/desktop-window.md); source builds only, Rust 1.95+) |
 
 ### Tracker Plugins
 

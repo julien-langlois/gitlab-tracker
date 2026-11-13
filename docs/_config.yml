@@ -1,0 +1,40 @@
+# GitHub Pages site for the documentation (Jekyll, built by GitHub from /docs).
+title: GitLab MR Tracker
+description: Track GitLab merge requests across your environment branches, from the terminal or a desktop window.
+
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+plugins:
+  - jekyll-remote-theme
+
+# Search box, anchor links on headings, links back to the code.
+search_enabled: true
+heading_anchors: true
+aux_links:
+  "GitHub":
+    - "https://github.com/julien-langlois/gitlab-tracker"
+  "Crates.io":
+    - "https://crates.io/crates/gitlab-tracker"
+aux_links_new_tab: true
+back_to_top: true
+back_to_top_text: "Back to top"
+gh_edit_link: true
+gh_edit_link_text: "Edit this page on GitHub"
+gh_edit_repository: "https://github.com/julien-langlois/gitlab-tracker"
+gh_edit_branch: "main"
+gh_edit_source: docs
+gh_edit_view_mode: "tree"
+footer_content: 'MIT licensed · <a href="https://github.com/julien-langlois/gitlab-tracker">github.com/julien-langlois/gitlab-tracker</a>'
+
+# Menu order, set here so the Markdown files stay free of front matter
+# (GitHub would show it as a table at the top of each page).
+defaults:
+  - scope: { path: "README.md" }
+    values: { title: "Home", nav_order: 1 }
+  - scope: { path: "desktop-window.md" }
+    values: { title: "Desktop window", nav_order: 2 }
+  - scope: { path: "terminal.md" }
+    values: { title: "Terminal UI", nav_order: 3 }
+  - scope: { path: "gitlab-token.md" }
+    values: { title: "GitLab token", nav_order: 4 }
+  - scope: { path: "signed-commits.md" }
+    values: { title: "Signed commits", nav_order: 5 }
