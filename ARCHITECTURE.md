@@ -161,6 +161,11 @@ What keeps the request count low (details, figures and the GraphQL roadmap in
 * **Counter.** `App::recompute_api_call_estimate` mirrors these rules: requests of
   the next cycle and those saved (`saved_*`), shown in the status bar.
 
+**Token permissions.** Every GitLab endpoint and GraphQL type the app reads is
+listed with its fine-grained permission in [`docs/gitlab-token.md`](docs/gitlab-token.md#permissions).
+A change that adds a GitLab call updates that table (and the short list in the
+README) in the same commit.
+
 ---
 
 ## Crate boundaries
