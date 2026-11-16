@@ -1764,6 +1764,20 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 .unwrap_or_default()
         })
         .collect();
+    // Who wrote each commit (an MR is often shared): avatar and name, the
+    // column as wide as the longest name, up to AUTHOR_MAX.
+    const AVATAR: f32 = 22.0;
+    const AUTHOR_MAX: f32 = 200.0;
+    let author_font = egui::FontId::proportional(theme.text_size - 1.0);
+    let author_width = mr
+        .commits
+        .iter()
+        .map(|c| AVATAR + 6.0 + text_width(ui, c.author(), author_font.clone()).ceil() + 2.0)
+        .fold(
+            text_width(ui, &tl("Author").to_uppercase(), author_font.clone()),
+            f32::max,
+        )
+        .min(AUTHOR_MAX);
     let date_font = egui::FontId::proportional(theme.text_size - 1.0);
     let date_width = dates
         .iter()
@@ -1791,6 +1805,8 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     });
     let sig_gap = if report.is_some() { GAP } else { 0.0 };
     let fixed_width = SHA
+        + author_width
+        + GAP
         + date_width
         + sig_width
         + sig_gap
@@ -1814,6 +1830,7 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 };
                 head(ui, SHA, "SHA");
                 head(ui, title, tl("Title"));
+                head(ui, author_width, tl("Author"));
                 head(ui, date_width, tl("Authored"));
                 if report.is_some() {
                     head(ui, sig_width, tl("Signature"));
@@ -1857,6 +1874,21 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                             "{}\n{}",
                             commit.fingerprint.title, commit.fingerprint.author_email
                         ));
+                });
+                fixed(&mut row, author_width, |ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    let author = commit.author();
+                    let who = format!("{author}\n{}", commit.fingerprint.author_email);
+                    avatar(ui, &theme, author, AVATAR).on_hover_text(&who);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(author)
+                                .font(author_font.clone())
+                                .color(theme.palette.text_secondary),
+                        )
+                        .truncate(),
+                    )
+                    .on_hover_text(who);
                 });
                 fixed(&mut row, date_width, |ui| {
                     ui.label(muted(&theme, date.as_str()));

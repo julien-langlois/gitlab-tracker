@@ -339,6 +339,22 @@ pub struct CommitFingerprint {
 pub struct MrCommit {
     pub sha: String,
     pub fingerprint: CommitFingerprint,
+    /// The author's name as the commit records it (empty when cached before
+    /// it was read: the e-mail then stands in).
+    #[serde(default)]
+    pub author_name: String,
+}
+
+impl MrCommit {
+    /// Who wrote the commit: its author's name, else the e-mail's local part.
+    pub fn author(&self) -> &str {
+        let name = self.author_name.trim();
+        if !name.is_empty() {
+            return name;
+        }
+        let email = &self.fingerprint.author_email;
+        email.split('@').next().unwrap_or(email)
+    }
 }
 
 /// What a tracked branch contains, from a scan of its recent commits: enough to
@@ -949,7 +965,16 @@ mod tests {
         MrCommit {
             sha: sha.into(),
             fingerprint: fp(sha),
+            author_name: String::new(),
         }
+    }
+
+    #[test]
+    fn commit_author_falls_back_to_the_email() {
+        let mut c = commit("abc");
+        assert_eq!(c.author(), "dev");
+        c.author_name = "  Ada Lovelace ".into();
+        assert_eq!(c.author(), "Ada Lovelace");
     }
 
     #[test]

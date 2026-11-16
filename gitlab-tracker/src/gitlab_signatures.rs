@@ -287,6 +287,7 @@ mod tests {
                 authored_at: 1_700_000_000,
                 title: title.into(),
             },
+            author_name: String::new(),
         }
     }
 

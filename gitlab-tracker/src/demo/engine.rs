@@ -1074,6 +1074,7 @@ impl World {
                     .map(|c| MrCommit {
                         sha: c.sha.clone(),
                         fingerprint: mr.fingerprint(c),
+                        author_name: mr.spec.author.name.to_string(),
                     })
                     .collect(),
                 landed_fingerprint: landed,

@@ -1174,6 +1174,8 @@ pub(crate) struct CommitJson {
     message: String,
     #[serde(default)]
     author_email: String,
+    #[serde(default)]
+    pub(crate) author_name: String,
     authored_date: Option<String>,
     /// When the commit was made on the branch (a copy's arrival date).
     committed_date: Option<String>,
@@ -1336,6 +1338,7 @@ async fn fetch_mr_commits(ctx: &FetchContext, mr_id: &str) -> Option<Vec<MrCommi
                 Some(MrCommit {
                     sha: c.id,
                     fingerprint,
+                    author_name: c.author_name,
                 })
             })
             .collect(),
@@ -2533,6 +2536,7 @@ pub(crate) mod tests {
                 authored_at: 0,
                 title: sha.into(),
             },
+            author_name: String::new(),
         };
         let two = [commit("1"), commit("2")];
         assert!(!diff_stats_cache_valid(None, &[]));

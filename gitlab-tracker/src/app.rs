@@ -3056,6 +3056,7 @@ pub(crate) mod tests {
                 authored_at: 0,
                 title: sha.into(),
             },
+            author_name: String::new(),
         };
         app.mrs[0].status = MrStatus::MergedIn(HashSet::from(["main".to_string()]));
         app.mrs[0].data.commits = vec![commit("c1"), commit("c2")];
