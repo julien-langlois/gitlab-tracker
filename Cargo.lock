@@ -501,10 +501,14 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "bevel-fonts-build"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4590aa1b4c59ad9fed7fc02f1cd7b9e46fc2b9123313f90432cd1e9f6c207df1"
 
 [[package]]
 name = "bevel-i18n"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b8ee5fab6b7d7df60c8a38fb612f2c657c21802cbe7ff1518f73c86df0d0edb"
 dependencies = [
  "fixed_decimal",
  "icu_decimal",
@@ -527,6 +531,8 @@ dependencies = [
 [[package]]
 name = "bevel-theme"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "356847aa587bcaa693fb75ca16424d26f4625e3945e54ffbf88405fe51c0dd80"
 dependencies = [
  "bevel-widgets",
  "egui",
@@ -535,6 +541,8 @@ dependencies = [
 [[package]]
 name = "bevel-widgets"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fca501a512801ac98528cc94d91e4a1b6d7b340d39b503990b9bdae8ed05319"
 dependencies = [
  "bevel-fonts-build",
  "bevel-i18n",
@@ -554,6 +562,8 @@ dependencies = [
 [[package]]
 name = "bevel-window"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a046c6cbe8c327c1d57a034b2a95b8e313b808f360cba4d11ebaa8a21c6c67a"
 dependencies = [
  "egui",
  "objc2 0.6.4",
@@ -5964,7 +5974,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
  "windows-sys 0.61.2",

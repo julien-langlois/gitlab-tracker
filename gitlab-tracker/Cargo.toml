@@ -3,8 +3,9 @@ name = "gitlab-tracker"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-# sqlx 0.9 (the stats database) needs 1.94; the other crates keep the workspace's.
-rust-version = "1.94"
+# The window (bevel, feature `gui`) needs 1.95, the stats database (sqlx 0.9) 1.94;
+# the other crates keep the workspace's.
+rust-version = "1.95"
 license.workspace = true
 repository.workspace = true
 readme = "../README.md"
@@ -23,8 +24,7 @@ notifications = ["dep:notify-rust"]
 redmine = ["dep:gitlab-tracker-redmine"]
 stats = ["dep:gitlab-tracker-stats"]
 # Desktop window (`gitlab-tracker gui`) over the same app state as the TUI.
-# Needs Rust 1.95 (bevel); bevel is a local path dependency for now, so this
-# feature is not publishable yet.
+# Needs Rust 1.95 (bevel).
 gui = [
   "dep:eframe",
   "dep:egui",
@@ -100,14 +100,10 @@ egui_extras = { version = "0.37", optional = true, default-features = false }
 git-cliff-core = { version = "2.14", optional = true, default-features = false }
 # Same version as egui_commonmark: the description is rewritten before it is shown.
 pulldown-cmark = { version = "0.13", optional = true, default-features = false }
-bevel-i18n = { path = "../../bevel/bevel-i18n", optional = true }
-bevel-theme = { path = "../../bevel/bevel-theme", optional = true, features = [
-  "fonts",
-] }
-bevel-widgets = { path = "../../bevel/bevel-widgets", optional = true }
-bevel-window = { path = "../../bevel/bevel-window", optional = true, features = [
-  "egui",
-] }
+bevel-i18n = { version = "0.1", optional = true }
+bevel-theme = { version = "0.1", optional = true, features = ["fonts"] }
+bevel-widgets = { version = "0.1", optional = true }
+bevel-window = { version = "0.1", optional = true, features = ["egui"] }
 
 [dev-dependencies]
 # A stand-in GitLab server for the request-count tests.

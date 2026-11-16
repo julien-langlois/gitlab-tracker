@@ -4,7 +4,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
 [![Crates.io Total Downloads](https://img.shields.io/crates/d/gitlab-tracker)](https://crates.io/crates/gitlab-tracker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.94+-orange.svg)](https://www.rust-lang.org/)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.95+-orange.svg)](https://www.rust-lang.org/)
 
 **GitLab MR Tracker** follows your team's GitLab merge requests across your environment branches (`main`, `staging`, `production`…): whether each MR reached each branch — by merge, cherry-pick, rebase or a partial copy — what holds the others back, and who has the next move. It runs as a desktop window, or in the terminal.
 
@@ -40,12 +40,10 @@
 
 ### Desktop window
 
-The window is **not on crates.io yet**: it depends on the `bevel` UI crates, which are not released. Build it from source with Rust **1.95+** and the `bevel` repository checked out next to this one (`../bevel`):
+The window is behind the `gui` feature (Rust **1.95+**):
 
 ```bash
-git clone git@github.com:julien-langlois/gitlab-tracker.git
-cd gitlab-tracker
-cargo install --path gitlab-tracker --features gui      # add stats,redmine as needed
+cargo install gitlab-tracker --features gui      # add stats,redmine as needed
 
 gitlab-tracker --demo gui     # try it on demo data, no GitLab needed
 gitlab-tracker gui            # your projects
@@ -56,7 +54,7 @@ On first launch the window asks for the GitLab URL, the project and the token, c
 ### Terminal UI (optional)
 
 ```bash
-cargo install gitlab-tracker      # Rust 1.94+ — or a binary from the Releases page
+cargo install gitlab-tracker      # Rust 1.95+ — or a binary from the Releases page
 
 gitlab-tracker --demo             # demo data
 gitlab-tracker                    # prompts for the project and token on first launch

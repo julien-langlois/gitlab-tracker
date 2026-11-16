@@ -26,18 +26,15 @@ projects.
 
 ## Install and run
 
-The window is behind the `gui` feature and is **not on crates.io yet**: it
-depends on the `bevel` UI crates, which are not released. To build it from
-source:
+The window is behind the `gui` feature. It needs:
 
-- Rust **1.95+** (required by `bevel`);
-- the `bevel` repository checked out **next to** this one (`../bevel`, a path
-  dependency for now);
+- Rust **1.95+** (required by the [`bevel`](https://crates.io/crates/bevel-widgets)
+  UI crates);
 - on Linux, the usual windowing libraries (Wayland and/or X11, OpenGL) — present
   on any desktop install.
 
 ```bash
-cargo install --path gitlab-tracker --features gui      # add stats,redmine as needed
+cargo install gitlab-tracker --features gui      # add stats,redmine as needed
 
 gitlab-tracker gui            # the active project
 gitlab-tracker --demo gui     # demo data, read-only
