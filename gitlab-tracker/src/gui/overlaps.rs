@@ -550,16 +550,28 @@ fn main(
     let folder_filter = g.overlaps.folder.clone();
     let my_login = me(&g.app);
     let app = &g.app;
+    let (spots_by_file, lockfiles) = (g.overlaps.spots_by_file, g.overlaps.lockfiles);
+    let spot = g.overlaps.spot.clone();
+    let mut spot_click = None;
+    // The hot spots and the bottlenecks, then the matrix and the list.
     board::split(
         ui,
-        0.42,
+        0.34,
+        260.0,
+        420.0,
+        |ui| hot_card(ui, &theme, hot),
+        |ui| {
+            spot_click =
+                super::hotspots::card(ui, &theme, app, spots_by_file, lockfiles, spot.as_deref());
+        },
+    );
+    ui.add_space(GAP);
+    board::split(
+        ui,
+        0.34,
         290.0,
         340.0,
-        |ui| {
-            matrix_card(ui, &theme, overlaps, pair, &mut picked);
-            ui.add_space(GAP);
-            hot_card(ui, &theme, hot);
-        },
+        |ui| matrix_card(ui, &theme, overlaps, pair, &mut picked),
         |ui| match view {
             View::Files => files_card(
                 ui,
@@ -579,15 +591,6 @@ fn main(
                 pairs_card(ui, &theme, overlaps, &list, pair, &mut picked_right);
             }
         },
-    );
-    ui.add_space(GAP);
-    let spot_click = super::hotspots::card(
-        ui,
-        &theme,
-        &g.app,
-        g.overlaps.spots_by_file,
-        g.overlaps.lockfiles,
-        g.overlaps.spot.as_deref(),
     );
     match spot_click {
         Some(super::hotspots::Click::Pick(path)) => {

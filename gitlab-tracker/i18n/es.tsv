@@ -1907,16 +1907,20 @@ date	Closed	Cerrada
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} MR abierta sin etiqueta|{n} MR abiertas sin etiqueta
 	Oldest first	Más antiguas primero
 	Bottlenecks	Cuellos de botella
-	where the stuck MRs meet	donde se cruzan las MR bloqueadas
-	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Una ruta suma un punto por cada MR abierta que la modifica y está en conflicto, con la CI fallando o sin actividad desde hace {days} días o más (el umbral de inactividad del proyecto).
 	No path where several open MRs meet with one of them stuck.	Ninguna ruta donde se crucen varias MR abiertas con una de ellas bloqueada.
 	conflict	conflicto
 	stale	inactiva
 	{stuck} of {n} MRs	{stuck} de {n} MR
 	Last change merged {time} ago: !{id} {title}	Último cambio fusionado hace {time}: !{id} {title}
 	ready to merge	lista para fusionar
-	Merge !{id} first: it is ready, and the others then rebase once onto it.	Fusione !{id} primero: está lista, y las demás hacen rebase una sola vez sobre ella.
-	None of them is ready to merge: unblock the stuck ones first.	Ninguna está lista para fusionar: desbloquee primero las bloqueadas.
 @plural	{n} more path|{n} more paths	{n} ruta más|{n} rutas más
 @plural	Show the {n} MR in the table|Show these {n} MRs in the table	Mostrar la {n} MR en la tabla|Mostrar estas {n} MR en la tabla
 	Files	Archivos
+	where the stuck MRs meet	donde se cruzan las MR bloqueadas
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Una ruta suma un punto por cada MR abierta que la modifica y está en conflicto, con la CI fallando o sin actividad desde hace {days} días o más (el umbral de inactividad del proyecto).
+	Merge them in this order:	Fusiónelas en este orden:
+	Fix them first: none is ready to merge (conflict, failing CI, draft, review not done). Once fixed, merge them in this order:	Corríjalas primero: ninguna está lista para fusionar (conflicto, CI fallida, borrador, revisión pendiente). Una vez corregidas, fusiónelas en este orden:
+	in review	en revisión
+	to fix first	a corregir primero
+	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	Primero las listas, luego en revisión, borradores y bloqueadas; en cada grupo, el cambio más pequeño primero: cada rebase posterior sigue siendo pequeño.
+	Merge them in this order; fix the ones in red before their turn:	Fusiónelas en este orden; corrija las rojas antes de su turno:

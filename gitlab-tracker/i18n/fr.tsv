@@ -1907,16 +1907,20 @@ date	Closed	Fermée
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} MR ouverte sans label|{n} MR ouvertes sans label
 	Oldest first	Plus anciennes d'abord
 	Bottlenecks	Goulots d'étranglement
-	where the stuck MRs meet	là où les MR bloquées se croisent
-	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Un chemin marque un point par MR ouverte qui le modifie et qui est en conflit, en échec de CI, ou sans activité depuis {days} jours ou plus (le seuil d'inactivité du projet).
 	No path where several open MRs meet with one of them stuck.	Aucun chemin où plusieurs MR ouvertes se croisent avec l'une d'elles bloquée.
 	conflict	conflit
 	stale	inactive
 	{stuck} of {n} MRs	{stuck} sur {n} MR
 	Last change merged {time} ago: !{id} {title}	Dernière modification fusionnée il y a {time} : !{id} {title}
 	ready to merge	prête à fusionner
-	Merge !{id} first: it is ready, and the others then rebase once onto it.	Fusionnez !{id} d'abord : elle est prête, et les autres se rebasent ensuite une seule fois dessus.
-	None of them is ready to merge: unblock the stuck ones first.	Aucune n'est prête à fusionner : débloquez d'abord celles qui sont bloquées.
 @plural	{n} more path|{n} more paths	{n} chemin de plus|{n} chemins de plus
 @plural	Show the {n} MR in the table|Show these {n} MRs in the table	Afficher la {n} MR dans le tableau|Afficher ces {n} MR dans le tableau
 	Files	Fichiers
+	where the stuck MRs meet	là où les MR bloquées se croisent
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Un chemin marque un point par MR ouverte qui le modifie et qui est en conflit, en échec de CI, ou sans activité depuis {days} jours ou plus (le seuil d'inactivité du projet).
+	Merge them in this order:	Fusionnez-les dans cet ordre :
+	Fix them first: none is ready to merge (conflict, failing CI, draft, review not done). Once fixed, merge them in this order:	Corrigez-les d'abord : aucune n'est prête à fusionner (conflit, CI en échec, brouillon, relecture pas faite). Une fois corrigées, fusionnez-les dans cet ordre :
+	in review	en relecture
+	to fix first	à corriger d'abord
+	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	Les prêtes d'abord, puis celles en relecture, les brouillons et les bloquées ; dans chaque groupe, la plus petite modification d'abord : chaque rebase qui suit reste petit.
+	Merge them in this order; fix the ones in red before their turn:	Fusionnez-les dans cet ordre ; corrigez celles en rouge avant leur tour :

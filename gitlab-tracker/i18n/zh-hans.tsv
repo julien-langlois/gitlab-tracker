@@ -1907,16 +1907,20 @@ date	Closed	已关闭
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} 个无标签的打开 MR
 	Oldest first	最久的优先
 	Bottlenecks	瓶颈
-	where the stuck MRs meet	受阻 MR 交汇之处
-	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	每个修改该路径且存在冲突、CI 失败或已静默 {days} 天及以上（项目的不活跃天数）的打开 MR 计一分。
 	No path where several open MRs meet with one of them stuck.	没有多个打开 MR 交汇且其中有受阻 MR 的路径。
 	conflict	冲突
 	stale	不活跃
 	{stuck} of {n} MRs	{n} 个 MR 中 {stuck} 个
 	Last change merged {time} ago: !{id} {title}	最近一次合并的修改在 {time} 前：!{id} {title}
 	ready to merge	可合并
-	Merge !{id} first: it is ready, and the others then rebase once onto it.	先合并 !{id}：它已就绪，其他 MR 随后只需在其上变基一次。
-	None of them is ready to merge: unblock the stuck ones first.	没有可合并的 MR：请先解除受阻的 MR。
 @plural	{n} more path|{n} more paths	另外 {n} 个路径
 @plural	Show the {n} MR in the table|Show these {n} MRs in the table	在表格中显示这 {n} 个 MR
 	Files	文件
+	where the stuck MRs meet	受阻 MR 交汇之处
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	每个修改该路径且存在冲突、CI 失败或已静默 {days} 天及以上（项目的不活跃天数）的打开 MR 计一分。
+	Merge them in this order:	按此顺序合并：
+	Fix them first: none is ready to merge (conflict, failing CI, draft, review not done). Once fixed, merge them in this order:	请先修复：没有可合并的 MR（冲突、CI 失败、草稿、评审未完成）。修复后按此顺序合并：
+	in review	评审中
+	to fix first	需先修复
+	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	先合并已就绪的，然后是评审中、草稿和受阻的；每组内先合并改动最小的：之后的每次变基都很小。
+	Merge them in this order; fix the ones in red before their turn:	按此顺序合并；红色的需在轮到它们之前修复：

@@ -17,6 +17,8 @@ use gitlab_tracker_core::MergeabilityStatus;
 
 /// Paths listed.
 const SHOWN: usize = 8;
+/// From this width on, a path or an MR takes one line.
+const WIDE: f32 = 460.0;
 
 /// Why an open MR is stuck.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -164,19 +166,65 @@ fn ready(mr: &TrackedMr) -> bool {
     mr.mergeability == MergeabilityStatus::Mergeable && !mr.approved_by.is_empty()
 }
 
-/// The MR to merge first among `spot`'s: one ready and stuck nowhere, the
-/// smallest change first (the others then rebase onto little).
-pub fn merge_first<'a>(app: &'a App, spot: &Spot) -> Option<&'a TrackedMr> {
-    spot.mrs
+/// Where an MR stands in the merge order, from the first to merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Readiness {
+    /// Approved and mergeable.
+    Ready,
+    /// Nothing wrong, still waiting on its review or approval.
+    InReview,
+    Draft,
+    /// In conflict, failing its CI, or quiet: to fix first.
+    Stuck,
+}
+
+impl Readiness {
+    pub fn of(mr: &TrackedMr, stuck: Stuck) -> Self {
+        if stuck.any() {
+            Readiness::Stuck
+        } else if mr.mergeability == MergeabilityStatus::Draft {
+            Readiness::Draft
+        } else if ready(mr) {
+            Readiness::Ready
+        } else {
+            Readiness::InReview
+        }
+    }
+
+    fn tone(self, theme: &Theme) -> Tone {
+        let t = &theme.tones;
+        match self {
+            Readiness::Ready => t.green,
+            Readiness::InReview => t.blue,
+            Readiness::Draft => t.gray,
+            Readiness::Stuck => t.red,
+        }
+    }
+}
+
+/// The order to merge `spot`'s MRs in, even when some are broken: the ready
+/// ones, then those in review, the drafts, the stuck ones; in each, the
+/// smallest change first, so that each rebase after it is as small as can be.
+pub fn merge_order<'a>(app: &'a App, spot: &Spot) -> Vec<(&'a TrackedMr, Readiness)> {
+    let mut order: Vec<(&TrackedMr, Readiness)> = spot
+        .mrs
         .iter()
-        .filter(|(_, stuck)| !stuck.any())
-        .filter_map(|(id, _)| app.mrs.iter().find(|m| &m.id == id))
-        .filter(|m| ready(m))
-        .min_by_key(|m| {
-            m.diff_stats
-                .as_ref()
-                .map_or(u32::MAX, |d| d.additions + d.deletions)
+        .filter_map(|(id, stuck)| {
+            let mr = app.mrs.iter().find(|m| &m.id == id)?;
+            Some((mr, Readiness::of(mr, *stuck)))
         })
+        .collect();
+    let size = |m: &TrackedMr| {
+        m.diff_stats
+            .as_ref()
+            .map_or(u32::MAX, |d| d.additions + d.deletions)
+    };
+    order.sort_by(|a, b| {
+        a.1.cmp(&b.1)
+            .then(size(a.0).cmp(&size(b.0)))
+            .then(a.0.id.cmp(&b.0.id))
+    });
+    order
 }
 
 /// What a click on the card asked for.
@@ -205,7 +253,8 @@ fn reason_tags(stuck: Stuck, theme: &Theme) -> Vec<(String, Tone)> {
     tags
 }
 
-/// The card, full width under the matrix. `picked`: the path unfolded.
+/// The card, two thirds of the page next to the hot spots. `picked`: the
+/// path unfolded.
 pub fn card(
     ui: &mut Ui,
     theme: &Theme,
@@ -226,28 +275,19 @@ pub fn card(
                 ui.label(super::widgets::semibold(tl("Bottlenecks"), theme.text_size));
                 ui.label(
                     muted(theme, tl("where the stuck MRs meet")).size(theme.text_size - 1.5),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.allocate_ui(Vec2::new(200.0, 28.0), |ui| {
-                        let labels = [tl("Folders"), tl("Files")];
-                        if let Some(i) =
-                            board::segmented(ui, theme, "hotspots_by", &labels, usize::from(by_file))
-                        {
-                            click = Some(Click::ByFile(i == 1));
-                        }
-                    });
-                });
-            });
-            ui.label(
-                muted(
-                    theme,
-                    tf(
-                        "A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).",
-                        &[("days", &app.config.activity_stale_days.to_string())],
-                    ),
                 )
-                .size(theme.text_size - 1.5),
-            );
+                .on_hover_text(tf(
+                    "A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).",
+                    &[("days", &app.config.activity_stale_days.to_string())],
+                ));
+            });
+            ui.add_space(8.0);
+            let labels = [tl("Folders"), tl("Files")];
+            if let Some(i) =
+                board::segmented(ui, theme, "hotspots_by", &labels, usize::from(by_file))
+            {
+                click = Some(Click::ByFile(i == 1));
+            }
             ui.add_space(8.0);
             if spots.is_empty() {
                 board::empty(
@@ -260,17 +300,40 @@ pub fn card(
             let most = spots.first().map_or(1, Spot::stuck).max(1);
             for spot in spots.iter().take(SHOWN) {
                 let open = picked == Some(spot.path.as_str());
-                let (rect, response) = board::row(ui, theme, 34.0, open);
-                let y = rect.center().y;
-                let count_w = 90.0;
-                let tags_w = 250.0;
+                let wide = ui.available_width() >= WIDE;
+                // Wide: one line, path · heat · reasons · count. In a
+                // column: the path and the count, then the heat and reasons.
+                let (rect, response) = board::row(ui, theme, if wide { 36.0 } else { 50.0 }, open);
+                let (top, bottom) = if wide {
+                    (rect.center().y, rect.center().y)
+                } else {
+                    (rect.top() + 15.0, rect.top() + 35.0)
+                };
                 let right = rect.right() - 8.0;
+                let count = tf(
+                    "{stuck} of {n} MRs",
+                    &[("stuck", &spot.stuck().to_string()), ("n", &spot.mrs.len().to_string())],
+                );
+                let count_w = board::paint_text(
+                    ui,
+                    egui::pos2(right, top),
+                    Align2::RIGHT_CENTER,
+                    &count,
+                    FontId::proportional(theme.text_size - 1.5),
+                    theme.palette.text_secondary,
+                    120.0,
+                );
                 // The heat: a gauge as on the hot spots card, its share of
-                // the worst path's stuck MRs, before the reasons.
-                let gauge_w = 110.0;
+                // the worst path's stuck MRs; then a tag per reason.
+                let tags_w = 230.0;
+                let gauge_left = if wide {
+                    right - 96.0 - tags_w - 92.0
+                } else {
+                    rect.left() + 8.0
+                };
                 let track = Rect::from_min_size(
-                    egui::pos2(right - count_w - tags_w - gauge_w - 16.0, y - 3.0),
-                    Vec2::new(gauge_w, 6.0),
+                    egui::pos2(gauge_left, bottom - 3.0),
+                    Vec2::new(72.0, 6.0),
                 );
                 ui.painter()
                     .rect_filled(track, CornerRadius::same(3), theme.palette.border_soft);
@@ -278,36 +341,37 @@ pub fn card(
                 fill.set_width(track.width() * spot.stuck() as f32 / most as f32);
                 ui.painter()
                     .rect_filled(fill, CornerRadius::same(3), theme.tones.orange.fg);
+                let path_room = if wide {
+                    track.left() - rect.left() - 24.0
+                } else {
+                    right - count_w - rect.left() - 20.0
+                };
                 super::overlaps::path_text(
                     ui,
                     theme,
-                    egui::pos2(rect.left() + 8.0, y),
+                    egui::pos2(rect.left() + 8.0, top),
                     &spot.path,
-                    (track.left() - rect.left() - 24.0).max(40.0),
+                    path_room.max(40.0),
                 );
-                // Why: a tag per reason, with its count.
-                let mut x = right - count_w - tags_w;
+                let mut x = track.right() + 10.0;
+                let tags_end = if wide { right - 96.0 } else { right };
                 for (n, label, tone) in [
                     (spot.conflicts, tl("conflict"), theme.tones.red),
                     (spot.ci, tl("CI failing"), theme.tones.amber),
                     (spot.stale, tl("stale"), theme.tones.gray),
                 ] {
                     if n > 0 {
-                        x += board::paint_tag(ui, theme, egui::pos2(x, y), &format!("{label} {n}"), tone, false) + 6.0;
+                        x += board::paint_tag_within(
+                            ui,
+                            theme,
+                            egui::pos2(x, bottom),
+                            &format!("{label} {n}"),
+                            tone,
+                            false,
+                            (tags_end - x).max(0.0),
+                        ) + 6.0;
                     }
                 }
-                board::paint_text(
-                    ui,
-                    egui::pos2(right, y),
-                    Align2::RIGHT_CENTER,
-                    &tf(
-                        "{stuck} of {n} MRs",
-                        &[("stuck", &spot.stuck().to_string()), ("n", &spot.mrs.len().to_string())],
-                    ),
-                    FontId::proportional(theme.text_size - 1.0),
-                    theme.palette.text_secondary,
-                    count_w,
-                );
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .clicked()
@@ -373,7 +437,10 @@ fn detail(
                         tf(
                             "Last change merged {time} ago: !{id} {title}",
                             &[
-                                ("time", &board::duration_text(board::days_between(at, now).max(0.0))),
+                                (
+                                    "time",
+                                    &board::duration_text(board::days_between(at, now).max(0.0)),
+                                ),
                                 ("id", &last.id),
                                 ("title", &last.title),
                             ],
@@ -387,41 +454,71 @@ fn detail(
                 let Some(mr) = app.mrs.iter().find(|m| &m.id == id) else {
                     continue;
                 };
-                let (rect, response) = board::row(ui, theme, 28.0, false);
-                let y = rect.center().y;
-                let mut x = rect.left() + 6.0;
-                x += board::paint_tag(ui, theme, egui::pos2(x, y), &format!("!{id}"), board::id_tone(theme), true) + 10.0;
-                let tags = reason_tags(*stuck, theme);
-                let (status, status_tone) = if tags.is_empty() {
-                    if ready(mr) {
+                // Wide: one line, the reasons on the right. In a column: the
+                // MR, then why it is stuck (or its status).
+                let wide = ui.available_width() >= WIDE;
+                let (rect, response) = board::row(ui, theme, if wide { 30.0 } else { 44.0 }, false);
+                let (top, bottom) = if wide {
+                    (rect.center().y, rect.center().y)
+                } else {
+                    (rect.top() + 13.0, rect.top() + 31.0)
+                };
+                let x = rect.left()
+                    + 6.0
+                    + board::paint_tag(
+                        ui,
+                        theme,
+                        egui::pos2(rect.left() + 6.0, top),
+                        &format!("!{id}"),
+                        board::id_tone(theme),
+                        true,
+                    )
+                    + 10.0;
+                let mut shown: Vec<(String, Tone)> = reason_tags(*stuck, theme);
+                if shown.is_empty() {
+                    shown.push(if ready(mr) {
                         (tl("ready to merge").to_string(), theme.tones.green)
                     } else {
                         let (label, tone) =
                             super::tones::status(mr.state, &mr.mergeability, &theme.tones);
                         (label.to_lowercase(), tone)
-                    }
+                    });
+                }
+                let font = FontId::proportional(theme.text_size - 2.5);
+                let tags_w: f32 = shown
+                    .iter()
+                    .map(|(t, tone)| {
+                        board::one_line(ui, t, font.clone(), tone.fg, f32::INFINITY)
+                            .size()
+                            .x
+                            + 18.0
+                    })
+                    .sum();
+                let mut tx = if wide { rect.right() - 6.0 - tags_w } else { x };
+                for (text, tone) in &shown {
+                    tx += board::paint_tag_within(
+                        ui,
+                        theme,
+                        egui::pos2(tx, bottom),
+                        text,
+                        *tone,
+                        false,
+                        (rect.right() - tx - 6.0).max(0.0),
+                    ) + 6.0;
+                }
+                let title_end = if wide {
+                    rect.right() - tags_w - 16.0
                 } else {
-                    (String::new(), theme.tones.gray)
+                    rect.right() - 6.0
                 };
-                // Right to left: its reasons (or its status).
-                let mut right = rect.right() - 6.0;
-                let mut shown: Vec<(String, Tone)> = tags;
-                if !status.is_empty() {
-                    shown.push((status, status_tone));
-                }
-                for (text, tone) in shown.iter().rev() {
-                    let w = board::one_line(ui, text, FontId::proportional(theme.text_size - 2.5), tone.fg, f32::INFINITY).size().x + 12.0;
-                    board::paint_tag(ui, theme, egui::pos2(right - w, y), text, *tone, false);
-                    right -= w + 6.0;
-                }
                 board::paint_text(
                     ui,
-                    egui::pos2(x, y),
+                    egui::pos2(x, top),
                     Align2::LEFT_CENTER,
                     &mr.title,
                     FontId::proportional(theme.text_size - 1.0),
                     theme.palette.text,
-                    (right - x - 8.0).max(0.0),
+                    (title_end - x).max(0.0),
                 );
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -432,47 +529,85 @@ fn detail(
                 }
             }
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                let advice = match merge_first(app, spot) {
-                    Some(first) => (
-                        tf(
-                            "Merge !{id} first: it is ready, and the others then rebase once onto it.",
-                            &[("id", &first.id)],
-                        ),
-                        theme.tones.green,
-                    ),
-                    None => (
-                        tl("None of them is ready to merge: unblock the stuck ones first.").to_string(),
-                        theme.tones.gray,
-                    ),
-                };
-                egui::Frame::new()
-                    .fill(advice.1.bg)
-                    .corner_radius(CornerRadius::same(theme.radii.small))
-                    .inner_margin(egui::Margin::symmetric(10, 6))
-                    .show(ui, |ui| {
-                        ui.label(
-                            egui::RichText::new(advice.0)
-                                .size(theme.text_size - 1.0)
-                                .color(advice.1.fg),
-                        );
-                    });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let text = tn(
-                        spot.mrs.len() as u64,
-                        "Show the {n} MR in the table",
-                        "Show these {n} MRs in the table",
-                    );
-                    if button(ui, theme, None, &text, false).clicked() {
-                        click = Some(Click::Table(
-                            spot.path.clone(),
-                            spot.mrs.iter().map(|(id, _)| id.clone()).collect(),
-                        ));
-                    }
-                });
-            });
+            sequence(ui, theme, app, spot);
+            ui.add_space(6.0);
+            let text = tn(
+                spot.mrs.len() as u64,
+                "Show the {n} MR in the table",
+                "Show these {n} MRs in the table",
+            );
+            if button(ui, theme, None, &text, false).clicked() {
+                click = Some(Click::Table(
+                    spot.path.clone(),
+                    spot.mrs.iter().map(|(id, _)| id.clone()).collect(),
+                ));
+            }
         });
     click
+}
+
+/// The merge order, as `!215 → !209 → !195`, each id in its readiness' tone;
+/// over it, a warning when none is ready yet: fix first, then this order.
+fn sequence(ui: &mut Ui, theme: &Theme, app: &App, spot: &Spot) {
+    let order = merge_order(app, spot);
+    let Some(first) = order.first() else {
+        return;
+    };
+    let ready = first.1 == Readiness::Ready;
+    let tone = if ready {
+        theme.tones.green
+    } else {
+        theme.tones.amber
+    };
+    egui::Frame::new()
+        .fill(tone.bg)
+        .corner_radius(CornerRadius::same(theme.radii.small))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 6.0;
+            let some_stuck = order.iter().any(|(_, r)| *r == Readiness::Stuck);
+            let head = if ready && some_stuck {
+                tl("Merge them in this order; fix the ones in red before their turn:").to_string()
+            } else if ready {
+                tl("Merge them in this order:").to_string()
+            } else {
+                tl("Fix them first: none is ready to merge (conflict, failing CI, draft, review not done). Once fixed, merge them in this order:").to_string()
+            };
+            ui.label(
+                egui::RichText::new(head)
+                    .size(theme.text_size - 1.0)
+                    .color(tone.fg),
+            );
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                for (i, (mr, readiness)) in order.iter().enumerate() {
+                    if i > 0 {
+                        ui.label(muted(theme, "→"));
+                    }
+                    let id_tone = readiness.tone(theme);
+                    board::chip(ui, theme, &format!("!{}", mr.id), id_tone).on_hover_text(
+                        format!(
+                            "{}\n{}",
+                            mr.title,
+                            match readiness {
+                                Readiness::Ready => tl("ready to merge"),
+                                Readiness::InReview => tl("in review"),
+                                Readiness::Draft => tl("draft"),
+                                Readiness::Stuck => tl("to fix first"),
+                            }
+                        ),
+                    );
+                }
+            });
+            ui.label(
+                muted(
+                    theme,
+                    tl("Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small."),
+                )
+                .size(theme.text_size - 2.0),
+            );
+        });
 }
 
 #[cfg(test)]
@@ -544,10 +679,45 @@ mod tests {
         assert!(with_locks
             .iter()
             .any(|s| s.path == "Cargo.lock" && s.stuck() == 2));
-        // Merge first: the ready one.
+        // The order: the ready one, then the stuck ones, the smallest first.
+        let order: Vec<(&str, Readiness)> = merge_order(&app, &spots[0])
+            .iter()
+            .map(|(m, r)| (m.id.as_str(), *r))
+            .collect();
+        assert_eq!(order[0], ("3", Readiness::Ready));
+        assert!(order[1..].iter().all(|(_, r)| *r == Readiness::Stuck));
+    }
+
+    #[tokio::test]
+    async fn broken_mrs_still_get_an_order_fixes_last() {
+        // None ready: a draft, one in review, one failing its CI, one quiet.
+        let draft = mr("1", &["src/a.rs"], MergeabilityStatus::Draft);
+        let review = mr("2", &["src/a.rs"], MergeabilityStatus::NotApproved);
+        let mut ci = mr("3", &["src/a.rs"], MergeabilityStatus::CiMustPass);
+        ci.data.pipelines = vec![crate::models::Pipeline {
+            id: 1,
+            status: PipelineState::Failed,
+            created_at: None,
+            updated_at: None,
+            sha: None,
+            jobs: vec![],
+        }];
+        let mut big_review = mr("4", &["src/a.rs"], MergeabilityStatus::NotApproved);
+        big_review.data.diff_stats.as_mut().unwrap().additions = 500;
+        let app = app_with(vec![draft, review, ci, big_review]).await;
+        let spots = analyze(&app, true, false, Utc::now());
+        let order: Vec<(&str, Readiness)> = merge_order(&app, &spots[0])
+            .iter()
+            .map(|(m, r)| (m.id.as_str(), *r))
+            .collect();
         assert_eq!(
-            merge_first(&app, &spots[0]).map(|m| m.id.as_str()),
-            Some("3")
+            order,
+            vec![
+                ("2", Readiness::InReview),
+                ("4", Readiness::InReview),
+                ("1", Readiness::Draft),
+                ("3", Readiness::Stuck),
+            ]
         );
     }
 

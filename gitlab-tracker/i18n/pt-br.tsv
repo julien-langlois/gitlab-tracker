@@ -1907,16 +1907,20 @@ date	Closed	Fechada
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} MR aberto sem rótulo|{n} MRs abertos sem rótulo
 	Oldest first	Mais antigos primeiro
 	Bottlenecks	Gargalos
-	where the stuck MRs meet	onde os MRs bloqueados se cruzam
-	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Um caminho soma um ponto por MR aberto que o altera e está em conflito, com a CI falhando ou parado há {days} dias ou mais (o limite de inatividade do projeto).
 	No path where several open MRs meet with one of them stuck.	Nenhum caminho onde vários MRs abertos se cruzam com um deles bloqueado.
 	conflict	conflito
 	stale	parado
 	{stuck} of {n} MRs	{stuck} de {n} MRs
 	Last change merged {time} ago: !{id} {title}	Última alteração mesclada há {time}: !{id} {title}
 	ready to merge	pronto para mesclar
-	Merge !{id} first: it is ready, and the others then rebase once onto it.	Mescle !{id} primeiro: ele está pronto, e os outros fazem rebase uma só vez sobre ele.
-	None of them is ready to merge: unblock the stuck ones first.	Nenhum está pronto para mesclar: desbloqueie primeiro os bloqueados.
 @plural	{n} more path|{n} more paths	mais {n} caminho|mais {n} caminhos
 @plural	Show the {n} MR in the table|Show these {n} MRs in the table	Mostrar o {n} MR na tabela|Mostrar estes {n} MRs na tabela
 	Files	Arquivos
+	where the stuck MRs meet	onde os MRs bloqueados se cruzam
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Um caminho soma um ponto por MR aberto que o altera e está em conflito, com a CI falhando ou parado há {days} dias ou mais (o limite de inatividade do projeto).
+	Merge them in this order:	Mescle-os nesta ordem:
+	Fix them first: none is ready to merge (conflict, failing CI, draft, review not done). Once fixed, merge them in this order:	Corrija-os primeiro: nenhum está pronto para mesclar (conflito, CI falhando, rascunho, revisão pendente). Depois de corrigidos, mescle-os nesta ordem:
+	in review	em revisão
+	to fix first	a corrigir primeiro
+	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	Primeiro os prontos, depois em revisão, rascunhos e bloqueados; em cada grupo, a menor alteração primeiro: cada rebase seguinte continua pequeno.
+	Merge them in this order; fix the ones in red before their turn:	Mescle-os nesta ordem; corrija os vermelhos antes da vez deles:
