@@ -55,6 +55,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let cards = crate::ui::cockpit::cockpit_cards(&g.app);
     let urgent = urgent(g);
     let mut pick = None;
+    let mut by_label = None;
 
     ui.horizontal(|ui| {
         page_title(
@@ -111,6 +112,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             // As in the mockup: what needs attention, right after the trends.
             let from_list = needs_attention(ui, &theme, &urgent);
             ui.add_space(12.0);
+            if let Some(click) = super::labels::card(ui, &theme, &g.app) {
+                by_label = Some(click);
+            }
+            ui.add_space(12.0);
             let from_tiles = tiles(ui, &theme, &headline, &counts);
             ui.add_space(12.0);
             let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
@@ -123,6 +128,11 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     match pick {
         Some(Pick::Focus(key, label)) => g.focus_on(&key, label),
         Some(Pick::Mr(id)) => g.show_mr(&id),
+        None => {}
+    }
+    match by_label {
+        Some(super::labels::Click::Label(label)) => g.filter_by_label(&label),
+        Some(super::labels::Click::Mr(id)) => g.show_mr(&id),
         None => {}
     }
 }

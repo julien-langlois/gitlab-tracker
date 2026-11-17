@@ -22,6 +22,7 @@ mod icons;
 mod inspector;
 mod journal;
 mod keys;
+mod labels;
 mod markdown;
 mod milestones;
 mod mr_page;

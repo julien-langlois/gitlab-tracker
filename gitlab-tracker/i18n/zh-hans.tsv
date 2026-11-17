@@ -1897,3 +1897,12 @@ date	Closed	已关闭
 @plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} 个计入变更失败率
 	no guess	无推测
 @plural	with {n} failed deployment|with {n} failed deployments	另有 {n} 次部署失败
+	Open MRs by label	按标签分组的打开 MR
+	where they wait, and for how long	在哪里等待，以及等待多久
+	Most MRs	MR 最多
+	Where they wait	等待位置
+	Click: list them in the table	点击：在表格中列出
+	An MR with two labels counts in both.	带两个标签的 MR 在两者中都计数。
+@plural	{n} more label|{n} more labels	另外 {n} 个标签
+@plural	{n} open MR without a label|{n} open MRs without a label	{n} 个无标签的打开 MR
+	Oldest first	最久的优先

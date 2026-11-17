@@ -1897,3 +1897,12 @@ date	Closed	Cerrada
 @plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} contada en la change failure rate|{n} contadas en la change failure rate
 	no guess	sin suposición
 @plural	with {n} failed deployment|with {n} failed deployments	con {n} despliegue fallido|con {n} despliegues fallidos
+	Open MRs by label	MR abiertas por etiqueta
+	where they wait, and for how long	dónde esperan y desde cuándo
+	Most MRs	Más MR
+	Where they wait	Dónde esperan
+	Click: list them in the table	Clic: listarlas en la tabla
+	An MR with two labels counts in both.	Una MR con dos etiquetas cuenta en ambas.
+@plural	{n} more label|{n} more labels	{n} etiqueta más|{n} etiquetas más
+@plural	{n} open MR without a label|{n} open MRs without a label	{n} MR abierta sin etiqueta|{n} MR abiertas sin etiqueta
+	Oldest first	Más antiguas primero

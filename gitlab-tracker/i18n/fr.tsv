@@ -1897,3 +1897,12 @@ date	Closed	Fermée
 @plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} comptée dans le change failure rate|{n} comptées dans le change failure rate
 	no guess	aucune supposition
 @plural	with {n} failed deployment|with {n} failed deployments	avec {n} déploiement en échec|avec {n} déploiements en échec
+	Open MRs by label	MR ouvertes par label
+	where they wait, and for how long	où elles attendent, et depuis combien de temps
+	Most MRs	Le plus de MR
+	Where they wait	Où elles attendent
+	Click: list them in the table	Clic : les lister dans le tableau
+	An MR with two labels counts in both.	Une MR avec deux labels compte dans les deux.
+@plural	{n} more label|{n} more labels	{n} label de plus|{n} labels de plus
+@plural	{n} open MR without a label|{n} open MRs without a label	{n} MR ouverte sans label|{n} MR ouvertes sans label
+	Oldest first	Plus anciennes d'abord
