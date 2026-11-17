@@ -126,14 +126,16 @@ and the terminal UI keeps it.
 ## Cockpit
 
 Where MRs wait (review, author, approved but not merged, between branches) with
-the bottleneck, four weekly trends (merges, time to first review, lead time to
-production, CI success), and the MRs that need attention, most urgent first.
+the bottleneck; the headline counters (blocked, to review, next release, oldest);
+the attention, delivery, quality and release cards; four weekly trends (merges,
+time to first review, lead time to production, CI success); then the MRs that
+need attention, most urgent first.
 **Open MRs by label** gives, for each label, how many open MRs carry it, where
 they wait (the next step, as the table's chips), their median age and the oldest;
 sorted by count or by age. A click on a label lists its MRs in the table, a click
 on the oldest opens it.
 
-![Cockpit: where MRs wait, trends, what needs attention](assets/desktop/cockpit.png)
+![Cockpit: where MRs wait, the counters, the attention and delivery cards](assets/desktop/cockpit.png)
 
 ## Promote
 

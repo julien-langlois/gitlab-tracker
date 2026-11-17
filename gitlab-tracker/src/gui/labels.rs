@@ -310,7 +310,7 @@ pub fn card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<Click> {
                     let parts: Vec<(f32, egui::Color32)> = Bucket::ALL
                         .iter()
                         .zip(row.buckets)
-                        .map(|(b, n)| (n as f32, super::table::bucket_tone(*b, &theme.tones).fg))
+                        .map(|(b, n)| (n as f32, bucket_color(*b, theme)))
                         .collect();
                     board::paint_stacked_bar(ui, theme, bar, &parts, 1.0);
                 }
@@ -353,7 +353,23 @@ pub fn card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<Click> {
     click
 }
 
-/// The buckets the rows use, as the table's chips: a dot and the name.
+/// A bucket's color on this card: hues far apart (red, yellow, purple, green,
+/// blue), so the segments of a bar read at a glance. The table's chips keep
+/// their softer tones, where the name is written.
+fn bucket_color(bucket: Bucket, theme: &Theme) -> egui::Color32 {
+    let t = &theme.tones;
+    match bucket {
+        Bucket::OnMe => t.red.fg,
+        Bucket::OnAuthor => t.amber.fg,
+        Bucket::OnReviewers => t.purple.fg,
+        Bucket::ToMerge => t.green.fg,
+        Bucket::ToDeploy => t.blue.fg,
+        Bucket::Done => t.teal.fg,
+        Bucket::Unknown => t.gray.fg,
+    }
+}
+
+/// The buckets the rows use: a dot and the name.
 fn legend(ui: &mut Ui, theme: &Theme, rows: &[LabelRow]) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 14.0;
@@ -361,7 +377,7 @@ fn legend(ui: &mut Ui, theme: &Theme, rows: &[LabelRow]) {
             if rows.iter().all(|r| r.buckets[i] == 0) {
                 continue;
             }
-            let color = super::table::bucket_tone(*bucket, &theme.tones).fg;
+            let color = bucket_color(*bucket, theme);
             super::widgets::dot_label(ui, theme, color, bucket.label());
         }
     });

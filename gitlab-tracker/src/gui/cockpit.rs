@@ -103,22 +103,23 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 pick = Some(Pick::Focus(key, name));
             }
             ui.add_space(12.0);
+            // The counters, then the flow and attention cards, then the weekly
+            // trends; the lists last: what needs attention, the labels.
+            let from_tiles = tiles(ui, &theme, &headline, &counts);
+            ui.add_space(12.0);
+            let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
+            ui.add_space(12.0);
             super::flow::trend_tiles(
                 ui,
                 &theme,
                 &super::flow::trends(&g.app, chrono::Utc::now(), g.trend_period),
             );
             ui.add_space(12.0);
-            // As in the mockup: what needs attention, right after the trends.
             let from_list = needs_attention(ui, &theme, &urgent);
             ui.add_space(12.0);
             if let Some(click) = super::labels::card(ui, &theme, &g.app) {
                 by_label = Some(click);
             }
-            ui.add_space(12.0);
-            let from_tiles = tiles(ui, &theme, &headline, &counts);
-            ui.add_space(12.0);
-            let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
             pick = pick.take().or(from_tiles).or(from_cards).or(from_list);
         });
 
