@@ -135,6 +135,9 @@ pub struct SavedMr {
     /// Whether the MR has been manually flagged by the user — persisted across restarts.
     #[serde(default)]
     pub flagged: bool,
+    /// Snoozed from Today until a moment or a change — persisted across restarts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snooze: Option<crate::snooze::Snooze>,
     /// Last resolved tracker ticket — persisted to avoid re-fetching the tracker on every restart.
     /// Re-fetched only when the detected ticket ID changes (title/description update).
     /// `None` when no tracker provider is configured or no ticket reference was found.
@@ -347,6 +350,7 @@ pub struct MrCommit {
 
 impl MrCommit {
     /// Who wrote the commit: its author's name, else the e-mail's local part.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub fn author(&self) -> &str {
         let name = self.author_name.trim();
         if !name.is_empty() {
@@ -537,6 +541,8 @@ pub struct TrackedMr {
     /// Manually flagged by the user (Space key) — persisted across restarts.
     /// Flagged MRs display a coloured chevron and can be isolated via the Flagged filter.
     pub flagged: bool,
+    /// Snoozed out of Today until a moment or a change — persisted across restarts.
+    pub snooze: Option<crate::snooze::Snooze>,
     /// Ticket linked to this MR, resolved by the active `TrackerProvider`.
     /// `None` when no tracker provider is configured or no ticket reference was found.
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
@@ -569,6 +575,7 @@ impl TrackedMr {
             mergeability: MergeabilityStatus::Unknown,
             recently_updated: false,
             flagged: false,
+            snooze: None,
             linked_ticket: None,
             data: MrData {
                 title,

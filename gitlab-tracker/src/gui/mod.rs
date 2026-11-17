@@ -729,6 +729,67 @@ impl GuiApp {
         save_state(&self.app, &self.last_known_branches, &self.state_writer);
     }
 
+    /// Changes the MRs of the tab at `index` (the active one or a hidden one)
+    /// and saves that tab's state; the demo, read-only, keeps it in memory.
+    pub(crate) fn edit_tab(&mut self, index: usize, edit: impl FnOnce(&mut App)) {
+        let save = !self.demo;
+        match self.tabs.get_mut(index).map(|slot| &mut slot.state) {
+            Some(SlotState::Active) => {
+                edit(&mut self.app);
+                if save && !self.app.read_only {
+                    self.save_state();
+                }
+            }
+            Some(SlotState::Parked(tab)) => {
+                edit(&mut tab.app);
+                if save && !tab.app.read_only {
+                    save_state(&tab.app, &tab.last_known_branches, &tab.state_writer);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Ends the snoozes whose time came or whose MR moved, in every tab, and
+    /// says which MRs are back in Today.
+    fn wake_snoozed(&mut self) {
+        let now = chrono::Utc::now();
+        let due = |app: &App| {
+            app.mrs.iter().any(|mr| {
+                mr.snooze
+                    .as_ref()
+                    .is_some_and(|s| s.wake(mr, now).is_some())
+            })
+        };
+        let tabs: Vec<usize> = (0..self.tabs.len())
+            .filter(|&i| match &self.tabs[i].state {
+                SlotState::Active => due(&self.app),
+                SlotState::Parked(tab) => due(&tab.app),
+                _ => false,
+            })
+            .collect();
+        let mut woken = Vec::new();
+        for index in tabs {
+            self.edit_tab(index, |app| {
+                woken.extend(crate::snooze::wake_due(&mut app.mrs, now));
+            });
+        }
+        if let Some((id, _, why)) = woken.first() {
+            let text = if woken.len() == 1 {
+                tf(
+                    "!{id} is back in Today: {why}",
+                    &[("id", id), ("why", why.text())],
+                )
+            } else {
+                tf(
+                    "{n} snoozed MRs are back in Today",
+                    &[("n", &woken.len().to_string())],
+                )
+            };
+            self.app.flash(text, false);
+        }
+    }
+
     fn dispatch_pending(&mut self) {
         let mut ctx = ActionContext {
             api_semaphore: &self.api_semaphore,
@@ -1581,6 +1642,7 @@ impl eframe::App for GuiApp {
         self.poll_tabs(ui.input(|i| i.time));
         self.poll_clicks();
         self.apply_events();
+        self.wake_snoozed();
         // Keys move the selection and change the list: before the frame's snapshot.
         keys::handle(self, ui.ctx());
         // Development aid (debug builds): `GITLAB_TRACKER_GUI_KEYS=g` types these

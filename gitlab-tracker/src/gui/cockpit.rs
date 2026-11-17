@@ -758,6 +758,8 @@ fn urgent(g: &GuiApp) -> Vec<Urgent> {
     let mut list: Vec<Urgent> = g
         .app
         .visible_mrs()
+        // Snoozed from Today: out of the list until it wakes.
+        .filter(|mr| mr.snooze.is_none())
         .filter_map(|mr| {
             let reasons = by_mr.get(mr.id.as_str())?.clone();
             let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());

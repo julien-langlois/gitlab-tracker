@@ -1344,6 +1344,7 @@ fn schema_snapshot() -> FileChange {
 fn push_notifications() -> MrSpec {
     MrSpec::new("push-notifications", "feat(notif): Push notifications on delivery status change", &JULIEN)
         .branch("feat/4302-push-notifications", "main")
+        .snoozed(Some(ahead(2, 9, 0)))
         .milestone("v2.5.0")
         .ticket(4302)
         .labels(&["feature", "mobile"])

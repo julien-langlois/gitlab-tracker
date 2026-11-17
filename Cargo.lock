@@ -2282,6 +2282,7 @@ dependencies = [
  "bevel-widgets",
  "bevel-window",
  "chrono",
+ "chrono-tz",
  "clap",
  "crossterm",
  "directories",

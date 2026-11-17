@@ -1020,7 +1020,7 @@ impl World {
             _ if state == GitlabMrState::Merged => MrStatus::MergedIn(self.branches_of(i)),
             _ => MrStatus::MergedIn(HashSet::new()),
         };
-        TrackedMr {
+        let mut tracked = TrackedMr {
             id: mr.iid.clone(),
             status,
             mergeability: if state == GitlabMrState::Opened {
@@ -1031,6 +1031,7 @@ impl World {
             recently_updated: state == GitlabMrState::Opened
                 && self.now - mr.updated < Duration::minutes(30),
             flagged: spec.flagged,
+            snooze: None,
             linked_ticket: spec.ticket.and_then(|id| tickets.linked(id)),
             data: crate::models::MrData {
                 title: spec.title.into(),
@@ -1098,7 +1099,14 @@ impl World {
                         .collect(),
                 ),
             },
+        };
+        if state == GitlabMrState::Opened {
+            if let Some(until) = spec.snooze {
+                let until = until.map(|when| super::clock::clock().at(when));
+                tracked.snooze = Some(crate::snooze::Snooze::new(&tracked, until));
+            }
         }
+        tracked
     }
 
     /// Where the MRs reached each branch beyond their target, and when.

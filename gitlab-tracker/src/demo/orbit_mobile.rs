@@ -333,6 +333,7 @@ fn in_review() -> Vec<MrSpec> {
             .status(S::Retrying),
         MrSpec::new("graphql-list", "feat(api): Shipments list from the GraphQL endpoint", &MARINA)
             .branch("feature/graphql-shipments", "develop")
+            .snoozed(None)
             .milestone("3.9.0")
             .labels(&["feature", "api"])
             .about("Reads the shipments list in one GraphQL query (with the last scan) instead of one call per shipment. Needs the API's GraphQL MR.")

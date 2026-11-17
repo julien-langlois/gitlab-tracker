@@ -553,7 +553,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Event], tabs: &[(usize, String)]) {
 }
 
 /// The heading of a day: "Today", "Yesterday", "Monday 2 November".
-fn day_label(day: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+pub(super) fn day_label(day: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
     if day == today {
         return tl("Today").to_string();
     }

@@ -105,6 +105,15 @@ tab. **Copy my stand-up** puts what you did since the last working day (merged,
 reviewed, pushed, opened), what is on today and what waits on others in the
 clipboard.
 
+The moon button of a row **snoozes** the MR: in an hour, tomorrow at 09:00, next
+Monday at 09:00, or until it changes. It leaves Today, the rail's badge and the
+Cockpit's "Needs attention" until then, and comes back early on a push, a failed
+pipeline, a new comment, or once merged or closed. The snoozed MRs wait folded at
+the end of the page, with **Wake now**. The times are your computer's local time
+(daylight saving included) and kept as an instant, so a snooze still wakes at the
+right moment after a clock change or a trip; it is saved with the project's state,
+and the terminal UI keeps it.
+
 ![Today: reviews waiting for you, your MRs that need you, ready to merge](assets/desktop/today.png)
 
 ## Cockpit

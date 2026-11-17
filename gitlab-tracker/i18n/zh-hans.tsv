@@ -1824,3 +1824,26 @@ date	Closed	已关闭
 @plural	{n} signed before a rebase from GitLab: tolerated|{n} signed before a rebase from GitLab: tolerated	{n} 个在 GitLab 变基前已签名：已容忍
 @plural	{n} lost its signature in a rebase from GitLab, signed before it|{n} lost their signature in a rebase from GitLab, signed before it	{n} 个在 GitLab 变基时丢失签名，变基前已签名
 @plural	{n} from an exempted bot|{n} from an exempted bot	{n} 个来自豁免的机器人
+	In 1 hour	1 小时后
+	Tomorrow morning	明天早上
+	Next Monday	下周一
+	Until it changes	直到它有变化
+	its snooze ended	暂缓已结束
+	new commits	有新提交
+	a new comment	有新评论
+	merged or closed	已合并或关闭
+	until {when}	直到 {when}
+	until it changes	直到它有变化
+	tomorrow {time}	明天 {time}
+	!{id} is back in Today: {why}	!{id} 回到了今天：{why}
+	{n} snoozed MRs are back in Today	{n} 个暂缓的 MR 回到了今天
+	!{id} snoozed {until}	!{id} 已暂缓，{until}
+	!{id} is back in Today	!{id} 回到了今天
+	Snooze	暂缓
+	Out of Today until then; back early on a push, a failed pipeline or a new comment	在此之前不显示在今天；有推送、流水线失败或新评论时提前回来
+	Snoozed	已暂缓
+	Wake now	立即唤醒
+	Back early if it moves · local time ({zone})	有变化时提前回来 · 本地时间（{zone}）
+	A push, a failed CI or a comment	推送、CI 失败或评论
+@plural	in {n} h|in {n} h	{n} 小时后
+@plural	in {n} d|in {n} d	{n} 天后

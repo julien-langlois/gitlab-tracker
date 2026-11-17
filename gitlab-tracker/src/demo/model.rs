@@ -193,6 +193,8 @@ pub struct MrSpec {
     /// GitLab's verdict on an open MR (the others are `NotOpen`).
     pub mergeability: MergeabilityStatus,
     pub flagged: bool,
+    /// Snoozed out of Today: until that moment, or (`Some(None)`) until it changes.
+    pub snooze: Option<Option<When>>,
     pub fetch: Fetch,
     /// What a job of its pipelines prints when it fails (job, output).
     pub failure: Option<(&'static str, &'static str)>,
@@ -215,6 +217,7 @@ impl MrSpec {
             log: Vec::new(),
             mergeability: MergeabilityStatus::NotApproved,
             flagged: false,
+            snooze: None,
             fetch: Fetch::Ok,
             failure: None,
         }
@@ -268,6 +271,12 @@ impl MrSpec {
 
     pub fn flagged(mut self) -> Self {
         self.flagged = true;
+        self
+    }
+
+    /// Snoozed out of Today until `until`, or until it changes (`None`).
+    pub fn snoozed(mut self, until: Option<When>) -> Self {
+        self.snooze = Some(until);
         self
     }
 

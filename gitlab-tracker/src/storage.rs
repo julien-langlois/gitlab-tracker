@@ -1393,6 +1393,7 @@ impl StateFile {
                         _ => HashSet::new(),
                     },
                     flagged: m.flagged,
+                    snooze: m.snooze.clone(),
                     linked_ticket: m.linked_ticket.clone(),
                     data: m.data.clone(),
                 })

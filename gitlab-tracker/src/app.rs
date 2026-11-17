@@ -2081,6 +2081,7 @@ impl App {
                 mergeability: MergeabilityStatus::Unknown,
                 recently_updated: false,
                 flagged: saved.flagged,
+                snooze: saved.snooze,
                 // Restored so the tracker is not queried again on every restart.
                 linked_ticket: saved.linked_ticket,
                 data,

@@ -25,6 +25,9 @@ mod settings;
 mod settings_core;
 mod shortcuts_core;
 mod signatures;
+// Set and shown by the window; the terminal UI only keeps it in the state file.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+mod snooze;
 mod status;
 mod storage;
 mod ui;

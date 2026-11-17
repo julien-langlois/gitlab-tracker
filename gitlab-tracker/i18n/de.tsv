@@ -1824,3 +1824,26 @@ date	Closed	Geschlossen
 @plural	{n} signed before a rebase from GitLab: tolerated|{n} signed before a rebase from GitLab: tolerated	{n} vor einem GitLab-Rebase signiert: toleriert|{n} vor einem GitLab-Rebase signiert: toleriert
 @plural	{n} lost its signature in a rebase from GitLab, signed before it|{n} lost their signature in a rebase from GitLab, signed before it	{n} hat seine Signatur bei einem GitLab-Rebase verloren, davor signiert|{n} haben ihre Signatur bei einem GitLab-Rebase verloren, davor signiert
 @plural	{n} from an exempted bot|{n} from an exempted bot	{n} von einem ausgenommenen Bot|{n} von einem ausgenommenen Bot
+	In 1 hour	In 1 Stunde
+	Tomorrow morning	Morgen früh
+	Next Monday	Nächsten Montag
+	Until it changes	Bis sie sich ändert
+	its snooze ended	Schlummern beendet
+	new commits	neue Commits
+	a new comment	ein neuer Kommentar
+	merged or closed	gemergt oder geschlossen
+	until {when}	bis {when}
+	until it changes	bis sie sich ändert
+	tomorrow {time}	morgen {time}
+	!{id} is back in Today: {why}	!{id} ist zurück in Heute: {why}
+	{n} snoozed MRs are back in Today	{n} zurückgestellte MRs sind zurück in Heute
+	!{id} snoozed {until}	!{id} zurückgestellt {until}
+	!{id} is back in Today	!{id} ist zurück in Heute
+	Snooze	Zurückstellen
+	Out of Today until then; back early on a push, a failed pipeline or a new comment	Bis dahin nicht in Heute; früher zurück bei einem Push, einer fehlgeschlagenen Pipeline oder einem neuen Kommentar
+	Snoozed	Zurückgestellt
+	Wake now	Jetzt zurückholen
+	Back early if it moves · local time ({zone})	Früher zurück, wenn sie sich ändert · Ortszeit ({zone})
+	A push, a failed CI or a comment	Ein Push, eine fehlgeschlagene CI oder ein Kommentar
+@plural	in {n} h|in {n} h	in {n} Std.|in {n} Std.
+@plural	in {n} d|in {n} d	in {n} T.|in {n} T.

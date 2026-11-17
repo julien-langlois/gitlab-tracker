@@ -56,6 +56,8 @@ pub enum Icon {
     Stack,
     /// A shield: the commits' signatures.
     Shield,
+    /// A calendar page: a day to come (snooze until Monday).
+    Calendar,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -340,6 +342,18 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 line(p(4.0, y), p(5.0, y));
                 line(p(8.5, y), p(20.0, y));
             }
+        }
+        Icon::Calendar => {
+            let page = Rect::from_min_max(p(3.5, 5.0), p(20.5, 20.5));
+            painter.rect_stroke(page, 2.5 * scale, stroke, egui::StrokeKind::Middle);
+            line(p(3.5, 10.0), p(20.5, 10.0));
+            line(p(8.0, 3.0), p(8.0, 7.0));
+            line(p(16.0, 3.0), p(16.0, 7.0));
+            painter.rect_filled(
+                Rect::from_min_max(p(7.0, 13.0), p(10.5, 16.5)),
+                0.8 * scale,
+                color,
+            );
         }
         Icon::Clock => {
             circle(p(12.0, 12.0), 8.5);

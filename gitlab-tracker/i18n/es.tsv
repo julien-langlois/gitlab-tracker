@@ -1824,3 +1824,26 @@ date	Closed	Cerrada
 @plural	{n} signed before a rebase from GitLab: tolerated|{n} signed before a rebase from GitLab: tolerated	{n} firmado antes de un rebase de GitLab: tolerado|{n} firmados antes de un rebase de GitLab: tolerados
 @plural	{n} lost its signature in a rebase from GitLab, signed before it|{n} lost their signature in a rebase from GitLab, signed before it	{n} perdió su firma en un rebase de GitLab, firmado antes|{n} perdieron su firma en un rebase de GitLab, firmados antes
 @plural	{n} from an exempted bot|{n} from an exempted bot	{n} de un bot exento|{n} de un bot exento
+	In 1 hour	En 1 hora
+	Tomorrow morning	Mañana por la mañana
+	Next Monday	El próximo lunes
+	Until it changes	Hasta que cambie
+	its snooze ended	fin de la pausa
+	new commits	nuevos commits
+	a new comment	un comentario nuevo
+	merged or closed	fusionada o cerrada
+	until {when}	hasta {when}
+	until it changes	hasta que cambie
+	tomorrow {time}	mañana {time}
+	!{id} is back in Today: {why}	!{id} vuelve a Hoy: {why}
+	{n} snoozed MRs are back in Today	{n} MR en pausa vuelven a Hoy
+	!{id} snoozed {until}	!{id} en pausa {until}
+	!{id} is back in Today	!{id} vuelve a Hoy
+	Snooze	Posponer
+	Out of Today until then; back early on a push, a failed pipeline or a new comment	Fuera de Hoy hasta entonces; vuelve antes con un push, un pipeline fallido o un comentario nuevo
+	Snoozed	En pausa
+	Wake now	Despertar ahora
+	Back early if it moves · local time ({zone})	Vuelve antes si cambia · hora local ({zone})
+	A push, a failed CI or a comment	Un push, una CI fallida o un comentario
+@plural	in {n} h|in {n} h	en {n} h|en {n} h
+@plural	in {n} d|in {n} d	en {n} d|en {n} d
