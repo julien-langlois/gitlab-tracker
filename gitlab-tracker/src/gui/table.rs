@@ -310,6 +310,7 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         {
             g.pending.push(Action::CopyChecklist);
         }
+        super::export::button_and_panel(g, ui);
         if button(ui, &theme, Some(Icon::List), tl("Select"), g.bulk_mode)
             .on_hover_text(tl(
                 "Bulk mode: tick several MRs to flag them, copy them or stop tracking them",
@@ -1634,6 +1635,113 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
     // In the order asked for (the groups reorder the list).
     views.sort_by_key(|v| indexes.iter().position(|i| *i == v.index));
     views
+}
+
+/// `mrs` as text, for the export: the title, author and status, then the
+/// columns shown (or, `all_columns`, every column the window has) and where
+/// each MR is on every tracked branch.
+pub(super) fn export_table(
+    g: &GuiApp,
+    mrs: &[&crate::models::TrackedMr],
+    all_columns: bool,
+) -> super::export::Table {
+    let app = &g.app;
+    let theme = &g.theme;
+    let tones = &theme.tones;
+    let me = app.config.gitlab_username.as_deref();
+    let columns: Vec<Col> = if all_columns {
+        let offered: Vec<&str> = app.visible_column_defs().iter().map(|c| c.id).collect();
+        Col::ALL
+            .into_iter()
+            .filter(|c| c.window_only() || offered.contains(&c.id()))
+            .collect()
+    } else {
+        wanted_columns(app, g.hide_next_column)
+    };
+    let order = branch_order(app);
+    let mut headers = vec![
+        tl("Title").to_string(),
+        tl("Author").to_string(),
+        tl("Status").to_string(),
+    ];
+    headers.extend(columns.iter().map(|c| c.title().to_string()));
+    if all_columns {
+        headers.push(tl("Updated").to_string());
+    }
+    headers.extend(order.iter().map(|(name, _)| name.clone()));
+    let rows = mrs
+        .iter()
+        .map(|mr| {
+            let failed = matches!(mr.status, MrStatus::Error(_));
+            let mut cells = vec![
+                mr.title.clone(),
+                split_person(&mr.author).0.to_string(),
+                tones::status(mr.state, &mr.mergeability, tones)
+                    .0
+                    .to_string(),
+            ];
+            for col in &columns {
+                cells.push(match col {
+                    Col::Next => NextView::of(&crate::next_step::of(app, mr, me), theme)
+                        .map(|n| {
+                            let mut text = format!("{}: {}", n.who, n.what);
+                            if !n.since.is_empty() {
+                                text = format!("{text} · {}", n.since);
+                            }
+                            text
+                        })
+                        .unwrap_or_default(),
+                    Col::Ci => mr
+                        .pipelines
+                        .first()
+                        .map(|p| tones::pipeline(p.status, tones).0.to_string())
+                        .unwrap_or_default(),
+                    Col::Effort => mr
+                        .diff_stats
+                        .as_ref()
+                        .map(|s| {
+                            let effort =
+                                Effort::from_score(s.difficulty(&app.config.complexity_profile));
+                            tones::effort(effort, tones).0.to_string()
+                        })
+                        .unwrap_or_default(),
+                    Col::Notes => mr.user_notes_count.to_string(),
+                    Col::Activity => activity(app, mr.updated_at.as_deref(), theme).0.to_string(),
+                    Col::Labels => mr.labels.join(", "),
+                    Col::Milestone => mr.milestone.clone().unwrap_or_default(),
+                    Col::Target => mr.target_branch.clone(),
+                    Col::Behind => mr
+                        .diff_stats
+                        .as_ref()
+                        .and_then(|s| s.commits_behind)
+                        .map(|n| n.to_string())
+                        .unwrap_or_default(),
+                    Col::Ticket => mr
+                        .linked_ticket
+                        .as_ref()
+                        .map(|t| format!("#{} {}", t.id, t.status))
+                        .unwrap_or_default(),
+                });
+            }
+            if all_columns {
+                cells.push(mr.updated_at.clone().unwrap_or_default());
+            }
+            cells.extend(
+                order
+                    .iter()
+                    .map(|(branch, _)| match app.branch_presence(mr, branch) {
+                        None if !failed => String::new(),
+                        presence => tones::presence(presence, failed, tones).1.to_string(),
+                    }),
+            );
+            super::export::Row {
+                id: mr.id.clone(),
+                url: mr.web_url.clone(),
+                cells,
+            }
+        })
+        .collect();
+    super::export::Table { headers, rows }
 }
 
 /// A line of the table: a group's heading, or an MR (its index in the visible list).

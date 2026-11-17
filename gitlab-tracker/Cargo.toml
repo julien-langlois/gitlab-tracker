@@ -36,6 +36,7 @@ gui = [
   "dep:bevel-theme",
   "dep:bevel-widgets",
   "dep:bevel-window",
+  "dep:rfd",
 ]
 
 [dependencies]
@@ -91,6 +92,9 @@ eframe = { version = "0.37", optional = true, default-features = false, features
   "x11",
 ] }
 egui = { version = "0.37", optional = true }
+# The export's "Save as…": the system's file dialog (the XDG portal on Linux:
+# no GTK to build against).
+rfd = { version = "0.17.2", optional = true }
 egui_commonmark = { version = "0.26", optional = true, default-features = false, features = [
   "pulldown_cmark",
 ] }

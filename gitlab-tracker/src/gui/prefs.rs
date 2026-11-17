@@ -21,6 +21,8 @@ pub struct Prefs {
     /// The table's branches in a column each (default: one flow cell).
     pub branch_columns: bool,
     pub folded_sections: Vec<String>,
+    /// The export's format and options, for the next export and its shortcut.
+    pub export: super::export::Settings,
     /// Inner size in points.
     pub window: Option<[f32; 2]>,
     /// The projects open in tabs, in order.
@@ -128,6 +130,7 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     g.hide_zeros = prefs.hide_zeros;
     g.hide_next_column = prefs.hide_next_column;
     g.flow_cells = !prefs.branch_columns;
+    g.export.settings = prefs.export;
     *super::widgets::folded_sections() = prefs.folded_sections.iter().cloned().collect();
 }
 
@@ -143,6 +146,7 @@ pub fn current(g: &GuiApp) -> Prefs {
         hide_next_column: g.hide_next_column,
         branch_columns: !g.flow_cells,
         folded_sections: super::widgets::folded_sections().iter().cloned().collect(),
+        export: g.export.settings,
         window: g.window_size.map(|s| [s.x, s.y]),
         tabs: g
             .tabs
@@ -172,6 +176,7 @@ mod tests {
             hide_next_column: false,
             branch_columns: false,
             folded_sections: vec!["History".into()],
+            export: super::super::export::Settings::default(),
             window: Some([1600.0, 1000.0]),
             tabs: vec![SavedTab {
                 url: "https://g.io".into(),

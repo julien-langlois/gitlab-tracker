@@ -73,6 +73,13 @@ the MR's changed files with their patches (**Changes**) and, for a failed job,
 the end of its log (**Log**, in Pipelines). A click on a desktop notification
 brings the window forward on that MR, in its tab.
 
+**Export** writes the MRs picked, those of the view or every tracked MR as a CSV
+file, a Markdown table or a list to paste in a chat: the columns shown (or all of
+them), each tracked branch, and the links to GitLab (a URL column in CSV). A
+preview shows the first lines; **Copy** puts it in the clipboard, **Save as…**
+asks where to write it (the system's file dialog; the XDG portal on Linux).
+`Ctrl+Shift+C` copies the MRs shown again in the last format used.
+
 ![The merge requests page: views and filters on the left, the MRs with their next step and branch presence, the inspector on the right](assets/desktop/merge-requests.png)
 
 ## MR page

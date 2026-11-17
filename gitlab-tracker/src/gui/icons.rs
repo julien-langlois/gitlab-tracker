@@ -58,6 +58,8 @@ pub enum Icon {
     Shield,
     /// A calendar page: a day to come (snooze until Monday).
     Calendar,
+    /// An arrow down onto a line: export, save.
+    Download,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -342,6 +344,17 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 line(p(4.0, y), p(5.0, y));
                 line(p(8.5, y), p(20.0, y));
             }
+        }
+        Icon::Download => {
+            line(p(12.0, 3.5), p(12.0, 15.0));
+            painter.add(Shape::line(
+                vec![p(7.0, 10.0), p(12.0, 15.0), p(17.0, 10.0)],
+                stroke,
+            ));
+            painter.add(Shape::line(
+                vec![p(4.5, 16.0), p(4.5, 20.0), p(19.5, 20.0), p(19.5, 16.0)],
+                stroke,
+            ));
         }
         Icon::Calendar => {
             let page = Rect::from_min_max(p(3.5, 5.0), p(20.5, 20.5));

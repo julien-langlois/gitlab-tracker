@@ -23,6 +23,13 @@ pub fn handle(g: &mut GuiApp, ctx: &egui::Context) {
     if g.palette.is_some() || typing {
         return;
     }
+    // Ctrl+Shift+C: the table's MRs, in the export's last format.
+    if g.page() == Page::MergeRequests
+        && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::C))
+    {
+        super::export::copy_view(g, ctx);
+        return;
+    }
     let events = ctx.input(|i| i.events.clone());
     for event in events {
         match event {

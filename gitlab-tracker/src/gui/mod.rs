@@ -14,6 +14,7 @@ mod delivery;
 mod details;
 mod dialogs;
 mod environments;
+mod export;
 mod flow;
 mod history;
 mod i18n;
@@ -389,6 +390,8 @@ struct GuiApp {
     /// The bell panel's filter, and whether it was open at the last frame (its
     /// notifications count as read once it closes).
     bell_filter: toasts::Filter,
+    /// The export's choices, and a save under way.
+    export: export::State,
     bell_open: bool,
     /// The URLs of the desktop notifications clicked: the window shows their MR.
     clicks: std::sync::mpsc::Receiver<String>,
@@ -543,6 +546,7 @@ impl GuiApp {
             show_resolved: false,
             clicks: notification_clicks(&cc.egui_ctx),
             bell_filter: toasts::Filter::All,
+            export: export::State::default(),
             bell_open: false,
             compact: false,
             hide_next_column: false,
@@ -1643,6 +1647,7 @@ impl eframe::App for GuiApp {
         self.poll_clicks();
         self.apply_events();
         self.wake_snoozed();
+        export::poll(self);
         // Keys move the selection and change the list: before the frame's snapshot.
         keys::handle(self, ui.ctx());
         // Development aid (debug builds): `GITLAB_TRACKER_GUI_KEYS=g` types these

@@ -566,6 +566,10 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Space", "Flag / unflag the selected MR"),
             ("Y", "Copy the git clone command"),
             ("E", "Copy the visible MRs as a Markdown checklist"),
+            (
+                "Ctrl+Shift+C",
+                "Copy the MRs shown in the export's last format",
+            ),
             ("Del", "Stop tracking the selected MR"),
             ("R", "Refresh now"),
             (

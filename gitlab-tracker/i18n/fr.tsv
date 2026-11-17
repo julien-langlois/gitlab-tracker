@@ -1847,3 +1847,29 @@ date	Closed	Fermée
 	A push, a failed CI or a comment	Un push, une CI en échec ou un commentaire
 @plural	in {n} h|in {n} h	dans {n} h|dans {n} h
 @plural	in {n} d|in {n} d	dans {n} j|dans {n} j
+	CSV	CSV
+	Markdown table	Tableau Markdown
+	Chat list	Liste pour un chat
+	URL	URL
+	Saved to {path}	Enregistré dans {path}
+	Could not save the export: {error}	Impossible d'enregistrer l'export : {error}
+	Export the merge requests	Exporter les merge requests
+	Export	Exporter
+	Copy or save the MRs as CSV, Markdown or a chat list	Copier ou enregistrer les MR en CSV, en Markdown ou en liste pour un chat
+	Rows	Lignes
+	This view	Cette vue
+	All tracked	Toutes
+	Ctrl+click or Select to pick MRs in the table	Ctrl+clic ou Sélectionner pour choisir des MR dans le tableau
+	Format	Format
+	Only the columns shown	Seulement les colonnes affichées
+	Off: every column, hidden ones included	Désactivé : toutes les colonnes, cachées comprises
+	A URL column	Une colonne URL
+	Links to GitLab	Liens vers GitLab
+	Ctrl+Shift+C copies the view this way	Ctrl+Maj+C copie la vue de cette façon
+	Save as…	Enregistrer sous…
+	The demo never writes to disk	La démo n'écrit jamais sur le disque
+	Nothing to export	Rien à exporter
+@plural	{n} MR copied as {format}|{n} MRs copied as {format}	{n} MR copiée en {format}|{n} MR copiées en {format}
+@plural	{n} merge request|{n} merge requests	{n} merge request|{n} merge requests
+@plural	+ {n} more line|+ {n} more lines	+ {n} ligne de plus|+ {n} lignes de plus
+	Copy the MRs shown in the export's last format	Copier les MR affichées dans le dernier format d'export

@@ -1847,3 +1847,29 @@ date	Closed	已关闭
 	A push, a failed CI or a comment	推送、CI 失败或评论
 @plural	in {n} h|in {n} h	{n} 小时后
 @plural	in {n} d|in {n} d	{n} 天后
+	CSV	CSV
+	Markdown table	Markdown 表格
+	Chat list	聊天列表
+	URL	URL
+	Saved to {path}	已保存到 {path}
+	Could not save the export: {error}	无法保存导出：{error}
+	Export the merge requests	导出合并请求
+	Export	导出
+	Copy or save the MRs as CSV, Markdown or a chat list	将 MR 复制或保存为 CSV、Markdown 或聊天列表
+	Rows	行
+	This view	当前视图
+	All tracked	全部跟踪的
+	Ctrl+click or Select to pick MRs in the table	按 Ctrl+点击或“选择”在表格中挑选 MR
+	Format	格式
+	Only the columns shown	仅显示的列
+	Off: every column, hidden ones included	关闭：所有列，包括隐藏的
+	A URL column	URL 列
+	Links to GitLab	链接到 GitLab
+	Ctrl+Shift+C copies the view this way	Ctrl+Shift+C 按此方式复制视图
+	Save as…	另存为…
+	The demo never writes to disk	演示模式从不写入磁盘
+	Nothing to export	没有可导出的内容
+@plural	{n} MR copied as {format}|{n} MRs copied as {format}	已将 {n} 个 MR 复制为 {format}
+@plural	{n} merge request|{n} merge requests	{n} 个合并请求
+@plural	+ {n} more line|+ {n} more lines	+ 另外 {n} 行
+	Copy the MRs shown in the export's last format	以上次的导出格式复制显示的 MR
