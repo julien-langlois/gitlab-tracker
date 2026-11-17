@@ -1873,3 +1873,27 @@ date	Closed	Cerrada
 @plural	{n} merge request|{n} merge requests	{n} merge request|{n} merge requests
 @plural	+ {n} more line|+ {n} more lines	+ {n} línea más|+ {n} líneas más
 	Copy the MRs shown in the export's last format	Copiar las MR visibles en el último formato de exportación
+	The file dialog did not open (on Linux it needs xdg-desktop-portal): use Copy instead	El diálogo de archivos no se abrió (en Linux necesita xdg-desktop-portal): use Copiar
+	Hotfix branches	Ramas de hotfix
+	Source branches of hotfixes, separated by commas; `*` stands for any text (hotfix/*, fix/prod-*). They count as failures in the change failure rate, with the MRs labelled hotfix. Empty: by label only.	Ramas de origen de los hotfix, separadas por comas; `*` equivale a cualquier texto (hotfix/*, fix/prod-*). Cuentan como fallos en la change failure rate, con las MR etiquetadas hotfix. Vacío: solo por etiqueta.
+	Reverts and hotfixes	Reverts y hotfixes
+	what had to be undone or patched	lo que hubo que deshacer o corregir
+	No revert or hotfix merged in the period.	Ningún revert ni hotfix fusionado en el periodo.
+	Revert	Revert
+	Hotfix	Hotfix
+	How far	Hasta dónde
+	After	Después de
+	Undoes	Deshace
+	named in its description	nombrada en su descripción
+	one of its commits is reverted	se revierte uno de sus commits
+	its title is quoted	se cita su título
+	a guess: the latest MR merged before it that changed the same files	una suposición: la última MR fusionada antes que cambió los mismos archivos
+	guess	suposición
+	not found	no encontrada
+	Hotfixes: the MRs labelled hotfix (no hotfix branch set).	Hotfixes: las MR etiquetadas hotfix (sin ramas de hotfix definidas).
+	Hotfixes: the MRs labelled hotfix or from {branches}. The project settings change the branches.	Hotfixes: las MR etiquetadas hotfix o desde {branches}. Los ajustes del proyecto cambian las ramas.
+	reverts this MR	revierte esta MR
+	reverted by this MR	revertida por esta MR
+@plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} contada en la change failure rate|{n} contadas en la change failure rate
+	no guess	sin suposición
+@plural	with {n} failed deployment|with {n} failed deployments	con {n} despliegue fallido|con {n} despliegues fallidos

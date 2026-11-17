@@ -1873,3 +1873,27 @@ date	Closed	Geschlossen
 @plural	{n} merge request|{n} merge requests	{n} Merge Request|{n} Merge Requests
 @plural	+ {n} more line|+ {n} more lines	+ {n} weitere Zeile|+ {n} weitere Zeilen
 	Copy the MRs shown in the export's last format	Die angezeigten MRs im zuletzt genutzten Exportformat kopieren
+	The file dialog did not open (on Linux it needs xdg-desktop-portal): use Copy instead	Der Dateidialog hat sich nicht geöffnet (unter Linux wird xdg-desktop-portal benötigt): nutzen Sie Kopieren
+	Hotfix branches	Hotfix-Branches
+	Source branches of hotfixes, separated by commas; `*` stands for any text (hotfix/*, fix/prod-*). They count as failures in the change failure rate, with the MRs labelled hotfix. Empty: by label only.	Quell-Branches von Hotfixes, durch Kommas getrennt; `*` steht für beliebigen Text (hotfix/*, fix/prod-*). Sie zählen als Fehler in der Change Failure Rate, wie die MRs mit dem Label hotfix. Leer: nur per Label.
+	Reverts and hotfixes	Reverts und Hotfixes
+	what had to be undone or patched	was rückgängig gemacht oder nachgebessert werden musste
+	No revert or hotfix merged in the period.	Kein Revert und kein Hotfix im Zeitraum gemergt.
+	Revert	Revert
+	Hotfix	Hotfix
+	How far	Wie weit
+	After	Nach
+	Undoes	Macht rückgängig
+	named in its description	in seiner Beschreibung genannt
+	one of its commits is reverted	einer seiner Commits wird rückgängig gemacht
+	its title is quoted	sein Titel wird zitiert
+	a guess: the latest MR merged before it that changed the same files	eine Vermutung: der letzte zuvor gemergte MR, der dieselben Dateien änderte
+	guess	Vermutung
+	not found	nicht gefunden
+	Hotfixes: the MRs labelled hotfix (no hotfix branch set).	Hotfixes: die MRs mit dem Label hotfix (keine Hotfix-Branch festgelegt).
+	Hotfixes: the MRs labelled hotfix or from {branches}. The project settings change the branches.	Hotfixes: die MRs mit dem Label hotfix oder aus {branches}. Die Projekteinstellungen ändern die Branches.
+	reverts this MR	macht diesen MR rückgängig
+	reverted by this MR	durch diesen MR rückgängig gemacht
+@plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} in der Change Failure Rate gezählt|{n} in der Change Failure Rate gezählt
+	no guess	keine Vermutung
+@plural	with {n} failed deployment|with {n} failed deployments	mit {n} fehlgeschlagenen Deployment|mit {n} fehlgeschlagenen Deployments

@@ -2758,11 +2758,19 @@ fn person_chip(ui: &mut Ui, theme: &Theme, display: &str) {
 pub fn related_mrs<'a>(app: &'a App, mr: &TrackedMr) -> Vec<(&'a TrackedMr, String)> {
     let ticket = mr.linked_ticket.as_ref().map(|t| t.id.as_str());
     let mention = format!("!{}", mr.id);
-    app.mrs
+    let mut list = app
+        .mrs
         .iter()
         .filter(|other| other.id != mr.id && !other.title.is_empty())
         .filter_map(|other| {
-            let why = if ticket.is_some()
+            let reverts = |a: &TrackedMr, b: &TrackedMr| {
+                super::delivery::reverted(app, a).is_some_and(|(undone, _)| undone.id == b.id)
+            };
+            let why = if reverts(other, mr) {
+                tl("reverts this MR").to_string()
+            } else if reverts(mr, other) {
+                tl("reverted by this MR").to_string()
+            } else if ticket.is_some()
                 && other.linked_ticket.as_ref().map(|t| t.id.as_str()) == ticket
             {
                 tf("same ticket #{id}", &[("id", ticket.unwrap_or_default())])
@@ -2778,7 +2786,10 @@ pub fn related_mrs<'a>(app: &'a App, mr: &TrackedMr) -> Vec<(&'a TrackedMr, Stri
             };
             Some((other, why))
         })
-        .collect()
+        .collect::<Vec<_>>();
+    // A revert first: it says the most about the MR.
+    list.sort_by_key(|(_, why)| *why != tl("reverts this MR") && *why != tl("reverted by this MR"));
+    list
 }
 
 fn related(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {

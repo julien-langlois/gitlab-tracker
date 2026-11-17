@@ -356,6 +356,43 @@ fn signed_bots_setting() -> ProjectSettingDef {
     }
 }
 
+fn hotfix_branches_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "delivery.hotfix_branches",
+        section: "Delivery",
+        label: "Hotfix branches",
+        help: "Source branches of hotfixes, separated by commas; `*` stands for any text \
+               (hotfix/*, fix/prod-*). They count as failures in the change failure rate, \
+               with the MRs labelled hotfix. Empty: by label only.",
+        priority: 300,
+        kind: ProjectSettingKind::Text,
+        default_value: ProjectSettingValue::Text(crate::config::DEFAULT_HOTFIX_BRANCHES.into()),
+        read: |project| {
+            ProjectSettingValue::Text(
+                project
+                    .get("hotfix_branches")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or(crate::config::DEFAULT_HOTFIX_BRANCHES)
+                    .to_string(),
+            )
+        },
+        write: |project, value| {
+            let ProjectSettingValue::Text(text) = value else {
+                return;
+            };
+            // The default is not written; an empty list is (it turns the
+            // branches off).
+            let text = text.trim();
+            if text == crate::config::DEFAULT_HOTFIX_BRANCHES {
+                project.remove("hotfix_branches");
+            } else {
+                project.insert("hotfix_branches".into(), toml::Value::String(text.into()));
+            }
+        },
+    }
+}
+
+inventory::submit!(ProjectSettingFactory(hotfix_branches_setting));
 inventory::submit!(ProjectSettingFactory(signed_enforce_setting));
 inventory::submit!(ProjectSettingFactory(signed_rebase_setting));
 inventory::submit!(ProjectSettingFactory(signed_patch_setting));
@@ -414,6 +451,26 @@ mod tests {
         let parsed: ProjectEntry = toml::from_str(&text).unwrap();
         assert_eq!(parsed.name.as_deref(), Some(tricky));
         assert_eq!(parsed.project_id, "42");
+    }
+
+    #[test]
+    fn hotfix_branches_keep_the_default_out_of_the_file() {
+        let def = hotfix_branches_setting();
+        let mut table = entry();
+        assert_eq!(
+            (def.read)(&table),
+            ProjectSettingValue::Text("hotfix/*".into())
+        );
+        (def.write)(&mut table, ProjectSettingValue::Text("fix/prod-*".into()));
+        assert_eq!(
+            table.get("hotfix_branches").and_then(toml::Value::as_str),
+            Some("fix/prod-*")
+        );
+        // Empty is kept: it turns the branches off.
+        (def.write)(&mut table, ProjectSettingValue::Text("  ".into()));
+        assert_eq!((def.read)(&table), ProjectSettingValue::Text(String::new()));
+        (def.write)(&mut table, ProjectSettingValue::Text("hotfix/*".into()));
+        assert!(table.get("hotfix_branches").is_none());
     }
 
     #[test]

@@ -68,6 +68,14 @@ pub struct ProjectEntry {
     /// Hours an MR may wait for my review before a reminder notification (0 = never).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub review_reminder_hours: Option<u64>,
+    /// The source branches of hotfixes, as patterns separated by commas (`*`:
+    /// any text). Absent: `hotfix/*`; empty: none.
+    ///
+    /// ```toml
+    /// hotfix_branches = "hotfix/*, fix/prod-*"
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotfix_branches: Option<String>,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     /// Defaults to `true` when omitted.
     ///

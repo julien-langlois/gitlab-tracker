@@ -164,6 +164,18 @@ a burn-up, its tickets' time and its people. Copies as release notes.
 The four DORA measures (deployment frequency, lead time, change failure rate,
 time to restore), each in its band from Elite to Low; where the time goes in each
 merged MR's path; the review rounds; and the open MRs by step and age.
+
+**Reverts and hotfixes** lists what had to be undone or patched in the period:
+each revert with the MR it undoes, how long after its merge, and how far that MR
+had gone (in red when it reached production); each hotfix with a guess at what it
+patches (the latest MR merged before it that changed the same files). A revert
+finds its MR by the description GitLab's Revert button writes ("This reverts merge
+request !12"), a reverted commit, or the quoted title. Hotfixes are the MRs
+labelled hotfix or whose branch matches the project's **Hotfix branches** setting
+(`hotfix/*` by default; see [configuration](configuration.md)). Those on
+production in the period are the change failure rate's failures. The MR page
+names the revert under **Related MRs**, both ways.
+
 **Copy the weekly report** puts it all, with the CI and the milestones'
 forecasts, in the clipboard as Markdown.
 

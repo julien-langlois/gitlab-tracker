@@ -1873,3 +1873,27 @@ date	Closed	已关闭
 @plural	{n} merge request|{n} merge requests	{n} 个合并请求
 @plural	+ {n} more line|+ {n} more lines	+ 另外 {n} 行
 	Copy the MRs shown in the export's last format	以上次的导出格式复制显示的 MR
+	The file dialog did not open (on Linux it needs xdg-desktop-portal): use Copy instead	文件对话框未打开（Linux 上需要 xdg-desktop-portal）：请改用“复制”
+	Hotfix branches	Hotfix 分支
+	Source branches of hotfixes, separated by commas; `*` stands for any text (hotfix/*, fix/prod-*). They count as failures in the change failure rate, with the MRs labelled hotfix. Empty: by label only.	hotfix 的源分支，用逗号分隔；`*` 代表任意文本（hotfix/*、fix/prod-*）。它们与带 hotfix 标签的 MR 一起计入变更失败率。留空：仅按标签。
+	Reverts and hotfixes	回滚与热修复
+	what had to be undone or patched	需要撤销或修补的内容
+	No revert or hotfix merged in the period.	该时段内没有合并回滚或热修复。
+	Revert	回滚
+	Hotfix	热修复
+	How far	到达位置
+	After	间隔
+	Undoes	撤销
+	named in its description	在其描述中提到
+	one of its commits is reverted	其某个提交被回滚
+	its title is quoted	引用了其标题
+	a guess: the latest MR merged before it that changed the same files	推测：此前最近合并且修改了相同文件的 MR
+	guess	推测
+	not found	未找到
+	Hotfixes: the MRs labelled hotfix (no hotfix branch set).	热修复：带 hotfix 标签的 MR（未设置 hotfix 分支）。
+	Hotfixes: the MRs labelled hotfix or from {branches}. The project settings change the branches.	热修复：带 hotfix 标签或来自 {branches} 的 MR。可在项目设置中修改分支。
+	reverts this MR	回滚了此 MR
+	reverted by this MR	被此 MR 回滚
+@plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} 个计入变更失败率
+	no guess	无推测
+@plural	with {n} failed deployment|with {n} failed deployments	另有 {n} 次部署失败

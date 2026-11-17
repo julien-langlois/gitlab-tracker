@@ -227,7 +227,13 @@ pub enum Saved {
     Done(std::path::PathBuf),
     Failed(String),
     Cancelled,
+    /// The dialog came back at once with nothing: it never showed (on Linux,
+    /// no XDG desktop portal answered).
+    NoDialog,
 }
+
+/// Faster than anyone picks Cancel: the dialog did not open.
+const NO_DIALOG: std::time::Duration = std::time::Duration::from_millis(400);
 
 /// The export's state in the window: its choices and a save under way.
 #[derive(Default)]
@@ -284,6 +290,10 @@ pub fn poll(g: &mut GuiApp) {
             true,
         ),
         Saved::Cancelled => {}
+        Saved::NoDialog => g.app.flash(
+            tl("The file dialog did not open (on Linux it needs xdg-desktop-portal): use Copy instead"),
+            true,
+        ),
     }
 }
 
@@ -303,6 +313,7 @@ fn save(g: &mut GuiApp, ctx: &egui::Context, text: String, format: Format) {
     };
     let filter = filter.to_string();
     std::thread::spawn(move || {
+        let asked = std::time::Instant::now();
         let picked = futures::executor::block_on(
             rfd::AsyncFileDialog::new()
                 .set_title(tl("Export the merge requests"))
@@ -311,6 +322,7 @@ fn save(g: &mut GuiApp, ctx: &egui::Context, text: String, format: Format) {
                 .save_file(),
         );
         let saved = match picked {
+            None if asked.elapsed() < NO_DIALOG => Saved::NoDialog,
             None => Saved::Cancelled,
             Some(file) => {
                 let path = file.path().to_path_buf();

@@ -1873,3 +1873,27 @@ date	Closed	Fechada
 @plural	{n} merge request|{n} merge requests	{n} merge request|{n} merge requests
 @plural	+ {n} more line|+ {n} more lines	+ {n} linha a mais|+ {n} linhas a mais
 	Copy the MRs shown in the export's last format	Copiar os MRs exibidos no último formato de exportação
+	The file dialog did not open (on Linux it needs xdg-desktop-portal): use Copy instead	A janela de arquivos não abriu (no Linux é preciso xdg-desktop-portal): use Copiar
+	Hotfix branches	Branches de hotfix
+	Source branches of hotfixes, separated by commas; `*` stands for any text (hotfix/*, fix/prod-*). They count as failures in the change failure rate, with the MRs labelled hotfix. Empty: by label only.	Branches de origem dos hotfixes, separadas por vírgulas; `*` vale qualquer texto (hotfix/*, fix/prod-*). Contam como falhas na change failure rate, com os MRs com o rótulo hotfix. Vazio: só pelo rótulo.
+	Reverts and hotfixes	Reverts e hotfixes
+	what had to be undone or patched	o que foi preciso desfazer ou corrigir
+	No revert or hotfix merged in the period.	Nenhum revert ou hotfix mesclado no período.
+	Revert	Revert
+	Hotfix	Hotfix
+	How far	Até onde
+	After	Depois de
+	Undoes	Desfaz
+	named in its description	citado na descrição
+	one of its commits is reverted	um de seus commits é revertido
+	its title is quoted	seu título é citado
+	a guess: the latest MR merged before it that changed the same files	um palpite: o último MR mesclado antes que alterou os mesmos arquivos
+	guess	palpite
+	not found	não encontrado
+	Hotfixes: the MRs labelled hotfix (no hotfix branch set).	Hotfixes: os MRs com o rótulo hotfix (nenhuma branch de hotfix definida).
+	Hotfixes: the MRs labelled hotfix or from {branches}. The project settings change the branches.	Hotfixes: os MRs com o rótulo hotfix ou vindos de {branches}. As configurações do projeto mudam as branches.
+	reverts this MR	reverte este MR
+	reverted by this MR	revertido por este MR
+@plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} contado na change failure rate|{n} contados na change failure rate
+	no guess	sem palpite
+@plural	with {n} failed deployment|with {n} failed deployments	com {n} deploy com falha|com {n} deploys com falha

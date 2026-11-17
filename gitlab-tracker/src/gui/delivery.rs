@@ -340,6 +340,8 @@ pub struct Delivery {
     pub p85: Option<f64>,
     pub dora: Dora,
     pub rounds: Rounds,
+    /// The reverts and hotfixes merged in the period, newest first.
+    pub undos: Vec<Undo>,
 }
 
 fn percentile(mut values: Vec<f64>, p: f64) -> Option<f64> {
@@ -419,12 +421,211 @@ fn is_revert(title: &str) -> bool {
     title.trim_start().to_lowercase().starts_with("revert")
 }
 
-/// Whether an MR is a fix rushed to production: a hotfix label or branch.
-fn is_hotfix(mr: &TrackedMr) -> bool {
+/// Whether an MR is a fix rushed to production: a hotfix label, or a source
+/// branch among the project's hotfix branches (`hotfix/*` unless set).
+fn is_hotfix(app: &App, mr: &TrackedMr) -> bool {
     mr.labels
         .iter()
         .any(|l| l.to_lowercase().contains("hotfix"))
-        || mr.source_branch.to_lowercase().starts_with("hotfix")
+        || app.config.is_hotfix_branch(&mr.source_branch)
+}
+
+// ── Reverts and hotfixes ─────────────────────────────────────────────────────
+
+/// A revert or a hotfix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UndoKind {
+    Revert,
+    Hotfix,
+}
+
+/// How the MR a revert or hotfix undoes was found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Found {
+    /// The description names it: "This reverts merge request !12" (GitLab's
+    /// Revert button).
+    Description,
+    /// The description names one of its commits: "This reverts commit 1a2b3c".
+    Commit,
+    /// Its title, quoted: `Revert "feat: …"`.
+    Title,
+    /// A guess: the latest MR merged before it that changed the same files.
+    SameFiles,
+}
+
+/// A revert or hotfix merged in the period.
+#[derive(Debug, Clone)]
+pub struct Undo {
+    pub kind: UndoKind,
+    pub id: String,
+    pub title: String,
+    pub merged: DateTime<Utc>,
+    /// The MR it undoes or patches: (id, title, how it was found).
+    pub undoes: Option<(String, String, Found)>,
+    /// Days from that MR's merge to this one's.
+    pub after: Option<f64>,
+    /// The furthest tracked branch that MR reached (a hotfix without one: its own).
+    pub reached: Option<String>,
+    /// Counted in the change failure rate: on production in the period.
+    pub counted: bool,
+}
+
+/// The digits of `!123` at the start of `text` (after the `!`).
+fn mr_number(text: &str) -> Option<&str> {
+    let end = text
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    (end > 0).then(|| &text[..end])
+}
+
+/// The merged MR `revert` undoes, and how it was found: the description's
+/// `!id` or commit, else the title (its own or a commit's) in quotes.
+pub fn reverted<'a>(app: &'a App, revert: &TrackedMr) -> Option<(&'a TrackedMr, Found)> {
+    if !is_revert(&revert.title) {
+        return None;
+    }
+    let merged = |m: &&TrackedMr| m.id != revert.id && m.state == GitlabMrState::Merged;
+    let text = revert.description.to_lowercase();
+    // "This reverts merge request !12".
+    for (at, _) in text.match_indices("reverts merge request !") {
+        let rest = &text[at + "reverts merge request !".len()..];
+        if let Some(found) =
+            mr_number(rest).and_then(|id| app.mrs.iter().filter(merged).find(|m| m.id == id))
+        {
+            return Some((found, Found::Description));
+        }
+    }
+    // "This reverts commit 1a2b3c4…".
+    for (at, _) in text.match_indices("reverts commit ") {
+        let rest = &text[at + "reverts commit ".len()..];
+        let sha: String = rest.chars().take_while(char::is_ascii_hexdigit).collect();
+        if sha.len() < 7 {
+            continue;
+        }
+        let found = app.mrs.iter().filter(merged).find(|m| {
+            m.commits
+                .iter()
+                .any(|c| c.sha.starts_with(&sha) || sha.starts_with(&c.sha))
+        });
+        if let Some(found) = found {
+            return Some((found, Found::Commit));
+        }
+    }
+    // `Revert "title"`, in the MR's title or one of its commits'.
+    let quoted = |title: &str| {
+        title
+            .split('"')
+            .nth(1)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+    };
+    let titles = std::iter::once(revert.title.as_str())
+        .chain(revert.commits.iter().map(|c| c.fingerprint.title.as_str()));
+    for undone in titles.filter(|t| is_revert(t)).filter_map(quoted) {
+        let found =
+            app.mrs.iter().filter(merged).find(|m| {
+                m.title == undone || m.commits.iter().any(|c| c.fingerprint.title == undone)
+            });
+        if let Some(found) = found {
+            return Some((found, Found::Title));
+        }
+    }
+    None
+}
+
+/// How far back a hotfix's cause is looked for.
+const HOTFIX_LOOKBACK_DAYS: i64 = 14;
+
+/// A guess at what `hotfix` patches: of the MRs merged in the two weeks before
+/// it (no revert or hotfix), the one sharing the most files with it, the
+/// latest on a tie.
+fn patched<'a>(app: &'a App, hotfix: &TrackedMr, merged: DateTime<Utc>) -> Option<&'a TrackedMr> {
+    let files: Vec<&str> = hotfix
+        .diff_stats
+        .as_ref()?
+        .files
+        .iter()
+        .map(|f| f.path.as_str())
+        .collect();
+    if files.is_empty() {
+        return None;
+    }
+    let since = merged - Duration::days(HOTFIX_LOOKBACK_DAYS);
+    app.mrs
+        .iter()
+        .filter(|m| m.id != hotfix.id && m.state == GitlabMrState::Merged)
+        .filter(|m| !is_revert(&m.title) && !is_hotfix(app, m))
+        .filter_map(|m| {
+            let at = m.merged_at.as_deref().and_then(board::parse_time)?;
+            if at > merged || at < since {
+                return None;
+            }
+            let shared = m
+                .diff_stats
+                .as_ref()?
+                .files
+                .iter()
+                .filter(|f| files.contains(&f.path.as_str()))
+                .count();
+            (shared > 0).then_some((m, shared, at))
+        })
+        .max_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
+        .map(|(m, _, _)| m)
+}
+
+/// The furthest of `ordered` (feature to production) that `mr` is on.
+fn furthest(app: &App, mr: &TrackedMr, ordered: &[String]) -> Option<String> {
+    ordered
+        .iter()
+        .rev()
+        .find(|b| app.branch_presence(mr, b).is_some_and(|p| !p.is_missing()))
+        .cloned()
+}
+
+/// The reverts and hotfixes merged since `start`, newest first.
+fn undos(app: &App, ordered: &[String], start: DateTime<Utc>, counted: &[String]) -> Vec<Undo> {
+    let mut list: Vec<Undo> = app
+        .mrs
+        .iter()
+        .filter(|m| m.state == GitlabMrState::Merged && !m.title.is_empty())
+        .filter_map(|mr| {
+            let merged = mr.merged_at.as_deref().and_then(board::parse_time)?;
+            if merged < start {
+                return None;
+            }
+            let (kind, undone) = if is_revert(&mr.title) {
+                (UndoKind::Revert, reverted(app, mr))
+            } else if is_hotfix(app, mr) {
+                (
+                    UndoKind::Hotfix,
+                    patched(app, mr, merged).map(|m| (m, Found::SameFiles)),
+                )
+            } else {
+                return None;
+            };
+            let after = undone.and_then(|(m, _)| {
+                let at = m.merged_at.as_deref().and_then(board::parse_time)?;
+                Some(board::days_between(at, merged).max(0.0))
+            });
+            let reached = match (kind, undone) {
+                (_, Some((m, _))) => furthest(app, m, ordered),
+                (UndoKind::Hotfix, None) => furthest(app, mr, ordered),
+                (UndoKind::Revert, None) => None,
+            };
+            Some(Undo {
+                kind,
+                id: mr.id.clone(),
+                title: mr.title.clone(),
+                merged,
+                undoes: undone.map(|(m, found)| (m.id.clone(), m.title.clone(), found)),
+                after,
+                reached,
+                counted: counted.contains(&mr.id),
+            })
+        })
+        .collect();
+    list.sort_by(|a, b| b.merged.cmp(&a.merged).then(a.id.cmp(&b.id)));
+    list
 }
 
 /// The deployments to production: those of the last branch, else of an
@@ -518,7 +719,7 @@ pub fn analyze(
                 delivered_in_period += 1;
                 if is_revert(&mr.title) {
                     d.dora.reverts.push(mr.id.clone());
-                } else if is_hotfix(mr) {
+                } else if is_hotfix(app, mr) {
                     d.dora.hotfixes.push(mr.id.clone());
                 }
             } else if delivered >= before {
@@ -623,12 +824,7 @@ pub fn analyze(
         let Some(revert) = app.mrs.iter().find(|m| &m.id == id) else {
             continue;
         };
-        let undone = revert.title.split('"').nth(1).filter(|t| !t.is_empty());
-        let original = undone.and_then(|t| {
-            app.mrs
-                .iter()
-                .find(|m| m.title == t && m.state == GitlabMrState::Merged)
-        });
+        let original = reverted(app, revert).map(|(m, _)| m);
         let (Some(original), Some(fixed)) = (
             original.and_then(|m| path_of(app, m, &last)),
             path_of(app, revert, &last).and_then(|p| p.delivered.or(p.merged)),
@@ -641,6 +837,8 @@ pub fn analyze(
     }
     dora.restores = restores.len();
     dora.restore = crate::next_step::median(restores);
+    let counted: Vec<String> = dora.reverts.iter().chain(&dora.hotfixes).cloned().collect();
+    d.undos = undos(app, &ordered, start, &counted);
     d
 }
 
@@ -753,6 +951,16 @@ fn main(
     dora_figures(ui, &theme, d);
 
     let mut picked = None;
+    ui.add_space(GAP);
+    undo_card(
+        ui,
+        &theme,
+        d,
+        &g.app.config.hotfix_branches,
+        g.delivery.selected.as_deref(),
+        &mut picked,
+    );
+    ui.add_space(GAP);
     board::split(
         ui,
         0.6,
@@ -775,6 +983,219 @@ fn main(
     if let Some(id) = picked {
         g.delivery.selected = Some(id);
     }
+}
+
+/// The reverts and hotfixes merged in the period: what each undoes or patches,
+/// how long after, and how far the faulty MR had gone.
+fn undo_card(
+    ui: &mut Ui,
+    theme: &Theme,
+    d: &Delivery,
+    hotfix_branches: &str,
+    selected: Option<&str>,
+    picked: &mut Option<String>,
+) {
+    let counted = d.undos.iter().filter(|u| u.counted).count();
+    let note = if d.undos.is_empty() {
+        tl("what had to be undone or patched").to_string()
+    } else {
+        let note = tn(
+            counted as u64,
+            "{n} counted in the change failure rate",
+            "{n} counted in the change failure rate",
+        );
+        match d.dora.failed_deploys {
+            0 => note,
+            n => format!(
+                "{note} · {}",
+                tn(
+                    n as u64,
+                    "with {n} failed deployment",
+                    "with {n} failed deployments"
+                )
+            ),
+        }
+    };
+    board::card(ui, theme, tl("Reverts and hotfixes"), &note, 0.0, |ui| {
+        if d.undos.is_empty() {
+            board::empty(ui, theme, tl("No revert or hotfix merged in the period."));
+        }
+        let font = FontId::proportional(theme.text_size - 1.0);
+        let small = FontId::proportional(theme.text_size - 2.0);
+        // The columns, right to left; the same in the heading and the rows.
+        let (reached_w, after_w, undoes_w) = (120.0, 70.0, 170.0);
+        if !d.undos.is_empty() {
+            let (head, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
+            let right = head.right() - 8.0;
+            let y = head.center().y;
+            let caption = |ui: &Ui, x: f32, align: Align2, text: &str, width: f32| {
+                board::paint_text(
+                    ui,
+                    egui::pos2(x, y),
+                    align,
+                    &text.to_uppercase(),
+                    FontId::proportional(theme.text_size - 3.0),
+                    theme.palette.text_muted,
+                    width,
+                );
+            };
+            caption(ui, right, Align2::RIGHT_CENTER, tl("How far"), reached_w);
+            caption(
+                ui,
+                right - reached_w - 8.0,
+                Align2::RIGHT_CENTER,
+                tl("After"),
+                after_w,
+            );
+            caption(
+                ui,
+                right - reached_w - after_w - 16.0 - undoes_w,
+                Align2::LEFT_CENTER,
+                tl("Undoes"),
+                undoes_w,
+            );
+        }
+        for undo in d.undos.iter().take(12) {
+            let (rect, response) = board::row(ui, theme, 34.0, selected == Some(undo.id.as_str()));
+            let y = rect.center().y;
+            let (kind, tone) = match undo.kind {
+                UndoKind::Revert => (tl("Revert"), theme.tones.red),
+                UndoKind::Hotfix => (tl("Hotfix"), theme.tones.amber),
+            };
+            // The kind, in a column of its own so the ids line up.
+            board::paint_tag(
+                ui,
+                theme,
+                egui::pos2(rect.left() + 6.0, y),
+                &kind.to_uppercase(),
+                tone,
+                false,
+            );
+            let mut x = rect.left() + 84.0;
+            x += board::paint_tag(
+                ui,
+                theme,
+                egui::pos2(x, y),
+                &format!("!{}", undo.id),
+                board::id_tone(theme),
+                true,
+            ) + 10.0;
+            // Right to left: where the faulty MR got, after how long, what it was.
+            let right = rect.right() - 8.0;
+            // On production, users saw it: in red.
+            let (reached, reached_color) = match &undo.reached {
+                Some(branch) if *branch == d.production => (branch.clone(), theme.tones.red.fg),
+                Some(branch) => (branch.clone(), theme.palette.text_secondary),
+                None => (board::dash().to_string(), theme.palette.text_muted),
+            };
+            board::paint_text(
+                ui,
+                egui::pos2(right, y),
+                Align2::RIGHT_CENTER,
+                &reached,
+                small.clone(),
+                reached_color,
+                reached_w,
+            );
+            let after = undo
+                .after
+                .map_or_else(|| board::dash().to_string(), board::duration_text);
+            board::paint_text(
+                ui,
+                egui::pos2(right - reached_w - 8.0, y),
+                Align2::RIGHT_CENTER,
+                &after,
+                font.clone(),
+                theme.palette.text_secondary,
+                after_w,
+            );
+            let undoes_left = right - reached_w - after_w - 16.0 - undoes_w;
+            let mut undone_click = None;
+            match &undo.undoes {
+                Some((id, title, found)) => {
+                    let w = board::paint_tag(
+                        ui,
+                        theme,
+                        egui::pos2(undoes_left, y),
+                        &format!("!{id}"),
+                        board::id_tone(theme),
+                        true,
+                    );
+                    let tag =
+                        Rect::from_min_size(egui::pos2(undoes_left, y - 10.0), Vec2::new(w, 20.0));
+                    let hint = match found {
+                        Found::Description => tl("named in its description"),
+                        Found::Commit => tl("one of its commits is reverted"),
+                        Found::Title => tl("its title is quoted"),
+                        Found::SameFiles => tl(
+                            "a guess: the latest MR merged before it that changed the same files",
+                        ),
+                    };
+                    let r = ui
+                        .interact(
+                            tag,
+                            ui.make_persistent_id(("undoes", &undo.id)),
+                            Sense::click(),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text(format!("{title}\n{hint}"));
+                    if r.clicked() {
+                        undone_click = Some(id.clone());
+                    }
+                    if *found == Found::SameFiles {
+                        board::paint_text(
+                            ui,
+                            egui::pos2(undoes_left + w + 6.0, y),
+                            Align2::LEFT_CENTER,
+                            tl("guess"),
+                            small.clone(),
+                            theme.palette.text_muted,
+                            undoes_w - w - 6.0,
+                        );
+                    }
+                }
+                None => {
+                    board::paint_text(
+                        ui,
+                        egui::pos2(undoes_left, y),
+                        Align2::LEFT_CENTER,
+                        match undo.kind {
+                            UndoKind::Revert => tl("not found"),
+                            UndoKind::Hotfix => tl("no guess"),
+                        },
+                        small.clone(),
+                        theme.palette.text_muted,
+                        undoes_w,
+                    );
+                }
+            }
+            board::paint_text(
+                ui,
+                egui::pos2(x, y),
+                Align2::LEFT_CENTER,
+                &undo.title,
+                font.clone(),
+                theme.palette.text,
+                (undoes_left - x - 12.0).max(0.0),
+            );
+            if undone_click.is_some() {
+                *picked = undone_click;
+            } else if response.clicked() {
+                *picked = Some(undo.id.clone());
+            }
+        }
+        ui.add_space(6.0);
+        let patterns = if hotfix_branches.trim().is_empty() {
+            tl("Hotfixes: the MRs labelled hotfix (no hotfix branch set).").to_string()
+        } else {
+            tf(
+                "Hotfixes: the MRs labelled hotfix or from {branches}. The project settings change the branches.",
+                &[("branches", hotfix_branches.trim())],
+            )
+        };
+        ui.label(muted(theme, patterns).size(theme.text_size - 1.5));
+    });
 }
 
 /// "+2 on the period before" in green, or worse in red, `better_up` telling
@@ -1960,5 +2381,106 @@ mod tests {
         let report = weekly_report(&app, Some(&overview), &ci, now);
         assert!(report.contains("Deployment frequency"), "{report}");
         assert!(report.contains("v2.4.0"), "{report}");
+    }
+
+    fn merged(id: &str, title: &str) -> TrackedMr {
+        let mut mr = TrackedMr::placeholder(id.into(), title.into(), None);
+        mr.data.author = "Alex <@alex>".into();
+        mr.data.state = GitlabMrState::Merged;
+        mr
+    }
+
+    fn commit(sha: &str, title: &str) -> crate::models::MrCommit {
+        crate::models::MrCommit {
+            sha: sha.into(),
+            fingerprint: crate::models::CommitFingerprint {
+                author_email: "alex@example.com".into(),
+                authored_at: 0,
+                title: title.into(),
+            },
+            author_name: "Alex".into(),
+        }
+    }
+
+    async fn app_with(mrs: Vec<TrackedMr>) -> App {
+        let mut app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+        app.mrs = mrs;
+        app
+    }
+
+    #[tokio::test]
+    async fn a_revert_finds_what_it_undoes_by_description_commit_or_title() {
+        let mut original = merged("12", "feat: quote cache");
+        original.data.commits = vec![commit("1a2b3c4d5e6f", "feat: quote cache")];
+        let other = merged("13", "feat: something else");
+
+        // GitLab's Revert button: the description names the MR.
+        let mut by_button = merged("20", "Revert \"feat: something else\"");
+        by_button.data.description = "This reverts merge request !12".into();
+        // `git revert`: the description (the commit's body) names the commit.
+        let mut by_commit = merged("21", "Revert the cache");
+        by_commit.data.description = "This reverts commit 1a2b3c4d5e6f0011.".into();
+        // Only the title.
+        let by_title = merged("22", "Revert \"feat: quote cache\"");
+        // A commit's title, under an MR named otherwise.
+        let mut by_commit_title = merged("23", "revert: back to the old cache");
+        by_commit_title.data.commits = vec![commit("ffff", "Revert \"feat: quote cache\"")];
+        // Not a revert.
+        let mut fix = merged("24", "fix: cache size");
+        fix.data.description = "This reverts merge request !12".into();
+
+        let app = app_with(vec![
+            original,
+            other,
+            by_button.clone(),
+            by_commit.clone(),
+            by_title.clone(),
+            by_commit_title.clone(),
+            fix.clone(),
+        ])
+        .await;
+        let found = |mr: &TrackedMr| reverted(&app, mr).map(|(m, how)| (m.id.clone(), how));
+        // The description wins over the quoted title.
+        assert_eq!(found(&by_button), Some(("12".into(), Found::Description)));
+        assert_eq!(found(&by_commit), Some(("12".into(), Found::Commit)));
+        assert_eq!(found(&by_title), Some(("12".into(), Found::Title)));
+        assert_eq!(found(&by_commit_title), Some(("12".into(), Found::Title)));
+        assert_eq!(found(&fix), None);
+    }
+
+    #[tokio::test]
+    async fn hotfixes_follow_the_project_branches_and_the_label() {
+        let mut app = app_with(vec![]).await;
+        let mut mr = merged("30", "fix: login");
+        mr.data.source_branch = "hotfix/login".into();
+        assert!(is_hotfix(&app, &mr));
+        app.config.hotfix_branches = "fix/prod-*, urgent-*".into();
+        assert!(!is_hotfix(&app, &mr));
+        mr.data.source_branch = "fix/prod-login".into();
+        assert!(is_hotfix(&app, &mr));
+        app.config.hotfix_branches = String::new();
+        assert!(!is_hotfix(&app, &mr));
+        mr.data.labels = vec!["Hotfix".into()];
+        assert!(is_hotfix(&app, &mr));
+    }
+
+    #[tokio::test]
+    async fn the_demo_lists_its_revert_and_hotfixes() {
+        let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+        let overview = crate::demo::demo_project_overview(&app);
+        let d = analyze(&app, Some(&overview), Utc::now(), 90);
+        let revert = d
+            .undos
+            .iter()
+            .find(|u| u.kind == UndoKind::Revert)
+            .expect("the demo has a revert");
+        let (_, title, _) = revert.undoes.as_ref().expect("it finds what it undoes");
+        assert!(title.contains("LRU eviction"), "{title}");
+        assert!(revert.after.is_some());
+        assert!(d.undos.iter().any(|u| u.kind == UndoKind::Hotfix));
+        // What the change failure rate counts is in the list.
+        for id in d.dora.reverts.iter().chain(&d.dora.hotfixes) {
+            assert!(d.undos.iter().any(|u| &u.id == id && u.counted), "!{id}");
+        }
     }
 }

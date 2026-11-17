@@ -57,6 +57,11 @@ review_reminder_hours = 24
 # Default: true. Editable from the in-app settings dashboard with [,].
 show_cockpit = true
 
+# Source branches of hotfixes, separated by commas (`*` stands for any text). With
+# the MRs labelled hotfix, they count as failures in Delivery's change failure rate.
+# Default: "hotfix/*" (git flow); "" counts the label only. Editable with [,].
+hotfix_branches = "hotfix/*"
+
 # Hide merged MRs from the table to focus on what is left to do. They stay tracked
 # (refreshed, notified, recorded in stats). Default: false. Toggle with [m] or [,].
 hide_merged = false

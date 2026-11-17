@@ -163,6 +163,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     if let Some(hours) = project.review_reminder_hours {
         config.review_reminder_hours = hours;
     }
+    if let Some(patterns) = &project.hotfix_branches {
+        config.hotfix_branches = patterns.clone();
+    }
     if let Some(show_cockpit) = project.show_cockpit {
         config.show_cockpit = show_cockpit;
     }

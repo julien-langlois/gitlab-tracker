@@ -58,6 +58,37 @@ fn default_activity_recent_days() -> u64 {
 }
 
 /// Default delay (in hours) before a waiting review is reminded; 0 disables reminders.
+/// The hotfix branches of git flow.
+pub const DEFAULT_HOTFIX_BRANCHES: &str = "hotfix/*";
+
+fn default_hotfix_branches() -> String {
+    DEFAULT_HOTFIX_BRANCHES.to_string()
+}
+
+/// Whether `text` matches `pattern`, where `*` stands for any text (none
+/// included) and the rest is compared without regard to case.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn glob_matches(pattern: &str, text: &str) -> bool {
+    let pattern = pattern.to_lowercase();
+    let text = text.to_lowercase();
+    let parts: Vec<&str> = pattern.split('*').collect();
+    if parts.len() == 1 {
+        return pattern == text;
+    }
+    let (first, last) = (parts[0], parts[parts.len() - 1]);
+    if !text.starts_with(first) || !text[first.len()..].ends_with(last) {
+        return false;
+    }
+    let mut rest = &text[first.len()..text.len() - last.len()];
+    for part in &parts[1..parts.len() - 1] {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    true
+}
+
 fn default_review_reminder_hours() -> u64 {
     24
 }
@@ -141,6 +172,11 @@ pub struct AppConfig {
     /// Hours an MR may wait for my review before a reminder notification (0 = never).
     #[serde(default = "default_review_reminder_hours")]
     pub review_reminder_hours: u64,
+    /// The source branches of hotfixes: patterns separated by commas, `*` for
+    /// any text (see [`AppConfig::is_hotfix_branch`]). Per project, in
+    /// `projects.toml`; never in the legacy config file.
+    #[serde(skip, default = "default_hotfix_branches")]
+    pub hotfix_branches: String,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
@@ -252,6 +288,7 @@ impl Default for AppConfig {
             activity_stale_days: default_activity_stale_days(),
             activity_recent_days: default_activity_recent_days(),
             review_reminder_hours: default_review_reminder_hours(),
+            hotfix_branches: default_hotfix_branches(),
             show_cockpit: default_show_cockpit(),
             hide_merged: false,
             cockpit_thresholds: CockpitThresholds::default(),
@@ -268,6 +305,16 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    /// Whether `branch` is a hotfix's, by the project's `hotfix_branches`.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub fn is_hotfix_branch(&self, branch: &str) -> bool {
+        self.hotfix_branches
+            .split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .any(|p| glob_matches(p, branch))
+    }
+
     pub fn is_table_label(&self, label: &str) -> bool {
         if self.table_label_prefixes.is_empty() {
             return true;
@@ -424,5 +471,34 @@ pub fn parse_color(s: &str) -> Color {
                 Color::Rgb(88, 88, 100)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn globs_take_any_text_for_a_star_and_ignore_case() {
+        assert!(glob_matches("hotfix/*", "hotfix/login"));
+        assert!(glob_matches("hotfix/*", "HOTFIX/"));
+        assert!(!glob_matches("hotfix/*", "feature/hotfix"));
+        assert!(glob_matches("*-hotfix", "release-hotfix"));
+        assert!(glob_matches("fix/*-prod-*", "fix/api-prod-timeout"));
+        assert!(!glob_matches("fix/*-prod-*", "fix/api-staging"));
+        assert!(glob_matches("main", "Main"));
+        assert!(!glob_matches("ab*ba", "aba"));
+    }
+
+    #[test]
+    fn hotfix_branches_are_a_list_with_a_git_flow_default() {
+        let mut config = AppConfig::default();
+        assert!(config.is_hotfix_branch("hotfix/x"));
+        config.hotfix_branches = " fix/prod-* ,, urgent ".into();
+        assert!(config.is_hotfix_branch("fix/prod-db"));
+        assert!(config.is_hotfix_branch("urgent"));
+        assert!(!config.is_hotfix_branch("hotfix/x"));
+        config.hotfix_branches = String::new();
+        assert!(!config.is_hotfix_branch("hotfix/x"));
     }
 }
