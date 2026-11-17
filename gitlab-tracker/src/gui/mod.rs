@@ -17,6 +17,7 @@ mod environments;
 mod export;
 mod flow;
 mod history;
+mod hotspots;
 mod i18n;
 mod icons;
 mod inspector;
@@ -1155,6 +1156,17 @@ impl GuiApp {
             key: key.to_string(),
             label: label.into(),
             ids,
+        }));
+        self.open_page(Page::MergeRequests);
+    }
+
+    /// Lists the MRs `ids` on the merge requests page, under `label`: a focus
+    /// that keeps those MRs (no counter behind it to follow).
+    fn focus_on_ids(&mut self, label: impl Into<String>, ids: Vec<String>) {
+        self.next_focus = Some(Some(Focus {
+            key: String::new(),
+            label: label.into(),
+            ids: ids.into_iter().collect(),
         }));
         self.open_page(Page::MergeRequests);
     }

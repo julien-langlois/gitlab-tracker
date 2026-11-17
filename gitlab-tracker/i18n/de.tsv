@@ -1906,3 +1906,17 @@ date	Closed	Geschlossen
 @plural	{n} more label|{n} more labels	{n} weiteres Label|{n} weitere Labels
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} offener MR ohne Label|{n} offene MRs ohne Label
 	Oldest first	Älteste zuerst
+	Bottlenecks	Engpässe
+	where the stuck MRs meet	wo sich die blockierten MRs treffen
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Ein Pfad zählt einen Punkt je offenem MR, der ihn ändert und einen Konflikt hat, dessen CI fehlschlägt oder der seit {days} Tagen oder länger ruht (die Inaktivitätstage des Projekts).
+	No path where several open MRs meet with one of them stuck.	Kein Pfad, an dem sich mehrere offene MRs treffen und einer davon blockiert ist.
+	conflict	Konflikt
+	stale	inaktiv
+	{stuck} of {n} MRs	{stuck} von {n} MRs
+	Last change merged {time} ago: !{id} {title}	Letzte Änderung vor {time} gemergt: !{id} {title}
+	ready to merge	bereit zum Mergen
+	Merge !{id} first: it is ready, and the others then rebase once onto it.	Mergen Sie zuerst !{id}: er ist bereit, und die anderen rebasen danach einmal darauf.
+	None of them is ready to merge: unblock the stuck ones first.	Keiner ist bereit zum Mergen: lösen Sie zuerst die blockierten.
+@plural	{n} more path|{n} more paths	{n} weiterer Pfad|{n} weitere Pfade
+@plural	Show the {n} MR in the table|Show these {n} MRs in the table	Den {n} MR in der Tabelle zeigen|Diese {n} MRs in der Tabelle zeigen
+	Files	Dateien

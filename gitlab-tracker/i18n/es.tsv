@@ -1906,3 +1906,17 @@ date	Closed	Cerrada
 @plural	{n} more label|{n} more labels	{n} etiqueta más|{n} etiquetas más
 @plural	{n} open MR without a label|{n} open MRs without a label	{n} MR abierta sin etiqueta|{n} MR abiertas sin etiqueta
 	Oldest first	Más antiguas primero
+	Bottlenecks	Cuellos de botella
+	where the stuck MRs meet	donde se cruzan las MR bloqueadas
+	A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).	Una ruta suma un punto por cada MR abierta que la modifica y está en conflicto, con la CI fallando o sin actividad desde hace {days} días o más (el umbral de inactividad del proyecto).
+	No path where several open MRs meet with one of them stuck.	Ninguna ruta donde se crucen varias MR abiertas con una de ellas bloqueada.
+	conflict	conflicto
+	stale	inactiva
+	{stuck} of {n} MRs	{stuck} de {n} MR
+	Last change merged {time} ago: !{id} {title}	Último cambio fusionado hace {time}: !{id} {title}
+	ready to merge	lista para fusionar
+	Merge !{id} first: it is ready, and the others then rebase once onto it.	Fusione !{id} primero: está lista, y las demás hacen rebase una sola vez sobre ella.
+	None of them is ready to merge: unblock the stuck ones first.	Ninguna está lista para fusionar: desbloquee primero las bloqueadas.
+@plural	{n} more path|{n} more paths	{n} ruta más|{n} rutas más
+@plural	Show the {n} MR in the table|Show these {n} MRs in the table	Mostrar la {n} MR en la tabla|Mostrar estas {n} MR en la tabla
+	Files	Archivos

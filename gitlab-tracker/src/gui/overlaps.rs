@@ -81,6 +81,10 @@ pub struct State {
     pub lockfiles: bool,
     pub drafts: bool,
     pub pair: Option<(String, String)>,
+    /// Hotspots by file rather than by folder.
+    pub spots_by_file: bool,
+    /// The hotspot unfolded.
+    pub spot: Option<String>,
 }
 
 /// An open MR the page looks at.
@@ -137,7 +141,7 @@ pub struct Overlaps {
     pub unknown: usize,
 }
 
-fn is_lock_file(path: &str) -> bool {
+pub(super) fn is_lock_file(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
     LOCK_FILES.contains(&name)
 }
@@ -275,14 +279,7 @@ impl Overlaps {
 }
 
 /// The folder of a path, two levels deep: `src/api/`.
-fn folder(path: &str) -> String {
-    let parts: Vec<&str> = path.split('/').collect();
-    match parts.len() {
-        0 | 1 => "/".into(),
-        2 => format!("{}/", parts[0]),
-        _ => format!("{}/{}/", parts[0], parts[1]),
-    }
-}
+use super::hotspots::folder;
 
 /// The files changed by the most tracked MRs created in the last 30 days.
 fn hot_spots(app: &App, now: DateTime<Utc>) -> Vec<(String, usize)> {
@@ -583,6 +580,27 @@ fn main(
             }
         },
     );
+    ui.add_space(GAP);
+    let spot_click = super::hotspots::card(
+        ui,
+        &theme,
+        &g.app,
+        g.overlaps.spots_by_file,
+        g.overlaps.lockfiles,
+        g.overlaps.spot.as_deref(),
+    );
+    match spot_click {
+        Some(super::hotspots::Click::Pick(path)) => {
+            g.overlaps.spot = (g.overlaps.spot.as_deref() != Some(path.as_str())).then_some(path);
+        }
+        Some(super::hotspots::Click::ByFile(on)) => {
+            g.overlaps.spots_by_file = on;
+            g.overlaps.spot = None;
+        }
+        Some(super::hotspots::Click::Mr(id)) => open = Some(id),
+        Some(super::hotspots::Click::Table(path, ids)) => g.focus_on_ids(path, ids),
+        None => {}
+    }
     if let Some(p) = picked.or(picked_right) {
         g.overlaps.pair = Some(p);
     }
@@ -794,7 +812,13 @@ fn hot_card(ui: &mut Ui, theme: &Theme, hot: &[(String, usize)]) {
 }
 
 /// A path: its folder muted, its name bright, cut from the left when long.
-fn path_text(ui: &Ui, theme: &Theme, pos: egui::Pos2, path: &str, max_width: f32) -> f32 {
+pub(super) fn path_text(
+    ui: &Ui,
+    theme: &Theme,
+    pos: egui::Pos2,
+    path: &str,
+    max_width: f32,
+) -> f32 {
     let (dir, name) = match path.rfind('/') {
         Some(i) => (&path[..=i], &path[i + 1..]),
         None => ("", path),
