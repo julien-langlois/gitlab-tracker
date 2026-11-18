@@ -1205,10 +1205,16 @@ fn apply_env_overrides_with_prefix(config: AppConfig, prefix: &str) -> AppConfig
         .merge(Env::prefixed(prefix).map(|key| key.as_str().to_lowercase().into()))
         .extract::<AppConfig>();
     match overridden {
-        // `#[serde(skip)]` fields do not survive the round trip: carry them over.
+        // `#[serde(skip)]` fields do not survive the round trip: carry them
+        // over, the per-project ones from `projects.toml` among them (a new
+        // skipped field must be added here, or it is lost at startup).
         Ok(overridden) => AppConfig {
             gitlab_label_colors: config.gitlab_label_colors,
             gitlab_username: config.gitlab_username,
+            hotfix_branches: config.hotfix_branches,
+            release_note_tickets: config.release_note_tickets,
+            freeze_periods: config.freeze_periods,
+            signed_commits: config.signed_commits,
             ..overridden
         },
         Err(e) => {
@@ -1598,12 +1604,24 @@ mod tests {
         let project_config = AppConfig {
             activity_stale_days: 7, // as set from projects.toml
             gitlab_username: Some("jdoe".into()),
+            // The per-project settings kept out of config.json.
+            hotfix_branches: "fix/prod-*".into(),
+            release_note_tickets: true,
+            freeze_periods: "0 18 * * 5 -> 0 7 * * 1 Europe/Paris".into(),
+            signed_commits: Some(crate::signatures::Policy::default()),
             ..AppConfig::default()
         };
         let config = apply_env_overrides_with_prefix(project_config, "GT_ENVTEST3_");
         std::env::remove_var("GT_ENVTEST3_ACTIVITY_STALE_DAYS");
         assert_eq!(config.activity_stale_days, 21);
         assert_eq!(config.gitlab_username.as_deref(), Some("jdoe"));
+        assert_eq!(config.hotfix_branches, "fix/prod-*");
+        assert!(config.release_note_tickets);
+        assert_eq!(
+            config.freeze_periods,
+            "0 18 * * 5 -> 0 7 * * 1 Europe/Paris"
+        );
+        assert!(config.signed_commits.is_some());
     }
 
     #[tokio::test]
