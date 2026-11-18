@@ -47,6 +47,7 @@ mod stacks;
 mod stats;
 mod table;
 mod team;
+mod tip;
 mod toasts;
 mod today;
 mod tones;
@@ -1899,7 +1900,11 @@ impl eframe::App for GuiApp {
             return;
         };
         if ctx.cumulative_pass_nr() == 5 {
-            ctx.global_style_mut(|style| style.interaction.tooltip_delay = 0.0);
+            // No fade either: the capture would catch the tooltip half drawn.
+            ctx.global_style_mut(|style| {
+                style.interaction.tooltip_delay = 0.0;
+                style.animation_time = 0.0;
+            });
             raw_input
                 .events
                 .push(egui::Event::PointerMoved(egui::pos2(x, y)));

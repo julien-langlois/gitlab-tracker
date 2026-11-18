@@ -12,6 +12,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Ui, Vec
 use super::board::{self, Figure, GAP};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::Tip;
 use super::widgets::{avatar, button, muted, primary_button, semibold, split_person};
 use super::GuiApp;
 use crate::app::{App, Focus};
@@ -540,15 +541,16 @@ fn main(
         tl("Team"),
         tl("Who waits on what, and who can take the next review"),
         |ui| {
-            copy = button(
-                ui,
-                &theme,
-                Some(super::icons::Icon::Copy),
-                tl("Copy the summary"),
-                false,
-            )
-            .on_hover_text(tl("Copy who waits on whom, to paste in a chat"))
-            .clicked();
+            copy = Tip::new()
+                .text(tl("Copy who waits on whom, to paste in a chat"))
+                .show(button(
+                    ui,
+                    &theme,
+                    Some(super::icons::Icon::Copy),
+                    tl("Copy the summary"),
+                    false,
+                ))
+                .clicked();
         },
     );
     if copy {
@@ -1091,15 +1093,19 @@ fn pair_cell(
             tone.fg,
         );
         let whole = id_rect.union(tag_rect);
-        let response = ui
-            .interact(
-                whole,
-                ui.scope_id()
-                    .with(("pair", row.top() as i32, col.0 as i32, index)),
-                Sense::click(),
-            )
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text(title.as_str());
+        let response = Tip::new()
+            .mr(id, title)
+            .chip(tag.clone(), *tone)
+            .hint(tl("Open its page"))
+            .show(
+                ui.interact(
+                    whole,
+                    ui.scope_id()
+                        .with(("pair", row.top() as i32, col.0 as i32, index)),
+                    Sense::click(),
+                )
+                .on_hover_cursor(egui::CursorIcon::PointingHand),
+            );
         if response.hovered() {
             ui.painter().rect_stroke(
                 whole,
@@ -1186,6 +1192,13 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
                 .find(|p| p.login == login)
                 .map_or(login.to_string(), |p| p.name.clone())
         };
+        // "Full Name (@login)", for the tooltips' avatars and handles.
+        let display = |login: &str| -> String {
+            match name_of(login) {
+                name if name.is_empty() || name == login => login.to_string(),
+                name => format!("{name} (@{login})"),
+            }
+        };
         let small = FontId::proportional(theme.text_size - 2.0);
         let strong = fonts::semibold(theme.text_size - 2.0);
         // Header: the reviewers.
@@ -1204,8 +1217,11 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
                 theme.palette.text_secondary,
                 cell_w,
             );
-            ui.interact(r, ui.scope_id().with(("rev", i)), Sense::hover())
-                .on_hover_text(name_of(reviewer));
+            Tip::new().person(&display(reviewer)).show(ui.interact(
+                r,
+                ui.scope_id().with(("rev", i)),
+                Sense::hover(),
+            ));
         }
         board::paint_text(
             ui,
@@ -1230,12 +1246,11 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
                 theme.palette.text_secondary,
                 label_w - 4.0,
             );
-            ui.interact(
+            Tip::new().person(&display(author)).show(ui.interact(
                 label_rect,
                 ui.scope_id().with(("author", author.as_str())),
                 Sense::hover(),
-            )
-            .on_hover_text(name_of(author));
+            ));
             let row = analysis.matrix.get(*author);
             for (i, (reviewer, _)) in reviewers.iter().enumerate() {
                 let n = row.and_then(|r| r.get(*reviewer)).copied().unwrap_or(0);
@@ -1290,12 +1305,14 @@ fn matrix_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, period: &str) {
                     .replace("{author}", &name_of(author))
                     .replace("{reviewer}", &name_of(reviewer))
                 };
-                ui.interact(
-                    cell,
-                    ui.scope_id().with(("cell", author.as_str(), i)),
-                    Sense::hover(),
-                )
-                .on_hover_text(tip);
+                Tip::new()
+                    .pair(&display(author), &display(reviewer))
+                    .text(tip)
+                    .show(ui.interact(
+                        cell,
+                        ui.scope_id().with(("cell", author.as_str(), i)),
+                        Sense::hover(),
+                    ));
             }
             board::paint_text(
                 ui,
@@ -1479,8 +1496,11 @@ fn signals_card(
             let rect = frame.response.rect;
             let response = ui
                 .interact(rect, ui.scope_id().with(("signal", index)), Sense::click())
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(format!("!{id} · {title}\n{}", tl("Open its page")));
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            let response = Tip::new()
+                .mr(&id, &title)
+                .hint(tl("Open its page"))
+                .show(response);
             if response.hovered() {
                 ui.painter().rect_stroke(
                     rect,
@@ -1616,12 +1636,19 @@ fn inspector(
                 },
                 if *n == 0 { theme.palette.border } else { color },
             );
-            ui.interact(
-                bar.expand2(Vec2::new(gap / 2.0, 30.0)).intersect(rect),
-                ui.scope_id().with(("week", i)),
-                Sense::hover(),
-            )
-            .on_hover_text(tn(u64::from(*n), "{n} review", "{n} reviews"));
+            let when = if i == 7 {
+                tl("this week").to_string()
+            } else {
+                tn(7 - i as u64, "{n} week ago", "{n} weeks ago")
+            };
+            Tip::new()
+                .title(tn(u64::from(*n), "{n} review", "{n} reviews"))
+                .text(when)
+                .show(ui.interact(
+                    bar.expand2(Vec2::new(gap / 2.0, 30.0)).intersect(rect),
+                    ui.scope_id().with(("week", i)),
+                    Sense::hover(),
+                ));
         }
         ui.add_space(4.0);
         ui.horizontal(|ui| {
@@ -1646,8 +1673,9 @@ fn inspector(
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
-                page = primary_button(ui, &theme, tl("Open their page"))
-                    .on_hover_text(tl("Or double click their row, or press Enter"))
+                page = Tip::new()
+                    .text(tl("Or double click their row, or press Enter"))
+                    .show(primary_button(ui, &theme, tl("Open their page")))
                     .clicked();
                 show = button(ui, &theme, None, tl("Show their MRs"), false).clicked();
                 remind = button(
@@ -1785,9 +1813,11 @@ pub(super) fn line(
         theme.palette.text_muted,
         rect.right() - x,
     );
-    response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open its page"))
+    Tip::new()
+        .mr(id, title)
+        .text(detail)
+        .hint(tl("Open its page"))
+        .show(response.on_hover_cursor(egui::CursorIcon::PointingHand))
         .clicked()
 }
 
