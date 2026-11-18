@@ -104,6 +104,22 @@ deployments are read when the page opens, and again once the MR changes.
 
 ![An MR page: what holds it back, where it is, people, ticket, lifecycle](assets/desktop/mr-page.png)
 
+**Merge queue.** An MR on a merge train (GitLab Premium) shows the train on its
+page: the target branch, then each car from the first, the MR picked out; where
+each car's pipeline stands, and when it should be on the target. On GitLab Free,
+or a project without trains, the MRs set to auto-merge make a **simulated**
+queue, labelled as such: GitLab merges each one when its own pipeline passes,
+so the order and the times are the app's estimate. The MRs ready to merge but
+not set to are listed below it. The times come from the median of the tracked
+MRs' passed pipelines over the last two weeks. While some MR is in a queue, the
+table gets a **Queue** column: its place, `2/4` (blue on a train, gray when
+simulated, red when stuck).
+Its next step is then **GitLab's**, "Merging by itself": nobody has to act, so it
+leaves "Ready to merge" on Today and the "Approved, not merged" stage; it goes
+back to its author if it gets stuck.
+
+![The merge train of an MR: the cars, its place, when it should merge](assets/desktop/merge-queue.png)
+
 ## Today
 
 Across every open tab: the reviews waiting for you, your MRs that need you (CI

@@ -26,6 +26,7 @@ mod journal;
 mod keys;
 mod labels;
 mod markdown;
+mod merge_queue;
 mod milestones;
 mod mr_page;
 mod mr_pipelines;
@@ -399,6 +400,8 @@ struct GuiApp {
     bell_filter: toasts::Filter,
     /// The latest run of each pipeline schedule the bell has seen.
     schedule_seen: schedules::Seen,
+    /// The merge queues of the open project, worked out each frame.
+    queues: Vec<merge_queue::Queue>,
     /// The export's choices, and a save under way.
     export: export::State,
     bell_open: bool,
@@ -558,6 +561,7 @@ impl GuiApp {
             clicks: notification_clicks(&cc.egui_ctx),
             bell_filter: toasts::Filter::All,
             schedule_seen: schedules::Seen::new(),
+            queues: Vec::new(),
             export: export::State::default(),
             bell_open: false,
             compact: false,
@@ -1839,6 +1843,14 @@ impl eframe::App for GuiApp {
             .input(|i| i.viewport().inner_rect.map(|r| r.size()));
         self.toasts
             .watch(&self.app, &self.theme, ui.input(|i| i.time));
+        // The project's overview (trains, schedules), read once per refresh
+        // interval whatever the page: the MR page and the table need it too.
+        let ctx = ui.ctx().clone();
+        self.details.project(&self.app, &ctx);
+        self.queues =
+            merge_queue::queues(&self.app, self.details.project_ready(), chrono::Utc::now());
+        // The next step of an MR on a train is GitLab's: it needs the cars.
+        self.app.merge_train = merge_queue::train_places(&self.queues);
         // A scheduled pipeline that failed since the last read, in the bell.
         if let Some(overview) = self.details.project_ready() {
             schedules::watch(

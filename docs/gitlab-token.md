@@ -38,6 +38,7 @@ and pick **Read**. Leave every other resource empty.
 | CI/CD | **Deployment** | `deployments` | Environments page |
 | CI/CD | **Freeze Period** | `freeze_periods` | Deploy freezes on Promote, Environments and Today (without it, those declared in the app's settings stand in) |
 | CI/CD | **Job** | `jobs/:job_id/trace` · GraphQL `CiJob` | Job logs, jobs of the MR pipelines |
+| CI/CD | **Merge Train** | `merge_trains` | The merge train an MR is on (GitLab Premium; without it, the queue is simulated from the MRs set to auto-merge) |
 | CI/CD | **Pipeline Schedule** | `pipeline_schedules`, `pipeline_schedules/:pipeline_schedule_id/pipelines` | CI page: the scheduled pipelines and their latest runs (needs **Pipeline** too) |
 | CI/CD | **Pipeline** | `pipelines`, `pipelines/:pipeline_id/jobs` · GraphQL `Pipeline`, `CiStage` | Pipelines and their jobs |
 | Project Planning | **Label** | `labels` | Label chips and filters |
@@ -52,7 +53,7 @@ and pick **Read**. Leave every other resource empty.
 All paths are under `/api/v4/projects/:id/`. GraphQL needs nothing more: GitLab
 checks each type a query reads, and the ones above cover the app's query.
 
-Nothing else is needed. In the CI/CD category for instance, only the five above
+Nothing else is needed. In the CI/CD category for instance, only the six above
 are: *Catalog Version*, *CI Config*, *CI/CD Setting*, *Cluster…*, *Commit
 Status* or *Environment* can stay empty.
 
@@ -85,7 +86,7 @@ read -rsp "Token: " T; echo
 G=https://gitlab.example.com/api/v4; P=<project id>
 for path in "/projects/$P" "/projects/$P/merge_requests" "/projects/$P/pipelines" \
   "/projects/$P/repository/commits" "/projects/$P/repository/tags" "/projects/$P/labels" \
-  "/projects/$P/milestones" "/projects/$P/deployments" "/projects/$P/releases" "/projects/$P/freeze_periods" "/projects/$P/pipeline_schedules" "/user" "/projects/<another project id>"; do
+  "/projects/$P/milestones" "/projects/$P/deployments" "/projects/$P/releases" "/projects/$P/freeze_periods" "/projects/$P/pipeline_schedules" "/projects/$P/merge_trains" "/user" "/projects/<another project id>"; do
   printf '%-45s %s\n' "$path" "$(curl -s -o /dev/null -w '%{http_code}' \
     -H @<(printf 'PRIVATE-TOKEN: %s\n' "$T") "$G$path")"
 done

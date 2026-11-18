@@ -228,6 +228,24 @@ pub fn spec() -> ProjectSpec {
             },
         ],
         freeze_setting: None,
+        // GitLab Premium: a merge train to main, with the two MRs ready to
+        // merge (GitLab takes no other): the first one's pipeline runs, the
+        // second waits for a runner.
+        auto_merge: Vec::new(),
+        train: vec![
+            TrainSpec {
+                iid: "215",
+                added: m(31),
+                pipeline: m(14),
+                running: true,
+            },
+            TrainSpec {
+                iid: "207",
+                added: m(4),
+                pipeline: m(4),
+                running: false,
+            },
+        ],
         // The nightly end-to-end run fails three nights in a row; the load
         // test stopped when its owner left.
         schedules: vec![

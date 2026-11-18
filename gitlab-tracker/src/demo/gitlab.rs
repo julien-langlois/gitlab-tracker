@@ -299,6 +299,7 @@ impl World {
             freezes_denied: false,
             schedules: self.schedules(),
             schedules_denied: false,
+            trains: self.train(),
             merges: MergeHistory {
                 merged: self
                     .mrs
@@ -337,6 +338,31 @@ impl World {
                         zone: (*zone).into(),
                     }
                 }
+            })
+            .collect()
+    }
+
+    /// The merge train: its cars, from the MRs they carry.
+    fn train(&self) -> Vec<crate::gitlab_detail::TrainCar> {
+        use crate::models::PipelineState;
+        self.spec
+            .train
+            .iter()
+            .filter_map(|car| {
+                let mr = self.mrs.iter().find(|m| m.iid == car.iid)?;
+                Some(crate::gitlab_detail::TrainCar {
+                    iid: car.iid.into(),
+                    title: mr.spec.title.into(),
+                    target_branch: mr.spec.target.into(),
+                    added_at: iso(clock().at(car.added)),
+                    pipeline: Some(if car.running {
+                        PipelineState::Running
+                    } else {
+                        PipelineState::Pending
+                    }),
+                    pipeline_created_at: Some(iso(clock().at(car.pipeline))),
+                    user: mr.spec.author.name.into(),
+                })
             })
             .collect()
     }

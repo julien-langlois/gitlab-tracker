@@ -173,6 +173,9 @@ pub fn spec() -> ProjectSpec {
         // weekend in the app's settings.
         freezes: Vec::new(),
         freeze_setting: Some("0 12 * * 5 -> 0 8 * * 1 Europe/Paris"),
+        // GitLab Free: no train, MRs set to merge when their pipeline passes.
+        auto_merge: vec!["526", "532", "522"],
+        train: Vec::new(),
         // The evening store build of develop.
         schedules: vec![ScheduleSpec {
             id: 77,

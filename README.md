@@ -14,7 +14,7 @@
 
 * 🔍 **Branch presence** — on which branch each MR landed, even cherry-picked, rebased or partly copied.
 * 👉 **Next step** — who has the ball on each MR, and what to do: review, fix the CI, answer threads, merge, deploy.
-* 🗂️ **MR page** — why it can't merge, where it is, its discussions, changes, commits, pipelines and timeline.
+* 🗂️ **MR page** — why it can't merge, where it is, its place in the merge train (simulated on GitLab Free), its discussions, changes, commits, pipelines and timeline.
 * ☀️ **Today** — your reviews, your MRs that need you, and your stand-up in one click.
 * 🚀 **Promote & Environments** — what is ready to go to the next branch, the commands to bring it there, and the deploy freezes.
 * 📅 **Milestones** — will the release make its date? A forecast from your team's real pace.
@@ -77,7 +77,7 @@ The OS keyring and desktop notifications need D-Bus headers (macOS and Windows n
 
 `gitlab-tracker` only reads. Create a [fine-grained personal access token](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/) (GitLab 19.2+) limited to the projects you track, and give **Read** — nothing else — to:
 
-* **Group and project** tab: Deployment, Freeze Period, Job, Pipeline Schedule, Pipeline, Label, Work Item, Project, Release, Commit, Merge Request, Repository, Repository Tag.
+* **Group and project** tab: Deployment, Freeze Period, Job, Merge Train, Pipeline Schedule, Pipeline, Label, Work Item, Project, Release, Commit, Merge Request, Repository, Repository Tag.
 * **User** tab *(optional)*: User — or set `gitlab_username` in `projects.toml` instead.
 
 Step-by-step creation, what each permission is used for, a script to check the token, replacing it and older GitLab versions: **[docs/gitlab-token.md](docs/gitlab-token.md)**.

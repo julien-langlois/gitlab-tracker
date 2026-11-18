@@ -1087,6 +1087,8 @@ impl World {
                 notes_seen: None,
                 // Set by its author when the MR was opened.
                 signatures: self.signatures(i),
+                auto_merge: state == GitlabMrState::Opened
+                    && self.spec.auto_merge.contains(&mr.iid.as_str()),
                 milestone_events: Some(
                     spec.milestone
                         .map(|title| crate::models::MilestoneEvent {

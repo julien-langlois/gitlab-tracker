@@ -121,6 +121,10 @@ pub struct GitLabMr {
     /// `false` while a thread that blocks the merge is unresolved (always `true`
     /// when the project does not require resolved threads to merge).
     pub blocking_discussions_resolved: Option<bool>,
+    /// Set to merge once its pipeline passes (auto-merge): it is in GitLab's
+    /// queue. `auto_merge_enabled` on recent GitLab versions.
+    pub merge_when_pipeline_succeeds: Option<bool>,
+    pub auto_merge_enabled: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -272,6 +276,9 @@ pub struct MrData {
     /// loads: the MR fetch does not read it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signatures: Option<crate::signatures::SignatureData>,
+    /// Set to merge once its pipeline passes (auto-merge).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto_merge: bool,
 }
 
 /// One milestone change of an MR, as GitLab records it: `add` when a milestone

@@ -30,6 +30,9 @@ pub enum Actor {
     Reviewers,
     /// Approved and mergeable: whoever merges it.
     Merger,
+    /// Approved, and set to merge by itself: on GitLab's merge train, or set
+    /// to auto-merge. Nobody has to act.
+    Gitlab,
     /// Merged, not yet on every branch up its flow.
     Deploy,
     /// Nothing left: on every branch of its flow, or closed.
@@ -130,6 +133,11 @@ pub enum Todo {
         count: usize,
     },
     Merge,
+    /// Merges by itself: car `car` of a train of `of` (GitLab Premium), else
+    /// set to auto-merge (merged when its pipeline passes).
+    AutoMerge {
+        train: Option<(usize, usize)>,
+    },
     /// Up to the next branch of its flow.
     Promote {
         to: String,
@@ -183,6 +191,15 @@ impl Todo {
                 "Read the answers to {n} threads",
             ),
             Todo::Merge => tl("Merge it").into(),
+            Todo::AutoMerge {
+                train: Some((car, of)),
+            } => tf(
+                "On the merge train, car {car} of {of}: GitLab merges it",
+                &[("car", &car.to_string()), ("of", &of.to_string())],
+            ),
+            Todo::AutoMerge { train: None } => {
+                tl("Set to auto-merge: GitLab merges it when its pipeline passes").into()
+            }
             Todo::Promote { to } => tf("Deploy to {branch}", &[("branch", to)]),
         }
     }
@@ -203,6 +220,13 @@ impl Todo {
             Todo::Review { again: true } => tl("review again").into(),
             Todo::ReadAnswers { count } => tn(*count as u64, "{n} answer", "{n} answers"),
             Todo::Merge => tl("merge").into(),
+            Todo::AutoMerge {
+                train: Some((car, of)),
+            } => tf(
+                "merge train {car}/{of}",
+                &[("car", &car.to_string()), ("of", &of.to_string())],
+            ),
+            Todo::AutoMerge { train: None } => tl("auto-merge").into(),
             Todo::Promote { to } => tf("to {branch}", &[("branch", to)]),
         }
     }
@@ -245,7 +269,7 @@ impl NextStep {
         match self.actor {
             Actor::Author => Bucket::OnAuthor,
             Actor::Reviewers => Bucket::OnReviewers,
-            Actor::Merger => Bucket::ToMerge,
+            Actor::Merger | Actor::Gitlab => Bucket::ToMerge,
             Actor::Deploy => Bucket::ToDeploy,
             Actor::Nobody => Bucket::Done,
             Actor::Unknown => Bucket::Unknown,
@@ -269,6 +293,7 @@ impl NextStep {
                 many => tn(many.len() as u64, "{n} reviewer", "{n} reviewers"),
             },
             Actor::Deploy => tl("Deploy").into(),
+            Actor::Gitlab => "GitLab".into(),
             Actor::Nobody if self.closed => tl("Closed").into(),
             Actor::Nobody => tl("Done").into(),
             Actor::Unknown => "—".into(),
@@ -554,6 +579,19 @@ fn opened(app: &App, mr: &TrackedMr, me: Option<&str>, mut step: NextStep) -> Ne
         return step;
     }
 
+    // Approved and set to merge by itself: nobody has to act.
+    let train = app.merge_train.get(&mr.id).copied();
+    if mr.auto_merge || train.is_some() {
+        step.actor = Actor::Gitlab;
+        step.todos.push(Todo::AutoMerge {
+            train: train.map(|t| (t.car, t.of)),
+        });
+        // Since it joined the train; GitLab does not say when auto-merge was set.
+        step.since = train.and_then(|t| t.joined);
+        step.then = promotion(app, mr);
+        return step;
+    }
+
     // Approved: whoever merges it.
     let merger = mr.assignee.clone().unwrap_or_else(|| mr.author.clone());
     step.actor = Actor::Merger;
@@ -683,6 +721,46 @@ mod tests {
         // Someone else sees it as the author's.
         let other = of(&app, mr(&app, &iid("pool-deadlock")), Some("nobody"));
         assert_eq!(other.bucket(), Bucket::OnAuthor);
+    }
+
+    #[tokio::test]
+    async fn an_approved_mr_set_to_merge_by_itself_waits_on_nobody() {
+        let mut app = demo().await;
+        let id = iid("rate-limit");
+        // Approved and mergeable: whoever merges it (its author).
+        assert_eq!(of(&app, mr(&app, &id), None).actor, Actor::Merger);
+        // On the train: GitLab merges it.
+        app.merge_train.insert(
+            id.clone(),
+            crate::app::TrainPlace {
+                car: 2,
+                of: 2,
+                joined: None,
+            },
+        );
+        let step = of(&app, mr(&app, &id), Some("alex_dev"));
+        assert_eq!(step.actor, Actor::Gitlab);
+        assert!(!step.mine);
+        assert_eq!(step.who(), "GitLab");
+        assert_eq!(
+            step.todos,
+            vec![Todo::AutoMerge {
+                train: Some((2, 2))
+            }]
+        );
+        // Set to auto-merge (GitLab Free): the same, without a train.
+        app.merge_train.clear();
+        app.mrs.iter_mut().find(|m| m.id == id).unwrap().auto_merge = true;
+        assert_eq!(
+            of(&app, mr(&app, &id), None).todos,
+            vec![Todo::AutoMerge { train: None }]
+        );
+        // Not approved yet: still the reviewers' turn, auto-merge or not.
+        let m = app.mrs.iter_mut().find(|m| m.id == id).unwrap();
+        m.approved_by.clear();
+        m.reviewers = vec!["Thomas Dubosc (@thomas_db)".into()];
+        m.mergeability = MergeabilityStatus::NotApproved;
+        assert_eq!(of(&app, mr(&app, &id), None).actor, Actor::Reviewers);
     }
 
     #[tokio::test]

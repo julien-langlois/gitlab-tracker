@@ -395,6 +395,16 @@ pub struct ReleaseSpec {
     pub notes: Option<&'static str>,
 }
 
+/// A car of the merge train: an MR, when it joined, and its train pipeline
+/// (started when, running or waiting).
+#[derive(Debug, Clone)]
+pub struct TrainSpec {
+    pub iid: &'static str,
+    pub added: When,
+    pub pipeline: When,
+    pub running: bool,
+}
+
 /// A pipeline schedule and how its latest runs went.
 #[derive(Debug, Clone)]
 pub struct ScheduleSpec {
@@ -496,6 +506,10 @@ pub struct ProjectSpec {
     pub freeze_setting: Option<&'static str>,
     /// The pipeline schedules.
     pub schedules: Vec<ScheduleSpec>,
+    /// The MRs set to merge when their pipeline passes (auto-merge), by iid.
+    pub auto_merge: Vec<&'static str>,
+    /// The merge train (GitLab Premium), first car first; empty: none.
+    pub train: Vec<TrainSpec>,
     /// The latest pipeline of these branches, when it does not pass.
     pub branch_ci: Vec<(&'static str, Ci)>,
     pub milestones: Vec<MilestoneSpec>,

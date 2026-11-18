@@ -33,7 +33,7 @@ pub fn tone(step: &NextStep, theme: &Theme) -> Tone {
         Actor::Author => t.amber,
         Actor::Reviewers => t.purple,
         Actor::Merger => t.teal,
-        Actor::Deploy => t.blue,
+        Actor::Gitlab | Actor::Deploy => t.blue,
         Actor::Nobody if step.closed => t.gray,
         Actor::Nobody => t.green,
         Actor::Unknown => t.gray,
@@ -57,6 +57,10 @@ pub fn caption(step: &NextStep) -> String {
             None => tl("Done").into(),
         },
         Actor::Unknown => tl("Known once the MR is loaded").into(),
+        Actor::Gitlab => match waited {
+            Some(w) => tf("Merging by itself · for {time}", &[("time", &w)]),
+            None => tl("Merging by itself").into(),
+        },
         _ => {
             let who = if step.mine {
                 tl("you").to_string()
@@ -133,6 +137,7 @@ fn headline(step: &NextStep) -> String {
             tf("Waiting on {who}", &[("who", &people(step))])
         }
         Actor::Deploy => tl("To deploy").into(),
+        Actor::Gitlab => tl("Merging by itself").into(),
         Actor::Nobody if step.closed => tl("Closed without merging").into(),
         Actor::Nobody => tl("Done").into(),
         Actor::Unknown => String::new(),

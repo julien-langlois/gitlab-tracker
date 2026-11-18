@@ -2056,3 +2056,40 @@ rail	Releases	Releases
 	account blocked	conta bloqueada
 	account deactivated	conta desativada
 	account banned	conta banida
+
+# Merge queue
+	A car whose pipeline fails drops out, and every car behind it restarts its pipeline.	Um vagão cujo pipeline falha sai do trem, e todos os de trás reiniciam o pipeline.
+	Each MR set to auto-merge merges when its own pipeline passes: the order and the times are the app's estimate.	Cada MR com auto-merge é mesclado quando o próprio pipeline passa: a ordem e os horários são uma estimativa do app.
+	Ready to merge, not set to: {ids}	Prontos para mesclar, sem auto-merge: {ids}
+	First in line: on {target} around {when}	Primeiro da fila: em {target} por volta de {when}
+	In the merge queue, stuck: {why}	Na fila de merge, travado: {why}
+	Merge queue to {target} · {n}	Fila de merge para {target} · {n}
+	Merge train to {target} · {n}	Trem de merge para {target} · {n}
+	On the merge train to {target}, car {n}	No trem de merge para {target}, vagão {n}
+	Set to auto-merge into {target}: {n} in the estimated order (simulated, GitLab Free has no train)	Com auto-merge para {target}: {n}º na ordem estimada (simulado, o GitLab Free não tem trem)
+	Stuck: {why}. It will not merge until that is fixed.	Travado: {why}. Não será mesclado até que isso seja resolvido.
+	Times from the median pipeline of the last two weeks ({d}).	Horários a partir do pipeline mediano das duas últimas semanas ({d}).
+	a car merges when its pipeline, with every car before it, passes	um vagão é mesclado quando seu pipeline, com todos os vagões à frente, passa
+	any moment	a qualquer momento
+	needs a rebase	precisa de rebase
+	open threads	threads abertas
+	passed, merging	passou, mesclando
+	pipeline canceled	pipeline cancelado
+	running {d}	rodando há {d}
+	simulated: GitLab Free has no merge train	simulado: o GitLab Free não tem trem de merge
+	stuck: {why}	travado: {why}
+	target	destino
+	waiting	aguardando
+	yours · {eta}	o seu · {eta}
+	{ahead} · expected on {target} around {when}	{ahead} · esperado em {target} por volta de {when}
+	~{left}	~{left}
+	Queue	Fila
+@plural	{n} ahead|{n} ahead	{n} à frente|{n} à frente
+@plural	{n} car|{n} cars	{n} vagão|{n} vagões
+	On the merge train, car {car} of {of}: GitLab merges it	No trem de merge, vagão {car} de {of}: o GitLab o mescla
+	Set to auto-merge: GitLab merges it when its pipeline passes	Com auto-merge: o GitLab o mescla quando o pipeline passa
+	merge train {car}/{of}	trem {car}/{of}
+	auto-merge	auto-merge
+	Merging by itself · for {time}	Mesclagem automática · há {time}
+	Merging by itself	Mesclagem automática
+	merging by itself	mesclagem automática

@@ -161,6 +161,11 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
             }
             if blocked || !reasons.is_empty() {
                 Some(Kind::Fix)
+            } else if mr.auto_merge || app.merge_train.contains_key(&mr.id) {
+                // On the train, or set to auto-merge: GitLab merges it, nobody
+                // has to.
+                reasons.push(tl("merging by itself").to_string());
+                Some(Kind::Waiting)
             } else if mr.mergeability == MergeabilityStatus::Mergeable && !mr.approved_by.is_empty()
             {
                 reasons.push(tn(

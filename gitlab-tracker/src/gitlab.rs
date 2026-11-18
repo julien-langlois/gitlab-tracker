@@ -2339,6 +2339,7 @@ pub async fn fetch_gitlab_data(
     };
 
     let target_branch = mr.target_branch.unwrap_or_else(|| "unknown".to_string());
+    let auto_merge = mr.auto_merge_enabled.or(mr.merge_when_pipeline_succeeds) == Some(true);
 
     Ok(MrLoadedData {
         id: mr_id.to_string(),
@@ -2376,6 +2377,7 @@ pub async fn fetch_gitlab_data(
             notes_seen,
             milestone_events,
             signatures: None,
+            auto_merge,
         },
     })
 }

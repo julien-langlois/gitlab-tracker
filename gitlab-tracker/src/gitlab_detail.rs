@@ -620,6 +620,25 @@ pub struct ProjectOverview {
     pub schedules: Vec<ScheduleRecord>,
     /// The token may not read them (403).
     pub schedules_denied: bool,
+    /// The cars of the project's merge trains (GitLab Premium), first car
+    /// first; empty on GitLab Free or without trains.
+    pub trains: Vec<TrainCar>,
+}
+
+/// An MR on a merge train.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrainCar {
+    /// The MR's iid.
+    pub iid: String,
+    pub title: String,
+    pub target_branch: String,
+    /// When it joined the train (RFC 3339).
+    pub added_at: String,
+    /// Its train pipeline: the MR on top of every car before it.
+    pub pipeline: Option<crate::models::PipelineState>,
+    pub pipeline_created_at: Option<String>,
+    /// Who put it on the train.
+    pub user: String,
 }
 
 /// A pipeline schedule (CI/CD › Schedules).
@@ -784,6 +803,7 @@ pub async fn fetch_project(
     let releases = project_releases(&target);
     let freezes = project_freezes(&target);
     let schedules = project_schedules(&target);
+    let trains = project_trains(&target);
     let (
         deployments,
         pipelines,
@@ -791,7 +811,16 @@ pub async fn fetch_project(
         (releases, releases_denied),
         (freezes, freezes_denied),
         (schedules, schedules_denied),
-    ) = tokio::join!(deployments, pipelines, merges, releases, freezes, schedules);
+        trains,
+    ) = tokio::join!(
+        deployments,
+        pipelines,
+        merges,
+        releases,
+        freezes,
+        schedules,
+        trains
+    );
     ProjectOverview {
         deployments,
         pipelines: pipelines.into_iter().flatten().collect(),
@@ -802,7 +831,63 @@ pub async fn fetch_project(
         freezes_denied,
         schedules,
         schedules_denied,
+        trains,
     }
+}
+
+/// The cars of the project's merge trains, first car first. Empty on GitLab
+/// Free (the endpoint is Premium's), without trains, or without the
+/// permission: the window simulates the queue from the MRs set to auto-merge.
+async fn project_trains(target: &Target) -> Vec<TrainCar> {
+    #[derive(serde::Deserialize)]
+    struct RawMr {
+        iid: u64,
+        #[serde(default)]
+        title: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawPipeline {
+        #[serde(default)]
+        status: crate::models::PipelineState,
+        #[serde(default)]
+        created_at: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawUser {
+        #[serde(default)]
+        name: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        id: u64,
+        merge_request: RawMr,
+        #[serde(default)]
+        user: Option<RawUser>,
+        #[serde(default)]
+        pipeline: Option<RawPipeline>,
+        #[serde(default)]
+        created_at: String,
+        #[serde(default)]
+        target_branch: String,
+    }
+    let Ok(mut cars) = target
+        .get::<Vec<Raw>>("merge_trains?scope=active&sort=asc&per_page=100")
+        .await
+    else {
+        return Vec::new();
+    };
+    cars.sort_by_key(|c| c.id);
+    cars.into_iter()
+        .map(|c| TrainCar {
+            iid: c.merge_request.iid.to_string(),
+            title: c.merge_request.title,
+            target_branch: c.target_branch,
+            added_at: c.created_at,
+            pipeline_created_at: c.pipeline.as_ref().and_then(|p| p.created_at.clone()),
+            pipeline: c.pipeline.map(|p| p.status),
+            user: c.user.map(|u| u.name).unwrap_or_default(),
+        })
+        .collect()
 }
 
 /// The project's pipeline schedules, the active ones first, each with its

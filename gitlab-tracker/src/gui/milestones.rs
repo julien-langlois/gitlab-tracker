@@ -172,7 +172,7 @@ fn stand_of(app: &App, mr: &TrackedMr, step: &NextStep, last: &str) -> Stand {
         return Stand::Draft;
     }
     match step.actor {
-        Actor::Merger => Stand::ToMerge,
+        Actor::Merger | Actor::Gitlab => Stand::ToMerge,
         Actor::Reviewers => Stand::InReview,
         _ => Stand::OnAuthor,
     }

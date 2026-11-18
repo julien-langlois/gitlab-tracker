@@ -312,6 +312,21 @@ pub struct UiLayout {
     pub spinner_frame: usize,
 }
 
+/// An MR's place on a GitLab merge train.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    not(feature = "gui"),
+    allow(dead_code, reason = "only the window reads the merge trains")
+)]
+pub struct TrainPlace {
+    /// Its car, from 1.
+    pub car: usize,
+    /// The train's length.
+    pub of: usize,
+    /// When it joined the train.
+    pub joined: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 pub struct App {
     pub mrs: Vec<TrackedMr>,
     pub branches: Vec<String>,
@@ -514,6 +529,13 @@ pub struct App {
         allow(dead_code, reason = "only the window draws the branch flow")
     )]
     pub branch_arrivals: HashMap<(String, String), chrono::DateTime<chrono::Utc>>,
+    /// The MRs on a GitLab merge train, by id: their car and the train's
+    /// length. Set by the window each frame (it reads the trains).
+    #[cfg_attr(
+        not(feature = "gui"),
+        allow(dead_code, reason = "only the window reads the merge trains")
+    )]
+    pub merge_train: HashMap<String, TrainPlace>,
     /// Active colour palette — resolved once at startup from the terminal background
     /// colour (OSC 11 via `terminal-colorsaurus`). Falls back to the dark palette
     /// when the terminal does not respond. Forwarded to renderers that need it.
@@ -656,6 +678,7 @@ impl App {
             #[cfg(feature = "stats")]
             stats_report_dirty: false,
             branch_arrivals: HashMap::new(),
+            merge_train: HashMap::new(),
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,
             discovery_started_at: None,

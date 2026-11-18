@@ -2056,3 +2056,40 @@ rail	Releases	发布
 	account blocked	账号已封禁
 	account deactivated	账号已停用
 	account banned	账号已禁止
+
+# Merge queue
+	A car whose pipeline fails drops out, and every car behind it restarts its pipeline.	流水线失败的车厢会退出，其后的所有车厢重新运行流水线。
+	Each MR set to auto-merge merges when its own pipeline passes: the order and the times are the app's estimate.	每个设置了自动合并的 MR 在其自身流水线通过时合并：顺序和时间是应用的估算。
+	Ready to merge, not set to: {ids}	可以合并但未设置自动合并：{ids}
+	First in line: on {target} around {when}	排在最前：约 {when} 进入 {target}
+	In the merge queue, stuck: {why}	在合并队列中，受阻：{why}
+	Merge queue to {target} · {n}	合并到 {target} 的队列 · {n}
+	Merge train to {target} · {n}	合并到 {target} 的合并列车 · {n}
+	On the merge train to {target}, car {n}	在合并到 {target} 的合并列车上，第 {n} 节
+	Set to auto-merge into {target}: {n} in the estimated order (simulated, GitLab Free has no train)	自动合并到 {target}：估算顺序第 {n}（模拟，GitLab Free 没有合并列车）
+	Stuck: {why}. It will not merge until that is fixed.	受阻：{why}。修复前不会合并。
+	Times from the median pipeline of the last two weeks ({d}).	时间来自最近两周流水线的中位数（{d}）。
+	a car merges when its pipeline, with every car before it, passes	车厢在其流水线（连同前面所有车厢）通过时合并
+	any moment	随时
+	needs a rebase	需要变基
+	open threads	未解决的讨论
+	passed, merging	已通过，正在合并
+	pipeline canceled	流水线已取消
+	running {d}	已运行 {d}
+	simulated: GitLab Free has no merge train	模拟：GitLab Free 没有合并列车
+	stuck: {why}	受阻：{why}
+	target	目标
+	waiting	等待中
+	yours · {eta}	你的 · {eta}
+	{ahead} · expected on {target} around {when}	{ahead} · 预计约 {when} 进入 {target}
+	~{left}	~{left}
+	Queue	队列
+@plural	{n} ahead|{n} ahead	前面 {n} 个
+@plural	{n} car|{n} cars	{n} 节
+	On the merge train, car {car} of {of}: GitLab merges it	在合并列车上，第 {car}/{of} 节：由 GitLab 合并
+	Set to auto-merge: GitLab merges it when its pipeline passes	已设置自动合并：流水线通过时由 GitLab 合并
+	merge train {car}/{of}	合并列车 {car}/{of}
+	auto-merge	自动合并
+	Merging by itself · for {time}	自动合并中 · 已 {time}
+	Merging by itself	自动合并中
+	merging by itself	自动合并中

@@ -1068,6 +1068,9 @@ pub enum Col {
     Next,
     /// The latest pipeline, as an icon (the window's own).
     Ci,
+    /// Its place in the merge train, or in the queue of the MRs set to
+    /// auto-merge (the window's own; shown while some MR is in one).
+    Queue,
     Effort,
     Notes,
     Activity,
@@ -1080,9 +1083,10 @@ pub enum Col {
 
 impl Col {
     /// Display order.
-    const ALL: [Col; 10] = [
+    const ALL: [Col; 11] = [
         Col::Next,
         Col::Ci,
+        Col::Queue,
         Col::Effort,
         Col::Notes,
         Col::Activity,
@@ -1093,7 +1097,7 @@ impl Col {
         Col::Ticket,
     ];
     /// The order columns are dropped in when the window is too narrow for them.
-    const DROP_ORDER: [Col; 10] = [
+    const DROP_ORDER: [Col; 11] = [
         Col::Activity,
         Col::Labels,
         Col::Ticket,
@@ -1103,18 +1107,21 @@ impl Col {
         Col::Notes,
         Col::Effort,
         Col::Ci,
+        // Only there while some MR is in a queue: kept as long as can be.
+        Col::Queue,
         Col::Next,
     ];
 
     /// Drawn by the window alone: shown unless hidden in its column picker.
     pub fn window_only(self) -> bool {
-        matches!(self, Col::Next | Col::Ci)
+        matches!(self, Col::Next | Col::Ci | Col::Queue)
     }
 
     fn id(self) -> &'static str {
         match self {
             Col::Next => "next_step",
             Col::Ci => "ci",
+            Col::Queue => "merge_queue",
             Col::Effort => "diff_stats",
             Col::Notes => "notes",
             Col::Activity => "activity",
@@ -1130,6 +1137,7 @@ impl Col {
         match self {
             Col::Next => 196.0,
             Col::Ci => 36.0,
+            Col::Queue => 60.0,
             Col::Effort => 92.0,
             Col::Notes => 44.0,
             Col::Activity => 96.0,
@@ -1145,6 +1153,7 @@ impl Col {
         tl(match self {
             Col::Next => "Next step",
             Col::Ci => "CI",
+            Col::Queue => "Queue",
             Col::Effort => "Effort",
             Col::Notes => "Threads",
             Col::Activity => "Activity",
@@ -1159,14 +1168,16 @@ impl Col {
 
 /// The columns the user chose. Until they pick some (here or in the TUI), the
 /// window shows a set suited to its width rather than the TUI's empty default.
-fn wanted_columns(app: &App, hide_next: bool) -> Vec<Col> {
+fn wanted_columns(app: &App, hide_next: bool, queue: bool) -> Vec<Col> {
     let offered: Vec<&str> = app.visible_column_defs().iter().map(|c| c.id).collect();
     let chosen = app.project_settings.visible_columns.is_some();
     Col::ALL
         .into_iter()
         .filter(|c| c.window_only() || offered.contains(&c.id()))
         .filter(|c| {
-            if c.window_only() {
+            if *c == Col::Queue {
+                queue
+            } else if c.window_only() {
                 !(hide_next && *c == Col::Next)
             } else if chosen {
                 app.config.visible_columns.is_visible(c.id())
@@ -1386,6 +1397,8 @@ struct RowView {
     /// Commits whose signature the project's policy rejects, when it enforces
     /// signed commits and there are some.
     signatures: Option<SignatureBadge>,
+    /// Its place in the merge queue: "2/4", its tone and what it means.
+    queue: Option<(String, Tone, String)>,
 }
 
 /// The shield next to the author: how many commits lack a valid signature.
@@ -1629,6 +1642,7 @@ fn row_views(g: &GuiApp, indexes: &[usize]) -> Vec<RowView> {
                 signatures: app
                     .signature_report(mr)
                     .and_then(|report| SignatureBadge::of(&report.summary(), tones)),
+                queue: super::merge_queue::cell(&g.queues, &mr.id, theme),
             }
         })
         .collect();
@@ -1656,7 +1670,7 @@ pub(super) fn export_table(
             .filter(|c| c.window_only() || offered.contains(&c.id()))
             .collect()
     } else {
-        wanted_columns(app, g.hide_next_column)
+        wanted_columns(app, g.hide_next_column, !g.queues.is_empty())
     };
     let order = branch_order(app);
     let mut headers = vec![
@@ -1720,6 +1734,9 @@ pub(super) fn export_table(
                         .linked_ticket
                         .as_ref()
                         .map(|t| format!("#{} {}", t.id, t.status))
+                        .unwrap_or_default(),
+                    Col::Queue => super::merge_queue::cell(&g.queues, &mr.id, theme)
+                        .map(|(text, _, _)| text)
                         .unwrap_or_default(),
                 });
             }
@@ -1842,7 +1859,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     let mut behind_cells: Vec<(String, egui::Response)> = Vec::new();
     let lines = lines(g);
     let (branches, aliases): (Vec<String>, Vec<String>) = branch_order(&g.app).into_iter().unzip();
-    let wanted = wanted_columns(&g.app, g.hide_next_column);
+    let wanted = wanted_columns(&g.app, g.hide_next_column, !g.queues.is_empty());
     let flow = g.flow_cells && !branches.is_empty();
     let step = flow_step(ui, &theme, &aliases);
     let (columns, dropped, branch_width) = if flow {
@@ -2870,6 +2887,11 @@ fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) -> Option<Str
                 ui.label(muted(theme, "—"));
             }
         },
+        Col::Queue => {
+            if let Some((text, tone, hint)) = &r.queue {
+                ui.add(Chip::new(text, *tone)).on_hover_text(hint);
+            }
+        }
     }
     clicked
 }

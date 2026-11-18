@@ -67,6 +67,11 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         .auto_shrink(false)
         .show(ui, |ui| {
             next_banner(g, ui, &mr);
+            // On the merge train, or in the queue of the MRs set to auto-merge.
+            let theme = g.theme;
+            if super::merge_queue::card(ui, &theme, &g.queues, &mr, chrono::Utc::now()) {
+                ui.add_space(12.0);
+            }
             tiles(g, ui, &mr, data.as_ref(), width);
             ui.add_space(12.0);
             lifecycle(g, ui, &mr);
