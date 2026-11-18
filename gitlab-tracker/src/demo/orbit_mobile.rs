@@ -169,6 +169,10 @@ pub fn spec() -> ProjectSpec {
                 paths: vec!["app/src/main/graphql/"],
             },
         ],
+        // None in GitLab: the team keeps the store submissions off the
+        // weekend in the app's settings.
+        freezes: Vec::new(),
+        freeze_setting: Some("0 12 * * 5 -> 0 8 * * 1 Europe/Paris"),
         last_session: d(2, 18, 30),
         profile: crate::models::DifficultyProfile {
             name: "Android".into(),

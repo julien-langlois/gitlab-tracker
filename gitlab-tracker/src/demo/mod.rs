@@ -103,6 +103,7 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         // The draft release notes name each MR's ticket, as a team on a
         // tracker would set it.
         release_note_tickets: true,
+        freeze_periods: spec.freeze_setting.unwrap_or_default().into(),
         ..config
     };
     let project = crate::storage::ProjectEntry {
@@ -119,6 +120,7 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         show_cockpit: Some(true),
         gitlab_username: Some(orbit_api::ME.into()),
         release_note_tickets: Some(true),
+        freeze_periods: spec.freeze_setting.map(String::from),
         signed_commits: Some(crate::storage::SignedCommitsConfig {
             enforce: true,
             ..Default::default()

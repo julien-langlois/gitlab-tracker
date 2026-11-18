@@ -62,6 +62,8 @@ pub enum Icon {
     Download,
     /// A price tag: the releases.
     Tag,
+    /// A snowflake: a deploy freeze.
+    Snowflake,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -371,6 +373,24 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 stroke,
             ));
             circle(p(8.0, 8.5), 1.6);
+        }
+        Icon::Snowflake => {
+            // Three strokes across, each with a small chevron at both ends.
+            for k in 0..3 {
+                let a = std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::PI / 3.0;
+                let (dx, dy) = (a.cos(), a.sin());
+                line(
+                    p(12.0 - 9.0 * dx, 12.0 - 9.0 * dy),
+                    p(12.0 + 9.0 * dx, 12.0 + 9.0 * dy),
+                );
+                for end in [-1.0f32, 1.0] {
+                    let tip = (12.0 + end * 6.0 * dx, 12.0 + end * 6.0 * dy);
+                    let (bx, by) = (-dy * 2.6, dx * 2.6);
+                    let back = (end * dx * 2.6, end * dy * 2.6);
+                    line(p(tip.0, tip.1), p(tip.0 + back.0 + bx, tip.1 + back.1 + by));
+                    line(p(tip.0, tip.1), p(tip.0 + back.0 - bx, tip.1 + back.1 - by));
+                }
+            }
         }
         Icon::Calendar => {
             let page = Rect::from_min_max(p(3.5, 5.0), p(20.5, 20.5));

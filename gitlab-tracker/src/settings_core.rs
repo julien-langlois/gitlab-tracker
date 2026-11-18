@@ -418,7 +418,43 @@ fn release_note_tickets_setting() -> ProjectSettingDef {
     }
 }
 
+fn freeze_periods_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "delivery.freeze_periods",
+        section: "Delivery",
+        label: "Deploy freezes",
+        help: "Used when the project declares none in GitLab (Settings › CI/CD › Deploy \
+               freezes): a start cron, ->, an end cron and a time zone, several separated \
+               by ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Without a zone: this machine's. \
+               A warning only: the pipelines do not know of them.",
+        priority: 305,
+        kind: ProjectSettingKind::Text,
+        default_value: ProjectSettingValue::Text(String::new()),
+        read: |project| {
+            ProjectSettingValue::Text(
+                project
+                    .get("freeze_periods")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+        },
+        write: |project, value| {
+            let ProjectSettingValue::Text(text) = value else {
+                return;
+            };
+            let text = text.trim();
+            if text.is_empty() {
+                project.remove("freeze_periods");
+            } else {
+                project.insert("freeze_periods".into(), toml::Value::String(text.into()));
+            }
+        },
+    }
+}
+
 inventory::submit!(ProjectSettingFactory(hotfix_branches_setting));
+inventory::submit!(ProjectSettingFactory(freeze_periods_setting));
 inventory::submit!(ProjectSettingFactory(release_note_tickets_setting));
 inventory::submit!(ProjectSettingFactory(signed_enforce_setting));
 inventory::submit!(ProjectSettingFactory(signed_rebase_setting));

@@ -295,6 +295,8 @@ impl World {
             pipelines,
             releases: self.releases(),
             releases_denied: false,
+            freezes: self.freezes(),
+            freezes_denied: false,
             merges: MergeHistory {
                 merged: self
                     .mrs
@@ -308,6 +310,35 @@ impl World {
 
     /// The version tags made so far, newest first: each on the head its
     /// branch had then.
+    /// The deploy freezes, as GitLab gives them: a one-off one as the crons
+    /// of its days.
+    fn freezes(&self) -> Vec<crate::freeze::Declared> {
+        use super::model::FreezeSpec;
+        self.spec
+            .freezes
+            .iter()
+            .map(|f| match f {
+                FreezeSpec::Cron { start, end, zone } => crate::freeze::Declared {
+                    start: (*start).into(),
+                    end: (*end).into(),
+                    zone: (*zone).into(),
+                },
+                FreezeSpec::Once { from, to, zone } => {
+                    let tz: chrono_tz::Tz = zone.parse().unwrap_or(chrono_tz::UTC);
+                    let cron = |at: chrono::DateTime<chrono::Utc>| {
+                        let t = at.with_timezone(&tz);
+                        t.format("%-M %-H %-d %-m *").to_string()
+                    };
+                    crate::freeze::Declared {
+                        start: cron(clock().at(*from)),
+                        end: cron(clock().at(*to)),
+                        zone: (*zone).into(),
+                    }
+                }
+            })
+            .collect()
+    }
+
     fn releases(&self) -> Vec<ReleaseRecord> {
         self.spec
             .releases

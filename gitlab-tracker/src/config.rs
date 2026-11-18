@@ -181,6 +181,11 @@ pub struct AppConfig {
     /// linked. Per project, in `projects.toml`.
     #[serde(skip)]
     pub release_note_tickets: bool,
+    /// Deploy freezes declared in the app, for a project that declares none
+    /// in GitLab: `start -> end [zone]` crons, separated by `;`. Per project,
+    /// in `projects.toml`.
+    #[serde(skip)]
+    pub freeze_periods: String,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
@@ -294,6 +299,7 @@ impl Default for AppConfig {
             review_reminder_hours: default_review_reminder_hours(),
             hotfix_branches: default_hotfix_branches(),
             release_note_tickets: false,
+            freeze_periods: String::new(),
             show_cockpit: default_show_cockpit(),
             hide_merged: false,
             cockpit_thresholds: CockpitThresholds::default(),

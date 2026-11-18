@@ -160,6 +160,9 @@ impl SettingsEditorState {
                 ("releases.ticket_links", ProjectSettingValue::Bool(value)) => {
                     app.config.release_note_tickets = *value;
                 }
+                ("delivery.freeze_periods", ProjectSettingValue::Text(value)) => {
+                    app.config.freeze_periods = value.trim().to_string();
+                }
                 #[cfg(feature = "stats")]
                 ("stats.sprint_weeks", ProjectSettingValue::U64(value)) => {
                     app.stats_view.sprint_weeks = u32::try_from(*value).unwrap_or(u32::MAX);

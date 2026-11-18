@@ -208,6 +208,26 @@ pub fn spec() -> ProjectSpec {
                 paths: vec!["migrations/", "src/db/"],
             },
         ],
+        // The weekend and the year's end, and a hardening freeze before the
+        // next release, going on now.
+        freezes: vec![
+            FreezeSpec::Cron {
+                start: "0 18 * * 5",
+                end: "0 7 * * 1",
+                zone: "Europe/Paris",
+            },
+            FreezeSpec::Once {
+                from: h(3),
+                to: ahead(1, 9, 0),
+                zone: "Europe/Paris",
+            },
+            FreezeSpec::Cron {
+                start: "0 0 20 12 *",
+                end: "0 0 5 1 *",
+                zone: "Europe/Paris",
+            },
+        ],
+        freeze_setting: None,
         last_session: d(2, 18, 30),
         profile: crate::models::DifficultyProfile {
             name: "Rust API".into(),

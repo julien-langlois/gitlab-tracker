@@ -2784,6 +2784,7 @@ pub(crate) mod tests {
                 review_reminder_hours: None,
                 hotfix_branches: None,
                 release_note_tickets: None,
+                freeze_periods: None,
                 show_cockpit: None,
                 hide_merged: None,
                 cockpit_thresholds: None,

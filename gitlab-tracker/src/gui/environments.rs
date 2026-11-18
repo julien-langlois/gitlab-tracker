@@ -323,9 +323,15 @@ fn main(
         });
         return;
     }
+    let freezes = super::freeze::of(&g.app, overview);
+    // The card below has the details: the banner leads nowhere here.
+    if super::freeze::banner(ui, &theme, &freezes, now, None).is_some() {
+        ui.add_space(GAP);
+    }
     let mut picked = None;
     flow_strip(ui, &theme, model, pair, now, &mut picked);
     ui.add_space(GAP);
+    super::freeze::card(ui, &theme, &freezes, now);
     let days = PERIODS[g.environments.period.min(PERIODS.len() - 1)].0;
     let failed = g.environments.failed;
     board::split(

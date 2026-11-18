@@ -361,6 +361,22 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     }
     ui.add_space(14.0);
 
+    // A deploy freeze of the open project, holding or about to.
+    let ctx = ui.ctx().clone();
+    let overview = g.details.project(&g.app, &ctx).cloned();
+    let freezes = super::freeze::of(&g.app, overview.as_ref());
+    let name = g
+        .app
+        .project_name
+        .clone()
+        .unwrap_or_else(|| g.app.project_id.clone());
+    if let Some(r) = super::freeze::banner(ui, &theme, &freezes, chrono::Utc::now(), Some(&name)) {
+        if r.clicked() {
+            g.open_page(super::Page::Environments);
+        }
+        ui.add_space(14.0);
+    }
+
     // The counts, one tile per kind that matters for the day.
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;

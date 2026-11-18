@@ -1989,3 +1989,33 @@ rail	Releases	发布
 	{bump}: {why}	{bump}：{why}
 	Tickets in release notes	在发布说明中显示工单
 	Each line of the draft release notes starts with the MR's ticket, linked: [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a ticket keep the plain line.	发布说明草稿的每一行都以该 MR 的工单开头，并带链接：[Feature #123](…) - 标题 (!42)。需要工单跟踪器；没有工单的 MR 保持普通行。
+
+# Deploy freezes
+	local time	本地时间
+	{d} d {h} h	{d} 天 {h} 小时
+	{h} h {m} min	{h} 小时 {m} 分钟
+	{m} min	{m} 分钟
+	Deploy freeze until {when}	部署冻结至 {when}
+	Deploy freeze, with no end in sight	部署冻结，尚无结束时间
+	ends in {left}	{left}后结束
+	Deploy freeze from {start} to {end}	部署冻结：{start} 至 {end}
+	Deploy freeze from {start}	部署冻结：自 {start} 起
+	starts in {left}	{left}后开始
+	deploy jobs that check $CI_DEPLOY_FREEZE do not run	检查 $CI_DEPLOY_FREEZE 的部署作业不会运行
+	from the app's settings: a warning, the pipelines do not know of it	来自应用设置：仅为提醒，流水线并不知道
+	Deploy freezes	部署冻结
+	The token may not read the project's deploy freezes (Freeze Period › Read).	令牌无权读取项目的部署冻结（Freeze Period › Read）。
+	declared in GitLab · times in your zone	在 GitLab 中声明 · 时间按你的时区
+	declared in the app's settings · times in your zone	在应用设置中声明 · 时间按你的时区
+	GitLab sets $CI_DEPLOY_FREEZE in the pipelines that run during one: the deploy jobs that check it do not run.	GitLab 会在冻结期间运行的流水线中设置 $CI_DEPLOY_FREEZE：检查它的部署作业不会运行。
+	The project declares none in GitLab: these come from the app's settings, as a warning only.	该项目未在 GitLab 中声明任何冻结：这些来自应用设置，仅作提醒。
+	The token may not read GitLab's (Freeze Period › Read).	令牌无权读取 GitLab 的冻结（Freeze Period › Read）。
+	No freeze this day	这一天没有冻结
+	now, until {when}	进行中，至 {when}
+	now, with no end	进行中，无结束时间
+	next: {start} → {end}	下次：{start} → {end}
+	next: {start}	下次：{start}
+	never again	不再发生
+	Read in {zone}, with its daylight saving changes	按 {zone} 读取，含夏令时变化
+	Used when the project declares none in GitLab (Settings › CI/CD › Deploy freezes): a start cron, ->, an end cron and a time zone, several separated by ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Without a zone: this machine's. A warning only: the pipelines do not know of them.	当项目未在 GitLab 中声明任何冻结时使用（Settings › CI/CD › Deploy freezes）：开始 cron、->、结束 cron 和时区，多个用 ; 分隔（0 18 * * 5 -> 0 7 * * 1 Europe/Paris）。不填时区：使用本机时区。仅为提醒：流水线并不知道。
+@plural	{n} period could not be read (its cron or its time zone).|{n} periods could not be read (their cron or their time zone).	{n} 个时段无法读取（cron 或时区）。

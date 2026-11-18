@@ -1989,3 +1989,33 @@ rail	Releases	Releases
 	{bump}: {why}	{bump} : {why}
 	Tickets in release notes	Tickets dans les notes de version
 	Each line of the draft release notes starts with the MR's ticket, linked: [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a ticket keep the plain line.	Chaque ligne du brouillon des notes de version commence par le ticket de la MR, en lien : [Feature #123](…) - Titre (!42). Nécessite un gestionnaire de tickets ; les MR sans ticket gardent la ligne simple.
+
+# Deploy freezes
+	local time	heure locale
+	{d} d {h} h	{d} j {h} h
+	{h} h {m} min	{h} h {m} min
+	{m} min	{m} min
+	Deploy freeze until {when}	Gel des déploiements jusqu'à {when}
+	Deploy freeze, with no end in sight	Gel des déploiements, sans fin prévue
+	ends in {left}	se termine dans {left}
+	Deploy freeze from {start} to {end}	Gel des déploiements du {start} au {end}
+	Deploy freeze from {start}	Gel des déploiements à partir du {start}
+	starts in {left}	commence dans {left}
+	deploy jobs that check $CI_DEPLOY_FREEZE do not run	les jobs de déploiement qui vérifient $CI_DEPLOY_FREEZE ne tournent pas
+	from the app's settings: a warning, the pipelines do not know of it	depuis les réglages de l'appli : un avertissement, les pipelines n'en savent rien
+	Deploy freezes	Gels des déploiements
+	The token may not read the project's deploy freezes (Freeze Period › Read).	Le jeton ne peut pas lire les gels des déploiements du projet (Freeze Period › Read).
+	declared in GitLab · times in your zone	déclarés dans GitLab · heures dans votre fuseau
+	declared in the app's settings · times in your zone	déclarés dans les réglages de l'appli · heures dans votre fuseau
+	GitLab sets $CI_DEPLOY_FREEZE in the pipelines that run during one: the deploy jobs that check it do not run.	GitLab définit $CI_DEPLOY_FREEZE dans les pipelines lancés pendant un gel : les jobs de déploiement qui la vérifient ne tournent pas.
+	The project declares none in GitLab: these come from the app's settings, as a warning only.	Le projet n'en déclare aucun dans GitLab : ceux-ci viennent des réglages de l'appli, à titre d'avertissement seulement.
+	The token may not read GitLab's (Freeze Period › Read).	Le jeton ne peut pas lire ceux de GitLab (Freeze Period › Read).
+	No freeze this day	Aucun gel ce jour-là
+	now, until {when}	en cours, jusqu'à {when}
+	now, with no end	en cours, sans fin
+	next: {start} → {end}	prochain : {start} → {end}
+	next: {start}	prochain : {start}
+	never again	plus jamais
+	Read in {zone}, with its daylight saving changes	Lu dans le fuseau {zone}, avec ses changements d'heure
+	Used when the project declares none in GitLab (Settings › CI/CD › Deploy freezes): a start cron, ->, an end cron and a time zone, several separated by ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Without a zone: this machine's. A warning only: the pipelines do not know of them.	Utilisé quand le projet n'en déclare aucun dans GitLab (Settings › CI/CD › Deploy freezes) : un cron de début, ->, un cron de fin et un fuseau horaire, plusieurs séparés par ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Sans fuseau : celui de cette machine. Un avertissement seulement : les pipelines n'en savent rien.
+@plural	{n} period could not be read (its cron or its time zone).|{n} periods could not be read (their cron or their time zone).	{n} période illisible (son cron ou son fuseau horaire).|{n} périodes illisibles (leur cron ou leur fuseau horaire).

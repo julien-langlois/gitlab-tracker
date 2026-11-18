@@ -67,6 +67,13 @@ hotfix_branches = "hotfix/*"
 # MRs without a ticket keep the plain line. Default: false. Editable with [,].
 release_note_tickets = false
 
+# Deploy freezes, for a project that declares none in GitLab (Settings › CI/CD ›
+# Deploy freezes, which win when there are some): a start cron, "->", an end cron
+# and an IANA time zone (this machine's when left out), several separated by ";".
+# A banner on Promote, Environments and Today while one holds or is 2 days away;
+# a warning only, the pipelines do not know of them. Default: none. Editable with [,].
+# freeze_periods = "0 18 * * 5 -> 0 7 * * 1 Europe/Paris; 0 0 20 12 * -> 0 0 5 1 *"
+
 # Hide merged MRs from the table to focus on what is left to do. They stay tracked
 # (refreshed, notified, recorded in stats). Default: false. Toggle with [m] or [,].
 hide_merged = false

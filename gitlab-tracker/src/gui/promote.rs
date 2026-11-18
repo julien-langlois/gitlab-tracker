@@ -287,6 +287,17 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let mut toggled = None;
     let mut copied = None;
     let now = chrono::Utc::now();
+    // A deploy freeze, holding or about to: promoting still works, the
+    // deploy waits.
+    let ctx = ui.ctx().clone();
+    let overview = g.details.project(&g.app, &ctx).cloned();
+    let freezes = super::freeze::of(&g.app, overview.as_ref());
+    if let Some(r) = super::freeze::banner(ui, &theme, &freezes, now, None) {
+        if r.clicked() {
+            g.open_page(super::Page::Environments);
+        }
+        ui.add_space(14.0);
+    }
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {

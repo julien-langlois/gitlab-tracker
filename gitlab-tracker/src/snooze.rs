@@ -197,7 +197,7 @@ where
     }
 }
 
-fn weekday_short(day: Weekday) -> &'static str {
+pub fn weekday_short(day: Weekday) -> &'static str {
     tc(
         "date",
         match day {

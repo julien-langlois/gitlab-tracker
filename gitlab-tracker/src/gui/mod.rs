@@ -16,6 +16,7 @@ mod dialogs;
 mod environments;
 mod export;
 mod flow;
+mod freeze;
 mod history;
 mod hotspots;
 mod i18n;

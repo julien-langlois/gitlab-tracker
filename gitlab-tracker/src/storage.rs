@@ -80,6 +80,15 @@ pub struct ProjectEntry {
     /// linked (`[Feature #123](…) - Title (!42)`). Absent: off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_note_tickets: Option<bool>,
+    /// Deploy freezes declared in the app, used when GitLab has none for the
+    /// project: a start cron, `->`, an end cron and an optional IANA zone (the
+    /// machine's when left out), several separated by `;`.
+    ///
+    /// ```toml
+    /// freeze_periods = "0 18 * * 5 -> 0 7 * * 1 Europe/Paris; 0 0 20 12 * -> 0 0 5 1 *"
+    /// ```
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freeze_periods: Option<String>,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     /// Defaults to `true` when omitted.
     ///

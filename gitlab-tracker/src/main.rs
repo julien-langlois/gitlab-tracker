@@ -9,6 +9,8 @@ mod config;
 mod demo;
 mod events;
 mod filters_core;
+#[cfg(feature = "gui")]
+mod freeze;
 mod gitlab;
 #[cfg(feature = "gui")]
 mod gitlab_detail;
@@ -168,6 +170,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     }
     if let Some(tickets) = project.release_note_tickets {
         config.release_note_tickets = tickets;
+    }
+    if let Some(periods) = &project.freeze_periods {
+        config.freeze_periods = periods.clone();
     }
     if let Some(show_cockpit) = project.show_cockpit {
         config.show_cockpit = show_cockpit;

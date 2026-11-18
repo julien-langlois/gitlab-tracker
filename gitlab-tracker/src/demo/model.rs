@@ -395,6 +395,24 @@ pub struct ReleaseSpec {
     pub notes: Option<&'static str>,
 }
 
+/// A deploy freeze declared in GitLab.
+#[derive(Debug, Clone)]
+pub enum FreezeSpec {
+    /// Its crons, as written.
+    Cron {
+        start: &'static str,
+        end: &'static str,
+        zone: &'static str,
+    },
+    /// Once, from `from` to `to`: written as the crons of those days (they
+    /// come back in a year), in `zone`.
+    Once {
+        from: When,
+        to: When,
+        zone: &'static str,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct MilestoneSpec {
     pub title: &'static str,
@@ -453,6 +471,10 @@ pub struct ProjectSpec {
     pub directs: Vec<Direct>,
     /// The version tags, oldest first.
     pub releases: Vec<ReleaseSpec>,
+    /// The deploy freezes declared in GitLab.
+    pub freezes: Vec<FreezeSpec>,
+    /// The deploy freezes declared in the app's settings (`freeze_periods`).
+    pub freeze_setting: Option<&'static str>,
     /// The latest pipeline of these branches, when it does not pass.
     pub branch_ci: Vec<(&'static str, Ci)>,
     pub milestones: Vec<MilestoneSpec>,

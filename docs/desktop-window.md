@@ -154,6 +154,20 @@ deployed from each, its last deployment, its branch's latest pipeline, and what
 it has that the next branch lacks; every gap between two branches (fixes to bring
 back upstream included), two weeks of deployments, and a way into Promote.
 
+**Deploy freezes** are read from GitLab (Settings › CI/CD › Deploy freezes). A
+project that declares none there can declare them in the app's settings (`,` ›
+Delivery › Deploy freezes), in the same form: a start cron, `->`, an end cron and
+a time zone, e.g. `0 18 * * 5 -> 0 7 * * 1 Europe/Paris`. GitLab's win when there
+are some. Those of the app are a warning only: GitLab's set `$CI_DEPLOY_FREEZE`
+in the pipelines, for the deploy jobs to check, the app's do not. While a freeze
+holds, or starts within two days, a banner says until when on Promote,
+Environments and Today. The Environments page shows the next two weeks, the
+frozen hours in blue, and each period with when it comes next. The crons are read
+in the period's own zone, daylight saving included; the times shown are your
+computer's.
+
+![Deploy freezes: the banner, the next two weeks and the periods](assets/desktop/freezes.png)
+
 ![Environments: branches as cards, gaps between them, deployments](assets/desktop/environments.png)
 
 ## Milestones

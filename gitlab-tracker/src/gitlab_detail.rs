@@ -612,6 +612,10 @@ pub struct ProjectOverview {
     pub releases: Vec<ReleaseRecord>,
     /// The token may not read the releases (403): only the tags are shown.
     pub releases_denied: bool,
+    /// The project's deploy freezes, as declared in GitLab.
+    pub freezes: Vec<crate::freeze::Declared>,
+    /// The token may not read them (403).
+    pub freezes_denied: bool,
 }
 
 /// A release, or a tag named like a version.
@@ -737,14 +741,42 @@ pub async fn fetch_project(
         updated
     };
     let releases = project_releases(&target);
-    let (deployments, pipelines, merges, (releases, releases_denied)) =
-        tokio::join!(deployments, pipelines, merges, releases);
+    let freezes = project_freezes(&target);
+    let (deployments, pipelines, merges, (releases, releases_denied), (freezes, freezes_denied)) =
+        tokio::join!(deployments, pipelines, merges, releases, freezes);
     ProjectOverview {
         deployments,
         pipelines: pipelines.into_iter().flatten().collect(),
         merges,
         releases,
         releases_denied,
+        freezes,
+        freezes_denied,
+    }
+}
+
+/// The project's deploy freezes (Settings › CI/CD › Deploy freezes), and
+/// whether the token may not read them (403).
+async fn project_freezes(target: &Target) -> (Vec<crate::freeze::Declared>, bool) {
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        freeze_start: String,
+        freeze_end: String,
+        #[serde(default)]
+        cron_timezone: Option<String>,
+    }
+    match target.get::<Vec<Raw>>("freeze_periods?per_page=100").await {
+        Ok(list) => (
+            list.into_iter()
+                .map(|p| crate::freeze::Declared {
+                    start: p.freeze_start,
+                    end: p.freeze_end,
+                    zone: p.cron_timezone.unwrap_or_else(|| "UTC".into()),
+                })
+                .collect(),
+            false,
+        ),
+        Err(e) => (Vec::new(), e.contains("403")),
     }
 }
 
