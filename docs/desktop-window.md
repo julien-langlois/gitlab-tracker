@@ -161,7 +161,9 @@ a time zone, e.g. `0 18 * * 5 -> 0 7 * * 1 Europe/Paris`. GitLab's win when ther
 are some. Those of the app are a warning only: GitLab's set `$CI_DEPLOY_FREEZE`
 in the pipelines, for the deploy jobs to check, the app's do not. While a freeze
 holds, or starts within two days, a banner says until when on Promote,
-Environments and Today. The Environments page shows the next two weeks, the
+Environments and Today. While it holds, the production card (the end of the flow)
+turns blue, marked frozen, with its end, and the branch before it shows what
+waits for the thaw. The Environments page shows the next two weeks, the
 frozen hours in blue, and each period with when it comes next. The crons are read
 in the period's own zone, daylight saving included; the times shown are your
 computer's.

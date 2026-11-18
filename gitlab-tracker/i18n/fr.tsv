@@ -2019,3 +2019,6 @@ rail	Releases	Releases
 	Read in {zone}, with its daylight saving changes	Lu dans le fuseau {zone}, avec ses changements d'heure
 	Used when the project declares none in GitLab (Settings › CI/CD › Deploy freezes): a start cron, ->, an end cron and a time zone, several separated by ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Without a zone: this machine's. A warning only: the pipelines do not know of them.	Utilisé quand le projet n'en déclare aucun dans GitLab (Settings › CI/CD › Deploy freezes) : un cron de début, ->, un cron de fin et un fuseau horaire, plusieurs séparés par ; (0 18 * * 5 -> 0 7 * * 1 Europe/Paris). Sans fuseau : celui de cette machine. Un avertissement seulement : les pipelines n'en savent rien.
 @plural	{n} period could not be read (its cron or its time zone).|{n} periods could not be read (their cron or their time zone).	{n} période illisible (son cron ou son fuseau horaire).|{n} périodes illisibles (leur cron ou leur fuseau horaire).
+	frozen	gelée
+	frozen, with no end	gelée, sans fin
+@plural	{n} waits for the thaw|{n} wait for the thaw	{n} attend le dégel|{n} attendent le dégel

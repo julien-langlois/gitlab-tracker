@@ -324,12 +324,17 @@ fn main(
         return;
     }
     let freezes = super::freeze::of(&g.app, overview);
+    // The end of the flow (production) shows frozen while a freeze holds.
+    let frozen = match freezes.status(now) {
+        crate::freeze::Status::Frozen { until, .. } => Some(until),
+        _ => None,
+    };
     // The card below has the details: the banner leads nowhere here.
     if super::freeze::banner(ui, &theme, &freezes, now, None).is_some() {
         ui.add_space(GAP);
     }
     let mut picked = None;
-    flow_strip(ui, &theme, model, pair, now, &mut picked);
+    flow_strip(ui, &theme, model, pair, now, frozen, &mut picked);
     ui.add_space(GAP);
     super::freeze::card(ui, &theme, &freezes, now);
     let days = PERIODS[g.environments.period.min(PERIODS.len() - 1)].0;
@@ -364,6 +369,7 @@ fn flow_strip(
     model: &Model,
     pair: Option<(usize, usize)>,
     now: DateTime<Utc>,
+    frozen: Frozen,
     picked: &mut Option<(usize, usize)>,
 ) {
     let n = model.branches.len() + 1;
@@ -394,7 +400,7 @@ fn flow_strip(
             if i == 0 {
                 open_card(ui, theme, card, model);
             } else {
-                branch_card(ui, theme, card, model, i - 1, pair, now, picked);
+                branch_card(ui, theme, card, model, i - 1, pair, now, frozen, picked);
             }
             if per_line == n && k + 1 < line {
                 let cx = card.right() + arrow / 2.0;
@@ -552,6 +558,9 @@ fn open_card(ui: &Ui, theme: &Theme, rect: Rect, model: &Model) {
     );
 }
 
+/// A deploy freeze holding now, until when (none: no end); `None`: no freeze.
+type Frozen = Option<Option<DateTime<Utc>>>;
+
 #[allow(clippy::too_many_arguments)]
 fn branch_card(
     ui: &mut Ui,
@@ -561,31 +570,67 @@ fn branch_card(
     i: usize,
     pair: Option<(usize, usize)>,
     now: DateTime<Utc>,
+    frozen: Frozen,
     picked: &mut Option<(usize, usize)>,
 ) {
     let b = &model.branches[i];
+    let last = i + 1 == model.branches.len();
+    // Production, frozen: tinted in blue, a snowflake in the corner, the
+    // content still readable.
+    let this_frozen = frozen.filter(|_| last);
+    // The branch before it: what it would promote waits for the thaw.
+    let next_frozen = frozen.is_some() && i + 2 == model.branches.len();
     let selected = pair.is_some_and(|(from, _)| from == i);
-    card_ground(ui, theme, rect, role_color(b.role, theme), selected);
+    let blue = theme.tones.blue;
+    if this_frozen.is_some() {
+        card_ground(ui, theme, rect, blue.fg, selected);
+        let radius = CornerRadius::same(theme.radii.large);
+        ui.painter().rect(
+            rect.shrink(1.0),
+            radius,
+            blue.bg,
+            Stroke::new(1.0, blue.fg.gamma_multiply(0.35)),
+            egui::StrokeKind::Inside,
+        );
+        let flake = Rect::from_center_size(
+            rect.right_top() + Vec2::new(-30.0, 104.0),
+            Vec2::splat(96.0),
+        );
+        super::icons::paint(
+            &ui.painter().with_clip_rect(rect.shrink(2.0)),
+            flake,
+            super::icons::Icon::Snowflake,
+            blue.fg.gamma_multiply(0.12),
+        );
+    } else {
+        card_ground(ui, theme, rect, role_color(b.role, theme), selected);
+    }
     let inner = rect.shrink2(Vec2::new(14.0, 14.0));
     let mut y = inner.top() + 10.0;
-    // The name, the environment on the right.
-    let env_w = b.environments.first().map_or(0.0, |env| {
-        let galley = ui.painter().layout_no_wrap(
-            env.clone(),
-            fonts::medium(theme.text_size - 2.5),
-            theme.tones.blue.fg,
-        );
-        let w = (galley.size().x + 12.0).min(inner.width() * 0.5);
-        board::paint_tag(
-            ui,
-            theme,
-            egui::pos2(inner.right() - w, y),
-            env,
-            theme.tones.blue,
-            false,
-        );
-        w + 8.0
-    });
+    let opacity = ui.opacity();
+    // The name, the environment on the right ("frozen" in its place while
+    // frozen: the tooltip of the banner names it).
+    let frozen_tag = this_frozen.map(|_| tl("frozen").to_string());
+    let env_w = frozen_tag
+        .as_ref()
+        .or(b.environments.first())
+        .map_or(0.0, |env| {
+            let galley = ui.painter().layout_no_wrap(
+                env.clone(),
+                fonts::medium(theme.text_size - 2.5),
+                theme.tones.blue.fg,
+            );
+            let w = (galley.size().x + 12.0).min(inner.width() * 0.5);
+            board::paint_tag(
+                ui,
+                theme,
+                egui::pos2(inner.right() - w, y),
+                env,
+                theme.tones.blue,
+                false,
+            );
+            w + 8.0
+        });
     board::paint_text(
         ui,
         egui::pos2(inner.left(), y),
@@ -595,6 +640,10 @@ fn branch_card(
         theme.palette.text,
         inner.width() - env_w,
     );
+    // Under the freeze, what is deployed shows a little faded.
+    if this_frozen.is_some() {
+        ui.set_opacity(opacity * 0.65);
+    }
     y += 30.0;
     // The state of what is deployed.
     let (state, tone) = match (&b.last, &b.pipeline) {
@@ -659,9 +708,33 @@ fn branch_card(
         &sha.unwrap_or_else(|| board::dash().to_string()),
         None,
     );
+    ui.set_opacity(opacity);
     // At the bottom: what waits for the next branch.
     let foot = Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - 24.0), inner.max);
-    if i + 1 < model.branches.len() {
+    if let Some(until) = this_frozen {
+        // The time left is in the banner above: the card keeps the end.
+        let text = match until {
+            Some(until) => tf(
+                "until {when}",
+                &[(
+                    "when",
+                    &crate::snooze::when_text(until, &chrono::Local::now()),
+                )],
+            ),
+            None => tl("frozen, with no end").to_string(),
+        };
+        ui.painter()
+            .rect_filled(foot, CornerRadius::same(theme.radii.medium), blue.bg);
+        board::paint_text(
+            ui,
+            foot.center(),
+            Align2::CENTER_CENTER,
+            &text,
+            fonts::medium(theme.text_size - 2.0),
+            blue.fg,
+            foot.width() - 12.0,
+        );
+    } else if i + 1 < model.branches.len() {
         let list = model.gap(i, i + 1);
         let late = oldest(list).is_some_and(|o| board::days_between(o, now) >= LATE_DAYS);
         let (text, tone) = if list.is_empty() {
@@ -674,13 +747,23 @@ fn branch_card(
             )
         } else {
             let wait = oldest(list).map(|o| board::duration_text(board::days_between(o, now)));
-            let mut text = tn(list.len() as u64, "{n} to promote", "{n} to promote");
+            let mut text = if next_frozen {
+                tn(
+                    list.len() as u64,
+                    "{n} waits for the thaw",
+                    "{n} wait for the thaw",
+                )
+            } else {
+                tn(list.len() as u64, "{n} to promote", "{n} to promote")
+            };
             if let Some(w) = wait {
                 text = format!("{text} · {w}");
             }
             (
                 text,
-                if late {
+                if next_frozen {
+                    blue
+                } else if late {
                     theme.tones.red
                 } else {
                     theme.tones.amber
