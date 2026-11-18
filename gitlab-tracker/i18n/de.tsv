@@ -2022,3 +2022,37 @@ rail	Releases	Releases
 	frozen	eingefroren
 	frozen, with no end	eingefroren, ohne Ende
 @plural	{n} waits for the thaw|{n} wait for the thaw	{n} wartet auf das Tauwetter|{n} warten auf das Tauwetter
+
+# Pipeline schedules
+	account {state}	Konto {state}
+	every day at {time}	täglich um {time}
+	every hour at :{m}	stündlich um :{m}
+	in {left}	in {left}
+	{name} · scheduled pipeline failed	{name} · geplante Pipeline fehlgeschlagen
+	Schedule #{id}	Zeitplan #{id}
+	started {ago}	gestartet {ago}
+	weekdays at {time}	werktags um {time}
+	weekends at {time}	am Wochenende um {time}
+	A failed run lands in the bell. A schedule whose owner is blocked no longer runs in GitLab: it is flagged.	Ein fehlgeschlagener Lauf landet in der Glocke. Ein Zeitplan, dessen Besitzer gesperrt ist, läuft in GitLab nicht mehr: er wird markiert.
+	inactive	inaktiv
+	Next	Nächster
+	Open the last run	Letzten Lauf öffnen
+	Open the schedules in GitLab	Zeitpläne in GitLab öffnen
+	Owner	Besitzer
+	owner blocked	Besitzer gesperrt
+	Pipeline schedules	Geplante Pipelines
+	running	läuft
+	Schedule	Zeitplan
+	When	Wann
+	will not run	wird nicht laufen
+	{name} has failed {n} runs in a row on {project}	{name} ist {n}-mal in Folge auf {project} fehlgeschlagen
+	Last green run: {when}	Letzter grüner Lauf: {when}
+	No green run in the last {n}	Kein grüner Lauf unter den letzten {n}
+	every {day} at {time}	jeden {day} um {time}
+	last {n} runs, oldest left · times in your zone	letzte {n} Läufe, der älteste links · Zeiten in deiner Zeitzone
+	{cron}, read in {zone}	{cron}, gelesen in {zone}
+	Open the CI page	CI-Seite öffnen
+@plural	{n} failed run|{n} failed runs in a row	{n} fehlgeschlagener Lauf|{n} fehlgeschlagene Läufe in Folge
+	account blocked	Konto gesperrt
+	account deactivated	Konto deaktiviert
+	account banned	Konto verbannt

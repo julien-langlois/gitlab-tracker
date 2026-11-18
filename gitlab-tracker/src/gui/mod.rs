@@ -37,6 +37,7 @@ mod prefs;
 mod promote;
 mod rail_badges;
 mod releases;
+mod schedules;
 mod setup;
 mod shell;
 mod sidebar;
@@ -396,6 +397,8 @@ struct GuiApp {
     /// The bell panel's filter, and whether it was open at the last frame (its
     /// notifications count as read once it closes).
     bell_filter: toasts::Filter,
+    /// The latest run of each pipeline schedule the bell has seen.
+    schedule_seen: schedules::Seen,
     /// The export's choices, and a save under way.
     export: export::State,
     bell_open: bool,
@@ -554,6 +557,7 @@ impl GuiApp {
             show_resolved: false,
             clicks: notification_clicks(&cc.egui_ctx),
             bell_filter: toasts::Filter::All,
+            schedule_seen: schedules::Seen::new(),
             export: export::State::default(),
             bell_open: false,
             compact: false,
@@ -1835,6 +1839,17 @@ impl eframe::App for GuiApp {
             .input(|i| i.viewport().inner_rect.map(|r| r.size()));
         self.toasts
             .watch(&self.app, &self.theme, ui.input(|i| i.time));
+        // A scheduled pipeline that failed since the last read, in the bell.
+        if let Some(overview) = self.details.project_ready() {
+            schedules::watch(
+                &mut self.toasts,
+                &mut self.schedule_seen,
+                &self.app.project_id,
+                &overview.schedules,
+                &self.theme,
+                ui.input(|i| i.time),
+            );
+        }
 
         // Snapshot the visible list for this frame (see `App::begin_render_cache`):
         // drawing records actions instead of changing the list.

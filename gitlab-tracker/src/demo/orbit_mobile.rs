@@ -173,6 +173,19 @@ pub fn spec() -> ProjectSpec {
         // weekend in the app's settings.
         freezes: Vec::new(),
         freeze_setting: Some("0 12 * * 5 -> 0 8 * * 1 Europe/Paris"),
+        // The evening store build of develop.
+        schedules: vec![ScheduleSpec {
+            id: 77,
+            description: "Store build",
+            ref_name: "develop",
+            cron: "0 19 * * 1-5",
+            zone: "Europe/Paris",
+            active: true,
+            owner: MARINA.name,
+            owner_state: "active",
+            runs: "ooooxooooooooo",
+            idle: 0,
+        }],
         last_session: d(2, 18, 30),
         profile: crate::models::DifficultyProfile {
             name: "Android".into(),

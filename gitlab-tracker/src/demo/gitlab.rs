@@ -297,6 +297,8 @@ impl World {
             releases_denied: false,
             freezes: self.freezes(),
             freezes_denied: false,
+            schedules: self.schedules(),
+            schedules_denied: false,
             merges: MergeHistory {
                 merged: self
                     .mrs
@@ -334,6 +336,71 @@ impl World {
                         end: cron(clock().at(*to)),
                         zone: (*zone).into(),
                     }
+                }
+            })
+            .collect()
+    }
+
+    /// The pipeline schedules, their runs at the cron's latest moments.
+    fn schedules(&self) -> Vec<crate::gitlab_detail::ScheduleRecord> {
+        use crate::gitlab_detail::{ScheduleRecord, ScheduleRun};
+        use crate::models::PipelineState;
+        let now = clock().now;
+        self.spec
+            .schedules
+            .iter()
+            .map(|s| {
+                let tz: chrono_tz::Tz = s.zone.parse().unwrap_or(chrono_tz::UTC);
+                let cron = crate::freeze::Cron::parse(s.cron);
+                // The cron's latest moments, newest first.
+                let mut moments = Vec::new();
+                let mut at = now;
+                while let Some(t) = cron.as_ref().and_then(|c| c.previous(&tz, at)) {
+                    moments.push(t);
+                    if moments.len() >= s.runs.len() + s.idle {
+                        break;
+                    }
+                    at = t - chrono::Duration::minutes(1);
+                }
+                let mut runs: Vec<ScheduleRun> = s
+                    .runs
+                    .chars()
+                    .rev()
+                    .zip(moments.iter().skip(s.idle))
+                    .enumerate()
+                    .map(|(i, (c, t))| {
+                        let id = 1_259_000 + s.id * 40 - i as u64;
+                        ScheduleRun {
+                            id,
+                            status: if c == 'x' {
+                                PipelineState::Failed
+                            } else {
+                                PipelineState::Success
+                            },
+                            created_at: iso(*t),
+                            web_url: format!(
+                                "https://gitlab.orbit-logistics.dev/{}/-/pipelines/{id}",
+                                self.spec.path
+                            ),
+                        }
+                    })
+                    .collect();
+                runs.reverse();
+                ScheduleRecord {
+                    id: s.id,
+                    description: s.description.into(),
+                    ref_name: s.ref_name.into(),
+                    cron: s.cron.into(),
+                    zone: s.zone.into(),
+                    next_run_at: cron
+                        .as_ref()
+                        .filter(|_| s.active)
+                        .and_then(|c| c.next(&tz, now))
+                        .map(iso),
+                    active: s.active,
+                    owner: s.owner.into(),
+                    owner_state: s.owner_state.into(),
+                    runs,
                 }
             })
             .collect()

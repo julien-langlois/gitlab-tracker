@@ -395,6 +395,25 @@ pub struct ReleaseSpec {
     pub notes: Option<&'static str>,
 }
 
+/// A pipeline schedule and how its latest runs went.
+#[derive(Debug, Clone)]
+pub struct ScheduleSpec {
+    pub id: u64,
+    pub description: &'static str,
+    pub ref_name: &'static str,
+    pub cron: &'static str,
+    pub zone: &'static str,
+    pub active: bool,
+    pub owner: &'static str,
+    /// The owner's account: `active`, or `blocked` for someone who left.
+    pub owner_state: &'static str,
+    /// Its runs at the cron's latest moments, oldest first: `o` passed, `x`
+    /// failed.
+    pub runs: &'static str,
+    /// The cron's latest moments without a run: inactive since.
+    pub idle: usize,
+}
+
 /// A deploy freeze declared in GitLab.
 #[derive(Debug, Clone)]
 pub enum FreezeSpec {
@@ -475,6 +494,8 @@ pub struct ProjectSpec {
     pub freezes: Vec<FreezeSpec>,
     /// The deploy freezes declared in the app's settings (`freeze_periods`).
     pub freeze_setting: Option<&'static str>,
+    /// The pipeline schedules.
+    pub schedules: Vec<ScheduleSpec>,
     /// The latest pipeline of these branches, when it does not pass.
     pub branch_ci: Vec<(&'static str, Ci)>,
     pub milestones: Vec<MilestoneSpec>,

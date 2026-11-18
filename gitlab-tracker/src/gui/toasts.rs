@@ -34,6 +34,9 @@ pub enum Kind {
     Merged,
     /// Another status change (closed, conflict, approved…).
     Status,
+    /// A scheduled pipeline failed: its id is `schedule:<id>`, it opens the
+    /// CI page.
+    ScheduleFailed,
 }
 
 /// A toast kept for the bell: what, about which MR, and when.
@@ -243,7 +246,11 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
         g.toasts.list.remove(i);
     } else if let Some(i) = clicked {
         let toast = g.toasts.list.remove(i);
-        g.open_mr(&toast.id);
+        if toast.id.starts_with("schedule:") {
+            g.open_page(super::Page::Ci);
+        } else {
+            g.open_mr(&toast.id);
+        }
     }
 }
 
@@ -262,7 +269,7 @@ impl Filter {
     fn keeps(self, kind: Kind) -> bool {
         match self {
             Filter::All => true,
-            Filter::Failures => kind == Kind::PipelineFailed,
+            Filter::Failures => matches!(kind, Kind::PipelineFailed | Kind::ScheduleFailed),
             Filter::Merges => kind == Kind::Merged,
             Filter::Changes => matches!(kind, Kind::Status | Kind::PipelinePassed),
         }
@@ -469,6 +476,11 @@ pub fn panel(g: &mut GuiApp, button: &egui::Response) {
         Some(Ask::Clear) => each(&mut |t| t.history.clear()),
         Some(Ask::Open(tab, id, failed)) => {
             each(&mut |t| t.history.iter_mut().for_each(|p| p.read = true));
+            if id.starts_with("schedule:") {
+                g.activate(tab);
+                g.open_page(super::Page::Ci);
+                return;
+            }
             g.open_link(tab, &id);
             if failed {
                 g.mr_tab = super::mr_page::Tab::Pipelines;
@@ -577,7 +589,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         ),
         kind => {
             let glyph = match kind {
-                Kind::PipelineFailed => "✕",
+                Kind::PipelineFailed | Kind::ScheduleFailed => "✕",
                 Kind::PipelinePassed => "✓",
                 _ => "●",
             };
@@ -621,8 +633,13 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         0.0,
         egui::TextFormat::simple(fonts::semibold(theme.text_size), theme.palette.text),
     );
+    let reference = if past.kind == Kind::ScheduleFailed {
+        String::new()
+    } else {
+        format!("  !{}", past.id)
+    };
     first.append(
-        &format!("  !{}", past.id),
+        &reference,
         0.0,
         egui::TextFormat::simple(
             egui::FontId::monospace(theme.text_size - 1.5),
@@ -668,7 +685,11 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
 
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open its MR page"))
+        .on_hover_text(if past.kind == Kind::ScheduleFailed {
+            tl("Open the CI page")
+        } else {
+            tl("Open its MR page")
+        })
         .clicked()
 }
 

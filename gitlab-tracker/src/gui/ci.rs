@@ -390,7 +390,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         "ci",
         |g, ui| nav(g, ui, &ci, days),
         |g, ui| inspector(g, ui, &ci, overview.as_ref(), selected.as_deref(), now),
-        |g, ui| main(g, ui, &ci, selected.as_deref(), now),
+        |g, ui| main(g, ui, &ci, overview.as_ref(), selected.as_deref(), now),
     );
 }
 
@@ -460,7 +460,14 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, ci: &Ci, days: i64) {
 
 // ── Main area ────────────────────────────────────────────────────────────────
 
-fn main(g: &mut GuiApp, ui: &mut Ui, ci: &Ci, selected: Option<&str>, now: DateTime<Utc>) {
+fn main(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    ci: &Ci,
+    overview: Option<&crate::gitlab_detail::ProjectOverview>,
+    selected: Option<&str>,
+    now: DateTime<Utc>,
+) {
     let theme = g.theme;
     let mut show_blocked = false;
     board::heading(
@@ -484,6 +491,19 @@ fn main(g: &mut GuiApp, ui: &mut Ui, ci: &Ci, selected: Option<&str>, now: DateT
         g.open_page(super::Page::MergeRequests);
     }
     ui.add_space(14.0);
+    // A schedule failing run after run: nobody watches the nightly runs.
+    let schedules = overview.map(|o| o.schedules.as_slice()).unwrap_or(&[]);
+    let project = g
+        .app
+        .project_name
+        .clone()
+        .unwrap_or_else(|| g.app.project_id.clone());
+    if super::schedules::worst(schedules).is_some() {
+        if let Some(url) = super::schedules::banner(ui, &theme, schedules, &project) {
+            board::open_url(ui, &url);
+        }
+        ui.add_space(GAP);
+    }
     let t = &theme.tones;
     let points = |now: Option<f64>, before: Option<f64>| -> (String, Option<Color32>) {
         match (now, before) {
@@ -579,6 +599,14 @@ fn main(g: &mut GuiApp, ui: &mut Ui, ci: &Ci, selected: Option<&str>, now: DateT
         },
     ];
     board::figures(ui, &theme, &figures);
+    if !schedules.is_empty() {
+        let page =
+            super::releases::project_url(&g.app).map(|p| format!("{p}/-/pipeline_schedules"));
+        if let Some(url) = super::schedules::card(ui, &theme, schedules, page.as_deref(), now) {
+            board::open_url(ui, &url);
+        }
+        ui.add_space(GAP);
+    }
 
     let jobs: Vec<&Job> = ci
         .jobs

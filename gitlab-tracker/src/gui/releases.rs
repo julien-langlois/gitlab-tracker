@@ -680,7 +680,7 @@ fn breakdown(c: &Contents) -> String {
 }
 
 /// The project's page on GitLab, from a tracked MR's address.
-fn project_url(app: &App) -> Option<String> {
+pub(super) fn project_url(app: &App) -> Option<String> {
     app.mrs.iter().find_map(|m| {
         m.web_url
             .split_once("/-/merge_requests/")

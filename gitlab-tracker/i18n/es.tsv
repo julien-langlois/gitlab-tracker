@@ -2022,3 +2022,37 @@ rail	Releases	Releases
 	frozen	congelado
 	frozen, with no end	congelado, sin final
 @plural	{n} waits for the thaw|{n} wait for the thaw	{n} espera el deshielo|{n} esperan el deshielo
+
+# Pipeline schedules
+	account {state}	cuenta {state}
+	every day at {time}	todos los días a las {time}
+	every hour at :{m}	cada hora a las :{m}
+	in {left}	en {left}
+	{name} · scheduled pipeline failed	{name} · pipeline programado fallido
+	Schedule #{id}	Programación n.º {id}
+	started {ago}	iniciado {ago}
+	weekdays at {time}	entre semana a las {time}
+	weekends at {time}	los fines de semana a las {time}
+	A failed run lands in the bell. A schedule whose owner is blocked no longer runs in GitLab: it is flagged.	Una ejecución fallida llega a la campana. Una programación cuyo propietario está bloqueado ya no se ejecuta en GitLab: se señala.
+	inactive	inactiva
+	Next	Próxima
+	Open the last run	Abrir la última ejecución
+	Open the schedules in GitLab	Abrir las programaciones en GitLab
+	Owner	Propietario
+	owner blocked	propietario bloqueado
+	Pipeline schedules	Pipelines programados
+	running	en curso
+	Schedule	Programación
+	When	Cuándo
+	will not run	no se ejecutará
+	{name} has failed {n} runs in a row on {project}	{name} ha fallado {n} veces seguidas en {project}
+	Last green run: {when}	Última ejecución verde: {when}
+	No green run in the last {n}	Ninguna ejecución verde en las últimas {n}
+	every {day} at {time}	cada {day} a las {time}
+	last {n} runs, oldest left · times in your zone	últimas {n} ejecuciones, la más antigua a la izquierda · horas en tu zona
+	{cron}, read in {zone}	{cron}, leído en {zone}
+	Open the CI page	Abrir la página de CI
+@plural	{n} failed run|{n} failed runs in a row	{n} ejecución fallida|{n} ejecuciones fallidas seguidas
+	account blocked	cuenta bloqueada
+	account deactivated	cuenta desactivada
+	account banned	cuenta vetada

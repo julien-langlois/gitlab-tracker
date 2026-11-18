@@ -616,7 +616,48 @@ pub struct ProjectOverview {
     pub freezes: Vec<crate::freeze::Declared>,
     /// The token may not read them (403).
     pub freezes_denied: bool,
+    /// The project's pipeline schedules, each with its latest runs.
+    pub schedules: Vec<ScheduleRecord>,
+    /// The token may not read them (403).
+    pub schedules_denied: bool,
 }
+
+/// A pipeline schedule (CI/CD › Schedules).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduleRecord {
+    pub id: u64,
+    pub description: String,
+    /// The branch or tag it runs on.
+    pub ref_name: String,
+    pub cron: String,
+    /// The zone its cron is read in (an IANA name, or `UTC`).
+    pub zone: String,
+    /// When it runs next (RFC 3339), as GitLab says.
+    pub next_run_at: Option<String>,
+    pub active: bool,
+    /// Its owner's name: the pipelines run as them.
+    pub owner: String,
+    /// The owner's account state: a blocked or deactivated owner's schedule
+    /// no longer runs.
+    pub owner_state: String,
+    /// Its latest runs, oldest first ([`SCHEDULE_RUNS`] at most).
+    pub runs: Vec<ScheduleRun>,
+}
+
+/// A pipeline a schedule started.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduleRun {
+    pub id: u64,
+    pub status: crate::models::PipelineState,
+    pub created_at: String,
+    pub web_url: String,
+}
+
+/// The runs of a schedule read: the strip of the CI page.
+pub const SCHEDULE_RUNS: usize = 14;
+
+/// Schedules whose runs are read, at most (one request each).
+const SCHEDULES_READ: usize = 20;
 
 /// A release, or a tag named like a version.
 #[derive(Debug, Clone, PartialEq)]
@@ -742,8 +783,15 @@ pub async fn fetch_project(
     };
     let releases = project_releases(&target);
     let freezes = project_freezes(&target);
-    let (deployments, pipelines, merges, (releases, releases_denied), (freezes, freezes_denied)) =
-        tokio::join!(deployments, pipelines, merges, releases, freezes);
+    let schedules = project_schedules(&target);
+    let (
+        deployments,
+        pipelines,
+        merges,
+        (releases, releases_denied),
+        (freezes, freezes_denied),
+        (schedules, schedules_denied),
+    ) = tokio::join!(deployments, pipelines, merges, releases, freezes, schedules);
     ProjectOverview {
         deployments,
         pipelines: pipelines.into_iter().flatten().collect(),
@@ -752,7 +800,103 @@ pub async fn fetch_project(
         releases_denied,
         freezes,
         freezes_denied,
+        schedules,
+        schedules_denied,
     }
+}
+
+/// The project's pipeline schedules, the active ones first, each with its
+/// latest runs; whether the token may not read them (403).
+async fn project_schedules(target: &Target) -> (Vec<ScheduleRecord>, bool) {
+    #[derive(serde::Deserialize)]
+    struct Owner {
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        state: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Raw {
+        id: u64,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(rename = "ref", default)]
+        ref_name: Option<String>,
+        cron: String,
+        #[serde(default)]
+        cron_timezone: Option<String>,
+        #[serde(default)]
+        next_run_at: Option<String>,
+        #[serde(default)]
+        active: bool,
+        #[serde(default)]
+        owner: Option<Owner>,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawRun {
+        id: u64,
+        #[serde(default)]
+        status: crate::models::PipelineState,
+        #[serde(default)]
+        created_at: Option<String>,
+        #[serde(default)]
+        web_url: Option<String>,
+    }
+    let list = match target
+        .get::<Vec<Raw>>("pipeline_schedules?per_page=100")
+        .await
+    {
+        Ok(list) => list,
+        Err(e) => return (Vec::new(), e.contains("403")),
+    };
+    let mut list = list;
+    list.sort_by_key(|s| (!s.active, s.id));
+    list.truncate(SCHEDULES_READ);
+    let runs = futures::future::join_all(list.iter().map(|s| async move {
+        let path = format!(
+            "pipeline_schedules/{}/pipelines?sort=desc&per_page={SCHEDULE_RUNS}",
+            s.id
+        );
+        target.get::<Vec<RawRun>>(&path).await
+    }))
+    .await;
+    let schedules = list
+        .into_iter()
+        .zip(runs)
+        .map(|(s, runs)| {
+            let mut runs: Vec<ScheduleRun> = runs
+                .unwrap_or_default()
+                .into_iter()
+                .map(|r| ScheduleRun {
+                    id: r.id,
+                    status: r.status,
+                    created_at: r.created_at.unwrap_or_default(),
+                    web_url: r.web_url.unwrap_or_default(),
+                })
+                .collect();
+            // Oldest first, the latest ones whatever order the server kept.
+            runs.sort_by_key(|r| r.id);
+            let skip = runs.len().saturating_sub(SCHEDULE_RUNS);
+            runs.drain(..skip);
+            let owner = s.owner.unwrap_or(Owner {
+                name: String::new(),
+                state: None,
+            });
+            ScheduleRecord {
+                id: s.id,
+                description: s.description.unwrap_or_default(),
+                ref_name: s.ref_name.unwrap_or_default(),
+                cron: s.cron,
+                zone: s.cron_timezone.unwrap_or_else(|| "UTC".into()),
+                next_run_at: s.next_run_at,
+                active: s.active,
+                owner: owner.name,
+                owner_state: owner.state.unwrap_or_else(|| "active".into()),
+                runs,
+            }
+        })
+        .collect();
+    (schedules, false)
 }
 
 /// The project's deploy freezes (Settings › CI/CD › Deploy freezes), and

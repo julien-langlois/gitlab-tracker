@@ -244,7 +244,16 @@ the same commit), failures by stage, the MRs held back by the CI and the tracked
 branches' latest pipeline. A **CI budget** adds up runner time, what failed
 pipelines spent, the wait for a runner, and the costliest jobs.
 
+**Pipeline schedules** (the nightly runs nobody watches) each show their cron in
+words and as written, with its time zone; their last 14 runs as a strip, oldest
+left (a click opens a run); when they run next; and their owner. A schedule that
+fails two runs in a row or more gets a banner at the top of the page, with its
+last green run. One that fails while the app is open lands in the bell. One
+whose owner's account is blocked is flagged: GitLab no longer runs it.
+
 ![CI / Pipelines: pass rate, jobs and their last runs, flaky jobs, CI budget](assets/desktop/ci.png)
+
+![Pipeline schedules: the failing nightly, the runs as a strip, the owner who left](assets/desktop/schedules.png)
 
 ## Team
 

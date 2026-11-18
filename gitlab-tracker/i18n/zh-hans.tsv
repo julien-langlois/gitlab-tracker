@@ -2022,3 +2022,37 @@ rail	Releases	发布
 	frozen	已冻结
 	frozen, with no end	已冻结，无结束时间
 @plural	{n} waits for the thaw|{n} wait for the thaw	{n} 个等待解冻
+
+# Pipeline schedules
+	account {state}	账号{state}
+	every day at {time}	每天 {time}
+	every hour at :{m}	每小时第 {m} 分
+	in {left}	{left}后
+	{name} · scheduled pipeline failed	{name} · 定时流水线失败
+	Schedule #{id}	计划 #{id}
+	started {ago}	{ago}开始
+	weekdays at {time}	工作日 {time}
+	weekends at {time}	周末 {time}
+	A failed run lands in the bell. A schedule whose owner is blocked no longer runs in GitLab: it is flagged.	失败的运行会出现在铃铛中。所有者被封禁的计划在 GitLab 中不再运行：会被标出。
+	inactive	未启用
+	Next	下次
+	Open the last run	打开最近一次运行
+	Open the schedules in GitLab	在 GitLab 中打开计划
+	Owner	所有者
+	owner blocked	所有者已封禁
+	Pipeline schedules	定时流水线
+	running	运行中
+	Schedule	计划
+	When	时间
+	will not run	不会运行
+	{name} has failed {n} runs in a row on {project}	{name} 在 {project} 上连续失败 {n} 次
+	Last green run: {when}	最近一次成功运行：{when}
+	No green run in the last {n}	最近 {n} 次中没有成功运行
+	every {day} at {time}	每{day} {time}
+	last {n} runs, oldest left · times in your zone	最近 {n} 次运行，最早的在左 · 时间按你的时区
+	{cron}, read in {zone}	{cron}，按 {zone} 读取
+	Open the CI page	打开 CI 页面
+@plural	{n} failed run|{n} failed runs in a row	连续 {n} 次失败
+	account blocked	账号已封禁
+	account deactivated	账号已停用
+	account banned	账号已禁止

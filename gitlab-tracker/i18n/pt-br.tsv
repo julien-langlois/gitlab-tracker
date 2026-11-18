@@ -2022,3 +2022,37 @@ rail	Releases	Releases
 	frozen	congelado
 	frozen, with no end	congelado, sem fim
 @plural	{n} waits for the thaw|{n} wait for the thaw	{n} aguarda o degelo|{n} aguardam o degelo
+
+# Pipeline schedules
+	account {state}	conta {state}
+	every day at {time}	todo dia às {time}
+	every hour at :{m}	toda hora aos :{m}
+	in {left}	em {left}
+	{name} · scheduled pipeline failed	{name} · pipeline agendado falhou
+	Schedule #{id}	Agendamento nº {id}
+	started {ago}	iniciado {ago}
+	weekdays at {time}	dias úteis às {time}
+	weekends at {time}	fins de semana às {time}
+	A failed run lands in the bell. A schedule whose owner is blocked no longer runs in GitLab: it is flagged.	Uma execução com falha chega ao sino. Um agendamento cujo dono está bloqueado não roda mais no GitLab: ele é sinalizado.
+	inactive	inativo
+	Next	Próxima
+	Open the last run	Abrir a última execução
+	Open the schedules in GitLab	Abrir os agendamentos no GitLab
+	Owner	Dono
+	owner blocked	dono bloqueado
+	Pipeline schedules	Pipelines agendados
+	running	rodando
+	Schedule	Agendamento
+	When	Quando
+	will not run	não vai rodar
+	{name} has failed {n} runs in a row on {project}	{name} falhou {n} vezes seguidas em {project}
+	Last green run: {when}	Última execução verde: {when}
+	No green run in the last {n}	Nenhuma execução verde nas últimas {n}
+	every {day} at {time}	toda {day} às {time}
+	last {n} runs, oldest left · times in your zone	últimas {n} execuções, a mais antiga à esquerda · horários no seu fuso
+	{cron}, read in {zone}	{cron}, lido em {zone}
+	Open the CI page	Abrir a página de CI
+@plural	{n} failed run|{n} failed runs in a row	{n} execução com falha|{n} execuções com falha seguidas
+	account blocked	conta bloqueada
+	account deactivated	conta desativada
+	account banned	conta banida
