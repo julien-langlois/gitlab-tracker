@@ -41,10 +41,11 @@ and pick **Read**. Leave every other resource empty.
 | Project Planning | **Label** | `labels` | Label chips and filters |
 | Project Planning | **Work Item** | `milestones`, `merge_requests/:iid/resource_milestone_events` | Milestones, milestone changes in the MR timeline |
 | Projects | **Project** | `/projects/:id` · GraphQL `Project` | The project itself (checked when it is added) |
-| Repository | **Commit** | `repository/commits`, `repository/commits/:sha`, `…/:sha/refs`, `…/:sha/diff`, `…/:sha/signature` | Branch scans, branches holding a commit, signed commits |
+| Project Features | **Release** | `releases` | Releases page: the releases, their names and notes (without it, the version tags stand in) |
+| Repository | **Commit** | `repository/commits` (also a range, `ref_name=v1.2.0..v1.3.0`), `repository/commits/:sha`, `…/:sha/refs`, `…/:sha/diff`, `…/:sha/signature` | Branch scans, branches holding a commit, signed commits, what each release holds |
 | Repository | **Merge Request** | `merge_requests`, `merge_requests/:iid`, `…/changes`, `…/commits`, `…/versions`, `…/pipelines`, `…/discussions`, `…/approvals`, `…/approval_state` · GraphQL `MergeRequest` | MRs and everything shown about them |
 | Repository | **Repository** | `repository/compare`, `repository/merge_base`, `repository/files/:file_path/raw` | Branch comparisons, `CHANGELOG.md` |
-| Repository | **Repository Tag** | `repository/tags` | Changelog and releases |
+| Repository | **Repository Tag** | `repository/tags` | Changelog, and the releases when the project has no GitLab release |
 
 All paths are under `/api/v4/projects/:id/`. GraphQL needs nothing more: GitLab
 checks each type a query reads, and the ones above cover the app's query.
@@ -82,7 +83,7 @@ read -rsp "Token: " T; echo
 G=https://gitlab.example.com/api/v4; P=<project id>
 for path in "/projects/$P" "/projects/$P/merge_requests" "/projects/$P/pipelines" \
   "/projects/$P/repository/commits" "/projects/$P/repository/tags" "/projects/$P/labels" \
-  "/projects/$P/milestones" "/projects/$P/deployments" "/user" "/projects/<another project id>"; do
+  "/projects/$P/milestones" "/projects/$P/deployments" "/projects/$P/releases" "/user" "/projects/<another project id>"; do
   printf '%-45s %s\n' "$path" "$(curl -s -o /dev/null -w '%{http_code}' \
     -H @<(printf 'PRIVATE-TOKEN: %s\n' "$T") "$G$path")"
 done

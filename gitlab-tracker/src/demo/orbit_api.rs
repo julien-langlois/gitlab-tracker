@@ -70,6 +70,33 @@ pub fn spec() -> ProjectSpec {
             },
         });
     }
+    // A release tagged on production after each weekly promotion, and a
+    // patch release for the hotfixes picked there since.
+    let versions = [
+        "v2.0.0", "v2.0.1", "v2.1.0", "v2.1.1", "v2.1.2", "v2.2.0", "v2.2.1", "v2.2.2", "v2.2.3",
+        "v2.3.0", "v2.3.1", "v2.3.2",
+    ];
+    let mut releases: Vec<ReleaseSpec> = (3..=58)
+        .rev()
+        .step_by(5)
+        .zip(versions)
+        .map(|(n, tag)| ReleaseSpec {
+            tag,
+            branch: "production",
+            at: d(n, 15, 50),
+            release: true,
+            notes: (tag == "v2.3.0").then_some(
+                "October release: public tracking page, label templates per country, webhook retries.",
+            ),
+        })
+        .collect();
+    releases.push(ReleaseSpec {
+        tag: "v2.3.3",
+        branch: "production",
+        at: d(1, 12, 5),
+        release: true,
+        notes: Some("Hotfixes: the refresh token race, migration 51 on NULL tracking numbers."),
+    });
     let mut mrs = history();
     mrs.extend(in_review());
     ProjectSpec {
@@ -137,6 +164,7 @@ pub fn spec() -> ProjectSpec {
                 by: &THOMAS,
             },
         ],
+        releases,
         branch_ci: vec![("main", Ci::Running)],
         milestones: vec![
             MilestoneSpec {

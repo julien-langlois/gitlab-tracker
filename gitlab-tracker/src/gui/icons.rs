@@ -60,6 +60,8 @@ pub enum Icon {
     Calendar,
     /// An arrow down onto a line: export, save.
     Download,
+    /// A price tag: the releases.
+    Tag,
 }
 
 /// Paints `icon` centered in `rect`.
@@ -355,6 +357,20 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 vec![p(4.5, 16.0), p(4.5, 20.0), p(19.5, 20.0), p(19.5, 16.0)],
                 stroke,
             ));
+        }
+        Icon::Tag => {
+            painter.add(Shape::closed_line(
+                vec![
+                    p(3.5, 4.5),
+                    p(3.5, 11.5),
+                    p(12.5, 20.5),
+                    p(20.0, 13.0),
+                    p(11.0, 4.0),
+                    p(4.0, 4.0),
+                ],
+                stroke,
+            ));
+            circle(p(8.0, 8.5), 1.6);
         }
         Icon::Calendar => {
             let page = Rect::from_min_max(p(3.5, 5.0), p(20.5, 20.5));

@@ -607,6 +607,43 @@ pub struct ProjectOverview {
     /// The project's merges, tracked or not: the team's pace for the
     /// milestones' forecast.
     pub merges: MergeHistory,
+    /// The releases: GitLab's when the project has some, else its tags named
+    /// like a version. Newest first.
+    pub releases: Vec<ReleaseRecord>,
+    /// The token may not read the releases (403): only the tags are shown.
+    pub releases_denied: bool,
+}
+
+/// A release, or a tag named like a version.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReleaseRecord {
+    pub tag: String,
+    /// The release's own name when it has one other than its tag.
+    pub name: Option<String>,
+    /// The tagged commit.
+    pub sha: String,
+    /// When the tagged commit was made (RFC 3339): what reached the branch
+    /// before is in the release.
+    pub committed_at: String,
+    /// When it was released (a GitLab release), else none.
+    pub released_at: Option<String>,
+    /// The release's notes (Markdown), when written in GitLab.
+    pub notes: Option<String>,
+    /// The release's page; empty for a bare tag.
+    pub web_url: String,
+    /// A GitLab release, not a bare tag.
+    pub is_release: bool,
+}
+
+/// Whether `tag` reads as a version: `v1.2`, `1.2.3`, `v2.0.0-rc.1`.
+pub fn is_version_tag(tag: &str) -> bool {
+    let bare = tag.strip_prefix(['v', 'V']).unwrap_or(tag);
+    let core = bare.split(['-', '+']).next().unwrap_or_default();
+    let parts: Vec<&str> = core.split('.').collect();
+    (2..=4).contains(&parts.len())
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// When the project's MRs merged over the last [`MERGE_HISTORY_DAYS`] days,
@@ -699,12 +736,108 @@ pub async fn fetch_project(
         }
         updated
     };
-    let (deployments, pipelines, merges) = tokio::join!(deployments, pipelines, merges);
+    let releases = project_releases(&target);
+    let (deployments, pipelines, merges, (releases, releases_denied)) =
+        tokio::join!(deployments, pipelines, merges, releases);
     ProjectOverview {
         deployments,
         pipelines: pipelines.into_iter().flatten().collect(),
         merges,
+        releases,
+        releases_denied,
     }
+}
+
+/// How many releases and tags are read: the newest, enough for a cadence.
+const RELEASES_READ: usize = 50;
+
+/// The project's releases, newest first: its GitLab releases when it has
+/// some, else its tags named like a version. Whether the releases could not
+/// be read for want of the permission (the tags are used then).
+async fn project_releases(target: &Target) -> (Vec<ReleaseRecord>, bool) {
+    #[derive(serde::Deserialize)]
+    struct RawRelease {
+        tag_name: String,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        description: Option<String>,
+        #[serde(default)]
+        released_at: Option<String>,
+        #[serde(default)]
+        upcoming_release: bool,
+        commit: Option<RawCommit>,
+        #[serde(rename = "_links", default)]
+        links: Option<RawLinks>,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawCommit {
+        id: String,
+        #[serde(default)]
+        committed_date: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawLinks {
+        #[serde(rename = "self", default)]
+        this: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct RawTag {
+        name: String,
+        commit: RawCommit,
+    }
+    let releases = target
+        .get::<Vec<RawRelease>>(&format!(
+            "releases?order_by=released_at&sort=desc&per_page={RELEASES_READ}"
+        ))
+        .await;
+    let denied = matches!(&releases, Err(e) if e.contains("403"));
+    let list: Vec<ReleaseRecord> = releases
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| !r.upcoming_release)
+        .filter_map(|r| {
+            let commit = r.commit?;
+            Some(ReleaseRecord {
+                name: r.name.filter(|n| !n.trim().is_empty() && *n != r.tag_name),
+                sha: commit.id,
+                committed_at: commit.committed_date.unwrap_or_default(),
+                released_at: r.released_at,
+                notes: r.description.filter(|d| !d.trim().is_empty()),
+                web_url: r.links.and_then(|l| l.this).unwrap_or_default(),
+                is_release: true,
+                tag: r.tag_name,
+            })
+        })
+        .collect();
+    if !list.is_empty() {
+        return (list, denied);
+    }
+    let Ok(tags) = target
+        .get::<Vec<RawTag>>(&format!(
+            "repository/tags?order_by=updated&sort=desc&per_page={RELEASES_READ}"
+        ))
+        .await
+    else {
+        return (Vec::new(), denied);
+    };
+    let mut list: Vec<ReleaseRecord> = tags
+        .into_iter()
+        .filter(|t| is_version_tag(&t.name))
+        .map(|t| ReleaseRecord {
+            // The page knows the project's address: it links the tag.
+            web_url: String::new(),
+            tag: t.name,
+            name: None,
+            sha: t.commit.id,
+            committed_at: t.commit.committed_date.unwrap_or_default(),
+            released_at: None,
+            notes: None,
+            is_release: false,
+        })
+        .collect();
+    list.sort_by(|a, b| b.committed_at.cmp(&a.committed_at));
+    (list, denied)
 }
 
 /// `known` brought up to date: the MRs updated since it was complete (with
@@ -884,6 +1017,30 @@ async fn branch_pipeline(target: &Target, branch: &str) -> Option<BranchPipeline
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_tags_read_as_versions() {
+        for tag in [
+            "v1.2.0",
+            "1.2.3",
+            "V2.0",
+            "v3.0.0-rc.1",
+            "1.2.3.4",
+            "2.1.0+build5",
+        ] {
+            assert!(is_version_tag(tag), "{tag}");
+        }
+        for tag in [
+            "deploy-2026",
+            "v1",
+            "release",
+            "v1.x",
+            "1..2",
+            "staging-1.2",
+        ] {
+            assert!(!is_version_tag(tag), "{tag}");
+        }
+    }
     use crate::gitlab::FileDiff;
 
     #[test]

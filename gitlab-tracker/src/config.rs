@@ -177,6 +177,10 @@ pub struct AppConfig {
     /// `projects.toml`; never in the legacy config file.
     #[serde(skip, default = "default_hotfix_branches")]
     pub hotfix_branches: String,
+    /// Each line of the draft release notes starts with the MR's ticket,
+    /// linked. Per project, in `projects.toml`.
+    #[serde(skip)]
+    pub release_note_tickets: bool,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     #[serde(default = "default_show_cockpit")]
     pub show_cockpit: bool,
@@ -289,6 +293,7 @@ impl Default for AppConfig {
             activity_recent_days: default_activity_recent_days(),
             review_reminder_hours: default_review_reminder_hours(),
             hotfix_branches: default_hotfix_branches(),
+            release_note_tickets: false,
             show_cockpit: default_show_cockpit(),
             hide_merged: false,
             cockpit_thresholds: CockpitThresholds::default(),

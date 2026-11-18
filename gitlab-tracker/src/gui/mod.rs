@@ -35,6 +35,7 @@ mod person;
 mod prefs;
 mod promote;
 mod rail_badges;
+mod releases;
 mod setup;
 mod shell;
 mod sidebar;
@@ -301,6 +302,8 @@ enum Page {
     Overlaps,
     /// How fast changes reach production: DORA, where the time goes.
     Delivery,
+    /// What shipped in each release, and what the next one will hold.
+    Releases,
     /// MRs opened on another MR's branch.
     Stacks,
 }
@@ -446,6 +449,8 @@ struct GuiApp {
     changelog: changelog::State,
     overlaps: overlaps::State,
     delivery: delivery::State,
+    /// The Releases page: the release picked, the ranges of commits read.
+    releases: releases::State,
     stacks: stacks::State,
     /// The tracker's statuses (the board's columns), once fetched, and the
     /// fetch in flight.
@@ -576,6 +581,7 @@ impl GuiApp {
             changelog: changelog::State::default(),
             overlaps: overlaps::State::default(),
             delivery: delivery::State::default(),
+            releases: releases::State::default(),
             stacks: stacks::State::default(),
             statuses,
             statuses_rx,
@@ -1711,6 +1717,7 @@ impl eframe::App for GuiApp {
                 Ok("milestones") => self.open_page(Page::Milestones),
                 Ok("overlaps") => self.open_page(Page::Overlaps),
                 Ok("delivery") => self.open_page(Page::Delivery),
+                Ok("releases") => self.open_page(Page::Releases),
                 Ok("stacks") => self.open_page(Page::Stacks),
                 // The bell's panel stays open (see `toasts`): the demo fills it.
                 Ok("bell") => {}

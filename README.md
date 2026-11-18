@@ -18,6 +18,7 @@
 * ☀️ **Today** — your reviews, your MRs that need you, and your stand-up in one click.
 * 🚀 **Promote & Environments** — what is ready to go to the next branch, and the commands to bring it there.
 * 📅 **Milestones** — will the release make its date? A forecast from your team's real pace.
+* 🏷️ **Releases** — what each release holds, read from git, what waits for the next one, its version and draft notes.
 * 📈 **Delivery, CI, Team** — DORA measures, flaky jobs and CI budget, review load and who reviews whom.
 * 🧭 **Journal, Overlaps, Stacked MRs** — what happened, MRs about to conflict, chains of MRs out of step.
 * ✍️ **Signed commits** *(optional)* — warns about unsigned commits, forgives GitLab rebases.
@@ -76,7 +77,7 @@ The OS keyring and desktop notifications need D-Bus headers (macOS and Windows n
 
 `gitlab-tracker` only reads. Create a [fine-grained personal access token](https://docs.gitlab.com/auth/tokens/fine_grained_access_tokens/) (GitLab 19.2+) limited to the projects you track, and give **Read** — nothing else — to:
 
-* **Group and project** tab: Deployment, Job, Pipeline, Label, Work Item, Project, Commit, Merge Request, Repository, Repository Tag.
+* **Group and project** tab: Deployment, Job, Pipeline, Label, Work Item, Project, Release, Commit, Merge Request, Repository, Repository Tag.
 * **User** tab *(optional)*: User — or set `gitlab_username` in `projects.toml` instead.
 
 Step-by-step creation, what each permission is used for, a script to check the token, replacing it and older GitLab versions: **[docs/gitlab-token.md](docs/gitlab-token.md)**.

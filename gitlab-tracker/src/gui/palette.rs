@@ -188,6 +188,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
         (Page::Milestones, tl("Milestones"), Icon::Flag),
         (Page::Overlaps, tl("Overlaps"), Icon::Overlap),
         (Page::Delivery, tl("Delivery"), Icon::Gauge),
+        (Page::Releases, tl("Releases"), Icon::Tag),
         (Page::Stacks, tl("Stacked MRs"), Icon::Stack),
     ]);
     for (page, name, icon) in pages {

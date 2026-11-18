@@ -76,6 +76,10 @@ pub struct ProjectEntry {
     /// ```
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hotfix_branches: Option<String>,
+    /// Each line of the draft release notes starts with the MR's ticket,
+    /// linked (`[Feature #123](…) - Title (!42)`). Absent: off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_note_tickets: Option<bool>,
     /// Controls whether the operational cockpit pane is displayed when enough vertical space is available.
     /// Defaults to `true` when omitted.
     ///

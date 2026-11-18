@@ -100,6 +100,9 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         complexity_profile: spec.profile.clone(),
         // The demo's team signs its commits: the check shows what it reports.
         signed_commits: Some(crate::signatures::Policy::default()),
+        // The draft release notes name each MR's ticket, as a team on a
+        // tracker would set it.
+        release_note_tickets: true,
         ..config
     };
     let project = crate::storage::ProjectEntry {
@@ -115,6 +118,7 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         activity_recent_days: Some(2),
         show_cockpit: Some(true),
         gitlab_username: Some(orbit_api::ME.into()),
+        release_note_tickets: Some(true),
         signed_commits: Some(crate::storage::SignedCommitsConfig {
             enforce: true,
             ..Default::default()
@@ -305,6 +309,18 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
     world(&app.project_id)
         .map(World::overview)
         .unwrap_or_default()
+}
+
+/// The commits of a range of the Releases page (`v2.3.2..v2.3.3`), and
+/// whether there were more (never, in the demo).
+#[cfg(feature = "gui")]
+pub fn demo_range(app: &App, range: &str) -> (Vec<crate::changelog::ApiCommit>, bool) {
+    (
+        world(&app.project_id)
+            .map(|w| w.range_commits(range))
+            .unwrap_or_default(),
+        false,
+    )
 }
 
 /// The files an MR changes, with their patches.

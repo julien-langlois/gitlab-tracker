@@ -279,6 +279,33 @@ pub async fn generate(
     })
 }
 
+/// Pages of 100 commits read at most for a range of the Releases page.
+const RANGE_PAGES: usize = 3;
+
+/// The commits of `range` (`v1.2.0..v1.3.0`, `v1.3.0..main`), newest first,
+/// as git lists them; whether there were more than were read.
+pub async fn range_commits(
+    target: ProjectTarget,
+    range: String,
+) -> Result<(Vec<ApiCommit>, bool), String> {
+    let api = Api(&target);
+    let mut commits: Vec<ApiCommit> = Vec::new();
+    for page in 1..=RANGE_PAGES {
+        let batch: Vec<ApiCommit> = api
+            .json(&format!(
+                "/repository/commits?ref_name={}&per_page=100&page={page}",
+                urlencoding::encode(&range)
+            ))
+            .await?;
+        let full = batch.len() == 100;
+        commits.extend(batch);
+        if !full {
+            return Ok((commits, false));
+        }
+    }
+    Ok((commits, true))
+}
+
 /// The config, offline (no remote is asked from here) and without its header.
 pub fn parse_config(text: &str) -> Result<Config, String> {
     let mut config: Config = text

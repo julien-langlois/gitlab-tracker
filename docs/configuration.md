@@ -62,6 +62,11 @@ show_cockpit = true
 # Default: "hotfix/*" (git flow); "" counts the label only. Editable with [,].
 hotfix_branches = "hotfix/*"
 
+# Start each line of the Releases page's draft notes with the MR's ticket, linked:
+# "- [Feature #123](https://…/issues/123) - Title (!42)". Needs a ticket tracker;
+# MRs without a ticket keep the plain line. Default: false. Editable with [,].
+release_note_tickets = false
+
 # Hide merged MRs from the table to focus on what is left to do. They stay tracked
 # (refreshed, notified, recorded in stats). Default: false. Toggle with [m] or [,].
 hide_merged = false

@@ -392,7 +392,34 @@ fn hotfix_branches_setting() -> ProjectSettingDef {
     }
 }
 
+fn release_note_tickets_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "releases.ticket_links",
+        section: "Releases",
+        label: "Tickets in release notes",
+        help: "Each line of the draft release notes starts with the MR's ticket, linked: \
+               [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a \
+               ticket keep the plain line.",
+        priority: 310,
+        kind: ProjectSettingKind::Bool,
+        default_value: ProjectSettingValue::Bool(false),
+        read: |project| read_bool(project, "release_note_tickets", false),
+        write: |project, value| {
+            // Off is the default: not written.
+            match value {
+                ProjectSettingValue::Bool(true) => {
+                    project.insert("release_note_tickets".into(), toml::Value::Boolean(true));
+                }
+                _ => {
+                    project.remove("release_note_tickets");
+                }
+            }
+        },
+    }
+}
+
 inventory::submit!(ProjectSettingFactory(hotfix_branches_setting));
+inventory::submit!(ProjectSettingFactory(release_note_tickets_setting));
 inventory::submit!(ProjectSettingFactory(signed_enforce_setting));
 inventory::submit!(ProjectSettingFactory(signed_rebase_setting));
 inventory::submit!(ProjectSettingFactory(signed_patch_setting));

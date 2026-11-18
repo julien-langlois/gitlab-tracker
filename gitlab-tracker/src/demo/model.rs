@@ -384,6 +384,17 @@ pub struct Direct {
     pub by: &'static Person,
 }
 
+/// A version tag on a branch, and the GitLab release made of it when
+/// `release` (with its notes).
+#[derive(Debug, Clone)]
+pub struct ReleaseSpec {
+    pub tag: &'static str,
+    pub branch: &'static str,
+    pub at: When,
+    pub release: bool,
+    pub notes: Option<&'static str>,
+}
+
 #[derive(Debug, Clone)]
 pub struct MilestoneSpec {
     pub title: &'static str,
@@ -440,6 +451,8 @@ pub struct ProjectSpec {
     pub syncs: Vec<Sync>,
     pub copies: Vec<CopySpec>,
     pub directs: Vec<Direct>,
+    /// The version tags, oldest first.
+    pub releases: Vec<ReleaseSpec>,
     /// The latest pipeline of these branches, when it does not pass.
     pub branch_ci: Vec<(&'static str, Ci)>,
     pub milestones: Vec<MilestoneSpec>,

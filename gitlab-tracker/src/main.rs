@@ -166,6 +166,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     if let Some(patterns) = &project.hotfix_branches {
         config.hotfix_branches = patterns.clone();
     }
+    if let Some(tickets) = project.release_note_tickets {
+        config.release_note_tickets = tickets;
+    }
     if let Some(show_cockpit) = project.show_cockpit {
         config.show_cockpit = show_cockpit;
     }

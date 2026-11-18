@@ -70,6 +70,7 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
         Page::Milestones => super::milestones::screen(g, ui, &sizes),
         Page::Overlaps => super::overlaps::screen(g, ui, &sizes),
         Page::Delivery => super::delivery::screen(g, ui, &sizes),
+        Page::Releases => super::releases::screen(g, ui, &sizes),
         Page::Stacks => super::stacks::screen(g, ui, &sizes),
         Page::MergeRequests | Page::Tracker => {
             if let (Page::MergeRequests, Some(width)) = (page, sizes.views) {
@@ -838,6 +839,7 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         Page::Milestones,
                         Page::Overlaps,
                         Page::Delivery,
+                        Page::Releases,
                         Page::Stacks,
                     ]
                     .into_iter()
@@ -926,6 +928,12 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         Icon::Gauge,
                         crate::i18n::tc("rail", "Delivery"),
                         tl("Delivery: DORA, and where the time goes"),
+                    ),
+                    (
+                        Page::Releases,
+                        Icon::Tag,
+                        crate::i18n::tc("rail", "Releases"),
+                        tl("Releases: what shipped, and what the next one will hold"),
                     ),
                     (
                         Page::Stacks,
@@ -1093,6 +1101,7 @@ fn items_label(page: Page) -> &'static str {
         Page::Milestones => tl("Milestones"),
         Page::Overlaps => tl("Overlaps"),
         Page::Delivery => tl("Delivery"),
+        Page::Releases => tl("Releases"),
         Page::Stacks => tl("Stacked MRs"),
     }
 }

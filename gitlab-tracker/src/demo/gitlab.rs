@@ -3,11 +3,11 @@
 //! it lacks; its patches; a job's log; the project's deployments and branch
 //! pipelines.
 
-use super::clock::iso;
+use super::clock::{clock, iso, sha};
 use super::engine::{DeployRec, JobRec, Owner, PipeRec, World};
 use crate::gitlab_detail::{
     BehindCommit, BranchPipeline, ConflictFile, Deployment, DeploymentRecord, MergeHistory, Note,
-    Overview, PageData, ProjectOverview, Rule, Thread, User,
+    Overview, PageData, ProjectOverview, ReleaseRecord, Rule, Thread, User,
 };
 use crate::models::{GitlabMrState, MergeabilityStatus};
 
@@ -293,6 +293,8 @@ impl World {
                 .map(Self::deployment_record)
                 .collect(),
             pipelines,
+            releases: self.releases(),
+            releases_denied: false,
             merges: MergeHistory {
                 merged: self
                     .mrs
@@ -302,6 +304,132 @@ impl World {
                 read_at: Some(self.now.to_rfc3339()),
             },
         }
+    }
+
+    /// The version tags made so far, newest first: each on the head its
+    /// branch had then.
+    fn releases(&self) -> Vec<ReleaseRecord> {
+        self.spec
+            .releases
+            .iter()
+            .rev()
+            .filter_map(|r| {
+                let at = clock().at(r.at);
+                if at > self.now {
+                    return None;
+                }
+                let head = self
+                    .logs
+                    .get(r.branch)
+                    .and_then(|log| log.iter().rev().find(|e| e.at <= at))
+                    .map_or_else(|| sha(&[self.spec.id, r.tag]), |e| e.sha.clone());
+                Some(ReleaseRecord {
+                    tag: r.tag.into(),
+                    name: None,
+                    sha: head,
+                    committed_at: iso(at),
+                    released_at: r.release.then(|| iso(at)),
+                    notes: r.notes.map(str::to_string),
+                    web_url: if r.release {
+                        format!(
+                            "https://gitlab.orbit-logistics.dev/{}/-/releases/{}",
+                            self.spec.path, r.tag
+                        )
+                    } else {
+                        String::new()
+                    },
+                    is_release: r.release,
+                })
+            })
+            .collect()
+    }
+
+    /// When each MR reached `branch` (by index), up to `until`: merged
+    /// there, promoted or copied.
+    fn on_branch(
+        &self,
+        branch: &str,
+        until: chrono::DateTime<chrono::Utc>,
+    ) -> Vec<(usize, chrono::DateTime<chrono::Utc>)> {
+        let mut list: Vec<(usize, chrono::DateTime<chrono::Utc>)> = self
+            .present
+            .get(branch)
+            .map(|m| m.iter().map(|(i, at)| (*i, *at)).collect())
+            .unwrap_or_default();
+        for a in self.arrivals.iter().filter(|a| a.branch == branch) {
+            if !list.iter().any(|(i, _)| *i == a.mr) {
+                list.push((a.mr, a.at));
+            }
+        }
+        list.retain(|(_, at)| *at <= until);
+        list
+    }
+
+    /// Where a ref of a range stands: a version tag (its branch then) or a
+    /// tracked branch (now).
+    fn ref_point(&self, reference: &str) -> Option<(&'static str, chrono::DateTime<chrono::Utc>)> {
+        if let Some(r) = self.spec.releases.iter().find(|r| r.tag == reference) {
+            return Some((r.branch, clock().at(r.at).min(self.now)));
+        }
+        let branch = self.spec.branches.iter().find(|b| **b == reference)?;
+        Some((*branch, self.now))
+    }
+
+    /// The commits of `range` (`from..to`), newest first, as GitLab lists
+    /// them: a merge commit per MR on `to` and not on `from`, and the
+    /// commits pushed straight to `to`'s branch after `from`.
+    pub fn range_commits(&self, range: &str) -> Vec<crate::changelog::ApiCommit> {
+        let Some((from, to)) = range.split_once("..") else {
+            return Vec::new();
+        };
+        let (Some((from_branch, from_at)), Some((to_branch, to_at))) =
+            (self.ref_point(from), self.ref_point(to))
+        else {
+            return Vec::new();
+        };
+        let before: std::collections::HashSet<usize> = self
+            .on_branch(from_branch, from_at)
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect();
+        let mut list: Vec<(chrono::DateTime<chrono::Utc>, crate::changelog::ApiCommit)> = self
+            .on_branch(to_branch, to_at)
+            .into_iter()
+            .filter(|(i, _)| !before.contains(i))
+            .map(|(i, at)| {
+                let mr = &self.mrs[i];
+                let message = format!(
+                    "Merge branch '{}' into '{}'\n\n{}\n\nSee merge request {}!{}",
+                    mr.spec.source, mr.spec.target, mr.spec.title, self.spec.path, mr.iid
+                );
+                (
+                    at,
+                    crate::changelog::ApiCommit {
+                        id: mr.merge_sha.clone(),
+                        message,
+                        committed_date: Some(iso(at)),
+                        parent_ids: vec![String::new(), String::new()],
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
+        for direct in self.spec.directs.iter().filter(|c| c.branch == to_branch) {
+            let at = clock().at(direct.at);
+            if at > from_at && at <= to_at {
+                list.push((
+                    at,
+                    crate::changelog::ApiCommit {
+                        id: sha(&[self.spec.id, direct.title]),
+                        message: direct.title.to_string(),
+                        committed_date: Some(iso(at)),
+                        ..Default::default()
+                    },
+                ));
+            }
+        }
+        list.sort_by_key(|c| std::cmp::Reverse(c.0));
+        list.into_iter().map(|(_, c)| c).collect()
     }
 
     pub fn job(&self, id: u64) -> Option<(&PipeRec, &JobRec)> {

@@ -78,6 +78,17 @@ pub fn spec() -> ProjectSpec {
             title: "chore(release): Version 3.8.0 (380)",
             by: &LEA,
         }],
+        // Tags only, no GitLab release: the store build is the release.
+        releases: [("3.6.0", d(24, 14, 0)), ("3.7.0", d(10, 14, 30))]
+            .into_iter()
+            .map(|(tag, at)| ReleaseSpec {
+                tag,
+                branch: "master",
+                at,
+                release: false,
+                notes: None,
+            })
+            .collect(),
         branch_ci: Vec::new(),
         milestones: vec![
             MilestoneSpec {

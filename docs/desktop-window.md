@@ -15,6 +15,7 @@ projects.
 - [Environments](#environments)
 - [Milestones](#milestones)
 - [Delivery](#delivery)
+- [Releases](#releases)
 - [CI / Pipelines](#ci--pipelines)
 - [Team](#team)
 - [Journal](#journal)
@@ -186,6 +187,38 @@ names the revert under **Related MRs**, both ways.
 forecasts, in the clipboard as Markdown.
 
 ![Delivery: DORA measures, where the time goes, review rounds](assets/desktop/delivery.png)
+
+## Releases
+
+What shipped, and what the next release will hold. The releases are the
+project's GitLab releases, else its tags named like a version (`v1.2.0`,
+`3.8.0`).
+
+What a release holds is read from git, not guessed from dates: the commits
+between it and the release before (`v2.3.2..v2.3.3`), each tied to its MR by its
+merge commit (`See merge request !N`), its SHA, or its `cherry picked from`
+trailer. MRs the app does not track are listed too, by the title in their merge
+commit. **Unreleased** is the same range from the latest release to the
+integration branch (`main`, `develop`…), each MR with the furthest tracked branch
+it reached; a fix already picked into a release is not listed again.
+
+The figures give the latest release and where it was deployed, how many MRs wait
+and for how long (in amber when longer than twice the usual cadence), the median
+time between releases over 90 days, and the **next version**: major for a
+breaking change (`feat!:`, `BREAKING CHANGE`), minor for a feature, patch
+otherwise, from the MR titles. **Draft release notes** groups the unreleased MRs
+by kind, to copy as Markdown and paste in GitLab when you tag. With a ticket
+tracker, the **Tickets in release notes** setting (per project) starts each line
+with the MR's ticket, linked: `- [Feature #1234](…) - New checkout (!42)`.
+**Generate
+changelog** runs the project's git-cliff config instead, when it has one. Pick a
+release, in the list or the history, to see what it holds, where it was deployed
+and its notes in GitLab.
+
+Reading the releases needs **Release › Read** on the token; without it the
+version tags stand in (see [GitLab token](gitlab-token.md)).
+
+![Releases: the latest release, what waits, the draft notes, the history](assets/desktop/releases.png)
 
 ## CI / Pipelines
 

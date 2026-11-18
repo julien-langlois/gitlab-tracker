@@ -1924,3 +1924,68 @@ date	Closed	已关闭
 	to fix first	需先修复
 	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	先合并已就绪的，然后是评审中、草稿和受阻的；每组内先合并改动最小的：之后的每次变基都很小。
 	Merge them in this order; fix the ones in red before their turn:	按此顺序合并；红色的需在轮到它们之前修复：
+
+# Releases page
+	Breaking changes	不兼容的变更
+	Cadence	节奏
+	Copy Markdown	复制 Markdown
+	Copy its notes	复制其说明
+	Deployed to	已部署到
+	Draft release notes	发布说明草稿
+	Features	新功能
+	Fixes	修复
+	GitLab release	GitLab 发布
+	Kind	类型
+	Latest release	最新发布
+	Next version	下一个版本
+	No GitLab release, and no tag named like a version (v1.2.0, 3.8.0). The page fills in with the first one.	没有 GitLab 发布，也没有以版本号命名的标签（v1.2.0、3.8.0）。出现第一个后本页即会填充。
+	No MR: commits only.	没有 MR：只有提交。
+	No release yet	尚无发布
+	Not tracked by the app	未被应用跟踪
+	Notes in GitLab	GitLab 中的说明
+	Nothing merged since the latest release.	自最新发布以来没有合并任何内容。
+	Other changes	其他变更
+	Paste it in GitLab when you tag.	打标签时粘贴到 GitLab。
+	Pick a release to see what it holds, where it went and its notes.	选择一个发布，查看其内容、去向和说明。
+	Reading the releases…	正在读取发布…
+	Released	发布于
+	Releases: what shipped, and what the next one will hold	发布：已交付的内容，以及下一个发布将包含的内容
+	Tag	标签
+	The commits could not be read: {error}	无法读取提交：{error}
+	The notes write themselves once an MR is merged.	一旦有 MR 合并，说明会自动生成。
+	The oldest release read: what came before it is not known.	读取到的最早发布：之前的内容未知。
+	The token cannot read the GitLab releases: the version tags stand in. Give it Release › Read for the releases' names and notes.	令牌无法读取 GitLab 发布：改用版本标签。为其授予 Release › Read 以获取发布的名称和说明。
+	Waiting for a release	等待发布
+	What a release holds is read from git: the commits since the release before, each tied to its MR. Unreleased: merged into {branch} since the latest release.	发布的内容从 git 读取：自上一个发布以来的提交，每个都关联到其 MR。未发布：自最新发布以来合并到 {branch} 的内容。
+	What it holds	包含内容
+	What shipped, and what the next release will hold	已交付的内容，以及下一个发布将包含的内容
+	breaking	不兼容
+	feat	功能
+	fix	修复
+	fixes and other changes only	仅修复和其他变更
+	major	主版本
+	median, last 90 days	中位数，最近 90 天
+	merged into {branch} since {tag}	自 {tag} 以来合并到 {branch}
+	minor	次版本
+	more commits than were read	提交多于已读取的数量
+	no MR	无 MR
+	not read	未读取
+	nothing merged into {branch} since	此后没有合并到 {branch}
+	nothing to release	没有可发布的内容
+	on {env}	在 {env}
+	one every {time}	每 {time} 一次
+	other	其他
+	patch	修订版本
+	reading the commits…	正在读取提交…
+	the commits could not be read	无法读取提交
+	the oldest merged {time} ago	最早的在 {time} 前合并
+@plural	and {n} more|and {n} more	还有 {n} 个
+@plural	and {n} older|and {n} older	还有 {n} 个更早的
+@plural	{n} breaking change|{n} breaking changes	{n} 个不兼容变更
+@plural	{n} commit outside an MR|{n} commits outside an MR	{n} 个 MR 之外的提交
+@plural	{n} feature|{n} features	{n} 个新功能
+@plural	{n} release in 90 days|{n} releases in 90 days	90 天内 {n} 个发布
+rail	Releases	发布
+	{bump}: {why}	{bump}：{why}
+	Tickets in release notes	在发布说明中显示工单
+	Each line of the draft release notes starts with the MR's ticket, linked: [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a ticket keep the plain line.	发布说明草稿的每一行都以该 MR 的工单开头，并带链接：[Feature #123](…) - 标题 (!42)。需要工单跟踪器；没有工单的 MR 保持普通行。

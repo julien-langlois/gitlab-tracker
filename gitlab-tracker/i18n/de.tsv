@@ -1924,3 +1924,68 @@ date	Closed	Geschlossen
 	to fix first	zuerst zu beheben
 	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	Zuerst die bereiten, dann die im Review, die Entwürfe und die blockierten; in jeder Gruppe die kleinste Änderung zuerst: jedes folgende Rebase bleibt klein.
 	Merge them in this order; fix the ones in red before their turn:	Mergen Sie sie in dieser Reihenfolge; beheben Sie die roten vor ihrer Runde:
+
+# Releases page
+	Breaking changes	Inkompatible Änderungen
+	Cadence	Takt
+	Copy Markdown	Markdown kopieren
+	Copy its notes	Notizen kopieren
+	Deployed to	Bereitgestellt auf
+	Draft release notes	Entwurf der Release Notes
+	Features	Neue Funktionen
+	Fixes	Fehlerbehebungen
+	GitLab release	GitLab-Release
+	Kind	Art
+	Latest release	Letztes Release
+	Next version	Nächste Version
+	No GitLab release, and no tag named like a version (v1.2.0, 3.8.0). The page fills in with the first one.	Kein GitLab-Release und kein Tag, der wie eine Version heißt (v1.2.0, 3.8.0). Die Seite füllt sich mit dem ersten.
+	No MR: commits only.	Kein MR: nur Commits.
+	No release yet	Noch kein Release
+	Not tracked by the app	Nicht von der App verfolgt
+	Notes in GitLab	Notizen in GitLab
+	Nothing merged since the latest release.	Seit dem letzten Release wurde nichts gemergt.
+	Other changes	Weitere Änderungen
+	Paste it in GitLab when you tag.	Beim Taggen in GitLab einfügen.
+	Pick a release to see what it holds, where it went and its notes.	Wähle ein Release, um zu sehen, was es enthält, wohin es ging und seine Notizen.
+	Reading the releases…	Releases werden gelesen…
+	Released	Veröffentlicht
+	Releases: what shipped, and what the next one will hold	Releases: was ausgeliefert wurde und was das nächste enthält
+	Tag	Tag
+	The commits could not be read: {error}	Die Commits konnten nicht gelesen werden: {error}
+	The notes write themselves once an MR is merged.	Die Notizen schreiben sich, sobald ein MR gemergt ist.
+	The oldest release read: what came before it is not known.	Das älteste gelesene Release: was davor kam, ist nicht bekannt.
+	The token cannot read the GitLab releases: the version tags stand in. Give it Release › Read for the releases' names and notes.	Das Token kann die GitLab-Releases nicht lesen: die Versions-Tags ersetzen sie. Gib ihm Release › Read für Namen und Notizen der Releases.
+	Waiting for a release	Wartet auf ein Release
+	What a release holds is read from git: the commits since the release before, each tied to its MR. Unreleased: merged into {branch} since the latest release.	Der Inhalt eines Releases wird aus git gelesen: die Commits seit dem vorherigen Release, jeder seinem MR zugeordnet. Unveröffentlicht: seit dem letzten Release in {branch} gemergt.
+	What it holds	Was es enthält
+	What shipped, and what the next release will hold	Was ausgeliefert wurde und was das nächste Release enthält
+	breaking	inkompatibel
+	feat	feat
+	fix	fix
+	fixes and other changes only	nur Fehlerbehebungen und andere Änderungen
+	major	Major
+	median, last 90 days	Median, letzte 90 Tage
+	merged into {branch} since {tag}	seit {tag} in {branch} gemergt
+	minor	Minor
+	more commits than were read	mehr Commits als gelesen
+	no MR	kein MR
+	not read	nicht gelesen
+	nothing merged into {branch} since	seitdem nichts in {branch} gemergt
+	nothing to release	nichts zu veröffentlichen
+	on {env}	auf {env}
+	one every {time}	eines alle {time}
+	other	sonstiges
+	patch	Patch
+	reading the commits…	Commits werden gelesen…
+	the commits could not be read	die Commits konnten nicht gelesen werden
+	the oldest merged {time} ago	die älteste vor {time} gemergt
+@plural	and {n} more|and {n} more	und {n} weiterer|und {n} weitere
+@plural	and {n} older|and {n} older	und {n} älteres|und {n} ältere
+@plural	{n} breaking change|{n} breaking changes	{n} inkompatible Änderung|{n} inkompatible Änderungen
+@plural	{n} commit outside an MR|{n} commits outside an MR	{n} Commit außerhalb eines MR|{n} Commits außerhalb eines MR
+@plural	{n} feature|{n} features	{n} neue Funktion|{n} neue Funktionen
+@plural	{n} release in 90 days|{n} releases in 90 days	{n} Release in 90 Tagen|{n} Releases in 90 Tagen
+rail	Releases	Releases
+	{bump}: {why}	{bump}: {why}
+	Tickets in release notes	Tickets in den Release Notes
+	Each line of the draft release notes starts with the MR's ticket, linked: [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a ticket keep the plain line.	Jede Zeile des Entwurfs der Release Notes beginnt mit dem Ticket des MR, verlinkt: [Feature #123](…) - Titel (!42). Braucht einen Ticket-Tracker; MRs ohne Ticket behalten die einfache Zeile.

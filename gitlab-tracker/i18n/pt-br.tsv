@@ -1924,3 +1924,68 @@ date	Closed	Fechada
 	to fix first	a corrigir primeiro
 	Ready ones first, then in review, drafts and the stuck ones; the smallest change first in each: every rebase after it stays small.	Primeiro os prontos, depois em revisão, rascunhos e bloqueados; em cada grupo, a menor alteração primeiro: cada rebase seguinte continua pequeno.
 	Merge them in this order; fix the ones in red before their turn:	Mescle-os nesta ordem; corrija os vermelhos antes da vez deles:
+
+# Releases page
+	Breaking changes	Mudanças incompatíveis
+	Cadence	Ritmo
+	Copy Markdown	Copiar Markdown
+	Copy its notes	Copiar as notas
+	Deployed to	Implantada em
+	Draft release notes	Rascunho das notas de versão
+	Features	Funcionalidades
+	Fixes	Correções
+	GitLab release	Release do GitLab
+	Kind	Tipo
+	Latest release	Última versão
+	Next version	Próxima versão
+	No GitLab release, and no tag named like a version (v1.2.0, 3.8.0). The page fills in with the first one.	Nenhuma release do GitLab e nenhuma tag com nome de versão (v1.2.0, 3.8.0). A página se preenche com a primeira.
+	No MR: commits only.	Nenhuma MR: só commits.
+	No release yet	Nenhuma versão ainda
+	Not tracked by the app	Não acompanhada pelo app
+	Notes in GitLab	Notas no GitLab
+	Nothing merged since the latest release.	Nada mesclado desde a última versão.
+	Other changes	Outras mudanças
+	Paste it in GitLab when you tag.	Cole no GitLab ao criar a tag.
+	Pick a release to see what it holds, where it went and its notes.	Escolha uma versão para ver o que ela contém, para onde foi e suas notas.
+	Reading the releases…	Lendo as versões…
+	Released	Publicada
+	Releases: what shipped, and what the next one will hold	Versões: o que saiu e o que a próxima terá
+	Tag	Tag
+	The commits could not be read: {error}	Não foi possível ler os commits: {error}
+	The notes write themselves once an MR is merged.	As notas se escrevem sozinhas assim que uma MR é mesclada.
+	The oldest release read: what came before it is not known.	A versão mais antiga lida: o que veio antes não é conhecido.
+	The token cannot read the GitLab releases: the version tags stand in. Give it Release › Read for the releases' names and notes.	O token não pode ler as releases do GitLab: as tags de versão as substituem. Dê a ele Release › Read para os nomes e as notas.
+	Waiting for a release	Aguardando uma versão
+	What a release holds is read from git: the commits since the release before, each tied to its MR. Unreleased: merged into {branch} since the latest release.	O conteúdo de uma versão é lido do git: os commits desde a versão anterior, cada um ligado à sua MR. Não publicado: mesclado em {branch} desde a última versão.
+	What it holds	O que ela contém
+	What shipped, and what the next release will hold	O que saiu e o que a próxima versão terá
+	breaking	incompatível
+	feat	feat
+	fix	fix
+	fixes and other changes only	só correções e outras mudanças
+	major	maior
+	median, last 90 days	mediana, últimos 90 dias
+	merged into {branch} since {tag}	mesclado em {branch} desde {tag}
+	minor	menor
+	more commits than were read	mais commits do que os lidos
+	no MR	nenhuma MR
+	not read	não lido
+	nothing merged into {branch} since	nada mesclado em {branch} desde então
+	nothing to release	nada a publicar
+	on {env}	em {env}
+	one every {time}	uma a cada {time}
+	other	outro
+	patch	patch
+	reading the commits…	lendo os commits…
+	the commits could not be read	não foi possível ler os commits
+	the oldest merged {time} ago	a mais antiga mesclada há {time}
+@plural	and {n} more|and {n} more	e mais {n}|e mais {n}
+@plural	and {n} older|and {n} older	e {n} mais antiga|e {n} mais antigas
+@plural	{n} breaking change|{n} breaking changes	{n} mudança incompatível|{n} mudanças incompatíveis
+@plural	{n} commit outside an MR|{n} commits outside an MR	{n} commit fora de uma MR|{n} commits fora de uma MR
+@plural	{n} feature|{n} features	{n} funcionalidade|{n} funcionalidades
+@plural	{n} release in 90 days|{n} releases in 90 days	{n} versão em 90 dias|{n} versões em 90 dias
+rail	Releases	Releases
+	{bump}: {why}	{bump}: {why}
+	Tickets in release notes	Tickets nas notas de versão
+	Each line of the draft release notes starts with the MR's ticket, linked: [Feature #123](…) - Title (!42). Needs a ticket tracker; MRs without a ticket keep the plain line.	Cada linha do rascunho das notas de versão começa com o ticket da MR, com link: [Feature #123](…) - Título (!42). Precisa de um gerenciador de tickets; MRs sem ticket mantêm a linha simples.
