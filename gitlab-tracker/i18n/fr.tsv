@@ -2132,3 +2132,11 @@ rail	Releases	Releases
 	Approval {n}	Approbation {n}
 	Read more	Lire la suite
 	Show less	Replier
+	Blockers	Blocages
+	Top	Haut
+	Back to the top (Home)	Revenir en haut (Home)
+	A commit is not signed	Un commit n'est pas signé
+	A signature is not verified	Une signature n'est pas vérifiée
+	The latest pipeline failed	Le dernier pipeline a échoué
+	Previous / next section of a long page	Section précédente / suivante d'une page longue
+	Back to the top of a long page	Revenir en haut d'une page longue

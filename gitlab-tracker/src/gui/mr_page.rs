@@ -37,6 +37,36 @@ pub enum Tab {
     Pipelines,
 }
 
+impl Tab {
+    const ALL: [Tab; 4] = [Tab::Discussions, Tab::Changes, Tab::Commits, Tab::Pipelines];
+
+    /// Its name as a section of the page's bar.
+    fn id(self) -> &'static str {
+        match self {
+            Tab::Discussions => "discussions",
+            Tab::Changes => "changes",
+            Tab::Commits => "commits",
+            Tab::Pipelines => "pipelines",
+        }
+    }
+
+    fn from_id(id: &str) -> Option<Tab> {
+        Tab::ALL.into_iter().find(|t| t.id() == id)
+    }
+}
+
+/// A tab: its name, its count, and a dot with what it says.
+type TabLine = (
+    Tab,
+    &'static str,
+    usize,
+    Option<egui::Color32>,
+    Option<String>,
+);
+
+/// The section the tabs' card is, in the page's bar.
+const TABS: &str = "tabs";
+
 /// The right column's width, and the page width below which it goes under.
 const SIDE_WIDTH: f32 = 420.0;
 /// The context tiles' height, and the page width below which they stack.
@@ -57,16 +87,31 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     ui.add_space(10.0);
     header(g, ui, &mr);
     ui.add_space(14.0);
-    if let Some(id) = facts(g, ui, &mr, data.as_ref()) {
+    let mut jumps = std::mem::take(&mut g.mr_jumps);
+    let (open, fact) = facts(g, ui, &mr, data.as_ref());
+    if let Some(id) = open {
         g.open_mr(&id);
+    }
+    if let Some(id) = fact {
+        jump_to(g, &mut jumps, id);
     }
     ui.add_space(14.0);
 
     let width = ui.available_width();
-    egui::ScrollArea::vertical()
+    let entries = jump_entries(g, &mr, data.as_ref(), width < TWO_COLUMNS);
+    if let Some(id) = super::jump::bar(ui, &g.theme, &mut jumps, &entries) {
+        if let Some(tab) = Tab::from_id(id) {
+            g.mr_tab = tab;
+        }
+    }
+    if jumps.shown() {
+        ui.add_space(12.0);
+    }
+    let output = egui::ScrollArea::vertical()
         .id_salt(("mr_page", &mr.id))
         .auto_shrink(false)
         .show(ui, |ui| {
+            jumps.begin(ui);
             next_banner(g, ui, &mr);
             // On the merge train, or in the queue of the MRs set to auto-merge.
             let theme = g.theme;
@@ -95,26 +140,165 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         .layout(Layout::top_down(Align::Min)),
                 );
                 left_ui.set_clip_rect(left_rect.intersect(viewport));
-                work(g, &mut left_ui, &mr, data.as_ref());
+                work(g, &mut left_ui, &mut jumps, &mr, data.as_ref());
                 let mut right_ui = ui.new_child(
                     egui::UiBuilder::new()
                         .max_rect(right_rect)
                         .layout(Layout::top_down(Align::Min)),
                 );
                 right_ui.set_clip_rect(right_rect.intersect(viewport));
-                context(g, &mut right_ui, &mr, data.as_ref());
+                context(g, &mut right_ui, &mut jumps, &mr, data.as_ref());
                 let height = left_ui
                     .min_rect()
                     .height()
                     .max(right_ui.min_rect().height());
                 ui.allocate_space(Vec2::new(width, height));
             } else {
-                work(g, ui, &mr, data.as_ref());
+                work(g, ui, &mut jumps, &mr, data.as_ref());
                 ui.add_space(16.0);
-                context(g, ui, &mr, data.as_ref());
+                context(g, ui, &mut jumps, &mr, data.as_ref());
             }
             ui.add_space(24.0);
         });
+    jumps.end(&output);
+    g.mr_jumps = jumps;
+}
+
+/// Scrolls to the section `id` of the page's bar; a tab's opens it too.
+pub(super) fn jump_to(g: &mut GuiApp, jumps: &mut super::jump::Jumps, id: &'static str) {
+    match Tab::from_id(id) {
+        Some(tab) => {
+            g.mr_tab = tab;
+            jumps.ask(TABS);
+        }
+        None => jumps.ask(id),
+    }
+}
+
+/// The page's sections, for its bar: what blocks, the description, the tabs
+/// (with their counts and dots), and, when the context goes under the work
+/// (a narrow window), its cards. Side by side, they are in view with the work.
+fn jump_entries(
+    g: &mut GuiApp,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+    narrow: bool,
+) -> Vec<super::jump::Entry> {
+    use super::jump::Entry;
+    let mut entries = Vec::new();
+    if mr.state == GitlabMrState::Opened {
+        let failing = checks(
+            mr,
+            data.and_then(|d| d.overview.as_ref()),
+            data.and_then(|d| d.rules.as_deref()),
+            data.and_then(|d| d.threads.as_deref().ok()),
+            data.and_then(|d| d.conflicts.as_deref()),
+        )
+        .iter()
+        .filter(|c| c.verdict == Verdict::Blocks)
+        .count();
+        let entry = Entry::new("blockers", tl("Blockers"));
+        entries.push(if failing > 0 {
+            entry.count(failing)
+        } else {
+            entry
+        });
+    }
+    if !mr.description.trim().is_empty() {
+        entries.push(Entry::new("description", tl("Description")));
+    }
+    let current = g.mr_tab;
+    for (i, (tab, label, n, alert, tip)) in tabs(g, mr, data).into_iter().enumerate() {
+        let entry = Entry::new(tab.id(), label)
+            .anchor(TABS)
+            .count(n)
+            .dot(alert, tip)
+            .lit(current == tab);
+        entries.push(if i == 0 { entry.group() } else { entry });
+    }
+    if narrow {
+        entries.push(Entry::new("timeline", tl("Timeline")).group());
+        if data.and_then(|d| d.rules.as_ref()).is_some() {
+            entries.push(Entry::new("approvals", tl("Approvals")));
+        }
+        if !related_mrs(&g.app, mr).is_empty() {
+            entries.push(Entry::new("related", tl("Related MRs")));
+        }
+        entries.push(Entry::new("planning", tl("Planning")));
+    }
+    entries
+}
+
+/// The left column's tabs: name, count, and a dot when something waits there
+/// (red, or amber for a signature not verified), with what it says.
+fn tabs(g: &mut GuiApp, mr: &TrackedMr, data: Option<&PageData>) -> [TabLine; 4] {
+    let theme = g.theme;
+    let threads = data.and_then(|d| d.threads.as_ref().ok());
+    let changed_files = g.details.diff(&mr.id).map(<[_]>::len);
+    // A dot on Commits when a signature is missing (red) or not verified (amber).
+    let commits_alert = g.app.signature_report(mr).and_then(|r| {
+        let s = r.summary();
+        if !s.unsigned.is_empty() || !s.system.is_empty() {
+            Some((theme.tones.red.fg, tl("A commit is not signed")))
+        } else if !s.unverified.is_empty() {
+            Some((theme.tones.amber.fg, tl("A signature is not verified")))
+        } else {
+            None
+        }
+    });
+    // A red dot on Discussions while a thread is unresolved.
+    let open = unresolved(mr, data);
+    let discussions_alert = (open > 0).then(|| {
+        (
+            theme.tones.red.fg,
+            tn(
+                open as u64,
+                "{n} unresolved thread",
+                "{n} unresolved threads",
+            ),
+        )
+    });
+    // A red dot on Pipelines when the latest pipeline failed.
+    let pipelines_alert = mr
+        .pipelines
+        .first()
+        .is_some_and(|p| p.status == PipelineState::Failed)
+        .then_some((theme.tones.red.fg, tl("The latest pipeline failed")));
+    [
+        (
+            Tab::Discussions,
+            tl("Discussions"),
+            threads.map_or(mr.user_notes_count as usize, |t| t.len()),
+            discussions_alert.as_ref().map(|a| a.0),
+            discussions_alert.map(|a| a.1),
+        ),
+        (
+            Tab::Changes,
+            tl("Changes"),
+            // The diff read, else GitLab's count (the demo has none).
+            changed_files.unwrap_or_else(|| {
+                mr.diff_stats
+                    .as_ref()
+                    .map_or(0, |s| s.files_changed as usize)
+            }),
+            None,
+            None,
+        ),
+        (
+            Tab::Commits,
+            tl("Commits"),
+            mr.commits.len(),
+            commits_alert.map(|a| a.0),
+            commits_alert.map(|a| a.1.to_string()),
+        ),
+        (
+            Tab::Pipelines,
+            tl("Pipelines"),
+            mr.pipelines.len(),
+            pipelines_alert.map(|a| a.0),
+            pipelines_alert.map(|a| a.1.to_string()),
+        ),
+    ]
 }
 
 /// Who the MR waits on, what they have to do, and what comes after.
@@ -340,7 +524,15 @@ fn branch_chip(ui: &mut Ui, theme: &Theme, name: &str, target: bool) {
 
 /// The figures that tell where the MR stands, side by side. "Behind target"
 /// lists, on a click, what the MR lacks; returns the MR picked there.
-fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Option<String> {
+/// The MR's figures in a band. Returns the MR picked in the "behind" popup,
+/// and the section of the page a figure leads to when clicked (the pipelines,
+/// the threads, the approvals, the changes, the planning).
+fn facts(
+    g: &GuiApp,
+    ui: &mut Ui,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+) -> (Option<String>, Option<&'static str>) {
     let theme = g.theme;
     let t = &theme.tones;
     let mut list: Vec<(&str, String, Option<Tone>, String)> = Vec::new();
@@ -451,7 +643,24 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
 
     let behind_name = (behind.is_some_and(|n| n > 0) && mr.state == GitlabMrState::Opened)
         .then(|| tl("Behind target"));
+    let has_rules = data.and_then(|d| d.rules.as_ref()).is_some();
+    let target = |name: &str| -> Option<&'static str> {
+        if name == tl("Pipeline") {
+            Some(Tab::Pipelines.id())
+        } else if name == tl("Threads") {
+            Some(Tab::Discussions.id())
+        } else if name == tl("Approvals") && has_rules {
+            Some("approvals")
+        } else if name == tl("Size") {
+            Some(Tab::Changes.id())
+        } else if name == tl("Effort") {
+            Some("planning")
+        } else {
+            None
+        }
+    };
     let mut open = None;
+    let mut jump = None;
     let columns = list.len().max(1);
     let gap = 1.0;
     let width = ((ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32).max(120.0);
@@ -463,6 +672,7 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
                 ui.spacing_mut().item_spacing = Vec2::splat(gap);
                 for (name, value, tone, caption) in &list {
                     let link = behind_name == Some(*name);
+                    let to = target(name);
                     let frame = egui::Frame::new()
                         .fill(theme.palette.panel)
                         .inner_margin(Margin::symmetric(14, 9))
@@ -505,7 +715,7 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
                                         muted(&theme, caption).size(theme.text_size - 1.5),
                                     )
                                     .truncate()
-                                    .selectable(!link),
+                                    .selectable(!link && to.is_none()),
                                 );
                             });
                         });
@@ -525,11 +735,28 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
                         if let Some(id) = behind_popup(g, &response, mr, data) {
                             open = Some(id);
                         }
+                    } else if let Some(to) = to {
+                        // A shortcut to the section it sums up.
+                        let response = frame
+                            .response
+                            .interact(Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if response.hovered() {
+                            ui.painter().rect_stroke(
+                                response.rect,
+                                CornerRadius::ZERO,
+                                egui::Stroke::new(1.0, theme.palette.accent.gamma_multiply(0.5)),
+                                egui::StrokeKind::Inside,
+                            );
+                        }
+                        if response.clicked() {
+                            jump = Some(to);
+                        }
                     }
                 }
             });
         });
-    open
+    (open, jump)
 }
 
 // ── Behind the target ────────────────────────────────────────────────────────
@@ -1510,16 +1737,24 @@ fn tree_row(
 
 // ── Left: the work ───────────────────────────────────────────────────────────
 
-fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
-    let theme = g.theme;
+fn work(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    jumps: &mut super::jump::Jumps,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+) {
     if mr.state == GitlabMrState::Opened {
-        let picked = blockers(g, ui, mr, data);
+        let picked = jumps.section(ui, "blockers", |ui| blockers(g, ui, mr, data));
+        // A file or the commits picked: their tab, brought into view.
         if let Some(path) = picked.file {
             g.mr_tab = Tab::Changes;
             g.details.open_file(&mr.id, &path);
+            jumps.ask(TABS);
         }
         if picked.commits {
             g.mr_tab = Tab::Commits;
+            jumps.ask(TABS);
         }
         if let Some(id) = picked.mr {
             g.open_mr(&id);
@@ -1530,54 +1765,27 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         ui.add_space(16.0);
     }
     if !mr.description.trim().is_empty() {
-        description(g, ui, mr);
+        jumps.section(ui, "description", |ui| description(g, ui, mr));
         ui.add_space(16.0);
     }
-    let threads = data.and_then(|d| d.threads.as_ref().ok());
-    let changed_files = g.details.diff(&mr.id).map(<[_]>::len);
-    let tabs = [
-        (
-            Tab::Discussions,
-            tl("Discussions"),
-            threads.map_or(mr.user_notes_count as usize, |t| t.len()),
-        ),
-        (
-            Tab::Changes,
-            tl("Changes"),
-            // The diff read, else GitLab's count (the demo has none).
-            changed_files.unwrap_or_else(|| {
-                mr.diff_stats
-                    .as_ref()
-                    .map_or(0, |s| s.files_changed as usize)
-            }),
-        ),
-        (Tab::Commits, tl("Commits"), mr.commits.len()),
-        (Tab::Pipelines, tl("Pipelines"), mr.pipelines.len()),
-    ];
-    // A dot on Commits when a signature is missing (red) or not verified (amber).
-    let commits_alert = g.app.signature_report(mr).and_then(|r| {
-        let s = r.summary();
-        if !s.unsigned.is_empty() || !s.system.is_empty() {
-            Some(theme.tones.red.fg)
-        } else if !s.unverified.is_empty() {
-            Some(theme.tones.amber.fg)
-        } else {
-            None
-        }
-    });
-    // A red dot on Discussions while a thread is unresolved.
-    let discussions_alert = (unresolved(mr, data) > 0).then_some(theme.tones.red.fg);
-    // A red dot on Pipelines when the latest pipeline failed.
-    let pipelines_alert = mr
-        .pipelines
-        .first()
-        .is_some_and(|p| p.status == PipelineState::Failed)
-        .then_some(theme.tones.red.fg);
+    let tabs = tabs(g, mr, data);
+    jumps.section(ui, TABS, |ui| tabs_card(g, ui, mr, data, tabs));
+}
+
+/// The card of the tabs: discussions, changes, commits, pipelines.
+fn tabs_card(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+    tabs: [TabLine; 4],
+) {
+    let theme = g.theme;
     theme.card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            for (tab, label, n) in tabs {
+            for (tab, label, n, alert, _) in tabs {
                 let on = g.mr_tab == tab;
                 let text = RichText::new(format!("{label} · {n}"))
                     .font(if on {
@@ -1593,12 +1801,6 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                 let response = ui
                     .add(egui::Label::new(text).sense(Sense::click()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
-                let alert = match tab {
-                    Tab::Discussions => discussions_alert,
-                    Tab::Changes => None,
-                    Tab::Commits => commits_alert,
-                    Tab::Pipelines => pipelines_alert,
-                };
                 if let Some(color) = alert {
                     let r = response.rect;
                     ui.painter().circle_filled(
@@ -1681,7 +1883,10 @@ fn description(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             let top = ui.cursor().min;
             let mut body = ui.new_child(
                 egui::UiBuilder::new()
-                    .max_rect(egui::Rect::from_min_size(top, Vec2::new(width, f32::INFINITY)))
+                    .max_rect(egui::Rect::from_min_size(
+                        top,
+                        Vec2::new(width, f32::INFINITY),
+                    ))
                     .layout(Layout::top_down(Align::Min)),
             );
             let folded = !open && full.is_none_or(|h| h > FOLDED_DESCRIPTION + FOLD_SLACK);
@@ -1716,10 +1921,7 @@ fn description(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 
 /// The last lines of a folded block fading into its background.
 fn fade(ui: &Ui, rect: egui::Rect, background: egui::Color32) {
-    let band = egui::Rect::from_min_max(
-        egui::pos2(rect.left(), rect.bottom() - 56.0),
-        rect.max,
-    );
+    let band = egui::Rect::from_min_max(egui::pos2(rect.left(), rect.bottom() - 56.0), rect.max);
     let mut mesh = egui::Mesh::default();
     let clear = background.gamma_multiply(0.0);
     mesh.colored_vertex(band.left_top(), clear);
@@ -2714,17 +2916,38 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
 
 // ── Right: the context ───────────────────────────────────────────────────────
 
-fn context(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
+fn context(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    jumps: &mut super::jump::Jumps,
+    mr: &TrackedMr,
+    data: Option<&PageData>,
+) {
     let theme = g.theme;
-    side_card(ui, &theme, tl("Timeline"), |ui| {
-        inspector::timeline(ui, &theme, &timeline_steps(g, mr, data))
+    // The gap under a card, when there is one: some have nothing to show.
+    let gap = |ui: &mut Ui, drew: bool| {
+        if drew {
+            ui.add_space(12.0);
+        }
+    };
+    jumps.section(ui, "timeline", |ui| {
+        side_card(ui, &theme, tl("Timeline"), |ui| {
+            inspector::timeline(ui, &theme, &timeline_steps(g, mr, data))
+        })
     });
-    approvals(g, ui, mr, data);
-    related(g, ui, mr);
-    compared(g, ui, mr);
-    side_card(ui, &theme, tl("Planning"), |ui| {
-        inspector::planning_body(ui, &theme, mr)
+    gap(ui, jumps.drew());
+    jumps.section(ui, "approvals", |ui| approvals(g, ui, mr, data));
+    gap(ui, jumps.drew());
+    jumps.section(ui, "related", |ui| related(g, ui, mr));
+    gap(ui, jumps.drew());
+    let drew = ui.scope(|ui| compared(g, ui, mr)).response.rect.height() > 0.5;
+    gap(ui, drew);
+    jumps.section(ui, "planning", |ui| {
+        side_card(ui, &theme, tl("Planning"), |ui| {
+            inspector::planning_body(ui, &theme, mr)
+        })
     });
+    ui.add_space(12.0);
 }
 
 /// A block of the right column: a tile of its own, titled like the tiles above.
@@ -2739,7 +2962,6 @@ fn side_card(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut Ui)
             tile_title(ui, theme, title);
             body(ui);
         });
-    ui.add_space(12.0);
 }
 
 /// A milestone change as the timeline tells it, oldest first: when, what

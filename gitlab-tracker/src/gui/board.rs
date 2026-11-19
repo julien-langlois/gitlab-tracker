@@ -14,6 +14,7 @@ use egui::{
     Vec2,
 };
 
+use super::jump::{self, Entry, Jumps};
 use super::shell::Sizes;
 use super::tip::{Tip, TipExt};
 use super::widgets::{focus_ring, muted, rule, semibold};
@@ -34,6 +35,32 @@ pub fn screen(
     nav: impl FnOnce(&mut GuiApp, &mut Ui),
     inspector: impl FnOnce(&mut GuiApp, &mut Ui),
     main: impl FnOnce(&mut GuiApp, &mut Ui),
+) {
+    screen_with_jumps(g, ui, sizes, id, None, nav, inspector, |g, ui, _| {
+        main(g, ui)
+    });
+}
+
+/// The sections of a page's middle column, for [`screen_with_jumps`]: where the
+/// page keeps them, and the bar's entries.
+pub type PageJumps = (fn(&mut GuiApp) -> &mut Jumps, Vec<Entry>);
+
+/// [`screen`], with a bar of shortcuts to the sections of the middle column
+/// above it when that column is long. `main` gets the page's [`Jumps`] to wrap
+/// its sections in (a default one without a bar).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "screen's arguments, plus the bar"
+)]
+pub fn screen_with_jumps(
+    g: &mut GuiApp,
+    ui: &mut Ui,
+    sizes: &Sizes,
+    id: &'static str,
+    jumps: Option<PageJumps>,
+    nav: impl FnOnce(&mut GuiApp, &mut Ui),
+    inspector: impl FnOnce(&mut GuiApp, &mut Ui),
+    main: impl FnOnce(&mut GuiApp, &mut Ui, &mut Jumps),
 ) {
     let theme = g.theme;
     if let Some(width) = sizes.views {
@@ -94,7 +121,23 @@ pub fn screen(
             bottom: 20,
         }))
         .show(ui, |ui| {
-            egui::ScrollArea::vertical()
+            let (get, entries) = match jumps {
+                Some((get, entries)) => (Some(get), entries),
+                None => (None, Vec::new()),
+            };
+            let mut page_jumps = get.map(|get| std::mem::take(get(g))).unwrap_or_default();
+            if get.is_some() {
+                let room = ui.available_width() - 10.0;
+                ui.allocate_ui(Vec2::new(room, 0.0), |ui| {
+                    if jump::bar(ui, &theme, &mut page_jumps, &entries).is_some() {
+                        ui.ctx().request_repaint();
+                    }
+                });
+                if page_jumps.shown() {
+                    ui.add_space(10.0);
+                }
+            }
+            let output = egui::ScrollArea::vertical()
                 .id_salt((id, "main_scroll"))
                 .max_width(ui.available_width())
                 .auto_shrink(false)
@@ -103,9 +146,14 @@ pub fn screen(
                     let room = ui.available_width() - 10.0;
                     ui.set_width(room);
                     ui.set_max_width(room);
-                    main(g, ui);
+                    page_jumps.begin(ui);
+                    main(g, ui, &mut page_jumps);
                     ui.add_space(8.0);
                 });
+            if let Some(get) = get {
+                page_jumps.end(&output);
+                *get(g) = page_jumps;
+            }
         });
 }
 

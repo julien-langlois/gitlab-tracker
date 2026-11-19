@@ -110,6 +110,13 @@ fn named_key(g: &mut GuiApp, key: Key, modifiers: Modifiers) {
     }
     let on_mr = g.page() == Page::Mr;
     let on_person = g.page() == Page::Person;
+    // Home: back to the top of a long page.
+    if key == Key::Home && modifiers.is_none() {
+        if let Some(jumps) = g.page_jumps() {
+            jumps.ask(super::jump::TOP);
+            return;
+        }
+    }
     match key {
         // Enter opens the page of the person shown, Esc goes back to the team,
         // the arrows move to the next or previous person.
@@ -146,6 +153,13 @@ pub(super) fn character(g: &mut GuiApp, c: char) {
         return;
     }
     if g.app.input_mode != InputMode::Normal {
+        return;
+    }
+    // [ / ]: the previous or next section of a long page.
+    if matches!(c, '[' | ']') {
+        if let Some(jumps) = g.page_jumps() {
+            jumps.step(if c == ']' { 1 } else { -1 });
+        }
         return;
     }
     if g.page() == Page::Person && matches!(c, 'j' | 'k') {

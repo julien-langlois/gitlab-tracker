@@ -13,6 +13,7 @@ use chrono::{DateTime, Duration, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
+use super::jump::{Entry, Jumps};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::tip::{Tip, TipExt};
@@ -34,6 +35,8 @@ pub struct State {
     pub period: usize,
     /// The MR picked, by id.
     pub selected: Option<String>,
+    /// The shortcuts to the page's sections.
+    pub jumps: Jumps,
 }
 
 impl Default for State {
@@ -41,6 +44,7 @@ impl Default for State {
         Self {
             period: 1,
             selected: None,
+            jumps: Jumps::default(),
         }
     }
 }
@@ -865,14 +869,22 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let ctx = ui.ctx().clone();
     let overview = g.details.project(&g.app, &ctx).cloned();
     let d = analyze(&g.app, overview.as_ref(), now, days);
-    board::screen(
+    let entries = vec![
+        Entry::new("undos", tl("Reverts and hotfixes")).count(d.undos.len()),
+        Entry::new("steps", tl("Where the time goes")),
+        Entry::new("rounds", tl("Review rounds")),
+        Entry::new("aging", tl("Aging work in progress")),
+        Entry::new("paths", tl("Merged in the period")).count(d.merged.len()),
+    ];
+    board::screen_with_jumps(
         g,
         ui,
         sizes,
         "delivery",
+        Some((|g| &mut g.delivery.jumps, entries)),
         |g, ui| nav(g, ui, &d),
         |g, ui| inspector(g, ui, &d, now),
-        |g, ui| main(g, ui, &d, overview.as_ref(), now),
+        |g, ui, jumps| main(g, ui, jumps, &d, overview.as_ref(), now),
     );
 }
 
@@ -924,6 +936,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery) {
 fn main(
     g: &mut GuiApp,
     ui: &mut Ui,
+    jumps: &mut Jumps,
     d: &Delivery,
     overview: Option<&ProjectOverview>,
     now: DateTime<Utc>,
@@ -952,35 +965,43 @@ fn main(
     dora_figures(ui, &theme, d);
 
     let mut picked = None;
+    let selected = g.delivery.selected.as_deref();
     ui.add_space(GAP);
-    undo_card(
-        ui,
-        &theme,
-        d,
-        &g.app.config.hotfix_branches,
-        g.delivery.selected.as_deref(),
-        &mut picked,
-    );
+    jumps.section(ui, "undos", |ui| {
+        undo_card(
+            ui,
+            &theme,
+            d,
+            &g.app.config.hotfix_branches,
+            selected,
+            &mut picked,
+        );
+    });
     ui.add_space(GAP);
+    // Side by side, or one under the other: each its own section.
+    let cell = std::cell::RefCell::new(&mut *jumps);
     board::split(
         ui,
         0.6,
         360.0,
         260.0,
-        |ui| steps_card(ui, &theme, d),
-        |ui| rounds_card(ui, &theme, d, &mut picked),
+        |ui| {
+            cell.borrow_mut()
+                .section(ui, "steps", |ui| steps_card(ui, &theme, d));
+        },
+        |ui| {
+            cell.borrow_mut()
+                .section(ui, "rounds", |ui| rounds_card(ui, &theme, d, &mut picked));
+        },
     );
     ui.add_space(GAP);
-    aging_card(ui, &theme, d, g.delivery.selected.as_deref(), &mut picked);
+    jumps.section(ui, "aging", |ui| {
+        aging_card(ui, &theme, d, selected, &mut picked);
+    });
     ui.add_space(GAP);
-    paths_card(
-        ui,
-        &theme,
-        d,
-        g.delivery.selected.as_deref(),
-        now,
-        &mut picked,
-    );
+    jumps.section(ui, "paths", |ui| {
+        paths_card(ui, &theme, d, selected, now, &mut picked);
+    });
     if let Some(id) = picked {
         g.delivery.selected = Some(id);
     }

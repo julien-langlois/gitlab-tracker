@@ -1463,6 +1463,8 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("C", "Columns"),
             ("P", "Inspector: details / pipelines"),
             ("T", "Inspector: linked ticket"),
+            ("[ / ]", "Previous / next section of a long page"),
+            ("Home", "Back to the top of a long page"),
         ],
     ),
     (

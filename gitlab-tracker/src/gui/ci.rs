@@ -10,6 +10,7 @@ use chrono::{DateTime, Duration, Local, Utc};
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
+use super::jump::{Entry, Jumps};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::tip::{Tip, TipExt};
@@ -36,6 +37,8 @@ pub struct State {
     pub period: usize,
     pub hidden_stages: HashSet<String>,
     pub selected: Option<String>,
+    /// The shortcuts to the page's sections.
+    pub jumps: Jumps,
 }
 
 impl Default for State {
@@ -45,6 +48,7 @@ impl Default for State {
             period: 1,
             hidden_stages: HashSet::new(),
             selected: None,
+            jumps: Jumps::default(),
         }
     }
 }
@@ -384,14 +388,41 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
             .clone()
             .filter(|s| ci.jobs.iter().any(|j| &j.name == s))
             .or_else(|| ci.jobs.first().map(|j| j.name.clone()));
-    board::screen(
+    let mut entries = Vec::new();
+    let schedules = overview.as_ref().map_or(0, |o| o.schedules.len());
+    if schedules > 0 {
+        entries.push(Entry::new("schedules", tl("Pipeline schedules")).count(schedules));
+    }
+    let jobs = ci
+        .jobs
+        .iter()
+        .filter(|j| shows(j, g.ci.view) && !g.ci.hidden_stages.contains(&j.stage))
+        .count();
+    entries.extend([
+        Entry::new("jobs", tl("Jobs")).count(jobs),
+        Entry::new("budget", tl("CI budget")),
+        Entry::new("durations", tl("Pipeline durations")),
+        Entry::new("stages", tl("Failures by stage")),
+    ]);
+    board::screen_with_jumps(
         g,
         ui,
         sizes,
         "ci",
+        Some((|g| &mut g.ci.jumps, entries)),
         |g, ui| nav(g, ui, &ci, days),
         |g, ui| inspector(g, ui, &ci, overview.as_ref(), selected.as_deref(), now),
-        |g, ui| main(g, ui, &ci, overview.as_ref(), selected.as_deref(), now),
+        |g, ui, jumps| {
+            main(
+                g,
+                ui,
+                jumps,
+                &ci,
+                overview.as_ref(),
+                selected.as_deref(),
+                now,
+            )
+        },
     );
 }
 
@@ -461,9 +492,14 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, ci: &Ci, days: i64) {
 
 // ── Main area ────────────────────────────────────────────────────────────────
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the page's data, and its sections"
+)]
 fn main(
     g: &mut GuiApp,
     ui: &mut Ui,
+    jumps: &mut Jumps,
     ci: &Ci,
     overview: Option<&crate::gitlab_detail::ProjectOverview>,
     selected: Option<&str>,
@@ -603,7 +639,10 @@ fn main(
     if !schedules.is_empty() {
         let page =
             super::releases::project_url(&g.app).map(|p| format!("{p}/-/pipeline_schedules"));
-        if let Some(url) = super::schedules::card(ui, &theme, schedules, page.as_deref(), now) {
+        let url = jumps.section(ui, "schedules", |ui| {
+            super::schedules::card(ui, &theme, schedules, page.as_deref(), now)
+        });
+        if let Some(url) = url {
             board::open_url(ui, &url);
         }
         ui.add_space(GAP);
@@ -616,33 +655,43 @@ fn main(
         .filter(|j| !g.ci.hidden_stages.contains(&j.stage))
         .collect();
     let mut picked = None;
-    board::card(
-        ui,
-        &theme,
-        tl("Jobs"),
-        tl("the most failing first"),
-        0.0,
-        |ui| {
-            if jobs.is_empty() {
-                board::empty(ui, &theme, tl("No job in this view for the period."));
-                return;
-            }
-            jobs_table(ui, &theme, &jobs, selected, &mut picked);
-        },
-    );
+    jumps.section(ui, "jobs", |ui| {
+        board::card(
+            ui,
+            &theme,
+            tl("Jobs"),
+            tl("the most failing first"),
+            0.0,
+            |ui| {
+                if jobs.is_empty() {
+                    board::empty(ui, &theme, tl("No job in this view for the period."));
+                    return;
+                }
+                jobs_table(ui, &theme, &jobs, selected, &mut picked);
+            },
+        );
+    });
     if let Some(name) = picked {
         g.ci.selected = Some(name);
     }
     ui.add_space(GAP);
-    budget_card(ui, &theme, ci);
+    jumps.section(ui, "budget", |ui| budget_card(ui, &theme, ci));
     ui.add_space(GAP);
+    // Side by side, or one under the other: each its own section.
+    let cell = std::cell::RefCell::new(jumps);
     board::split(
         ui,
         0.58,
         320.0,
         240.0,
-        |ui| durations_card(ui, &theme, ci),
-        |ui| stages_card(ui, &theme, ci),
+        |ui| {
+            cell.borrow_mut()
+                .section(ui, "durations", |ui| durations_card(ui, &theme, ci));
+        },
+        |ui| {
+            cell.borrow_mut()
+                .section(ui, "stages", |ui| stages_card(ui, &theme, ci));
+        },
     );
 }
 

@@ -23,6 +23,7 @@ mod i18n;
 mod icons;
 mod inspector;
 mod journal;
+mod jump;
 mod keys;
 mod labels;
 mod markdown;
@@ -110,7 +111,12 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
 /// translated too, not left in English.
 async fn install_language() {
     i18n::install();
-    i18n::set_language(crate::storage::load_projects_toml().await.language.as_deref());
+    i18n::set_language(
+        crate::storage::load_projects_toml()
+            .await
+            .language
+            .as_deref(),
+    );
 }
 
 /// The demo's notifications of the last hours, kept for the bell (no toast:
@@ -402,6 +408,8 @@ struct GuiApp {
     folded: HashSet<String>,
     /// The MR page's tab, and whether it lists the resolved threads.
     mr_tab: mr_page::Tab,
+    /// The shortcuts to the MR page's sections.
+    mr_jumps: jump::Jumps,
     show_resolved: bool,
     /// The MR whose description the MR page shows in full (folded otherwise).
     mr_description_open: Option<String>,
@@ -571,6 +579,7 @@ impl GuiApp {
             tracker_board: false,
             promote: None,
             mr_tab: mr_page::Tab::Discussions,
+            mr_jumps: jump::Jumps::default(),
             show_resolved: false,
             mr_description_open: None,
             clicks: notification_clicks(&cc.egui_ctx),
@@ -1146,6 +1155,16 @@ impl GuiApp {
         matches!(self.app.input_mode, crate::app::InputMode::Stats)
     }
 
+    /// The shortcuts to the sections of the page shown, when it has some.
+    fn page_jumps(&mut self) -> Option<&mut jump::Jumps> {
+        match self.page() {
+            Page::Mr => Some(&mut self.mr_jumps),
+            Page::Delivery => Some(&mut self.delivery.jumps),
+            Page::Ci => Some(&mut self.ci.jumps),
+            _ => None,
+        }
+    }
+
     /// The page shown: the stats while they are open, else the one picked last.
     fn page(&self) -> Page {
         #[cfg(feature = "stats")]
@@ -1697,6 +1716,21 @@ impl eframe::App for GuiApp {
         // shortcuts once the window is up, to check a view without clicking;
         // `GITLAB_TRACKER_GUI_PAGE=cockpit` opens that page, and
         // `GITLAB_TRACKER_GUI_THEME=light` the light theme.
+        // `GITLAB_TRACKER_GUI_JUMP=commits` jumps to that section of the page's
+        // bar, once the page has measured its sections.
+        #[cfg(debug_assertions)]
+        if ui.ctx().cumulative_pass_nr() == 6 {
+            if let Ok(id) = std::env::var("GITLAB_TRACKER_GUI_JUMP") {
+                let id: &'static str = Box::leak(id.into_boxed_str());
+                if self.page() == Page::Mr {
+                    let mut jumps = std::mem::take(&mut self.mr_jumps);
+                    mr_page::jump_to(self, &mut jumps, id);
+                    self.mr_jumps = jumps;
+                } else if let Some(jumps) = self.page_jumps() {
+                    jumps.ask(id);
+                }
+            }
+        }
         #[cfg(debug_assertions)]
         if ui.ctx().cumulative_pass_nr() == 3 {
             // `GITLAB_TRACKER_GUI_TAB=1` brings the second open project forward.
@@ -1964,7 +1998,12 @@ fn screenshot_for_development(ctx: &egui::Context) {
     let Ok(path) = std::env::var("GITLAB_TRACKER_GUI_SCREENSHOT") else {
         return;
     };
-    if ctx.cumulative_pass_nr() != 10 {
+    // Later with `GITLAB_TRACKER_GUI_SCREENSHOT_PASS`: a jump's scroll to end.
+    let pass = std::env::var("GITLAB_TRACKER_GUI_SCREENSHOT_PASS")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(10);
+    if ctx.cumulative_pass_nr() != pass {
         ctx.request_repaint();
         return;
     }

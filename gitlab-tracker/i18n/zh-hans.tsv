@@ -2132,3 +2132,11 @@ rail	Releases	发布
 	Approval {n}	第 {n} 次批准
 	Read more	展开全文
 	Show less	收起
+	Blockers	阻碍
+	Top	顶部
+	Back to the top (Home)	回到顶部 (Home)
+	A commit is not signed	有提交未签名
+	A signature is not verified	有签名未验证
+	The latest pipeline failed	最新的流水线失败了
+	Previous / next section of a long page	长页面的上一节 / 下一节
+	Back to the top of a long page	回到长页面顶部

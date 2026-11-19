@@ -103,6 +103,15 @@ on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR
 Merge checks, approval rules (GitLab Premium; left out otherwise), threads and
 deployments are read when the page opens, and again once the MR changes.
 
+**Section bar.** When the page runs longer than the window, a bar under the
+figures lists its sections: what blocks the merge, the description, the four
+tabs (with their counts and the same dots), and, in a window too narrow for the
+right column, that column's cards. A click scrolls there (a tab's also opens it)
+and lights the section a moment; the bar shows the section in view. `[` / `]`
+move to the previous or next section, `Home` goes back to the top. The figures
+lead there too: a click on Pipeline, Threads, Approvals, Size or Effort scrolls
+to its section. Delivery and CI / Pipelines have the same bar.
+
 ![An MR page: what holds it back, where it is, people, ticket, lifecycle](assets/desktop/mr-page.png)
 
 **Merge queue.** An MR on a merge train (GitLab Premium) shows the train on its
