@@ -11,6 +11,7 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Color32, CornerRadius, FontId, Margin, Response, RichText, Stroke, Ui, Vec2};
 
+use super::icons::Icon;
 use super::widgets::{avatar, split_person};
 
 /// Widest a tooltip grows before its text wraps.
@@ -34,6 +35,12 @@ enum Part {
     #[cfg_attr(not(feature = "stats"), allow(dead_code))]
     Facts(Vec<(String, String)>),
     Chips(Vec<(String, Tone)>),
+    /// A moment to the minute: the day in words, then the time and its zone.
+    Moment {
+        date: String,
+        time: String,
+        zone: String,
+    },
 }
 
 /// A tooltip's content, laid out top-down; shown with [`Tip::show`].
@@ -137,6 +144,24 @@ impl Tip {
             Some(Part::Chips(chips)) => chips.push(chip),
             _ => self.parts.push(Part::Chips(vec![chip])),
         }
+        self
+    }
+
+    /// When `at` was, in the machine's time zone: the day in words, then the
+    /// time and the zone ("14:32 · UTC+1, local time").
+    pub fn moment(mut self, at: chrono::DateTime<chrono::Utc>) -> Self {
+        use chrono::Offset;
+        let local = at.with_timezone(&chrono::Local);
+        let offset = local.offset().fix().local_minus_utc();
+        self.parts.push(Part::Moment {
+            date: super::widgets::long_date(local.date_naive(), true),
+            time: local.format("%H:%M").to_string(),
+            zone: format!(
+                "{}, {}",
+                super::widgets::utc_offset(offset),
+                crate::i18n::tl("local time")
+            ),
+        });
         self
     }
 
@@ -414,6 +439,44 @@ fn part_ui(ui: &mut Ui, theme: &Theme, part: &Part, lead: bool) {
                         ui.end_row();
                     }
                 });
+        }
+        Part::Moment { date, time, zone } => {
+            let icon_line = |ui: &mut Ui, icon: Icon, add: &mut dyn FnMut(&mut Ui)| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 7.0;
+                    let size = theme.text_size;
+                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::hover());
+                    super::icons::paint(ui.painter(), rect, icon, theme.palette.text_muted);
+                    add(ui);
+                });
+            };
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 4.0;
+                icon_line(ui, Icon::Calendar, &mut |ui| {
+                    ui.label(
+                        RichText::new(date)
+                            .font(fonts::medium(theme.text_size - 0.5))
+                            .color(if lead {
+                                theme.palette.text
+                            } else {
+                                theme.palette.text_secondary
+                            }),
+                    );
+                });
+                icon_line(ui, Icon::Clock, &mut |ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(
+                        RichText::new(time)
+                            .font(fonts::semibold(theme.text_size - 0.5))
+                            .color(theme.palette.text),
+                    );
+                    ui.label(
+                        RichText::new(zone)
+                            .size(theme.text_size - 2.0)
+                            .color(theme.palette.text_muted),
+                    );
+                });
+            });
         }
         Part::Chips(chips) => {
             ui.horizontal_wrapped(|ui| {

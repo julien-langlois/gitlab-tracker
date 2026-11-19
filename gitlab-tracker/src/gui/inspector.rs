@@ -1355,6 +1355,8 @@ pub(super) struct Step {
     /// Off the main line: a branch the changes come down to (sync), drawn as
     /// a branch-off of the line.
     pub side: bool,
+    /// When it happened: the exact time shows on hovering the detail.
+    pub at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Where a merged MR went after its merge, nearest first: the branches fed by
@@ -1363,12 +1365,14 @@ pub(super) struct Step {
 pub(super) fn flow_steps(g: &GuiApp, mr: &TrackedMr) -> (Vec<Step>, Vec<Step>) {
     let tones = &g.theme.tones;
     let path = g.app.branch_flow().path(&mr.target_branch);
-    let detail = |branch: &str, label: &str| {
-        let arrived = g
-            .app
+    let arrival = |branch: &str| {
+        g.app
             .branch_arrivals
             .get(&(mr.id.clone(), branch.to_string()))
-            .map(|at| at.with_timezone(&chrono::Local).to_rfc3339());
+            .copied()
+    };
+    let detail = |branch: &str, label: &str| {
+        let arrived = arrival(branch).map(|at| at.with_timezone(&chrono::Local).to_rfc3339());
         match arrived {
             Some(at) => format!("{label} · {}", format_relative_date(&at)),
             None => label.to_string(),
@@ -1396,6 +1400,7 @@ pub(super) fn flow_steps(g: &GuiApp, mr: &TrackedMr) -> (Vec<Step>, Vec<Step>) {
                     color: tones.amber.fg,
                     pending: true,
                     side: true,
+                    at: None,
                 },
                 _ => Step {
                     title: tf("Synced into {branch}", &vars),
@@ -1403,6 +1408,7 @@ pub(super) fn flow_steps(g: &GuiApp, mr: &TrackedMr) -> (Vec<Step>, Vec<Step>) {
                     color: tone.fg,
                     pending: !reached,
                     side: true,
+                    at: arrival(branch),
                 },
             }
         })
@@ -1419,6 +1425,7 @@ pub(super) fn flow_steps(g: &GuiApp, mr: &TrackedMr) -> (Vec<Step>, Vec<Step>) {
                 color: tone.fg,
                 pending: !presence.is_some_and(|p| !p.is_missing()),
                 side: false,
+                at: arrival(branch),
             }
         })
         .collect();
@@ -1473,7 +1480,13 @@ pub(super) fn timeline(ui: &mut Ui, theme: &Theme, steps: &[Step]) {
                             .color(title_color),
                     );
                     if let Some(detail) = &step.detail {
-                        ui.label(muted(theme, detail).size(theme.text_size - 1.5));
+                        let response = ui.label(muted(theme, detail).size(theme.text_size - 1.5));
+                        if let Some(at) = step.at {
+                            Tip::new()
+                                .title(step.title.as_str())
+                                .moment(at)
+                                .show(response);
+                        }
                     }
                     ui.add_space(10.0);
                 });

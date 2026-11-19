@@ -330,6 +330,10 @@ pub struct ReviewActivity {
     /// sent back to the author.
     #[serde(default)]
     pub pushes_after_review: u32,
+    /// When each approval still standing was given, by username (a later
+    /// unapproval by the same person removes it).
+    #[serde(default)]
+    pub approvals: std::collections::BTreeMap<String, String>,
 }
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author

@@ -873,6 +873,11 @@ impl World {
         }
         review.first_review_at = first_review.map(iso);
         review.approved_at = mr.approved.iter().map(|(_, at)| *at).max().map(iso);
+        review.approvals = mr
+            .approved
+            .iter()
+            .map(|(p, at)| (p.login.to_string(), iso(*at)))
+            .collect();
         review.last_push_at = pushes.last().copied().map(iso);
         review.pushes_after_review = first_review.map_or(0, |first| {
             pushes.iter().filter(|p| **p > first).count() as u32

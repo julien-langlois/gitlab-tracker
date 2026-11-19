@@ -2121,3 +2121,10 @@ rail	Releases	Releases
 	Hidden: the window is too narrow	Oculta: la ventana es demasiado estrecha
 @plural	{n} unsaved change|{n} unsaved changes	{n} cambio sin guardar|{n} cambios sin guardar
 @plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	{n} columna oculta: la ventana es demasiado estrecha. Ensánchala para verla.|{n} columnas ocultas: la ventana es demasiado estrecha. Ensánchala para verlas.
+	{weekday} {day} {month} {year}	{weekday} {day} de {month} de {year}
+	First approval	Primera aprobación
+	Second approval	Segunda aprobación
+	Third approval	Tercera aprobación
+	Fourth approval	Cuarta aprobación
+	Fifth approval	Quinta aprobación
+	Approval {n}	Aprobación {n}

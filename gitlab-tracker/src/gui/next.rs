@@ -398,6 +398,33 @@ fn parse(at: Option<&str>) -> Option<chrono::DateTime<chrono::Utc>> {
 /// A stage's name, when it was reached, and whether it was.
 type Milestone = (String, Option<chrono::DateTime<chrono::Utc>>, bool);
 
+/// Where "Approved" sits in [`milestones`].
+const APPROVED: usize = 2;
+
+/// When each approval still standing on `mr` was given, oldest first.
+fn approvals(mr: &TrackedMr) -> Vec<chrono::DateTime<chrono::Utc>> {
+    let mut at: Vec<_> = mr
+        .review
+        .iter()
+        .flat_map(|r| r.approvals.values())
+        .filter_map(|a| parse(Some(a)))
+        .collect();
+    at.sort();
+    at
+}
+
+/// The name of the `n`th approval (from 1): "First approval", "Second approval"…
+fn nth_approval(n: usize) -> String {
+    match n {
+        1 => tl("First approval").into(),
+        2 => tl("Second approval").into(),
+        3 => tl("Third approval").into(),
+        4 => tl("Fourth approval").into(),
+        5 => tl("Fifth approval").into(),
+        n => tf("Approval {n}", &[("n", &n.to_string())]),
+    }
+}
+
 /// When each stage of `mr` was reached: created, first review, approved,
 /// merged, then each branch up its flow. `None`: not reached (or not known).
 fn milestones(app: &crate::app::App, mr: &TrackedMr) -> Vec<Milestone> {
@@ -416,7 +443,10 @@ fn milestones(app: &crate::app::App, mr: &TrackedMr) -> Vec<Milestone> {
         ),
         (
             tl("Approved").to_string(),
-            parse(review.and_then(|r| r.approved_at.as_deref())),
+            approvals(mr)
+                .last()
+                .copied()
+                .or_else(|| parse(review.and_then(|r| r.approved_at.as_deref()))),
             !mr.approved_by.is_empty() || merged,
         ),
         (
@@ -510,7 +540,8 @@ fn stages_of(app: &crate::app::App, mr: &TrackedMr) -> Vec<Stage> {
     let now = chrono::Utc::now();
     let closed = mr.state == crate::models::GitlabMrState::Closed;
     let current = (!closed).then(|| mine.iter().position(|s| !s.2)).flatten();
-    mine.iter()
+    let mut stages: Vec<Stage> = mine
+        .iter()
         .enumerate()
         .map(|(i, (label, at, reached))| {
             let from = mine[..i].iter().rev().find_map(|s| s.1);
@@ -533,7 +564,36 @@ fn stages_of(app: &crate::app::App, mr: &TrackedMr) -> Vec<Stage> {
                 current: is_current,
             }
         })
-        .collect()
+        .collect();
+    split_approvals(&mut stages, &approvals(mr));
+    stages
+}
+
+/// "Approved" made into a stage per approval when there were several, each
+/// timed from the one before ("First approval", "Second approval"…). The
+/// usual time is the other MRs' time to be approved: it no longer fits a hop.
+fn split_approvals(stages: &mut Vec<Stage>, approvals: &[chrono::DateTime<chrono::Utc>]) {
+    if approvals.len() < 2 || !stages.get(APPROVED).is_some_and(|s| s.reached) {
+        return;
+    }
+    let mut from = stages[..APPROVED].iter().rev().find_map(|s| s.at);
+    let split: Vec<Stage> = approvals
+        .iter()
+        .enumerate()
+        .map(|(i, at)| {
+            let took = from.map(|from| (*at - from).num_minutes().max(0) as f64 / 1440.0);
+            from = Some(*at);
+            Stage {
+                label: nth_approval(i + 1),
+                at: Some(*at),
+                took,
+                usual: None,
+                reached: true,
+                current: false,
+            }
+        })
+        .collect();
+    stages.splice(APPROVED..=APPROVED, split);
 }
 
 /// The lifecycle as a line of steps, each with the time the hop took and the
@@ -549,6 +609,20 @@ pub fn lifecycle_strip(ui: &mut Ui, theme: &Theme, stages: &[Stage], tone: Tone)
         .show(ui, |ui| {
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(step * n as f32, height), egui::Sense::hover());
+            // Each stage's exact time on hovering it.
+            for (i, s) in stages.iter().enumerate() {
+                let Some(at) = s.at else { continue };
+                let column = egui::Rect::from_min_size(
+                    egui::pos2(rect.left() + i as f32 * step, rect.top()),
+                    egui::vec2(step - 6.0, height),
+                );
+                let response = ui.interact(
+                    column,
+                    ui.scope_id().with(("stage", i)),
+                    egui::Sense::hover(),
+                );
+                Tip::new().title(s.label.as_str()).moment(at).show(response);
+            }
             let painter = ui.painter_at(rect);
             let y = rect.top() + 8.0;
             for (i, s) in stages.iter().enumerate() {
@@ -657,4 +731,61 @@ pub fn lifecycle_strip(ui: &mut Ui, theme: &Theme, stages: &[Stage], tone: Tone)
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stage(label: &str, at: Option<&str>, reached: bool) -> Stage {
+        Stage {
+            label: label.into(),
+            at: parse(at),
+            took: None,
+            usual: Some(1.0),
+            reached,
+            current: false,
+        }
+    }
+
+    #[test]
+    fn several_approvals_become_a_stage_each_timed_from_the_one_before() {
+        let mut stages = vec![
+            stage("Created", Some("2026-09-01T09:00:00Z"), true),
+            stage("First review", Some("2026-09-02T09:00:00Z"), true),
+            stage("Approved", Some("2026-09-05T09:00:00Z"), true),
+            stage("Merged", None, false),
+        ];
+        let approvals = [
+            parse(Some("2026-09-03T09:00:00Z")).unwrap(),
+            parse(Some("2026-09-05T09:00:00Z")).unwrap(),
+        ];
+        split_approvals(&mut stages, &approvals);
+        let labels: Vec<&str> = stages.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "Created",
+                "First review",
+                "First approval",
+                "Second approval",
+                "Merged"
+            ]
+        );
+        assert_eq!(stages[2].took, Some(1.0));
+        assert_eq!(stages[3].took, Some(2.0));
+        assert_eq!(stages[3].usual, None);
+    }
+
+    #[test]
+    fn a_single_approval_stays_approved() {
+        let mut stages = vec![
+            stage("Created", Some("2026-09-01T09:00:00Z"), true),
+            stage("First review", None, true),
+            stage("Approved", Some("2026-09-05T09:00:00Z"), true),
+        ];
+        split_approvals(&mut stages, &[parse(Some("2026-09-05T09:00:00Z")).unwrap()]);
+        assert_eq!(stages.len(), 3);
+        assert_eq!(stages[2].label, "Approved");
+    }
 }

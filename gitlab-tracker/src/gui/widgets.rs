@@ -680,3 +680,62 @@ pub fn spinner(ui: &mut Ui, size: f32, color: Color32) -> egui::Response {
         .add(egui::Shape::line(points, Stroke::new(3.0, color)));
     response
 }
+
+/// A day in words, in the window's language: "Wednesday 18 November", with
+/// the year after it when `year` ("Wednesday 18 November 2026").
+pub fn long_date(day: chrono::NaiveDate, year: bool) -> String {
+    use chrono::Datelike;
+    let weekday = crate::i18n::tc(
+        "date",
+        match day.weekday() {
+            chrono::Weekday::Mon => "Monday",
+            chrono::Weekday::Tue => "Tuesday",
+            chrono::Weekday::Wed => "Wednesday",
+            chrono::Weekday::Thu => "Thursday",
+            chrono::Weekday::Fri => "Friday",
+            chrono::Weekday::Sat => "Saturday",
+            chrono::Weekday::Sun => "Sunday",
+        },
+    );
+    let month = crate::i18n::tc(
+        "date",
+        [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ][day.month0() as usize],
+    );
+    let vars = [
+        ("weekday", weekday),
+        ("day", &day.day().to_string()),
+        ("month", month),
+        ("year", &day.year().to_string()),
+    ];
+    if year {
+        crate::i18n::tf("{weekday} {day} {month} {year}", &vars)
+    } else {
+        crate::i18n::tf("{weekday} {day} {month}", &vars)
+    }
+}
+
+/// An offset from UTC as people write it: "UTC", "UTC+1", "UTC−5", "UTC+5:30".
+pub fn utc_offset(seconds: i32) -> String {
+    if seconds == 0 {
+        return "UTC".into();
+    }
+    let sign = if seconds < 0 { '−' } else { '+' };
+    let minutes = seconds.unsigned_abs() / 60;
+    match minutes % 60 {
+        0 => format!("UTC{sign}{}", minutes / 60),
+        m => format!("UTC{sign}{}:{m:02}", minutes / 60),
+    }
+}

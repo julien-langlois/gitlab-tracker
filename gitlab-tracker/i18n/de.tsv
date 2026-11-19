@@ -2121,3 +2121,10 @@ rail	Releases	Releases
 	Hidden: the window is too narrow	Ausgeblendet: das Fenster ist zu schmal
 @plural	{n} unsaved change|{n} unsaved changes	{n} ungespeicherte Änderung|{n} ungespeicherte Änderungen
 @plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	{n} Spalte ausgeblendet: das Fenster ist zu schmal dafür. Vergrößere es, um sie zu sehen.|{n} Spalten ausgeblendet: das Fenster ist zu schmal dafür. Vergrößere es, um sie zu sehen.
+	{weekday} {day} {month} {year}	{weekday}, {day}. {month} {year}
+	First approval	Erste Genehmigung
+	Second approval	Zweite Genehmigung
+	Third approval	Dritte Genehmigung
+	Fourth approval	Vierte Genehmigung
+	Fifth approval	Fünfte Genehmigung
+	Approval {n}	Genehmigung {n}

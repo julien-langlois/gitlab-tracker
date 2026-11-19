@@ -2567,6 +2567,9 @@ pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>
     let mut add = |at: Option<&str>, title: String, by: Option<&str>, color: egui::Color32| {
         if let Some(at) = at {
             let when = format_relative_date(at);
+            let moment = chrono::DateTime::parse_from_rfc3339(at)
+                .ok()
+                .map(|t| t.with_timezone(&chrono::Utc));
             let detail = match by {
                 Some(name) => tf("{when} by {name}", &[("when", &when), ("name", name)]),
                 None => when,
@@ -2579,6 +2582,7 @@ pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>
                     color,
                     pending: false,
                     side: false,
+                    at: moment,
                 },
             ));
         }
@@ -2612,12 +2616,29 @@ pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>
             None,
             t.blue.fg,
         );
-        add(
-            review.approved_at.as_deref(),
-            tl("Approved").into(),
-            None,
-            t.green.fg,
-        );
+        // One entry per approval still standing, by whom; without them (an
+        // MR read before they were kept), the last approval alone.
+        if review.approvals.is_empty() {
+            let by = match mr.approved_by.as_slice() {
+                [login] => Some(display_of(mr, data, login)),
+                _ => None,
+            };
+            add(
+                review.approved_at.as_deref(),
+                tl("Approved").into(),
+                by.as_deref().map(|d| split_person(d).0),
+                t.green.fg,
+            );
+        }
+        for (login, at) in &review.approvals {
+            let display = display_of(mr, data, login);
+            add(
+                Some(at),
+                tl("Approved").into(),
+                Some(split_person(&display).0),
+                t.green.fg,
+            );
+        }
     }
     for p in &mr.pipelines {
         let (label, tone) = tones::pipeline(p.status, t);
@@ -2678,6 +2699,7 @@ pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>
                 color: t.gray.fg,
                 pending: true,
                 side: false,
+                at: None,
             });
         }
         steps.reverse();

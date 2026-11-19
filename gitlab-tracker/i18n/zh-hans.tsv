@@ -2121,3 +2121,10 @@ rail	Releases	发布
 	Hidden: the window is too narrow	已隐藏：窗口太窄
 @plural	{n} unsaved change|{n} unsaved changes	{n} 项未保存的更改
 @plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	已隐藏 {n} 列：窗口太窄，加宽窗口即可看到。
+	{weekday} {day} {month} {year}	{year}年{month}{day}日 {weekday}
+	First approval	第一次批准
+	Second approval	第二次批准
+	Third approval	第三次批准
+	Fourth approval	第四次批准
+	Fifth approval	第五次批准
+	Approval {n}	第 {n} 次批准

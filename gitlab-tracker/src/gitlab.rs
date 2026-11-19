@@ -766,9 +766,13 @@ fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
         let reviewed = if note.system {
             if body == "approved this merge request" {
                 activity.approved_at = Some(at.clone());
+                if !user.is_empty() {
+                    activity.approvals.insert(user.to_string(), at.clone());
+                }
                 true
             } else if body == "unapproved this merge request" {
                 activity.approved_at = None;
+                activity.approvals.remove(user);
                 false
             } else if let Some(who) = body.strip_prefix("requested review from ") {
                 if activity.first_review_requested_at.is_none() {
@@ -2421,6 +2425,34 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn review_activity_keeps_each_standing_approval_with_its_time() {
+        let json = r#"[
+            {"notes": [{"id": 1, "system": true, "author": {"username": "alice", "name": "Alice"},
+                        "body": "approved this merge request", "created_at": "2026-09-01T10:00:00.000Z"}]},
+            {"notes": [{"id": 2, "system": true, "author": {"username": "carol", "name": "Carol"},
+                        "body": "approved this merge request", "created_at": "2026-09-01T11:00:00.000Z"}]},
+            {"notes": [{"id": 3, "system": true, "author": {"username": "carol", "name": "Carol"},
+                        "body": "unapproved this merge request", "created_at": "2026-09-01T12:00:00.000Z"}]},
+            {"notes": [{"id": 4, "system": true, "author": {"username": "bob", "name": "Bob"},
+                        "body": "approved this merge request", "created_at": "2026-09-02T09:00:00.000Z"}]}
+        ]"#;
+        let discussions: Vec<Discussion> = serde_json::from_str(json).unwrap();
+        let activity = review_activity(&discussions, "dev");
+        let approvals: Vec<(&str, &str)> = activity
+            .approvals
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        assert_eq!(
+            approvals,
+            [
+                ("alice", "2026-09-01T10:00:00.000Z"),
+                ("bob", "2026-09-02T09:00:00.000Z")
+            ]
+        );
+    }
+
+    #[test]
     fn review_activity_reads_comments_approvals_requests_and_pushes() {
         let json = r#"[
             {"notes": [{"id": 1, "system": true, "author": {"username": "dev", "name": "Dev"},
@@ -2450,6 +2482,7 @@ pub(crate) mod tests {
             Some("2026-09-01T10:00:00.000Z")
         );
         assert_eq!(activity.approved_at, None, "unapproved afterwards");
+        assert!(activity.approvals.is_empty(), "Bob's approval withdrawn");
         assert_eq!(
             activity.last_push_at.as_deref(),
             Some("2026-09-01T12:00:00.000Z")

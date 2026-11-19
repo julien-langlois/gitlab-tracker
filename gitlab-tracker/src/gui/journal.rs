@@ -561,43 +561,7 @@ pub(super) fn day_label(day: chrono::NaiveDate, today: chrono::NaiveDate) -> Str
     if Some(day) == today.pred_opt() {
         return tl("Yesterday").to_string();
     }
-    let weekday = tc(
-        "date",
-        match day.weekday() {
-            chrono::Weekday::Mon => "Monday",
-            chrono::Weekday::Tue => "Tuesday",
-            chrono::Weekday::Wed => "Wednesday",
-            chrono::Weekday::Thu => "Thursday",
-            chrono::Weekday::Fri => "Friday",
-            chrono::Weekday::Sat => "Saturday",
-            chrono::Weekday::Sun => "Sunday",
-        },
-    );
-    let month = tc(
-        "date",
-        [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
-        ][day.month0() as usize],
-    );
-    tf(
-        "{weekday} {day} {month}",
-        &[
-            ("weekday", weekday),
-            ("day", &day.day().to_string()),
-            ("month", month),
-        ],
-    )
+    super::widgets::long_date(day, false)
 }
 
 #[allow(clippy::too_many_arguments)]
