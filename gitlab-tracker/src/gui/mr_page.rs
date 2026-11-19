@@ -1781,15 +1781,24 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 .unwrap_or_default()
         })
         .collect();
-    // Who wrote each commit (an MR is often shared): avatar and name, the
+    // Who wrote each commit (an MR is often shared): avatar and full name, the
     // column as wide as the longest name, up to AUTHOR_MAX.
     const AVATAR: f32 = 22.0;
     const AUTHOR_MAX: f32 = 200.0;
     let author_font = egui::FontId::proportional(theme.text_size - 1.0);
-    let author_width = mr
+    let people = known_people(&g.app);
+    let authors: Vec<(String, Option<String>)> = mr
         .commits
         .iter()
-        .map(|c| AVATAR + 6.0 + text_width(ui, c.author(), author_font.clone()).ceil() + 2.0)
+        .map(|c| commit_author(&people, c))
+        .collect();
+    let author_widths: Vec<f32> = authors
+        .iter()
+        .map(|(name, _)| AVATAR + 6.0 + text_width(ui, name, author_font.clone()).ceil() + 2.0)
+        .collect();
+    let author_width = author_widths
+        .iter()
+        .copied()
         .fold(
             text_width(ui, &tl("Author").to_uppercase(), author_font.clone()),
             f32::max,
@@ -1847,7 +1856,11 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 };
                 head(ui, SHA, "SHA");
                 head(ui, title, tl("Title"));
-                head(ui, author_width, tl("Author"));
+                centered(ui, author_width, |ui| {
+                    ui.label(
+                        muted(&theme, tl("Author").to_uppercase()).size(theme.text_size - 2.5),
+                    );
+                });
                 head(ui, date_width, tl("Authored"));
                 if report.is_some() {
                     head(ui, sig_width, tl("Signature"));
@@ -1863,7 +1876,13 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 }
             });
             super::widgets::rule(ui, &theme);
-            for (commit, date) in mr.commits.iter().zip(&dates) {
+            for (((commit, date), (author, display)), author_w) in mr
+                .commits
+                .iter()
+                .zip(&dates)
+                .zip(&authors)
+                .zip(&author_widths)
+            {
                 let (rect, response) =
                     ui.allocate_exact_size(Vec2::new(total, ROW), Sense::hover());
                 if response.hovered() {
@@ -1899,10 +1918,12 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 });
                 fixed(&mut row, author_width, |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    let author = commit.author();
+                    // Centred under the column's title, as one block.
+                    ui.add_space(((author_width - author_w) / 2.0).max(0.0));
+                    let author = author.as_str();
                     let who = || {
                         Tip::new()
-                            .person(author)
+                            .person(display.as_deref().unwrap_or(author))
                             .text(&commit.fingerprint.author_email)
                     };
                     avatar(ui, &theme, author, AVATAR).rich(who());
@@ -1947,6 +1968,48 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         });
     ui.add_space(10.0);
     ui.label(muted(&theme, tl("● same SHA · ◆ cherry-picked with -x · ≈ copied (same author, date and title) · ○ absent")));
+}
+
+/// Everyone the tracking knows by "Full Name (@login)": lower-cased login to
+/// that display string.
+fn known_people(app: &App) -> std::collections::HashMap<String, String> {
+    let mut people = std::collections::HashMap::new();
+    for mr in &app.mrs {
+        let all = std::iter::once(&mr.author)
+            .chain(&mr.reviewers)
+            .chain(&mr.approvers)
+            .chain(&mr.assignee)
+            .chain(&mr.merged_by);
+        for display in all {
+            if let (name, Some(login)) = split_person(display) {
+                if !name.trim().is_empty() {
+                    people
+                        .entry(login.to_lowercase())
+                        .or_insert_with(|| display.clone());
+                }
+            }
+        }
+    }
+    people
+}
+
+/// A commit's author by their GitLab full name when git recorded their login
+/// (as its author name or its e-mail's local part), with their "Full Name
+/// (@login)"; else as git recorded them.
+fn commit_author(
+    people: &std::collections::HashMap<String, String>,
+    commit: &crate::models::MrCommit,
+) -> (String, Option<String>) {
+    let email = &commit.fingerprint.author_email;
+    let local = email.split('@').next().unwrap_or(email);
+    [commit.author_name.trim(), local]
+        .into_iter()
+        .filter(|key| !key.is_empty())
+        .find_map(|key| people.get(&key.to_lowercase()))
+        .map_or_else(
+            || (commit.author().to_string(), None),
+            |display| (split_person(display).0.to_string(), Some(display.clone())),
+        )
 }
 
 /// A commit's signature: glyph and label on its tone, why on hover.
