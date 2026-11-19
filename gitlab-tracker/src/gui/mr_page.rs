@@ -394,7 +394,8 @@ fn facts(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) -> Op
         ),
         None => (
             mr.approved_by.len().to_string(),
-            tl("approvals").to_string(),
+            // The number is above it: the word alone, in the number's form.
+            tn(mr.approved_by.len() as u64, "approval", "approvals"),
         ),
     };
     list.push((tl("Approvals"), approvals, None, approval_caption));

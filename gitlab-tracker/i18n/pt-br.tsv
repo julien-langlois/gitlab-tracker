@@ -966,6 +966,7 @@ date	Merged	Mesclada
 	All resolved	Todas resolvidas
 	rules met	regras cumpridas
 	approvals	aprovações
+@plural	approval|approvals	aprovação|aprovações
 	Approvals	Aprovações
 	Mark it as ready in GitLab once it is.	Marque-a como pronta no GitLab quando estiver.
 	Conflicts with {target}	Conflitos com {target}

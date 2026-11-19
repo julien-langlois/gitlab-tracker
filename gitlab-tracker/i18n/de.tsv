@@ -966,6 +966,7 @@ date	Merged	Gemergt
 	All resolved	Alle gelöst
 	rules met	Regeln erfüllt
 	approvals	Genehmigungen
+@plural	approval|approvals	Genehmigung|Genehmigungen
 	Approvals	Genehmigungen
 	Mark it as ready in GitLab once it is.	Markieren Sie ihn in GitLab als bereit, sobald er es ist.
 	Conflicts with {target}	Konflikte mit {target}

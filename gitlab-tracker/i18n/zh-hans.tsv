@@ -966,6 +966,7 @@ date	Merged	合并时间
 	All resolved	全部已解决
 	rules met	条规则已满足
 	approvals	个批准
+@plural	approval|approvals	个批准
 	Approvals	批准
 	Mark it as ready in GitLab once it is.	准备好后在 GitLab 中将其标记为就绪。
 	Conflicts with {target}	与 {target} 冲突
