@@ -782,9 +782,16 @@ pub fn signature_checks(mr: &TrackedMr, report: &crate::signatures::Report) -> V
         to_commits: true,
     };
     let mut list = Vec::new();
+    // From the branch as GitLab has it, signed again over the target, pushed
+    // back in place of the unsigned one (refused if someone pushed meanwhile).
     let resign = format!(
-        "git rebase --exec 'git commit --amend --no-edit -S' origin/{}",
-        mr.target_branch
+        "git fetch origin\n\
+         git switch {src}\n\
+         git merge --ff-only origin/{src}\n\
+         git rebase --exec 'git commit --amend --no-edit -S' origin/{target}\n\
+         git push --force-with-lease origin {src}",
+        src = mr.source_branch,
+        target = mr.target_branch
     );
     if !summary.unsigned.is_empty() {
         list.push(check(
@@ -1116,6 +1123,8 @@ struct Picked {
     mr: Option<String>,
     /// The Commits tab, for the signatures.
     commits: bool,
+    /// A command was copied: the window says so.
+    copied: bool,
 }
 
 /// The checks, worst first, and what was clicked in them.
@@ -1135,6 +1144,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
     let mut picked = None;
     let mut open = None;
     let mut to_commits = false;
+    let mut copied = false;
     let ready = !list.iter().any(|c| c.verdict != Verdict::Met);
     let title = if ready {
         tl("Nothing blocks the merge")
@@ -1211,7 +1221,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
                             ui.label(muted(&theme, &check.why));
                         }
                         if let Some(command) = &check.command {
-                            command_box(ui, &theme, command);
+                            copied |= command_box(ui, &theme, command);
                         }
                         if check.to_commits && check.verdict != Verdict::Met {
                             ui.add_space(4.0);
@@ -1238,17 +1248,25 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
         file: picked,
         mr: open,
         commits: to_commits,
+        copied,
     }
 }
 
-/// A command to copy: monospace in a box, copied on click.
-fn command_box(ui: &mut Ui, theme: &Theme, command: &str) {
+/// A command to copy: monospace in a box, with the copy icon in its corner;
+/// copied on click (`true` then).
+fn command_box(ui: &mut Ui, theme: &Theme, command: &str) -> bool {
+    const ICON: f32 = 14.0;
     ui.add_space(2.0);
     let response = egui::Frame::new()
         .fill(theme.palette.content)
         .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
         .corner_radius(CornerRadius::same(theme.radii.small))
-        .inner_margin(Margin::symmetric(8, 5))
+        .inner_margin(Margin {
+            left: 8,
+            right: 8 + ICON as i8 + 6,
+            top: 5,
+            bottom: 5,
+        })
         .show(ui, |ui| {
             ui.add(egui::Label::new(mono(command, theme.text_size - 1.5)).wrap());
         })
@@ -1256,10 +1274,56 @@ fn command_box(ui: &mut Ui, theme: &Theme, command: &str) {
         .interact(Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .tip(tl("Copy"));
+    let corner = egui::Rect::from_min_size(
+        egui::pos2(
+            response.rect.right() - 8.0 - ICON,
+            response.rect.top() + 6.0,
+        ),
+        Vec2::splat(ICON),
+    );
+    // For a moment after a click, "✓ Copied" in place of the icon.
+    let copied_at = response.id.with("copied at");
+    let now = ui.input(|i| i.time);
     if response.clicked() {
         ui.ctx().copy_text(command.to_string());
+        ui.data_mut(|d| d.insert_temp(copied_at, now));
     }
+    let since = ui
+        .data(|d| d.get_temp::<f64>(copied_at))
+        .map(|at| now - at)
+        .filter(|since| *since < COPIED_FOR);
+    if let Some(since) = since {
+        let galley = ui.painter().layout_no_wrap(
+            format!("✓ {}", tc("clipboard", "Copied")),
+            fonts::medium(theme.text_size - 1.5),
+            theme.tones.green.fg,
+        );
+        let pos = egui::pos2(
+            corner.right() - galley.size().x,
+            corner.center().y - galley.size().y / 2.0,
+        );
+        let behind = egui::Rect::from_min_size(pos, galley.size()).expand2(Vec2::new(6.0, 2.0));
+        ui.painter().rect_filled(
+            behind,
+            CornerRadius::same(theme.radii.small),
+            theme.palette.content,
+        );
+        ui.painter().galley(pos, galley, theme.tones.green.fg);
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs_f64(COPIED_FOR - since));
+    } else {
+        let color = if response.hovered() {
+            theme.palette.text
+        } else {
+            theme.palette.text_muted
+        };
+        super::icons::paint(ui.painter(), corner, Icon::Copy, color);
+    }
+    response.clicked()
 }
+
+/// How long a command box says it was copied, in seconds.
+const COPIED_FOR: f64 = 1.5;
 
 /// How many files in conflict show at once; the box scrolls past them.
 const CONFLICTS_SHOWN: usize = 10;
@@ -1459,6 +1523,9 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         }
         if let Some(id) = picked.mr {
             g.open_mr(&id);
+        }
+        if picked.copied {
+            g.app.flash(tl("Commands copied"), false);
         }
         ui.add_space(16.0);
     }
