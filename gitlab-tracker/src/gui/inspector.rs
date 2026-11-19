@@ -595,7 +595,7 @@ fn body(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     anchor(g, ui, InspectorSection::Description);
     if !mr.description.trim().is_empty() {
         section(ui, &theme, tl("Description"), |ui| {
-            g.description.show(ui, &theme, mr);
+            g.description.show(ui, &theme, mr, false);
         });
     }
     ui.add_space(16.0);

@@ -2,7 +2,7 @@
 //! GitLab adds or allows on top is rewritten into plain Markdown first (see
 //! [`prepare`]): raw HTML, `!1` / `#1` / `@user` references, bare URLs, and links
 //! relative to the project. Images become links: they would need the token on a
-//! private project, and the sidebar is too narrow to show them well. Lists holding
+//! private project, and the inspector is too narrow to show them well. Lists holding
 //! tasks are drawn here (see [`blocks`]): the viewer gives a task both a bullet and a
 //! box, and takes the box's look from the theme, where it is round.
 
@@ -35,7 +35,9 @@ pub struct Description {
 }
 
 impl Description {
-    pub fn show(&mut self, ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
+    /// `wide`: drawn across the MR page's main column, where a title can stand out
+    /// more than in the inspector.
+    pub fn show(&mut self, ui: &mut Ui, theme: &Theme, mr: &TrackedMr, wide: bool) {
         let (description, web_url, target) = &self.from;
         if description != &mr.description || web_url != &mr.web_url || target != &mr.target_branch {
             self.from = (
@@ -55,10 +57,10 @@ impl Description {
             // Back to the theme's secondary text: the theme's override would also take
             // the colour of the links and of the bold text away.
             style.visuals.override_text_color = None;
-            // The sidebar is narrow: a title stays close to the text's size.
+            // The inspector is narrow: a title stays close to the text's size there.
             style.text_styles.insert(
                 TextStyle::Heading,
-                FontId::proportional(theme.text_size + 3.0),
+                FontId::proportional(theme.text_size + if wide { 5.0 } else { 3.0 }),
             );
             show_blocks(ui, theme, &mut self.cache, &self.blocks);
         });

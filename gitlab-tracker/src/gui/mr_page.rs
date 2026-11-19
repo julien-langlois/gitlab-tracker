@@ -1,9 +1,9 @@
 //! The MR page: the selected MR on a page of its own (double click or Enter on
 //! the table, Esc back, J / K to the next or previous MR).
 //!
-//! Left, the work: why it cannot merge, then its discussions, changes, commits
-//! and pipelines. Right, the context: its branches and deployments, a timeline,
-//! approvals, people, ticket, related MRs, how it compares, and its description.
+//! Left, the work: why it cannot merge, its description (folded when long), then
+//! its discussions, changes, commits and pipelines. Right, the context: a
+//! timeline, approvals, related MRs, how it compares, and its planning.
 //! What the list does not keep (merge checks, approval rules, the threads in full,
 //! deployments) is read when the page opens (`gitlab_detail`).
 
@@ -1529,6 +1529,10 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         }
         ui.add_space(16.0);
     }
+    if !mr.description.trim().is_empty() {
+        description(g, ui, mr);
+        ui.add_space(16.0);
+    }
     let threads = data.and_then(|d| d.threads.as_ref().ok());
     let changed_files = g.details.diff(&mr.id).map(<[_]>::len);
     let tabs = [
@@ -1639,6 +1643,105 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
             Tab::Pipelines => super::mr_pipelines::tab(g, ui, mr),
         }
     });
+}
+
+/// The description's height while folded, and how much taller it may be and
+/// still show in full: folding would hide only a line or two.
+const FOLDED_DESCRIPTION: f32 = 180.0;
+const FOLD_SLACK: f32 = 48.0;
+
+/// The MR's description across the main column, where its lists, tables and
+/// code have room. Folded when long, with a fade over its last lines, so the
+/// tabs below stay in view; "Read more" shows it in full, until another MR.
+fn description(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
+    let theme = g.theme;
+    let open = g.mr_description_open.as_deref() == Some(mr.id.as_str());
+    // The full height, measured at the last frame: whether there is anything to fold
+    // is known before the title row is drawn.
+    let height_id = egui::Id::unique(("mr_description_height", &mr.id));
+    let full: Option<f32> = ui.ctx().data(|d| d.get_temp(height_id));
+    let foldable = full.is_some_and(|h| h > FOLDED_DESCRIPTION + FOLD_SLACK);
+    let mut toggle = false;
+    egui::Frame::new()
+        .fill(theme.palette.panel)
+        .stroke(egui::Stroke::new(1.0, theme.palette.border_soft))
+        .corner_radius(CornerRadius::same(theme.radii.large))
+        .inner_margin(Margin::symmetric(14, 12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                tile_title(ui, &theme, tl("Description"));
+                if foldable && open {
+                    ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                        toggle |= text_link(ui, &theme, tl("Show less")).clicked();
+                    });
+                }
+            });
+            let width = ui.available_width();
+            let top = ui.cursor().min;
+            let mut body = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(egui::Rect::from_min_size(top, Vec2::new(width, f32::INFINITY)))
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            let folded = !open && full.is_none_or(|h| h > FOLDED_DESCRIPTION + FOLD_SLACK);
+            if folded {
+                // Clipped: what lies below can be neither seen nor clicked.
+                let shown = egui::Rect::from_min_size(top, Vec2::new(width, FOLDED_DESCRIPTION));
+                body.set_clip_rect(body.clip_rect().intersect(shown));
+            }
+            g.description.show(&mut body, &theme, mr, true);
+            let measured = body.min_rect().height();
+            ui.ctx().data_mut(|d| d.insert_temp(height_id, measured));
+            let height = if folded {
+                measured.min(FOLDED_DESCRIPTION)
+            } else {
+                measured
+            };
+            let rect = egui::Rect::from_min_size(top, Vec2::new(width, height));
+            ui.allocate_rect(rect, Sense::hover());
+            if folded && measured > FOLDED_DESCRIPTION {
+                fade(ui, rect, theme.palette.panel);
+                ui.add_space(4.0);
+                toggle |= text_link(ui, &theme, &format!("{} ▾", tl("Read more"))).clicked();
+            } else if foldable && open {
+                ui.add_space(6.0);
+                toggle |= text_link(ui, &theme, &format!("{} ▴", tl("Show less"))).clicked();
+            }
+        });
+    if toggle {
+        g.mr_description_open = (!open).then(|| mr.id.clone());
+    }
+}
+
+/// The last lines of a folded block fading into its background.
+fn fade(ui: &Ui, rect: egui::Rect, background: egui::Color32) {
+    let band = egui::Rect::from_min_max(
+        egui::pos2(rect.left(), rect.bottom() - 56.0),
+        rect.max,
+    );
+    let mut mesh = egui::Mesh::default();
+    let clear = background.gamma_multiply(0.0);
+    mesh.colored_vertex(band.left_top(), clear);
+    mesh.colored_vertex(band.right_top(), clear);
+    mesh.colored_vertex(band.right_bottom(), background);
+    mesh.colored_vertex(band.left_bottom(), background);
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    ui.painter().add(egui::Shape::mesh(mesh));
+}
+
+/// Text in the accent that reads as a link.
+fn text_link(ui: &mut Ui, theme: &Theme, text: &str) -> egui::Response {
+    ui.add(
+        egui::Label::new(
+            RichText::new(text)
+                .size(theme.text_size - 1.0)
+                .color(theme.palette.accent),
+        )
+        .sense(Sense::click()),
+    )
+    .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 fn discussions(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
@@ -2622,11 +2725,6 @@ fn context(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
     side_card(ui, &theme, tl("Planning"), |ui| {
         inspector::planning_body(ui, &theme, mr)
     });
-    if !mr.description.trim().is_empty() {
-        side_card(ui, &theme, tl("Description"), |ui| {
-            g.description.show(ui, &theme, mr);
-        });
-    }
 }
 
 /// A block of the right column: a tile of its own, titled like the tiles above.

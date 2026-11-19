@@ -380,7 +380,7 @@ struct GuiApp {
     pending: Vec<Action>,
     /// Writes the state off the UI thread.
     state_writer: StateWriter,
-    /// The selected MR's description, rendered in the inspector.
+    /// The selected MR's description, rendered in the inspector and the MR page.
     description: markdown::Description,
     /// Diffs and job logs read on demand for the inspector.
     details: details::Details,
@@ -403,6 +403,8 @@ struct GuiApp {
     /// The MR page's tab, and whether it lists the resolved threads.
     mr_tab: mr_page::Tab,
     show_resolved: bool,
+    /// The MR whose description the MR page shows in full (folded otherwise).
+    mr_description_open: Option<String>,
     /// The bell panel's filter, and whether it was open at the last frame (its
     /// notifications count as read once it closes).
     bell_filter: toasts::Filter,
@@ -570,6 +572,7 @@ impl GuiApp {
             promote: None,
             mr_tab: mr_page::Tab::Discussions,
             show_resolved: false,
+            mr_description_open: None,
             clicks: notification_clicks(&cc.egui_ctx),
             bell_filter: toasts::Filter::All,
             schedule_seen: schedules::Seen::new(),
