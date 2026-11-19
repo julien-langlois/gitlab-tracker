@@ -2093,3 +2093,31 @@ rail	Releases	Releases
 	Merging by itself · for {time}	Fusion automatique · depuis {time}
 	Merging by itself	Fusion automatique
 	merging by itself	fusion automatique
+	Theme	Thème
+	Dark	Sombre
+	Light	Clair
+	Applied at once, as with the title bar's button.	Appliqué tout de suite, comme avec le bouton de la barre de titre.
+	What the merge request table shows	Ce qu'affiche le tableau des merge requests
+	This window's look. Not part of the project's settings.	L'apparence de cette fenêtre. Ne fait pas partie des réglages du projet.
+	What the project tracks, and how often it refreshes.	Ce que le projet suit, et à quelle fréquence il se rafraîchit.
+	Warn about the commits of the open MRs that are not signed.	Signale les commits non signés des MR ouvertes.
+	Hotfixes and deploy freezes.	Hotfixes et gels de déploiement.
+	The draft release notes.	Le brouillon des notes de version.
+	The local statistics: how long they are kept, how sprints are cut.	Les statistiques locales : combien de temps elles sont gardées, comment les sprints sont découpés.
+	Changed, not saved yet	Modifié, pas encore enregistré
+	Search settings	Rechercher un réglage
+	No setting found	Aucun réglage trouvé
+	Nothing matches “{query}” in the settings' names and help.	Rien ne correspond à « {query} » dans les noms et l'aide des réglages.
+	Recent, slowing or stale, from its last update	Récente, ralentie ou inactive, d'après sa dernière mise à jour
+	The branch it merges into	La branche dans laquelle elle fusionne
+	Its GitLab labels	Ses labels GitLab
+	The milestone it belongs to	Le jalon auquel elle appartient
+	How many comments it holds	Combien de commentaires elle contient
+	How hard it is to review, from its size	La difficulté de la relecture, d'après sa taille
+	The commits its target branch gained since	Les commits gagnés depuis par sa branche cible
+	Its linked ticket	Son ticket lié
+	Shared with the terminal UI	Partagées avec l'interface du terminal
+	Applied at once, kept for this project.	Appliqué tout de suite, gardé pour ce projet.
+	Hidden: the window is too narrow	Masquée : la fenêtre est trop étroite
+@plural	{n} unsaved change|{n} unsaved changes	{n} modification non enregistrée|{n} modifications non enregistrées
+@plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	{n} colonne masquée : la fenêtre est trop étroite pour elle. Élargissez-la pour la voir.|{n} colonnes masquées : la fenêtre est trop étroite pour elles. Élargissez-la pour les voir.

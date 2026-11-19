@@ -2093,3 +2093,31 @@ rail	Releases	发布
 	Merging by itself · for {time}	自动合并中 · 已 {time}
 	Merging by itself	自动合并中
 	merging by itself	自动合并中
+	Theme	主题
+	Dark	深色
+	Light	浅色
+	Applied at once, as with the title bar's button.	立即生效，与标题栏按钮相同。
+	What the merge request table shows	合并请求表格显示的内容
+	This window's look. Not part of the project's settings.	此窗口的外观，不属于项目设置。
+	What the project tracks, and how often it refreshes.	项目跟踪的内容及刷新频率。
+	Warn about the commits of the open MRs that are not signed.	提醒未签名的开放 MR 提交。
+	Hotfixes and deploy freezes.	热修复与部署冻结。
+	The draft release notes.	发布说明草稿。
+	The local statistics: how long they are kept, how sprints are cut.	本地统计：保留多久，冲刺如何划分。
+	Changed, not saved yet	已修改，尚未保存
+	Search settings	搜索设置
+	No setting found	未找到设置
+	Nothing matches “{query}” in the settings' names and help.	设置的名称和说明中没有匹配“{query}”的内容。
+	Recent, slowing or stale, from its last update	按最近更新：活跃、放缓或停滞
+	The branch it merges into	合并的目标分支
+	Its GitLab labels	它的 GitLab 标签
+	The milestone it belongs to	所属的里程碑
+	How many comments it holds	包含的评论数
+	How hard it is to review, from its size	按规模估算的评审难度
+	The commits its target branch gained since	目标分支此后新增的提交
+	Its linked ticket	关联的工单
+	Shared with the terminal UI	与终端界面共享
+	Applied at once, kept for this project.	立即生效，并为此项目保存。
+	Hidden: the window is too narrow	已隐藏：窗口太窄
+@plural	{n} unsaved change|{n} unsaved changes	{n} 项未保存的更改
+@plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	已隐藏 {n} 列：窗口太窄，加宽窗口即可看到。

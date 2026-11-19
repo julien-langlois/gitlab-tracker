@@ -2093,3 +2093,31 @@ rail	Releases	Releases
 	Merging by itself · for {time}	Fusión automática · desde hace {time}
 	Merging by itself	Fusión automática
 	merging by itself	fusión automática
+	Theme	Tema
+	Dark	Oscuro
+	Light	Claro
+	Applied at once, as with the title bar's button.	Se aplica al instante, como con el botón de la barra de título.
+	What the merge request table shows	Lo que muestra la tabla de merge requests
+	This window's look. Not part of the project's settings.	El aspecto de esta ventana. No forma parte de los ajustes del proyecto.
+	What the project tracks, and how often it refreshes.	Lo que sigue el proyecto y cada cuánto se actualiza.
+	Warn about the commits of the open MRs that are not signed.	Avisa de los commits sin firmar de los MR abiertos.
+	Hotfixes and deploy freezes.	Hotfixes y congelaciones de despliegue.
+	The draft release notes.	El borrador de las notas de versión.
+	The local statistics: how long they are kept, how sprints are cut.	Las estadísticas locales: cuánto se conservan y cómo se cortan los sprints.
+	Changed, not saved yet	Cambiado, aún sin guardar
+	Search settings	Buscar ajustes
+	No setting found	Ningún ajuste encontrado
+	Nothing matches “{query}” in the settings' names and help.	Nada coincide con «{query}» en los nombres y la ayuda de los ajustes.
+	Recent, slowing or stale, from its last update	Reciente, en pausa o inactivo, según su última actualización
+	The branch it merges into	La rama en la que se fusiona
+	Its GitLab labels	Sus etiquetas de GitLab
+	The milestone it belongs to	El hito al que pertenece
+	How many comments it holds	Cuántos comentarios tiene
+	How hard it is to review, from its size	Lo difícil que es revisarlo, según su tamaño
+	The commits its target branch gained since	Los commits que ganó su rama destino desde entonces
+	Its linked ticket	Su ticket vinculado
+	Shared with the terminal UI	Compartidas con la interfaz de terminal
+	Applied at once, kept for this project.	Se aplica al instante y se guarda para este proyecto.
+	Hidden: the window is too narrow	Oculta: la ventana es demasiado estrecha
+@plural	{n} unsaved change|{n} unsaved changes	{n} cambio sin guardar|{n} cambios sin guardar
+@plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	{n} columna oculta: la ventana es demasiado estrecha. Ensánchala para verla.|{n} columnas ocultas: la ventana es demasiado estrecha. Ensánchala para verlas.

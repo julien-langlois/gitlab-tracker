@@ -196,7 +196,7 @@ pub fn render_table(app: &App) -> Table<'_> {
         header_cells.push(Cell::from("Milestone").bold());
     }
     if col("notes") {
-        header_cells.push(Cell::from("Notes").bold());
+        header_cells.push(Cell::from("Threads").bold());
     }
     if col("diff_stats") {
         header_cells.push(Cell::from("Effort").bold());
@@ -486,7 +486,7 @@ pub fn render_table(app: &App) -> Table<'_> {
         constraints.push(Constraint::Fill(milestone_fill)); // Milestone
     }
     if col("notes") {
-        constraints.push(Constraint::Length(10)); // Notes badge
+        constraints.push(Constraint::Length(10)); // Threads badge
     }
     if col("diff_stats") {
         constraints.push(Constraint::Length(14)); // Complexity chip badge (e.g. " 🔴 Complex ")

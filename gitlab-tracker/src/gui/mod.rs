@@ -418,6 +418,12 @@ struct GuiApp {
     hide_next_column: bool,
     /// The table shows the branches as one flow cell instead of a column each.
     flow_cells: bool,
+    /// The settings dialog's tab (a section's name) and its search.
+    settings_tab: String,
+    settings_search: String,
+    /// The table's optional columns drawn last frame, once fitted to the window:
+    /// the column picker's preview.
+    shown_columns: Vec<table::Col>,
     /// The Promote page's ready MRs left out of the release, by id.
     promote_skipped: HashSet<String>,
     /// The inspector's section last picked in its tabs.
@@ -568,6 +574,9 @@ impl GuiApp {
             compact: false,
             hide_next_column: false,
             flow_cells: true,
+            settings_tab: String::new(),
+            settings_search: String::new(),
+            shown_columns: Vec::new(),
             promote_skipped: HashSet::new(),
             inspector_tab: InspectorSection::Review,
             feed_seen_at: None,
@@ -1827,6 +1836,14 @@ impl eframe::App for GuiApp {
                     self.wizard = Some(setup::ProjectForm::new(&self.ctx, setup::Mode::New));
                 }
                 _ => {}
+            }
+            // `GITLAB_TRACKER_GUI_SETTINGS=Core` opens that tab of the settings
+            // (with `GITLAB_TRACKER_GUI_KEYS=,`); `=?text` searches them.
+            if let Ok(tab) = std::env::var("GITLAB_TRACKER_GUI_SETTINGS") {
+                match tab.strip_prefix('?') {
+                    Some(query) => self.settings_search = query.to_string(),
+                    None => self.settings_tab = tab,
+                }
             }
             if std::env::var("GITLAB_TRACKER_GUI_THEME").as_deref() == Ok("light") {
                 self.set_theme(bevel_theme::Mode::Light);

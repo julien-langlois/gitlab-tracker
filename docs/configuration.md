@@ -170,7 +170,7 @@ enforce = true
 > | `target_branch` | **Target** — the branch the MR merges into |
 > | `labels` | **Labels** — filtered label chips (respects `table_label_prefixes`) |
 > | `milestone` | **Milestone** — the associated milestone title |
-> | `notes` | **Notes** — unresolved review threads (`💬 N` in yellow when non-zero) |
+> | `notes` | **Threads** — unresolved review threads (`💬 N` in yellow when non-zero) |
 > | `diff_stats` | **Effort** — 🟢 / 🟡 / 🔴 chip badge calibrated to `complexity_profile` |
 > | `commits_behind` | **Behind** — commits the source branch is behind the target (`✔ Up to date`, `N behind`, `RETRYING`, `SYNC FAILED`) |
 > | `tracker_ticket` | **Tracker** — linked ticket ID, status and spent / estimated time (requires a tracker plugin) |

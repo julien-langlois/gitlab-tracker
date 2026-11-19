@@ -60,7 +60,7 @@ also be set in `[project.visible_columns]` (see the [configuration](configuratio
 | **Target** | The branch the MR merges into |
 | **Labels** | Filtered label chips (respects `table_label_prefixes`) |
 | **Milestone** | The milestone title |
-| **Notes** | Unresolved review threads — `💬 N` in yellow, dimmed `✔ 0` otherwise |
+| **Threads** | Unresolved review threads — `💬 N` in yellow, dimmed `✔ 0` otherwise |
 | **Effort** | 🟢 Easy / 🟡 Medium / 🔴 Complex, calibrated to your `complexity_profile` |
 | **Behind** | Commits the source branch is behind its target — green, yellow, red at 10+; may show `RETRYING` or `SYNC FAILED` while GitLab's mergeability is unresolved |
 | **Tracker** | Linked ticket ID, status and spent / estimated time *(only with a tracker plugin such as Redmine)* |

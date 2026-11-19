@@ -1118,7 +1118,7 @@ impl Col {
         matches!(self, Col::Next | Col::Ci | Col::Queue)
     }
 
-    fn id(self) -> &'static str {
+    pub(crate) fn id(self) -> &'static str {
         match self {
             Col::Next => "next_step",
             Col::Ci => "ci",
@@ -1150,7 +1150,7 @@ impl Col {
         }
     }
 
-    fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         tl(match self {
             Col::Next => "Next step",
             Col::Ci => "CI",
@@ -1169,9 +1169,8 @@ impl Col {
 
 /// The columns the user chose. Until they pick some (here or in the TUI), the
 /// window shows a set suited to its width rather than the TUI's empty default.
-fn wanted_columns(app: &App, hide_next: bool, queue: bool) -> Vec<Col> {
+pub(crate) fn wanted_columns(app: &App, hide_next: bool, queue: bool) -> Vec<Col> {
     let offered: Vec<&str> = app.visible_column_defs().iter().map(|c| c.id).collect();
-    let chosen = app.project_settings.visible_columns.is_some();
     Col::ALL
         .into_iter()
         .filter(|c| c.window_only() || offered.contains(&c.id()))
@@ -1180,13 +1179,21 @@ fn wanted_columns(app: &App, hide_next: bool, queue: bool) -> Vec<Col> {
                 queue
             } else if c.window_only() {
                 !(hide_next && *c == Col::Next)
-            } else if chosen {
-                app.config.visible_columns.is_visible(c.id())
             } else {
-                !matches!(c, Col::Activity | Col::Labels)
+                shows_column(app, c.id())
             }
         })
         .collect()
+}
+
+/// Whether the table shows the shared column `id`: the user's choice once made
+/// (here or in the TUI), else the window's own set.
+pub(crate) fn shows_column(app: &App, id: &str) -> bool {
+    if app.project_settings.visible_columns.is_some() {
+        app.config.visible_columns.is_visible(id)
+    } else {
+        !matches!(id, "activity" | "labels")
+    }
 }
 
 const FLAG_WIDTH: f32 = 18.0;
@@ -1873,6 +1880,7 @@ fn table(g: &mut GuiApp, ui: &mut Ui, shown: usize, inspector_shown: bool) {
     } else {
         fit_columns(&wanted, ui.available_width(), branches.len())
     };
+    g.shown_columns.clone_from(&columns);
     let mut grid = if flow {
         Grid::with_flow(&columns, branches.len(), step, ui.available_width())
     } else {

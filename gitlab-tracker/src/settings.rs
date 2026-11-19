@@ -51,6 +51,13 @@ impl SettingsEditorState {
         *self = Self::from_project_table(self.original_project_table.clone());
     }
 
+    /// Whether the item at `index` differs from the value it was opened with.
+    pub fn is_modified(&self, index: usize) -> bool {
+        self.items.get(index).is_some_and(|item| {
+            normalize_value((item.def.read)(&self.original_project_table), &item.def) != item.value
+        })
+    }
+
     pub fn selected_help(&self) -> &'static str {
         self.items
             .get(self.cursor)

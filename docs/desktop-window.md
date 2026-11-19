@@ -23,6 +23,7 @@ projects.
 - [Stacked MRs](#stacked-mrs)
 - [Tracker](#tracker)
 - [Stats](#stats)
+- [Settings and columns](#settings-and-columns)
 - [Dock icon and launcher (Linux)](#dock-icon-and-launcher-linux)
 
 ## Install and run
@@ -337,6 +338,27 @@ correlations, from the local stats database (see
 [Analytics and velocity stats](terminal.md#analytics-and-velocity-stats)).
 
 ![Stats: throughput, time to merge by size, backlog health](assets/desktop/stats.png)
+
+## Settings and columns
+
+**Settings** (`,`, or the gear at the bottom of the rail) has a tab per section
+on the left: the window's own (language, theme) first, then the project's
+(general, signed commits, delivery, releases, stats). The search above the tabs
+goes through every section's names and help at once, each tab counting what it
+found. A dot marks what changed and is not saved yet, on the row and on its tab,
+and the footer counts it; Save writes the project's to `projects.toml`, Cancel
+or Esc leaves them as they were. Options that depend on another are greyed out
+while it is off.
+
+![Settings: a tab per section, the search, the signed commits' options](assets/desktop/settings.png)
+
+**Columns** (`C`, or *Columns…* in the table) previews the table's head as it is
+drawn now: the columns picked in the accent, those the window has no room for
+dashed. Below, a card per column to switch on or off: first those shared with
+the terminal UI, then the window's own (next step, branches in one cell). The
+changes apply at once and are kept for the project.
+
+![Columns: the live preview of the table's head, a card per column](assets/desktop/columns.png)
 
 ## Dock icon and launcher (Linux)
 

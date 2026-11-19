@@ -2093,3 +2093,31 @@ rail	Releases	Releases
 	Merging by itself · for {time}	Wird automatisch gemergt · seit {time}
 	Merging by itself	Wird automatisch gemergt
 	merging by itself	wird automatisch gemergt
+	Theme	Design
+	Dark	Dunkel
+	Light	Hell
+	Applied at once, as with the title bar's button.	Sofort angewendet, wie mit der Schaltfläche in der Titelleiste.
+	What the merge request table shows	Was die Merge-Request-Tabelle zeigt
+	This window's look. Not part of the project's settings.	Das Aussehen dieses Fensters. Gehört nicht zu den Projekteinstellungen.
+	What the project tracks, and how often it refreshes.	Was das Projekt verfolgt und wie oft es aktualisiert wird.
+	Warn about the commits of the open MRs that are not signed.	Warnt vor nicht signierten Commits in offenen MRs.
+	Hotfixes and deploy freezes.	Hotfixes und Deploy-Sperren.
+	The draft release notes.	Der Entwurf der Release Notes.
+	The local statistics: how long they are kept, how sprints are cut.	Die lokalen Statistiken: wie lange sie aufbewahrt werden, wie Sprints geschnitten sind.
+	Changed, not saved yet	Geändert, noch nicht gespeichert
+	Search settings	Einstellungen durchsuchen
+	No setting found	Keine Einstellung gefunden
+	Nothing matches “{query}” in the settings' names and help.	Nichts passt zu „{query}“ in Namen und Hilfe der Einstellungen.
+	Recent, slowing or stale, from its last update	Aktuell, nachlassend oder veraltet, nach der letzten Änderung
+	The branch it merges into	Der Branch, in den gemergt wird
+	Its GitLab labels	Seine GitLab-Labels
+	The milestone it belongs to	Der Meilenstein, zu dem er gehört
+	How many comments it holds	Wie viele Kommentare er hat
+	How hard it is to review, from its size	Wie aufwendig die Review ist, nach Größe
+	The commits its target branch gained since	Die Commits, die der Ziel-Branch seitdem bekam
+	Its linked ticket	Sein verknüpftes Ticket
+	Shared with the terminal UI	Mit der Terminal-Oberfläche geteilt
+	Applied at once, kept for this project.	Sofort angewendet, für dieses Projekt gespeichert.
+	Hidden: the window is too narrow	Ausgeblendet: das Fenster ist zu schmal
+@plural	{n} unsaved change|{n} unsaved changes	{n} ungespeicherte Änderung|{n} ungespeicherte Änderungen
+@plural	{n} column hidden: the window is too narrow for it. Widen it to see it.|{n} columns hidden: the window is too narrow for them. Widen it to see them.	{n} Spalte ausgeblendet: das Fenster ist zu schmal dafür. Vergrößere es, um sie zu sehen.|{n} Spalten ausgeblendet: das Fenster ist zu schmal dafür. Vergrößere es, um sie zu sehen.

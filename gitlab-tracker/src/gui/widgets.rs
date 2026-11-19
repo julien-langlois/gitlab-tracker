@@ -458,16 +458,7 @@ pub fn switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> egui::Respon
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     if ui.is_rect_visible(rect) {
         let how_on = ui.ctx().animate_bool(response.id, on);
-        let track = Rect::from_min_size(
-            egui::pos2(rect.left(), rect.center().y - 8.5),
-            Vec2::new(30.0, 17.0),
-        );
-        let idle = theme.palette.border;
-        let fill = lerp_color(idle, theme.palette.accent_fill, how_on);
-        ui.painter().rect_filled(track, CornerRadius::same(9), fill);
-        let x = egui::lerp(track.left() + 8.5..=track.right() - 8.5, how_on);
-        ui.painter()
-            .circle_filled(egui::pos2(x, track.center().y), 6.5, Color32::WHITE);
+        let track = switch_track(ui, theme, egui::pos2(rect.left(), rect.center().y), how_on);
         ui.painter().galley(
             egui::pos2(
                 track.right() + 10.0,
@@ -479,6 +470,18 @@ pub fn switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> egui::Respon
     }
     focus_ring(ui, theme, &response, 9);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Paints a switch's track, 30 × 17, its left edge's middle at `left_center`,
+/// `how_on` from 0 (off) to 1 (on); returns its rectangle.
+pub fn switch_track(ui: &Ui, theme: &Theme, left_center: egui::Pos2, how_on: f32) -> Rect {
+    let track = Rect::from_min_size(left_center - Vec2::new(0.0, 8.5), Vec2::new(30.0, 17.0));
+    let fill = lerp_color(theme.palette.border, theme.palette.accent_fill, how_on);
+    ui.painter().rect_filled(track, CornerRadius::same(9), fill);
+    let x = egui::lerp(track.left() + 8.5..=track.right() - 8.5, how_on);
+    ui.painter()
+        .circle_filled(egui::pos2(x, track.center().y), 6.5, Color32::WHITE);
+    track
 }
 
 fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {

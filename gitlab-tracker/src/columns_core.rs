@@ -36,7 +36,7 @@ inventory::submit!(ColumnDef {
 
 inventory::submit!(ColumnDef {
     id: "notes",
-    label: "Notes",
+    label: "Threads",
     default_visible: false,
     priority: 4,
     requires: None,
