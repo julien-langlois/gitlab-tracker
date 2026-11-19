@@ -1561,6 +1561,14 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
             None
         }
     });
+    // A red dot on Discussions while a thread is unresolved.
+    let discussions_alert = (unresolved(mr, data) > 0).then_some(theme.tones.red.fg);
+    // A red dot on Pipelines when the latest pipeline failed.
+    let pipelines_alert = mr
+        .pipelines
+        .first()
+        .is_some_and(|p| p.status == PipelineState::Failed)
+        .then_some(theme.tones.red.fg);
     theme.card_frame().show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
@@ -1581,16 +1589,20 @@ fn work(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                 let response = ui
                     .add(egui::Label::new(text).sense(Sense::click()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
-                if tab == Tab::Commits {
-                    if let Some(color) = commits_alert {
-                        let r = response.rect;
-                        ui.painter().circle_filled(
-                            egui::pos2(r.right() + 6.0, r.center().y),
-                            3.5,
-                            color,
-                        );
-                        ui.add_space(8.0);
-                    }
+                let alert = match tab {
+                    Tab::Discussions => discussions_alert,
+                    Tab::Changes => None,
+                    Tab::Commits => commits_alert,
+                    Tab::Pipelines => pipelines_alert,
+                };
+                if let Some(color) = alert {
+                    let r = response.rect;
+                    ui.painter().circle_filled(
+                        egui::pos2(r.right() + 6.0, r.center().y),
+                        3.5,
+                        color,
+                    );
+                    ui.add_space(8.0);
                 }
                 if on {
                     let r = response.rect;
