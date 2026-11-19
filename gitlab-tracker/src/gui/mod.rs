@@ -371,9 +371,6 @@ struct GuiApp {
     history: history::History,
     /// Set by a shortcut: the inspector scrolls to this section on the next frame.
     scroll_to: Option<InspectorSection>,
-    /// The MR whose ticket the inspector was last brought to on the tracker page;
-    /// `None` away from that page.
-    ticket_anchor: Option<String>,
     /// The text filter being edited in the views panel: its index in
     /// `App::filter_defs` and the text typed so far.
     text_filter: (Option<usize>, String),
@@ -519,7 +516,6 @@ impl GuiApp {
             state_writer,
             page,
             history,
-            ticket_anchor,
             text_filter,
             members,
             baseline,
@@ -556,7 +552,6 @@ impl GuiApp {
             page,
             history,
             scroll_to: None,
-            ticket_anchor,
             text_filter,
             focus_search: false,
             pending: Vec::new(),
@@ -983,7 +978,6 @@ impl GuiApp {
         swap(&mut self.state_writer, &mut tab.state_writer);
         swap(&mut self.page, &mut tab.page);
         swap(&mut self.history, &mut tab.history);
-        swap(&mut self.ticket_anchor, &mut tab.ticket_anchor);
         swap(&mut self.text_filter, &mut tab.text_filter);
         swap(&mut self.members, &mut tab.members);
         swap(&mut self.baseline, &mut tab.baseline);
@@ -1603,7 +1597,6 @@ struct Tab {
     state_writer: StateWriter,
     page: Page,
     history: history::History,
-    ticket_anchor: Option<String>,
     text_filter: (Option<usize>, String),
     members: HashMap<String, Vec<String>>,
     baseline: Option<Baseline>,
@@ -1638,7 +1631,6 @@ impl Tab {
             state_writer: StateWriter::default(),
             page: Page::MergeRequests,
             history: history::History::default(),
-            ticket_anchor: None,
             text_filter: (None, String::new()),
             members: HashMap::new(),
             baseline: None,

@@ -19,8 +19,6 @@ pub fn draw(g: &mut GuiApp, ui: &mut Ui) {
     g.views_shown = page == Page::MergeRequests && sizes.views.is_some();
     if page == Page::Tracker {
         sizes.widen_inspector(width);
-    } else {
-        g.ticket_anchor = None;
     }
     title_bar(g, ui, &sizes, page);
     status_bar(g, ui);

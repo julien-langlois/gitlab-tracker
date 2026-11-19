@@ -42,20 +42,10 @@ pub fn panel(g: &mut GuiApp, ui: &mut Ui, width: f32) {
                 ui.vertical_centered(|ui| ui.label(muted(&theme, tl("Select a merge request"))));
                 return;
             };
-            // The tracker page brings each MR it opens to its ticket, then leaves the
-            // scrolling to the user. It scrolls on its own, away from the other pages.
-            let on_tracker = g.page() == Page::Tracker;
-            if on_tracker && g.ticket_anchor.as_deref() != Some(mr.id.as_str()) {
-                g.ticket_anchor = Some(mr.id.clone());
-                g.scroll_to = Some(InspectorSection::Ticket);
-                // The tabs say where it went.
-                g.inspector_tab = InspectorSection::Ticket;
-            }
             header(g, ui, &mr);
             next_card(g, ui, &mr);
             anchors(g, ui, &mr);
             egui::ScrollArea::vertical()
-                .id_salt(on_tracker)
                 .auto_shrink(false)
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
