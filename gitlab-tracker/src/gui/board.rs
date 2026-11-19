@@ -15,6 +15,7 @@ use egui::{
 };
 
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{focus_ring, muted, rule, semibold};
 use super::GuiApp;
 use crate::i18n::{tf, tl};
@@ -409,11 +410,7 @@ pub fn nav_switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> bool {
     );
     focus_ring(ui, theme, &response, 9);
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    let response = if cut {
-        response.on_hover_text(label)
-    } else {
-        response
-    };
+    let response = if cut { response.tip(label) } else { response };
     response.clicked()
 }
 
@@ -740,7 +737,7 @@ pub fn figures(ui: &mut Ui, theme: &Theme, figures: &[Figure]) {
                     ui.scope_id().with(("figure", f.label.as_str())),
                     Sense::hover(),
                 )
-                .on_hover_text(&f.caption);
+                .tip(&f.caption);
             }
         }
         ui.add_space(GAP);
@@ -862,11 +859,7 @@ pub fn mr_pill(ui: &mut Ui, theme: &Theme, id: &str, title: &str) -> egui::Respo
         theme.palette.text,
     );
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    if title.is_empty() {
-        response
-    } else {
-        response.on_hover_text(title)
-    }
+    response.rich(Tip::new().mr(id, title))
 }
 
 /// A chip of `text` in `tone`, the size of the table's chips.

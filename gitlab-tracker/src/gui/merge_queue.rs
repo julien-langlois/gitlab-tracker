@@ -15,6 +15,7 @@ use chrono::{DateTime, Duration, Utc};
 use egui::{Align2, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, paint_text};
+use super::tip::{Tip, TipExt};
 use crate::app::App;
 use crate::gitlab_detail::{ProjectOverview, TrainCar};
 use crate::i18n::{tf, tl, tn};
@@ -534,7 +535,7 @@ fn strip(ui: &mut Ui, theme: &Theme, q: &Queue, mine: usize, now: DateTime<Utc>)
             ui.scope_id().with(("queue_car", &car.iid)),
             Sense::hover(),
         )
-        .on_hover_text(format!("!{} {}", car.iid, car.title));
+        .rich(Tip::new().mr(&car.iid, &car.title));
         x += car_w;
     }
     if shown < q.cars.len() {

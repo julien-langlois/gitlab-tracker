@@ -6,6 +6,7 @@ use egui::{Align, Color32, CornerRadius, Layout, Margin, RichText, Sense, Stroke
 use gitlab_tracker_core::FilterDef;
 
 use super::icons::Icon;
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     avatar, button, dot, dot_label, field, icon_button, label_tone, mono, muted, pill_toggle, rule,
     section_title, semibold, split_person, switch, FieldLook,
@@ -226,7 +227,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
             }
             ui.add_space(4.0);
             if switch(ui, &theme, g.app.config.hide_merged, tl("Hide merged MRs"))
-                .on_hover_text(tl("They stay tracked and refreshed (M)"))
+                .tip(tl("They stay tracked and refreshed (M)"))
                 .clicked()
             {
                 g.pending.push(Action::ToggleHideMerged);
@@ -413,7 +414,7 @@ fn focus_item(
     super::widgets::focus_ring(ui, &theme, &response, theme.radii.medium);
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl(if selected {
+        .tip(tl(if selected {
             "Click to show them all"
         } else {
             "Click to show only these"
@@ -432,7 +433,7 @@ fn branch_pills(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
         for branch in g.app.branches.clone() {
             let on = g.app.active_filter.index == index && g.app.active_filter.query == branch;
             let response = pill_toggle(ui, &theme, &branch, theme.tones.red, on)
-                .on_hover_text(tf("The MRs not on {branch} yet", &[("branch", &branch)]));
+                .tip(tf("The MRs not on {branch} yet", &[("branch", &branch)]));
             if response.clicked() {
                 g.pending.push(Action::SetFilter {
                     index: if on { 0 } else { index },
@@ -562,7 +563,7 @@ fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
                     )
                 })
             })
-            .on_hover_text(tl("Clear the filter"))
+            .tip(tl("Clear the filter"))
             .clicked();
         clear |= clicked;
     }
@@ -834,7 +835,7 @@ fn branches(g: &mut GuiApp, ui: &mut Ui) {
         );
         let small = |ui: &mut Ui, text: &str, hint: &str| {
             ui.add(egui::Button::new(muted(&theme, text)).frame(false))
-                .on_hover_text(hint)
+                .tip(hint)
                 .clicked()
         };
         if !g.app.read_only && small(&mut controls, "✕", tl("Stop tracking this branch")) {
@@ -920,7 +921,7 @@ fn role_chip(
         (None, true) => tl("Guessed from the name: click to set").to_string(),
         (None, false) => tl("Click to change").to_string(),
     };
-    let response = response.on_hover_text(hint);
+    let response = response.tip(hint);
     if g.app.read_only {
         return None;
     }
@@ -1001,7 +1002,7 @@ fn compare_link(ui: &mut Ui, project: &str, branch: &str, source: &str) {
     );
     if ui
         .button(text)
-        .on_hover_text(compare_url(project, branch, source))
+        .rich(Tip::new().mono(compare_url(project, branch, source)))
         .clicked()
     {
         ui.ctx()
@@ -1038,7 +1039,7 @@ fn behind(g: &GuiApp, ui: &mut Ui, branch: &str, project: Option<&str>) -> Optio
     let response = line
         .inner
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tf(
+        .tip(tf(
             "Merged upstream, not in {branch} yet: rebase it, or merge into it",
             &[("branch", branch)],
         ));
@@ -1090,7 +1091,7 @@ fn behind(g: &GuiApp, ui: &mut Ui, branch: &str, project: Option<&str>) -> Optio
                 let text = tf("Compare with {source} on GitLab", &[("source", source)]);
                 let url = compare_url(project, branch, source);
                 if button(ui, &theme, Some(Icon::ExternalLink), &text, false)
-                    .on_hover_text(&url)
+                    .rich(Tip::new().mono(&url))
                     .clicked()
                 {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(url));
@@ -1125,7 +1126,7 @@ pub(super) fn behind_row(
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click());
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open its page"));
+        .rich(Tip::new().mr(&mr.id, &mr.title).hint(tl("Open its page")));
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(theme.radii.medium), p.raised);
@@ -1137,7 +1138,7 @@ pub(super) fn behind_row(
     );
     let ui = &mut child;
     let name = split_person(&mr.author).0;
-    avatar(ui, &theme, name, 26.0).on_hover_text(name);
+    avatar(ui, &theme, name, 26.0).rich(Tip::new().person(&mr.author));
     ui.add_space(4.0);
     // The arrow to GitLab on the right, the texts in what is left.
     let gitlab = ui

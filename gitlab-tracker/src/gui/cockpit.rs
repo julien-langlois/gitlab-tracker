@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, Color32, CornerRadius, Layout, RichText, Sense, Stroke, Ui, Vec2};
 
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     avatar, badge, card, kpi, mono, muted, page_title, semibold, split_person, switch,
 };
@@ -73,7 +74,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 16.0;
             if switch(ui, &theme, g.hide_zeros, tl("Hide zeros"))
-                .on_hover_text(tl("Hide the counters at zero"))
+                .tip(tl("Hide the counters at zero"))
                 .clicked()
             {
                 g.hide_zeros = !g.hide_zeros;
@@ -156,7 +157,7 @@ fn since_last_session(ui: &mut Ui, theme: &Theme, digest: &str) -> bool {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     closed = ui
                         .add(egui::Button::new(muted(theme, "✕")).frame(false))
-                        .on_hover_text(tl("Close"))
+                        .tip(tl("Close"))
                         .clicked();
                 });
             });
@@ -284,12 +285,16 @@ fn tiles(ui: &mut Ui, theme: &Theme, h: &Headline, counts: &Counts<'_>) -> Optio
                     )
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                 let response = match counts.members.get(key.as_str()) {
-                    Some(ids) => response.on_hover_text(tn(
+                    Some(ids) => response.rich(Tip::new().title(label.as_str()).hint(tn(
                         ids.len() as u64,
                         "Click to list {n} MR",
                         "Click to list {n} MRs",
-                    )),
-                    None => response.on_hover_text(tl("Click to list these MRs")),
+                    ))),
+                    None => response.rich(
+                        Tip::new()
+                            .title(label.as_str())
+                            .hint(tl("Click to list these MRs")),
+                    ),
                 };
                 if response.hovered() {
                     hover_ring(ui, theme, response.rect);
@@ -493,7 +498,7 @@ fn cockpit_row(
                     super::icons::Icon::Clock,
                     theme.palette.text_muted,
                 );
-                response.on_hover_text(tl(
+                response.tip(tl(
                     "From the stats history since recording started, not the listed MRs",
                 ));
             }
@@ -508,11 +513,11 @@ fn cockpit_row(
             let hint = key.as_deref().and_then(explain);
             let response = match (hint, clickable) {
                 (Some(hint), true) => response
-                    .on_hover_text(format!("{}\n{}", tl(hint), tl("Click to list them")))
+                    .rich(Tip::new().text(tl(hint)).hint(tl("Click to list them")))
                     .on_hover_cursor(egui::CursorIcon::PointingHand),
-                (Some(hint), false) => response.on_hover_text(tl(hint)),
+                (Some(hint), false) => response.tip(tl(hint)),
                 (None, true) => response
-                    .on_hover_text(tl("Click to list them"))
+                    .tip(tl("Click to list them"))
                     .on_hover_cursor(egui::CursorIcon::PointingHand),
                 (None, false) => response,
             };
@@ -542,7 +547,7 @@ fn trend(ui: &mut Ui, theme: &Theme, counts: &Counts<'_>, key: &str) {
             .size(theme.text_size - 2.5)
             .color(tone.fg),
     )
-    .on_hover_text(format!(
+    .tip_lines(format!(
         "{}\n{}",
         tf(
             "{delta} since {time}",
@@ -635,7 +640,7 @@ fn release_block(ui: &mut Ui, theme: &Theme, r: &ReleaseView, counts: &Counts<'_
                 let response = ui
                     .interact(response.rect, ui.scope_id().with(&key), Sense::click())
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Click to list them"));
+                    .tip(tl("Click to list them"));
                 if response.hovered() {
                     ui.painter().hline(
                         response.rect.x_range(),
@@ -683,12 +688,10 @@ fn stacked_bar(ui: &mut Ui, theme: &Theme, parts: &[(&str, usize, Tone)]) {
         Stroke::new(1.5, theme.palette.panel),
         egui::StrokeKind::Outside,
     );
-    let summary = parts
-        .iter()
-        .map(|(name, count, _)| format!("{} {count}", tl(name)))
-        .collect::<Vec<_>>()
-        .join(" · ");
-    response.on_hover_text(summary);
+    let tip = parts.iter().fold(Tip::new(), |tip, (name, count, tone)| {
+        tip.dot(tone.fg, format!("{} · {count}", tl(name)))
+    });
+    response.rich(tip);
 }
 
 /// What a counter means, for its tooltip.
@@ -851,7 +854,7 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
                     .color(theme.palette.text_secondary),
             );
             let (name, _) = split_person(&u.author);
-            avatar(&mut row, theme, name, 18.0).on_hover_text(name);
+            avatar(&mut row, theme, name, 18.0).rich(Tip::new().person(&u.author));
             row.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
                 badge(ui, theme, u.status.0, u.status.1);
@@ -863,9 +866,14 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
                                 .font(fonts::medium(theme.text_size - 1.5))
                                 .color(tone.fg),
                         )
-                        .truncate(),
+                        .truncate()
+                        .show_tooltip_when_elided(false),
                     )
-                    .on_hover_text(tl("Who it waits on, and since when"));
+                    .rich(
+                        Tip::new()
+                            .chip(text.as_str(), *tone)
+                            .text(tl("Who it waits on, and since when")),
+                    );
                 }
                 let mut reasons = u.reasons.clone();
                 reasons.sort_by_key(|r| std::cmp::Reverse(r.1));
@@ -888,7 +896,11 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
             });
             if response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tl("Open it on the merge requests page"))
+                .rich(
+                    Tip::new()
+                        .mr(&u.id, &u.title)
+                        .hint(tl("Open it on the merge requests page")),
+                )
                 .clicked()
             {
                 pick = Some(Pick::Mr(u.id.clone()));

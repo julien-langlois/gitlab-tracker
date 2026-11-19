@@ -18,6 +18,7 @@ use super::board::{self, Figure, GAP};
 use super::details::Fetch;
 use super::icons::Icon;
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button, semibold};
 use super::GuiApp;
 use crate::app::App;
@@ -901,7 +902,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: &Model, now: DateTime<Utc>) {
                     tl("Generate changelog"),
                     false,
                 )
-                .on_hover_text(tl(
+                .tip(tl(
                     "The changelog since the last release tag, with the project's git-cliff config",
                 ))
                 .clicked();
@@ -1121,7 +1122,7 @@ fn item_row(
     } else {
         tl("Not tracked by the app")
     };
-    response.on_hover_text(format!("{}\n{hint}", item.title))
+    response.rich(Tip::new().mr(&item.id, &item.title).hint(hint))
 }
 
 fn unreleased_card(
@@ -1217,8 +1218,12 @@ fn unreleased_card(
                 *show = Some(tracked.clone());
             }
             let line = foot.join(" · ");
-            ui.add(egui::Label::new(muted(theme, &line).size(theme.text_size - 1.5)).truncate())
-                .on_hover_text(line);
+            ui.add(
+                egui::Label::new(muted(theme, &line).size(theme.text_size - 1.5))
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            )
+            .tip(line);
         });
     });
 }

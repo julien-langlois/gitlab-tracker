@@ -9,6 +9,7 @@ use chrono::{DateTime, Duration, Utc};
 use egui::{Align2, CornerRadius, FontId, Rect, Ui, Vec2};
 
 use super::board;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted};
 use crate::app::App;
 use crate::i18n::{tf, tl, tn};
@@ -276,7 +277,7 @@ pub fn card(
                 ui.label(
                     muted(theme, tl("where the stuck MRs meet")).size(theme.text_size - 1.5),
                 )
-                .on_hover_text(tf(
+                .tip(tf(
                     "A path scores one per open MR changing it that is in conflict, failing its CI, or quiet for {days} days or more (the project's stale days).",
                     &[("days", &app.config.activity_stale_days.to_string())],
                 ));
@@ -522,7 +523,7 @@ fn detail(
                 );
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Open its page"))
+                    .rich(Tip::new().mr(id, &mr.title).hint(tl("Open its page")))
                     .clicked()
                 {
                     click = Some(Click::Mr(id.clone()));
@@ -586,16 +587,15 @@ fn sequence(ui: &mut Ui, theme: &Theme, app: &App, spot: &Spot) {
                         ui.label(muted(theme, "→"));
                     }
                     let id_tone = readiness.tone(theme);
-                    board::chip(ui, theme, &format!("!{}", mr.id), id_tone).on_hover_text(
-                        format!(
-                            "{}\n{}",
-                            mr.title,
+                    board::chip(ui, theme, &format!("!{}", mr.id), id_tone).rich(
+                        Tip::new().mr(&mr.id, &mr.title).chip(
                             match readiness {
                                 Readiness::Ready => tl("ready to merge"),
                                 Readiness::InReview => tl("in review"),
                                 Readiness::Draft => tl("draft"),
                                 Readiness::Stuck => tl("to fix first"),
-                            }
+                            },
+                            id_tone,
                         ),
                     );
                 }

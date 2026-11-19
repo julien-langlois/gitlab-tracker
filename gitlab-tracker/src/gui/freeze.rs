@@ -8,6 +8,7 @@ use egui::{Align2, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, paint_text};
 use super::icons::{self, Icon};
+use super::tip::{Tip, TipExt};
 use crate::app::App;
 use crate::freeze::{left_text, moment_text, zoned_text, Freezes, Period, Source, Status};
 use crate::gitlab_detail::ProjectOverview;
@@ -170,7 +171,7 @@ pub fn banner(
     );
     Some(
         response
-            .on_hover_text(format!("{}\n{}", b.title, b.detail))
+            .rich(Tip::new().title(&b.title).text(&b.detail))
             .on_hover_cursor(egui::CursorIcon::PointingHand),
     )
 }
@@ -325,36 +326,36 @@ fn strip(ui: &mut Ui, theme: &Theme, freezes: &Freezes, now: DateTime<Utc>) {
         // The day's freezes, in your zone and in the period's.
         let hover = ui.interact(cell, ui.scope_id().with(("freeze_day", i)), Sense::hover());
         if hover.hovered() {
-            hover.on_hover_text(day_text(freezes, &windows, start, end));
+            hover.rich(day_tip(freezes, &windows, start, end));
         }
     }
 }
 
-/// The freezes that meet a day, for its tooltip.
-fn day_text(
+/// The freezes that meet a day, for its tooltip: each from and until, then
+/// its start as the period's cron reads it.
+fn day_tip(
     freezes: &Freezes,
     windows: &[(usize, crate::freeze::Window)],
     start: DateTime<Utc>,
     end: DateTime<Utc>,
-) -> String {
-    let lines: Vec<String> = windows
+) -> Tip {
+    let mut tip = Tip::new();
+    let mut any = false;
+    for (i, w) in windows
         .iter()
         .filter(|(_, w)| w.start < end && w.end.is_none_or(|e| e > start))
-        .map(|(i, w)| {
-            let p = &freezes.periods[*i];
-            let until = w.end.map(moment_text).unwrap_or_else(|| "…".into());
-            // The second line: the start as the period's cron reads it.
-            format!(
-                "{} → {until}\n  {}",
-                moment_text(w.start),
-                zoned_text(w.start, p.zone)
-            )
-        })
-        .collect();
-    if lines.is_empty() {
-        tl("No freeze this day").to_string()
+    {
+        let p = &freezes.periods[*i];
+        let until = w.end.map(moment_text).unwrap_or_else(|| "…".into());
+        tip = tip
+            .title(format!("{} → {until}", moment_text(w.start)))
+            .text(zoned_text(w.start, p.zone));
+        any = true;
+    }
+    if any {
+        tip
     } else {
-        lines.join("\n")
+        tip.text(tl("No freeze this day"))
     }
 }
 
@@ -426,7 +427,7 @@ fn period_row(ui: &mut Ui, theme: &Theme, p: &Period, now: DateTime<Utc>, last: 
             Stroke::new(1.0, theme.palette.border_soft),
         );
     }
-    response.on_hover_text(tf(
+    response.tip(tf(
         "Read in {zone}, with its daylight saving changes",
         &[("zone", &p.zone.name())],
     ));

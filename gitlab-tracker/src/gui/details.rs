@@ -8,6 +8,7 @@ use std::sync::mpsc::{channel, Receiver};
 use bevel_theme::{fonts, Theme};
 use egui::{Align, Color32, CornerRadius, Layout, Margin, RichText, Sense, Ui, Vec2};
 
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, mono, muted, spinner};
 use crate::app::App;
 use crate::gitlab::FileDiff;
@@ -734,7 +735,7 @@ fn split_patch(ui: &mut Ui, theme: &Theme, diff: &str, web_url: &str) {
                         }
                         // The line in full, should it be cut.
                         if response.hovered() && !full.is_empty() {
-                            response.on_hover_text(egui::RichText::new(full).font(font.clone()));
+                            super::tip::Tip::new().mono(full).show(response);
                         }
                     }
                 }
@@ -977,7 +978,7 @@ fn folder_row(
     });
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl(if folded { "Unfold" } else { "Fold" }))
+        .tip(tl(if folded { "Unfold" } else { "Fold" }))
         .clicked()
 }
 
@@ -1093,7 +1094,7 @@ fn file_row(
         .inner;
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(path)
+        .rich(Tip::new().mono(path))
         .clicked()
 }
 

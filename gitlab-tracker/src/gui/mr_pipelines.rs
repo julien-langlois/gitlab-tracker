@@ -7,6 +7,7 @@ use egui::{Align, Color32, CornerRadius, Layout, Margin, RichText, Sense, Stroke
 
 use super::details;
 use super::inspector::duration;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, icon_button, mono, muted};
 use super::{icons::Icon, tones, GuiApp};
 use crate::i18n::{tf, tl, tn};
@@ -407,12 +408,13 @@ fn job_box(
     ui.painter()
         .galley(time_pos, time_galley, theme.palette.text_muted);
 
-    let hover = format!("{} · {}", job.name, tl(status_label(&job.status)));
-    let response = response.on_hover_text(if sense == Sense::click() {
-        format!("{hover}\n{}", tl("Click to read its log"))
-    } else {
-        hover
-    });
+    let mut hover = Tip::new()
+        .title(&job.name)
+        .dot(color, tl(status_label(&job.status)));
+    if sense == Sense::click() {
+        hover = hover.hint(tl("Click to read its log"));
+    }
+    let response = response.rich(hover);
     if sense == Sense::click() {
         response.on_hover_cursor(egui::CursorIcon::PointingHand)
     } else {
@@ -538,8 +540,12 @@ fn log_panel(
                                         theme.palette.text_muted,
                                     ),
                                 );
-                                ui.add(egui::Label::new(text).truncate())
-                                    .on_hover_text(&job.name);
+                                ui.add(
+                                    egui::Label::new(text)
+                                        .truncate()
+                                        .show_tooltip_when_elided(false),
+                                )
+                                .tip(&job.name);
                             });
                         });
                     });
@@ -624,7 +630,7 @@ fn log_buttons(
     }
     if let Some(url) = url {
         if button(ui, theme, Some(Icon::ExternalLink), tl("Full log"), false)
-            .on_hover_text(tl("The whole log, in GitLab"))
+            .tip(tl("The whole log, in GitLab"))
             .clicked()
         {
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
@@ -1076,7 +1082,7 @@ fn older_row(ui: &mut Ui, theme: &Theme, pipeline: &Pipeline, project_url: Optio
     });
     if let Some(url) = project_url {
         if response
-            .on_hover_text(tl("Open in GitLab"))
+            .tip(tl("Open in GitLab"))
             .on_hover_cursor(egui::CursorIcon::PointingHand)
             .clicked()
         {

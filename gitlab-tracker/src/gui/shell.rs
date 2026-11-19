@@ -5,6 +5,7 @@ use bevel_theme::{fonts, Theme};
 use egui::{Align, Color32, CornerRadius, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::icons::{self, Icon};
+use super::tip::{Tip, TipExt};
 use super::widgets::{dot, icon_toggle, muted, spinner};
 use super::{cockpit, dialogs, inspector, sidebar, table, tracker, GuiApp, Page};
 use crate::actions::Action;
@@ -321,7 +322,7 @@ fn bar_button(ui: &mut Ui, theme: &Theme, width: f32, label: &str, icon: Icon) -
         icon,
         color,
     );
-    response.on_hover_text(label)
+    response.tip(label)
 }
 
 /// What a tab shows, read before drawing.
@@ -464,7 +465,7 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                     ui.scope_id().with(("close_tab", index)),
                     Sense::click(),
                 )
-                .on_hover_text(tl("Close the tab"));
+                .tip(tl("Close the tab"));
             if close_response.hovered() {
                 ui.painter()
                     .rect_filled(close_rect, CornerRadius::same(4), theme.palette.border);
@@ -481,20 +482,18 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
             );
             close_clicked = close_response.clicked();
         }
-        let tooltip = if view.unread > 0 {
-            format!(
-                "{}\n{}",
-                view.tooltip,
+        let mut tooltip = Tip::new().title(&view.name).text(&view.tooltip);
+        if view.unread > 0 {
+            tooltip = tooltip.dot(
+                theme.palette.accent,
                 tn(
                     view.unread as u64,
                     "{n} change since shown",
-                    "{n} changes since shown"
-                )
-            )
-        } else {
-            view.tooltip.clone()
-        };
-        let response = response.on_hover_text(tooltip);
+                    "{n} changes since shown",
+                ),
+            );
+        }
+        let response = response.rich(tooltip);
         if close_clicked || (closable && response.middle_clicked()) {
             close = Some(index);
         } else if response.clicked() && !view.active {
@@ -601,7 +600,7 @@ fn sync_state(g: &GuiApp, ui: &mut Ui) {
             let ago = updated_ago((chrono::Local::now() - at).num_minutes());
             ui.add_space(6.0);
             ui.label(muted(theme, format!("{ago} ·")))
-                .on_hover_text(at.format("%H:%M:%S").to_string());
+                .tip(at.format("%H:%M:%S").to_string());
         }
     }
 }
@@ -720,7 +719,7 @@ fn auto_polling(ui: &mut Ui, theme: &Theme, on: bool) {
             ui.label(muted(theme, tl("Auto-polling")).size(theme.text_size - 1.0));
         })
         .response;
-    response.on_hover_text(hint);
+    response.tip(hint);
 }
 
 /// "GitLab ~12" — the requests the next refresh should send, the count in the
@@ -781,7 +780,7 @@ fn request_estimate(
             &[("n", &s.to_string())],
         ));
     }
-    response.on_hover_text(hint);
+    response.tip_lines(hint);
 }
 
 // ── Icon rail ────────────────────────────────────────────────────────────────
@@ -964,36 +963,32 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         );
                     }
                     let label = (size == RailSize::Labeled).then_some(label);
-                    let hint = match label {
-                        Some(_) => hint.to_string(),
-                        None => format!("{label_text} · {hint}", label_text = items_label(target)),
-                    };
                     let badge = badges
                         .iter()
                         .find(|b| b.0 == target)
                         .map(|b| (b.1, b.2, b.3.clone()));
-                    let hint = match &badge {
-                        Some((_, _, what)) => format!("{hint}\n{what}"),
-                        None => hint,
-                    };
+                    let mut hint = Tip::new().title(items_label(target)).text(hint);
+                    if let Some((_, tone, what)) = &badge {
+                        hint = hint.dot(tone.fg, what.as_str());
+                    }
                     let response =
                         rail_item(ui, &theme, icon, label, size.height(), page == target);
                     if let Some((n, tone, _)) = badge {
                         rail_badge(ui, &theme, response.rect, n, tone);
                     }
-                    if response.on_hover_text(hint).clicked() {
+                    if response.rich(hint).clicked() {
                         g.open_page(target);
                     }
                 }
                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
                     if rail_item(ui, &theme, Icon::Settings, None, 34.0, false)
-                        .on_hover_text(tl("Settings (,)"))
+                        .tip(tl("Settings (,)"))
                         .clicked()
                     {
                         g.pending.push(Action::OpenSettings);
                     }
                     if rail_item(ui, &theme, Icon::Help, None, 34.0, false)
-                        .on_hover_text(tl("Keyboard shortcuts (?)"))
+                        .tip(tl("Keyboard shortcuts (?)"))
                         .clicked()
                     {
                         g.app.input_mode = InputMode::Help;

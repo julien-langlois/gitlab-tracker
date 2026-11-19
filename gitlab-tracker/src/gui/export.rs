@@ -10,6 +10,7 @@ use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Ui, Vec2};
 use serde::{Deserialize, Serialize};
 
 use super::icons::{self, Icon};
+use super::tip::TipExt;
 use super::widgets::{button, muted, pill_toggle, switch};
 use super::GuiApp;
 use crate::i18n::{tf, tl, tn};
@@ -346,7 +347,7 @@ const PREVIEW_LINES: usize = 6;
 pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let response = button(ui, &theme, Some(Icon::Download), tl("Export"), false)
-        .on_hover_text(tl("Copy or save the MRs as CSV, Markdown or a chat list"));
+        .tip(tl("Copy or save the MRs as CSV, Markdown or a chat list"));
     if response.clicked() {
         // Each opening starts from the picked MRs when there are some.
         g.export.rows = default_rows(g);
@@ -412,7 +413,7 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui) {
                                 pill_toggle(ui, &theme, &text, theme.tones.blue, on)
                             });
                             let r = if choice == Rows::Picked && count == 0 {
-                                r.inner.on_disabled_hover_text(tl(
+                                r.inner.tip_disabled(tl(
                                     "Ctrl+click or Select to pick MRs in the table",
                                 ))
                             } else {
@@ -448,7 +449,7 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui) {
                         !settings.all_columns,
                         tl("Only the columns shown"),
                     )
-                    .on_hover_text(tl("Off: every column, hidden ones included"))
+                    .tip(tl("Off: every column, hidden ones included"))
                     .clicked()
                     {
                         settings.all_columns = !settings.all_columns;
@@ -487,8 +488,7 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui) {
                                 button(ui, &theme, None, tl("Save as…"), false)
                             });
                             let r = if demo {
-                                r.inner
-                                    .on_disabled_hover_text(tl("The demo never writes to disk"))
+                                r.inner.tip_disabled(tl("The demo never writes to disk"))
                             } else {
                                 r.inner
                             };

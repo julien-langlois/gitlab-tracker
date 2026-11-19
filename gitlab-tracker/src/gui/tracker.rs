@@ -8,6 +8,7 @@ use gitlab_tracker_core::LinkedTicket;
 
 use super::icons::{self, Icon};
 use super::inspector::duration;
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     avatar, bar, dot, icon_toggle, kpi, mono, muted, page_title, semibold, split_person,
 };
@@ -224,7 +225,7 @@ fn quick_log(ui: &mut Ui, theme: &Theme, card: &egui::Response, right: f32) -> b
     let response = ui
         .interact(rect, card.id.with("log_time"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Log time… (L)"));
+        .tip(tl("Log time… (L)"));
     let fill = if response.hovered() {
         theme.palette.accent_fill
     } else {
@@ -405,8 +406,11 @@ fn board_card(ui: &mut Ui, theme: &Theme, row: &Row, selected: bool) -> egui::Re
                 if let Some(assignee) = &ticket.assignee {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let (name, _) = split_person(assignee);
-                        avatar(ui, theme, name, 20.0)
-                            .on_hover_text(tf("Assigned to {name}", &[("name", assignee)]));
+                        avatar(ui, theme, name, 20.0).rich(
+                            Tip::new()
+                                .person(assignee)
+                                .text(tf("Assigned to {name}", &[("name", name)])),
+                        );
                     });
                 }
             });
@@ -544,7 +548,7 @@ fn summary(
                 let response = ui
                     .interact(rect, ui.scope_id().with(("tile", link.0)), Sense::click())
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Click to list these MRs"));
+                    .tip(tl("Click to list these MRs"));
                 if response.hovered() {
                     ui.painter().rect_stroke(
                         rect,
@@ -582,7 +586,7 @@ fn group_heading(
                 let (clock, _) = ui.allocate_exact_size(Vec2::splat(11.0), Sense::hover());
                 icons::paint(ui.painter(), clock, Icon::Clock, theme.palette.text_muted);
                 ui.label(muted(theme, time))
-                    .on_hover_text(tl("Time spent / estimated on these tickets"));
+                    .tip(tl("Time spent / estimated on these tickets"));
             });
         }
     });
@@ -692,7 +696,11 @@ fn ticket_row(
                             let (name, _) = split_person(assignee);
                             let response = avatar(ui, theme, name, 24.0);
                             avatar_rect = Some(response.rect);
-                            response.on_hover_text(tf("Assigned to {name}", &[("name", assignee)]));
+                            response.rich(
+                                Tip::new()
+                                    .person(assignee)
+                                    .text(tf("Assigned to {name}", &[("name", name)])),
+                            );
                         },
                     );
                 }

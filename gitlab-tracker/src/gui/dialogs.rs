@@ -5,6 +5,7 @@ use bevel_theme::Theme;
 use egui::{Align, CornerRadius, Layout, Margin, RichText, Stroke, Ui, Vec2};
 use gitlab_tracker_core::{ProjectSettingKind, ProjectSettingValue};
 
+use super::tip::TipExt;
 use super::widgets::{button, muted, primary_button, rule, section_title, semibold, switch};
 use super::GuiApp;
 use crate::actions::Action;
@@ -306,13 +307,13 @@ fn columns(g: &mut GuiApp, ui: &mut Ui) {
     let mut next = !g.hide_next_column;
     if ui
         .checkbox(&mut next, tl("Next step"))
-        .on_hover_text(tl("Who each MR waits on, and since when"))
+        .tip(tl("Who each MR waits on, and since when"))
         .changed()
     {
         g.hide_next_column = !next;
     }
     ui.checkbox(&mut g.flow_cells, tl("Branches in one cell"))
-        .on_hover_text(tl(
+        .tip(tl(
             "A dot per branch, joined, instead of a column each: room for the title",
         ));
     buttons(ui, |ui| {

@@ -13,6 +13,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 use super::board::{self, GAP};
 use super::rail_badges::Badge;
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{avatar, button, muted, primary_button, semibold, split_person};
 use super::GuiApp;
 use crate::app::{App, Focus};
@@ -457,7 +458,7 @@ fn forecast_section(ui: &mut Ui, theme: &Theme, m: &Milestone, weekly: &[u32], n
                     ui.scope_id().with(("forecast_week", w)),
                     Sense::hover(),
                 )
-                .on_hover_text(tf(
+                .tip(tf(
                     "{share} done by {date}",
                     &[
                         ("share", &board::percent(f64::from(share))),
@@ -762,7 +763,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
                 tl("Generate changelog"),
                 false,
             )
-            .on_hover_text(tl(
+            .tip(tl(
                 "The changelog since the last release tag, with the project's git-cliff config",
             ))
             .clicked();
@@ -1093,11 +1094,9 @@ fn projection_banner(
     if !held.is_empty() {
         let titles = held
             .iter()
-            .map(|i| format!("!{} · {}", i.id, i.title))
-            .collect::<Vec<_>>()
-            .join("\n");
+            .fold(Tip::new(), |tip, i| tip.mr(&i.id, &i.title));
         ui.interact(banner, ui.scope_id().with("held_titles"), Sense::hover())
-            .on_hover_text(titles);
+            .rich(titles);
     }
     let tile = if side_by_side {
         Rect::from_min_max(egui::pos2(banner.right() + GAP, row.top()), row.max)
@@ -1196,7 +1195,7 @@ fn landing_tile(
         );
     }
     if let (Some(eta), Some(due)) = (eta, due) {
-        response.on_hover_text(tf(
+        response.tip(tf(
             "Due {due}, projected {eta}",
             &[
                 ("due", &due.format("%Y-%m-%d").to_string()),
@@ -1264,10 +1263,11 @@ fn item_row(ui: &mut Ui, theme: &Theme, item: &Item, ordered: &[String]) -> bool
             ui.scope_id().with(("mark", item.id.as_str(), k)),
             Sense::hover(),
         )
-        .on_hover_text(format!(
-            "{} · {label}",
-            ordered.get(k).map_or("", String::as_str)
-        ));
+        .rich(
+            Tip::new()
+                .mono(ordered.get(k).map_or("", String::as_str))
+                .chip(format!("{glyph} {label}"), tone),
+        );
     }
     let step = match item.stand {
         Stand::Delivered => tl("delivered").to_string(),
@@ -1309,7 +1309,11 @@ fn item_row(ui: &mut Ui, theme: &Theme, item: &Item, ordered: &[String]) -> bool
         (step_left - 12.0 - (left + w + 10.0)).max(0.0),
     );
     response
-        .on_hover_text(tl("Show it on the merge requests page"))
+        .rich(
+            Tip::new()
+                .mr(&item.id, &item.title)
+                .hint(tl("Show it on the merge requests page")),
+        )
         .clicked()
 }
 

@@ -7,6 +7,7 @@ use egui::{Align, Margin, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::icons::{self, Icon};
 use super::mr_page::display_of;
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     activity, avatar, badge, bar, button, dot, icon_button, key_values, label_chip, mono, muted,
     section, semibold, spinner, split_person,
@@ -256,7 +257,7 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                                 let color = if mr.flagged { tones.amber.fg } else { tint };
                                 icons::paint(ui.painter(), rect.shrink(4.0), icon, color);
                             })
-                            .on_hover_text(hint);
+                            .tip(hint);
                     if response.clicked() {
                         g.pending.push(Action::ToggleFlagSelected);
                     }
@@ -277,14 +278,14 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 let outlined = theme.outlined_icon_button();
                 let height = theme.spacing.control_height + 2.0;
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    if icon_button(
+                    if super::widgets::icon_button_tip(
                         ui,
                         tl("Copy the git clone command (Y)"),
                         Icon::Copy,
                         &outlined,
                         height,
+                        Tip::plain(tl("Copy the git clone command (Y)")).mono(clone),
                     )
-                    .on_hover_text(clone)
                     .clicked()
                     {
                         g.pending.push(Action::YankCloneCommand);
@@ -304,10 +305,7 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     }
                     ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
                         let response = full_width_button(ui, &theme, tl("Open in GitLab"));
-                        if response
-                            .on_hover_text(tl("Open in the browser (O)"))
-                            .clicked()
-                        {
+                        if response.tip(tl("Open in the browser (O)")).clicked() {
                             g.pending.push(Action::OpenSelectedMr);
                         }
                     });
@@ -386,7 +384,7 @@ fn ticket_shortcut(
         theme.palette.text_secondary,
     );
     response
-        .on_hover_text(tl("Open the ticket in the browser (T)"))
+        .tip(tl("Open the ticket in the browser (T)"))
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
@@ -397,8 +395,8 @@ fn byline(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) {
         let size = theme.text_size - 1.0;
         let (name, handle) = split_person(&mr.author);
         let response = avatar(ui, theme, name, 20.0);
-        if let Some(handle) = handle {
-            response.on_hover_text(format!("@{handle}"));
+        if handle.is_some() {
+            response.rich(Tip::new().person(&mr.author));
         }
         ui.label(
             RichText::new(name)
@@ -495,7 +493,7 @@ fn branch_route(ui: &mut Ui, theme: &Theme, source: &str, target: &str) {
                 theme.tones.blue.bg,
                 theme.tones.blue.fg.gamma_multiply(0.35),
             );
-            response.on_hover_text(format!("{source} → {target}"));
+            response.rich(Tip::new().mono(format!("{source} → {target}")));
         });
 }
 
@@ -883,7 +881,7 @@ pub(super) fn branches(
                 let pos = name_rect.left_center() - Vec2::new(0.0, name.size().y / 2.0);
                 ui.painter().galley(pos, name, theme.palette.text);
                 if elided {
-                    response.on_hover_text(&row.branch);
+                    response.rich(Tip::new().mono(&row.branch));
                 }
                 ui.add_space(BRANCH_CHIP_GAP - 8.0);
                 ui.add(Chip::new(label, tone).glyph(glyph));
@@ -952,7 +950,7 @@ pub(super) fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if g.app.tracker.is_some()
                     && button(ui, &theme, Some(Icon::Plus), tl("Log time…"), true)
-                        .on_hover_text(tl("Log time on this ticket (L)"))
+                        .tip(tl("Log time on this ticket (L)"))
                         .clicked()
                 {
                     g.pending.push(Action::OpenLogTime);
@@ -964,7 +962,7 @@ pub(super) fn ticket(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     tl("Open ticket"),
                     false,
                 )
-                .on_hover_text(tl("Open the ticket in the browser (T)"))
+                .tip(tl("Open the ticket in the browser (T)"))
                 .clicked()
                 {
                     g.pending.push(Action::OpenSelectedTicket);
@@ -1223,7 +1221,7 @@ fn threads(ui: &mut Ui, theme: &Theme, mr: &TrackedMr, me: Option<&str>) {
                 .response
                 .interact(Sense::click())
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tl("Open the thread in GitLab"));
+                .tip(tl("Open the thread in GitLab"));
             if response.clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(format!(
                     "{}#note_{}",
@@ -1261,8 +1259,8 @@ fn person(ui: &mut Ui, theme: &Theme, me: Option<&str>, display: &str) {
         if is_me {
             ui.add(Chip::new(tl("you"), theme.tones.blue).pill());
         }
-        if let Some(handle) = handle {
-            response.on_hover_text(format!("@{handle}"));
+        if handle.is_some() {
+            response.rich(Tip::new().person(display));
         }
     });
 }

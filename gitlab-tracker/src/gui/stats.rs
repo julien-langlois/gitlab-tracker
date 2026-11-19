@@ -7,6 +7,7 @@ use gitlab_tracker_stats::poisson::{AnomalySeverity, QueueStatus};
 use gitlab_tracker_stats::{CorrelationStrength, MetricPair, StatReport};
 
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     badge, card, dot, mono, muted, page_title, rule, section_title, semibold, spinner,
 };
@@ -164,7 +165,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui) {
                 tl("Recompute"),
                 false,
             )
-            .on_hover_text(tl("Recompute the report (R)"))
+            .tip(tl("Recompute the report (R)"))
             .clicked()
             {
                 g.pending.push(Action::RefreshStats);
@@ -209,7 +210,7 @@ fn period_selector(g: &mut GuiApp, ui: &mut Ui) {
             egui::FontId::proportional(theme.text_size - 1.0),
             color,
         );
-        if response.on_hover_text(window.label()).clicked() && !selected {
+        if response.tip(window.label()).clicked() && !selected {
             g.app.stats_view.window = window;
             g.pending.push(Action::RefreshStats);
         }
@@ -543,7 +544,7 @@ fn figures(ui: &mut Ui, theme: &Theme, rows: Vec<Figure<'_>>) {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(RichText::new(row.caption).color(theme.palette.text_secondary))
                     .on_hover_cursor(egui::CursorIcon::Help)
-                    .on_hover_text(row.hint);
+                    .tip(row.hint);
                 if let Some((label, tone)) = flag {
                     badge(ui, theme, label, tone);
                 }
@@ -557,7 +558,7 @@ fn figures(ui: &mut Ui, theme: &Theme, rows: Vec<Figure<'_>>) {
                                 .size(theme.text_size - 1.5)
                                 .color(trend.color),
                         )
-                        .on_hover_text(trend.previous);
+                        .tip(trend.previous);
                     }
                 });
             });
@@ -665,11 +666,15 @@ fn kpi(
                                 .size(theme.text_size - 1.5)
                                 .color(trend.color),
                         )
-                        .on_hover_text(&trend.previous);
+                        .tip(&trend.previous);
                     }
                     ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                        ui.add(egui::Label::new(muted(theme, label)).truncate())
-                            .on_hover_text(label);
+                        ui.add(
+                            egui::Label::new(muted(theme, label))
+                                .truncate()
+                                .show_tooltip_when_elided(false),
+                        )
+                        .tip(label);
                     });
                 });
             });
@@ -681,9 +686,10 @@ fn kpi(
                         .size(theme.text_size - 1.5)
                         .color(caption_color),
                 )
-                .truncate(),
+                .truncate()
+                .show_tooltip_when_elided(false),
             )
-            .on_hover_text(caption);
+            .tip(caption);
         });
 }
 
@@ -900,16 +906,20 @@ fn size_chart(ui: &mut Ui, theme: &Theme, report: &StatReport) -> Option<(String
             };
             let response = response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(format!(
-                    "{} · {range}\n{}\n{}\n{}",
-                    tl(&bucket.label),
-                    tf(
-                        "Median time to merge: {time}",
-                        &[("time", &hours(bucket.cycle_time_median_hours))]
-                    ),
-                    tn(bucket.merged_mrs as u64, "{n} merged MR", "{n} merged MRs"),
-                    tl("Click to list the tracked ones"),
-                ));
+                .rich(
+                    Tip::new()
+                        .title(format!("{} · {range}", tl(&bucket.label)))
+                        .text(tf(
+                            "Median time to merge: {time}",
+                            &[("time", &hours(bucket.cycle_time_median_hours))],
+                        ))
+                        .text(tn(
+                            bucket.merged_mrs as u64,
+                            "{n} merged MR",
+                            "{n} merged MRs",
+                        ))
+                        .hint(tl("Click to list the tracked ones")),
+                );
             if response.clicked() {
                 let key = format!(
                     "size:{}:{}",
@@ -1203,7 +1213,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                     theme.palette.accent,
                 );
             });
-            samples.response.on_hover_text(tl(
+            samples.response.tip(tl(
                 "Medians and correlations become reliable from about 30 MRs.",
             ));
         });
@@ -1514,7 +1524,7 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                     );
                 })
                 .response
-                .on_hover_text(tl(
+                .tip(tl(
                     "How busy the review flow is: arrivals ÷ capacity. Above 100%, the backlog grows.",
                 ));
             }
@@ -1554,7 +1564,7 @@ fn forecasts(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         );
                     })
                     .response
-                    .on_hover_text(hint);
+                    .tip(hint);
                 }
                 ui.add_space(6.0);
             }
@@ -1670,16 +1680,13 @@ fn correlations(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                 };
                 ui.label(mono(text, theme.text_size - 1.0).color(color));
             });
-            row.response.on_hover_text(format!(
-                "p = {:.3} · n = {}{}",
-                c.p_value,
-                c.sample_size,
-                if significant {
-                    String::new()
-                } else {
-                    format!(" · {}", tl("not significant"))
-                }
-            ));
+            let mut tip = Tip::new()
+                .fact("p", format!("{:.3}", c.p_value))
+                .fact("n", c.sample_size.to_string());
+            if !significant {
+                tip = tip.chip(tl("not significant"), theme.tones.gray);
+            }
+            row.response.rich(tip);
         }
         ui.label(muted(
             theme,

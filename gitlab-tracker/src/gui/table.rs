@@ -13,6 +13,7 @@ use egui::{
 
 use super::icons::{self, Icon};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     activity, avatar, badge, button, field, icon_button, icon_toggle, label_tone, mono, muted,
     semibold, split_person, toned_label_chip, FieldLook,
@@ -102,7 +103,7 @@ fn bulk_bar(g: &mut GuiApp, ui: &mut Ui) {
                     tn(n as u64, "{n} MR selected", "{n} MRs selected"),
                     theme.text_size,
                 ))
-                .on_hover_text(tl("Ctrl+click adds one · Shift+click a range"));
+                .tip(tl("Ctrl+click adds one · Shift+click a range"));
                 if bulk_mode {
                     ui.add_space(4.0);
                     ui.label(muted(&theme, tl("Pick:")));
@@ -128,7 +129,7 @@ fn bulk_bar(g: &mut GuiApp, ui: &mut Ui) {
                             button(ui, &theme, None, &label, false)
                         });
                         if r.inner
-                            .on_hover_text(tl("Adds them to the MRs selected, among the MRs shown"))
+                            .tip(tl("Adds them to the MRs selected, among the MRs shown"))
                             .clicked()
                         {
                             quick = Some(pick);
@@ -303,7 +304,7 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
             tl("Copy checklist"),
             true,
         )
-        .on_hover_text(tl(
+        .tip(tl(
             "Copy the visible MRs as a Markdown release checklist (E)",
         ))
         .clicked()
@@ -312,7 +313,7 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         }
         super::export::button_and_panel(g, ui);
         if button(ui, &theme, Some(Icon::List), tl("Select"), g.bulk_mode)
-            .on_hover_text(tl(
+            .tip(tl(
                 "Bulk mode: tick several MRs to flag them, copy them or stop tracking them",
             ))
             .clicked()
@@ -345,7 +346,7 @@ fn display_button(g: &mut GuiApp, ui: &mut Ui) {
         GroupBy::None => sort_label(g.app.sort_column).to_string(),
         group => format!("{} · {}", sort_label(g.app.sort_column), group.label()),
     };
-    let response = button(ui, &theme, Some(icon), &text, false).on_hover_text(tl(
+    let response = button(ui, &theme, Some(icon), &text, false).tip(tl(
         "Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)",
     ));
     egui::Popup::menu(&response).show(|ui| {
@@ -388,7 +389,7 @@ fn display_button(g: &mut GuiApp, ui: &mut Ui) {
         }
         if ui
             .selectable_label(g.compact, tl("Compact"))
-            .on_hover_text(tl("One line per MR: twice as many in view"))
+            .tip(tl("One line per MR: twice as many in view"))
             .clicked()
         {
             g.compact = true;
@@ -639,7 +640,7 @@ fn next_chips(g: &mut GuiApp, ui: &mut Ui) {
                     );
                     if response
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(tl(if on {
+                        .tip(tl(if on {
                             "Click to show them all"
                         } else {
                             "Click to show only these"
@@ -758,7 +759,7 @@ fn status_hint(
     );
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(hint)
+        .tip(hint)
 }
 
 /// What narrows the list beyond every tracked MR, as chips that each undo
@@ -896,7 +897,7 @@ fn removable_chip(ui: &mut Ui, theme: &Theme, text: &str, tone: Tone) -> bool {
     super::widgets::focus_ring(ui, theme, &response, 12);
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Remove"))
+        .tip(tl("Remove"))
         .clicked()
 }
 
@@ -1470,7 +1471,7 @@ fn signature_chip(ui: &mut Ui, theme: &Theme, badge: &SignatureBadge) {
             );
         })
         .response;
-    response.on_hover_text(&badge.tip);
+    response.rich(Tip::new().text(&badge.tip));
 }
 
 /// The Next step cell: who, what, since when.
@@ -2110,7 +2111,7 @@ fn header(
                 };
                 if ui
                     .add(egui::Label::new(text).sense(Sense::click()))
-                    .on_hover_text(tl("Sort by this column"))
+                    .tip(tl("Sort by this column"))
                     .clicked()
                 {
                     *sort_by = Some(column);
@@ -2123,7 +2124,7 @@ fn header(
                 // The column is narrower than its name: an icon, named on hover.
                 let (rect, response) = ui.allocate_exact_size(Vec2::splat(13.0), Sense::hover());
                 icons::paint(ui.painter(), rect, Icon::Comment, theme.palette.text_muted);
-                response.on_hover_text(tl("Unresolved threads"));
+                response.tip(tl("Unresolved threads"));
             }
             (Cell::Optional(col), _) => {
                 ui.label(caption(col.title()));
@@ -2145,7 +2146,7 @@ fn header(
                         theme.palette.text_muted,
                     );
                 }
-                response.on_hover_text(branches.join(" → "));
+                response.rich(Tip::new().mono(branches.join(" → ")));
             }
             (Cell::Branch(i), _) => {
                 let name = branches.get(i).map_or("", String::as_str);
@@ -2154,9 +2155,10 @@ fn header(
                     egui::Label::new(
                         mono(alias, theme.text_size - 1.5).color(theme.palette.text_muted),
                     )
-                    .truncate(),
+                    .truncate()
+                    .show_tooltip_when_elided(false),
                 )
-                .on_hover_text(name);
+                .rich(Tip::new().mono(name));
             }
             _ => {}
         }
@@ -2232,7 +2234,7 @@ fn group_heading(
     );
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl(if folded { "Unfold" } else { "Fold" }))
+        .tip(tl(if folded { "Unfold" } else { "Fold" }))
         .clicked()
 }
 
@@ -2430,7 +2432,7 @@ fn behind_link(ui: &mut Ui, theme: &Theme, n: u32) -> egui::Response {
             .selectable(false),
     )
     .on_hover_cursor(egui::CursorIcon::PointingHand)
-    .on_hover_text(tl("See what it lacks"))
+    .tip(tl("See what it lacks"))
 }
 
 /// The Next step cell: who (in their tone, stronger when it is me) and what,
@@ -2438,7 +2440,7 @@ fn behind_link(ui: &mut Ui, theme: &Theme, n: u32) -> egui::Response {
 fn next_cell(ui: &mut Ui, theme: &Theme, r: &RowView, compact: bool) {
     let Some(next) = &r.next else {
         ui.label(muted(theme, "—"))
-            .on_hover_text(tl("Known once the MR is loaded"));
+            .tip(tl("Known once the MR is loaded"));
         return;
     };
     let who_color = if next.mine || next.tone.fg != theme.tones.gray.fg {
@@ -2484,12 +2486,11 @@ fn next_cell(ui: &mut Ui, theme: &Theme, r: &RowView, compact: bool) {
         .response
     };
     if !next.hint.is_empty() {
-        let hint = if compact && !next.since.is_empty() {
-            format!("{}\n{}", next.since, next.hint)
-        } else {
-            next.hint.clone()
-        };
-        response.on_hover_text(hint);
+        let mut hint = Tip::new();
+        if compact && !next.since.is_empty() {
+            hint = hint.title(&next.since);
+        }
+        response.rich(hint.text(&next.hint));
     }
 }
 
@@ -2505,7 +2506,7 @@ fn ci_cell(ui: &mut Ui, theme: &Theme, state: Option<crate::models::PipelineStat
             c.y,
             Stroke::new(1.5, theme.palette.border),
         );
-        response.on_hover_text(tl("No pipeline"));
+        response.tip(tl("No pipeline"));
         return;
     };
     let (label, tone) = tones::pipeline(state, &theme.tones);
@@ -2535,7 +2536,7 @@ fn ci_cell(ui: &mut Ui, theme: &Theme, state: Option<crate::models::PipelineStat
             painter.circle_stroke(c, 6.5, Stroke::new(1.5, tone.fg));
         }
     }
-    response.on_hover_text(label);
+    response.rich(Tip::new().dot(tone.fg, label));
 }
 
 /// Every branch of the row as a line of dots, joined: the flow at a glance.
@@ -2553,26 +2554,29 @@ fn flow_cell(ui: &mut Ui, theme: &Theme, cells: &[BranchCell], names: &[String],
             Stroke::new(1.5, theme.palette.border),
         );
     }
-    let mut hints = Vec::new();
+    let mut hints = Tip::new();
     for (i, cell) in cells.iter().enumerate() {
         let name = names.get(i).map_or("", String::as_str);
         match cell {
             BranchCell::Known(glyph, label, tone) => {
                 painter.circle_filled(center(i), 8.0, tone.bg);
                 presence_glyph(painter, center(i), glyph, tone.fg);
-                hints.push(format!("{name}: {label}"));
+                hints = hints.dot(tone.fg, format!("{name} · {label}"));
             }
             BranchCell::Loading => {
                 painter.circle_stroke(center(i), 6.0, Stroke::new(1.5, theme.palette.text_muted));
-                hints.push(format!("{name}: {}", tl("Loading")));
+                hints = hints.dot(
+                    theme.palette.text_muted,
+                    format!("{name} · {}", tl("Loading")),
+                );
             }
             BranchCell::Unknown => {
                 painter.circle_stroke(center(i), 6.0, Stroke::new(1.0, theme.palette.border));
-                hints.push(format!("{name}: —"));
+                hints = hints.dot(theme.palette.border, format!("{name} · —"));
             }
         }
     }
-    response.on_hover_text(hints.join("\n"));
+    response.rich(hints);
 }
 
 /// A branch cell: a dot in the presence's tone with its glyph, named on hover.
@@ -2582,15 +2586,15 @@ fn branch_cell(ui: &mut Ui, theme: &Theme, cell: BranchCell) {
             let (rect, response) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::hover());
             ui.painter().circle_filled(rect.center(), 11.0, tone.bg);
             presence_glyph(ui.painter(), rect.center(), glyph, tone.fg);
-            response.on_hover_text(label);
+            response.rich(Tip::new().dot(tone.fg, label));
         }
         BranchCell::Loading => {
-            shimmer(ui, theme, 22.0, 22.0).on_hover_text(tl("Loading"));
+            shimmer(ui, theme, 22.0, 22.0).tip(tl("Loading"));
         }
         BranchCell::Unknown => {
             ui.add_space(7.0);
             ui.label(muted(theme, "—"))
-                .on_hover_text(tl("Not checked yet: the next refresh will tell"));
+                .tip(tl("Not checked yet: the next refresh will tell"));
         }
     }
 }
@@ -2689,7 +2693,7 @@ fn flag(ui: &mut Ui, theme: &Theme, flagged: bool) -> egui::Response {
             };
             icons::paint(ui.painter(), rect.shrink(2.5), icon, color);
         })
-        .on_hover_text(label)
+        .tip(label)
 }
 
 /// Bulk mode's box, ticked when the row is picked.
@@ -2721,7 +2725,7 @@ fn tick(ui: &mut Ui, theme: &Theme, ticked: bool) -> egui::Response {
                 );
             }
         })
-        .on_hover_text(label)
+        .tip(label)
 }
 
 /// The title over "@author · when" and the scoped labels (unless they have
@@ -2729,17 +2733,16 @@ fn tick(ui: &mut Ui, theme: &Theme, ticked: bool) -> egui::Response {
 fn title_cell(ui: &mut Ui, theme: &Theme, r: &RowView, grid: &Grid) -> Option<String> {
     if grid.row_height < ROW_HEIGHT {
         // Compact: the title alone, who and when on hover.
-        let (name, _) = split_person(&r.author);
-        let hint = if r.updated.is_empty() {
-            name.to_string()
-        } else {
-            format!("{name} · {}", r.updated)
-        };
+        let hint = Tip::new()
+            .mr(&r.id, &r.title)
+            .person(&r.author)
+            .text(&r.updated);
         ui.add(
             egui::Label::new(RichText::new(&r.title).font(fonts::medium(theme.text_size)))
-                .truncate(),
+                .truncate()
+                .show_tooltip_when_elided(false),
         )
-        .on_hover_text(hint);
+        .rich(hint);
         return None;
     }
     let mut clicked = None;
@@ -2785,8 +2788,8 @@ fn meta_line(ui: &mut Ui, theme: &Theme, r: &RowView) {
     let size = theme.text_size - 1.5;
     let (name, handle) = split_person(&r.author);
     let response = avatar(ui, theme, name, 18.0);
-    if let Some(handle) = handle {
-        response.on_hover_text(format!("@{handle}"));
+    if handle.is_some() {
+        response.rich(Tip::new().person(&r.author));
     }
     ui.label(
         RichText::new(name)
@@ -2806,7 +2809,7 @@ fn meta_line(ui: &mut Ui, theme: &Theme, r: &RowView) {
     icons::paint(ui.painter(), rect, Icon::Clock, color);
     let date = ui.label(RichText::new(&r.updated).size(size).color(color));
     if r.age.is_some() {
-        date.on_hover_text(r.activity.0);
+        date.tip(r.activity.0);
     }
 }
 
@@ -2889,7 +2892,8 @@ fn cell_content(ui: &mut Ui, theme: &Theme, r: &RowView, col: Col) -> Option<Str
         },
         Col::Queue => {
             if let Some((text, tone, hint)) = &r.queue {
-                ui.add(Chip::new(text, *tone)).on_hover_text(hint);
+                ui.add(Chip::new(text, *tone))
+                    .rich(Tip::new().chip(text.as_str(), *tone).text(hint.as_str()));
             }
         }
     }

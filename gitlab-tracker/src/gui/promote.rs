@@ -8,6 +8,7 @@
 use bevel_theme::{fonts, Chip, Theme};
 use egui::{Align, CornerRadius, Layout, RichText, Sense, Ui, Vec2};
 
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, mono, muted, page_title, semibold, split_person};
 use super::{tones, GuiApp};
 use crate::app::{App, Focus};
@@ -395,7 +396,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                                     *copied = Some(Copied::Commands);
                                 }
                                 if button(ui, &theme, None, tl("Release notes"), false)
-                                    .on_hover_text(tl("The selected MRs as a Markdown list"))
+                                    .tip(tl("The selected MRs as a Markdown list"))
                                     .clicked()
                                 {
                                     ui.ctx().copy_text(
@@ -405,7 +406,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                                     *copied = Some(Copied::Notes);
                                 }
                                 if button(ui, &theme, None, tl("Markdown checklist"), false)
-                                    .on_hover_text(tl(
+                                    .tip(tl(
                                         "The selected MRs as a Markdown table, for the release ticket",
                                     ))
                                     .clicked()
@@ -734,7 +735,11 @@ fn side_row(
     });
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open it on the merge requests page"))
+        .rich(
+            Tip::new()
+                .mr(&r.id, &r.title)
+                .hint(tl("Open it on the merge requests page")),
+        )
         .clicked()
 }
 
@@ -811,17 +816,17 @@ fn id_pill(ui: &mut Ui, theme: &Theme, r: &Row, tone: bevel_theme::Tone) -> egui
     );
     ui.painter()
         .galley(rect.center() - galley.size() / 2.0, galley, tone.fg);
-    let (status, _) = tones::status(r.state, &r.mergeability, &theme.tones);
+    let (status, status_tone) = tones::status(r.state, &r.mergeability, &theme.tones);
     let why = r
         .blockers
         .iter()
-        .cloned()
-        .chain(std::iter::once(status.to_string()))
-        .collect::<Vec<_>>()
-        .join(" · ");
+        .fold(Tip::new().mr(&r.id, &r.title), |tip, b| {
+            tip.chip(b.as_str(), theme.tones.red)
+        })
+        .chip(status, status_tone);
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(format!("{}\n{why}", r.title))
+        .rich(why)
 }
 
 /// The ready table's columns, from the row's left edge: the box, the MR, the
@@ -933,7 +938,7 @@ fn ready_row(
     let mut c = child(ui, cell(0, COL_BOX));
     let mut checked = ticked;
     if c.checkbox(&mut checked, "")
-        .on_hover_text(tl("In the release or not"))
+        .tip(tl("In the release or not"))
         .changed()
     {
         click = Some(ReadyClick::Toggle);
@@ -974,7 +979,7 @@ fn ready_row(
                 None => theme.palette.text_muted,
             }),
     )
-    .on_hover_text(tl(
+    .tip(tl(
         "How long it has been tested there: under a day, in amber",
     ));
     let ticket_cell = cell(4, COL_TICKET);
@@ -988,8 +993,16 @@ fn ready_row(
                 Chip::new(&format!("#{id}"), theme.tones.blue)
                     .font(fonts::medium(theme.text_size - 2.5)),
             );
-            c.add(egui::Label::new(muted(theme, status).size(theme.text_size - 2.0)).truncate())
-                .on_hover_text(format!("#{id} {status}"));
+            c.add(
+                egui::Label::new(muted(theme, status).size(theme.text_size - 2.0))
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            )
+            .rich(
+                Tip::new()
+                    .ticket(id, "")
+                    .chip(status.as_str(), theme.tones.blue),
+            );
         }
         None => {
             c.label(muted(theme, "—"));
@@ -1013,7 +1026,11 @@ fn ready_row(
     }
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open it on the merge requests page"))
+        .rich(
+            Tip::new()
+                .mr(&r.id, &r.title)
+                .hint(tl("Open it on the merge requests page")),
+        )
         .clicked()
         .then_some(ReadyClick::Open)
 }

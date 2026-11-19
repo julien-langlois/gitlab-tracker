@@ -13,6 +13,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 use super::board::{self, Figure, GAP};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button, split_person};
 use super::GuiApp;
 use crate::app::App;
@@ -641,11 +642,7 @@ fn matrix_card(
         let (head, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 18.0), Sense::hover());
         // An id alone says little: its title on hover.
-        let title = |id: &str| {
-            overlaps
-                .mr(id)
-                .map_or_else(|| format!("!{id}"), |m| format!("!{id} · {}", m.title))
-        };
+        let with_mr = |tip: Tip, id: &str| tip.mr(id, overlaps.mr(id).map_or("", |m| &m.title));
         for (j, id) in ids.iter().enumerate().take(n) {
             let cx = head.left() + label_w + j as f32 * (cell + 4.0) + cell / 2.0;
             board::paint_text(
@@ -665,7 +662,7 @@ fn matrix_card(
                 ui.scope_id().with(("matrix_col", *id)),
                 Sense::hover(),
             )
-            .on_hover_text(title(id));
+            .rich(with_mr(Tip::new(), id));
         }
         // A lower triangle: no first row, no last column.
         for (i, a) in ids.iter().enumerate().skip(1) {
@@ -685,7 +682,7 @@ fn matrix_card(
                 ui.scope_id().with(("matrix_row", *a)),
                 Sense::hover(),
             )
-            .on_hover_text(title(a));
+            .rich(with_mr(Tip::new(), a));
             for (j, b) in ids.iter().enumerate().take(i) {
                 let r = Rect::from_min_size(
                     egui::pos2(
@@ -700,12 +697,10 @@ fn matrix_card(
                         let response = ui
                             .interact(r, ui.scope_id().with(("pair", *a, *b)), Sense::click())
                             .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .on_hover_text(format!(
-                                "{}\n{}\n{}",
-                                title(a),
-                                title(b),
-                                tn(p.files.len() as u64, "{n} file", "{n} files")
-                            ));
+                            .rich(
+                                with_mr(with_mr(Tip::new(), a), b)
+                                    .chip(tn(p.files.len() as u64, "{n} file", "{n} files"), tone),
+                            );
                         let fill = if response.hovered() {
                             tone.bg.gamma_multiply(1.7)
                         } else {
@@ -988,7 +983,7 @@ fn files_card(
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(overlaps.mr(id).map_or(String::new(), |m| m.title.clone()));
+                        .rich(Tip::new().mr(id, overlaps.mr(id).map_or("", |m| &m.title)));
                     let fill = if hit.hovered() {
                         theme.palette.border
                     } else {
@@ -1587,14 +1582,16 @@ fn file_lanes(
             );
         }
     }
-    let hover = format!("!{a_id}: {}\n!{b_id}: {}", ranges_text(a), ranges_text(b));
+    let hover = Tip::new()
+        .dot(ca, format!("!{a_id} · {}", ranges_text(a)))
+        .dot(cb, format!("!{b_id} · {}", ranges_text(b)));
     ui.interact(
         track,
         ui.scope_id()
             .with(("lanes", a_id, b_id, lo, hi, a.len(), b.len())),
         Sense::hover(),
     )
-    .on_hover_text(hover);
+    .rich(hover);
     // The line numbers: both ends, or the one line.
     let (axis, _) = ui.allocate_exact_size(Vec2::new(width, 14.0), Sense::hover());
     let font = egui::FontId::monospace(theme.text_size - 3.5);

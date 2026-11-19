@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use egui::{Align2, CornerRadius, FontId, Rect, Sense, Ui, Vec2};
 
 use super::board;
+use super::tip::{Tip, TipExt};
 use super::widgets::{label_tone, muted};
 use crate::app::App;
 use crate::i18n::{tl, tn};
@@ -256,7 +257,7 @@ pub fn card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<Click> {
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(title);
+                        .rich(Tip::new().mr(id, title).text(board::duration_text(*days)));
                     ui.painter().rect_filled(
                         pill,
                         CornerRadius::same(theme.radii.small),
@@ -314,19 +315,17 @@ pub fn card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<Click> {
                         .collect();
                     board::paint_stacked_bar(ui, theme, bar, &parts, 1.0);
                 }
-                let hover: Vec<String> = Bucket::ALL
+                let hover = Bucket::ALL
                     .iter()
                     .zip(row.buckets)
                     .filter(|(_, n)| *n > 0)
-                    .map(|(b, n)| format!("{} {n}", b.label()))
-                    .collect();
+                    .fold(Tip::new().title(&row.label), |tip, (b, n)| {
+                        tip.dot(bucket_color(*b, theme), format!("{} · {n}", b.label()))
+                    })
+                    .hint(tl("Click: list them in the table"));
                 let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(format!(
-                        "{}\n{}",
-                        hover.join(" · "),
-                        tl("Click: list them in the table")
-                    ));
+                    .rich(hover);
                 if response.clicked() && !on_pill && click.is_none() {
                     click = Some(Click::Label(row.label.clone()));
                 }

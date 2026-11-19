@@ -5,6 +5,7 @@ use bevel_widgets::buttons::{IconButton, IconButtonStyle};
 use egui::{Color32, CornerRadius, FontId, Margin, Rect, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::icons::{self, Icon};
+use super::tip::TipExt;
 use crate::app::App;
 
 /// The most time between the two clicks of a double click, in seconds. egui's
@@ -51,6 +52,23 @@ pub fn icon_button(
     icon_toggle(ui, label, icon, style, size, false)
 }
 
+/// An icon button with `tip` on hover instead of its label: one tooltip, not
+/// the label's stacked over the caller's.
+pub fn icon_button_tip(
+    ui: &mut Ui,
+    label: &str,
+    icon: Icon,
+    style: &IconButtonStyle,
+    size: f32,
+    tip: super::tip::Tip,
+) -> egui::Response {
+    IconButton::new(label, Vec2::splat(size), style)
+        .show(ui, |ui, rect, tint| {
+            icons::paint(ui.painter(), rect.shrink(size * 0.26), icon, tint)
+        })
+        .rich(tip)
+}
+
 /// An icon button drawn as selected when `selected`.
 pub fn icon_toggle(
     ui: &mut Ui,
@@ -65,7 +83,7 @@ pub fn icon_toggle(
         .show(ui, |ui, rect, tint| {
             icons::paint(ui.painter(), rect.shrink(size * 0.26), icon, tint)
         })
-        .on_hover_text(label)
+        .tip(label)
 }
 
 /// Text in Inter SemiBold: titles, headings, badges.
@@ -226,7 +244,7 @@ pub fn section(ui: &mut Ui, theme: &Theme, title: &str, body: impl FnOnce(&mut U
             focus_ring(ui, theme, &response, theme.radii.small);
             let response = response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(crate::i18n::tl(if open { "Fold" } else { "Unfold" }));
+                .tip(crate::i18n::tl(if open { "Fold" } else { "Unfold" }));
             if response.clicked() {
                 let mut folded = folded_sections();
                 if open {
@@ -571,7 +589,7 @@ pub fn toned_label_chip(ui: &mut Ui, theme: &Theme, label: &str, tone: Tone) -> 
     ui.add(Chip::new(label, tone).font(FontId::monospace(theme.text_size - 2.5)))
         .interact(egui::Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(crate::i18n::tl("Show only the MRs with this label"))
+        .tip(crate::i18n::tl("Show only the MRs with this label"))
 }
 
 /// The activity badge of an MR (`Active`, `Slowing`, `Stale`), from the project's

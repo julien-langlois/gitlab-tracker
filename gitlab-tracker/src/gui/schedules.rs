@@ -12,6 +12,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 
 use super::board::{self, paint_text};
 use super::icons::{self, Icon};
+use super::tip::{Tip, TipExt};
 use super::toasts::{Kind, Toasts};
 use crate::gitlab_detail::{ScheduleRecord, ScheduleRun, SCHEDULE_RUNS};
 use crate::i18n::{tc, tf, tl, tn};
@@ -384,10 +385,10 @@ fn row(
         ui.scope_id().with(("sched_when", s.id)),
         Sense::hover(),
     )
-    .on_hover_text(tf(
+    .rich(Tip::new().mono(&s.cron).text(tf(
         "{cron}, read in {zone}",
         &[("cron", &s.cron), ("zone", &s.zone)],
-    ));
+    )));
     x += cols[1] + 12.0;
     // The runs, oldest left, padded with empty slots.
     let pad = SCHEDULE_RUNS.saturating_sub(s.runs.len());
@@ -410,15 +411,15 @@ fn row(
             )
             .on_hover_cursor(egui::CursorIcon::PointingHand);
         if response.hovered() {
-            let (label, _) = super::tones::pipeline(run.status, &theme.tones);
+            let (label, tone) = super::tones::pipeline(run.status, &theme.tones);
             let when = board::parse_time(&run.created_at)
                 .map(crate::freeze::moment_text)
                 .unwrap_or_default();
-            response.clone().on_hover_text(format!(
-                "#{} · {} · {when}",
-                run.id,
-                label.to_lowercase()
-            ));
+            response.clone().rich(
+                Tip::new()
+                    .item(format!("#{}", run.id), &when)
+                    .chip(label.to_lowercase(), tone),
+            );
         }
         if response.clicked() && !run.web_url.is_empty() {
             open = Some(run.web_url.clone());

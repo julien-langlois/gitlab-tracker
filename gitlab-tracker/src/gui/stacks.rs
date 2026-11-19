@@ -14,6 +14,7 @@ use egui::{Align2, Color32, FontId, Sense, Stroke, Ui, Vec2};
 use super::board::{self, Figure, GAP};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, semibold, split_person};
 use super::GuiApp;
 use crate::app::App;
@@ -140,6 +141,16 @@ impl Stack {
             .iter()
             .find(|n| n.id == id)
             .map_or_else(|| format!("!{id}"), |n| format!("!{id} · {}", n.title))
+    }
+
+    /// An MR of the stack by its id and title, for a tooltip.
+    fn named_tip(&self, id: &str) -> Tip {
+        let title = self
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .map_or("", |n| &n.title);
+        Tip::new().mr(id, title)
     }
 
     fn open(&self) -> usize {
@@ -681,7 +692,7 @@ fn stack_body(
                 ui.scope_id().with(("problem", node.id.as_str())),
                 Sense::hover(),
             )
-            .on_hover_text(stack.named(problem.parent()));
+            .rich(stack.named_tip(problem.parent()));
         }
         if super::widgets::double_clicked(ui, &response, ("stack", &node.id)) {
             *open = Some(node.id.clone());
@@ -805,7 +816,7 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
                         )
                         .wrap(),
                     )
-                    .on_hover_text(stack.named(problem.parent()));
+                    .rich(stack.named_tip(problem.parent()));
                 });
                 ui.add_space(4.0);
             }

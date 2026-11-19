@@ -5,6 +5,7 @@
 use bevel_theme::{fonts, Theme, Tone};
 use egui::{CornerRadius, Margin, RichText, Stroke, Ui};
 
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted};
 use crate::i18n::{tf, tl};
 use crate::models::TrackedMr;
@@ -267,7 +268,7 @@ pub fn card(
                         }
                         Todo::Rebase { .. } => {
                             if secondary(ui, theme, tl("Copy the rebase commands"))
-                                .on_hover_text(rebase_commands(mr))
+                                .rich(Tip::new().mono(rebase_commands(mr)))
                                 .clicked()
                             {
                                 ui.ctx().copy_text(rebase_commands(mr));

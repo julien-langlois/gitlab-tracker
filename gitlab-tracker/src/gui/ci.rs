@@ -12,6 +12,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 use super::board::{self, Figure, GAP};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button};
 use super::GuiApp;
 use crate::app::{App, Focus};
@@ -796,7 +797,7 @@ fn budget_card(ui: &mut Ui, theme: &Theme, ci: &Ci) {
                         egui::pos2(bar.right(), area.bottom()),
                     );
                     ui.interact(hit, ui.scope_id().with(("budget_day", i)), Sense::hover())
-                        .on_hover_text(format!(
+                        .tip(format!(
                             "{} · {}",
                             day.format("%Y-%m-%d"),
                             hours_text(*secs)
@@ -1046,24 +1047,28 @@ fn jobs_table(
                     CornerRadius::same(2),
                     status_color(&run.status, run.flaky, theme),
                 );
-                let tip = format!(
-                    "!{} · {}\n{}{}\n{}",
-                    run.mr,
-                    run.mr_title,
-                    run.status,
-                    if run.flaky {
-                        format!(" · {}", tl("passed on a rerun"))
-                    } else {
-                        String::new()
-                    },
-                    run.at.with_timezone(&Local).format("%Y-%m-%d %H:%M"),
-                );
+                let tip = Tip::new()
+                    .mr(&run.mr, &run.mr_title)
+                    .dot(
+                        status_color(&run.status, run.flaky, theme),
+                        if run.flaky {
+                            format!("{} · {}", run.status, tl("passed on a rerun"))
+                        } else {
+                            run.status.clone()
+                        },
+                    )
+                    .text(
+                        run.at
+                            .with_timezone(&Local)
+                            .format("%Y-%m-%d %H:%M")
+                            .to_string(),
+                    );
                 ui.interact(
                     slot.expand2(Vec2::new(1.5, 4.0)),
                     ui.scope_id().with(("run", job.name.as_str(), k)),
                     Sense::hover(),
                 )
-                .on_hover_text(tip);
+                .rich(tip);
             }
         }
         // Failure rate: the figure and a bar.
@@ -1200,7 +1205,7 @@ fn durations_card(ui: &mut Ui, theme: &Theme, ci: &Ci) {
                 None => format!("{} · {}", day.format("%d/%m"), tl("no pipeline")),
             };
             ui.interact(column, ui.scope_id().with(("day", i)), Sense::hover())
-                .on_hover_text(tip);
+                .tip(tip);
         }
         if median > 0.0 {
             let y = rect.bottom() - rect.height() * (median / top) as f32;
@@ -1459,7 +1464,7 @@ fn inspector(
                 );
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Open its pipelines"))
+                    .tip(tl("Open its pipelines"))
                     .clicked()
                 {
                     open = Some(b.id.clone());

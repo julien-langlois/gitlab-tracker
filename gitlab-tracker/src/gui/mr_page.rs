@@ -13,6 +13,7 @@ use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Ui, Vec2};
 use super::details::Folder;
 use super::icons::Icon;
 use super::inspector::{self, Step};
+use super::tip::{Tip, TipExt};
 use super::widgets::{
     avatar, badge, button, label_chip, mono, muted, semibold, spinner, split_person,
 };
@@ -174,7 +175,7 @@ fn crumbs(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     // The next and previous MRs, their titles on hover.
     let neighbour = |ui: &mut Ui, (id, title): &(String, String)| {
         ui.label(muted(&theme, format!("!{id}")))
-            .on_hover_text(format!("!{id} · {title}"));
+            .rich(Tip::new().mr(id, title));
     };
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
@@ -306,7 +307,7 @@ fn header(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
             // Log time is on the ticket tile.
 
             if button(ui, &theme, Some(Icon::Copy), tl("Copy git clone"), false)
-                .on_hover_text(tl("git clone -b <source branch> <ssh url>"))
+                .rich(Tip::new().mono(tl("git clone -b <source branch> <ssh url>")))
                 .clicked()
             {
                 pick = Some(Action::YankCloneCommand);
@@ -636,7 +637,7 @@ pub fn behind_popup(
             &[("source", &mr.target_branch)],
         );
         if button(ui, &theme, Some(Icon::ExternalLink), &text, false)
-            .on_hover_text(&url)
+            .rich(Tip::new().mono(&url))
             .clicked()
         {
             ui.ctx().open_url(egui::OpenUrl::new_tab(url));
@@ -652,9 +653,16 @@ fn commit_row(g: &GuiApp, ui: &mut Ui, commit: &crate::gitlab_detail::BehindComm
     let theme = g.theme;
     let p = &theme.palette;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 46.0), Sense::click());
+    let reference = match &commit.mr_iid {
+        Some(iid) => Tip::new().mr(iid, &commit.title),
+        None => Tip::new().item(
+            commit.sha.get(..8).unwrap_or(&commit.sha).to_string(),
+            &commit.title,
+        ),
+    };
     let response = response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open in GitLab"));
+        .rich(reference.text(&commit.author).hint(tl("Open in GitLab")));
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, CornerRadius::same(theme.radii.medium), p.raised);
@@ -1181,7 +1189,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
                                         .selectable(false),
                                 )
                                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                .on_hover_text(tl("See what it lacks"));
+                                .tip(tl("See what it lacks"));
                             if let Some(id) = behind_popup(g, &response, mr, data) {
                                 open = Some(id);
                             }
@@ -1246,7 +1254,7 @@ fn command_box(ui: &mut Ui, theme: &Theme, command: &str) {
         .response
         .interact(Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Copy"));
+        .tip(tl("Copy"));
     if response.clicked() {
         ui.ctx().copy_text(command.to_string());
     }
@@ -1278,7 +1286,7 @@ fn conflict_files(
             .font(fonts::medium(theme.text_size - 1.0))
             .color(theme.palette.text_secondary),
         )
-        .on_hover_text(tl(
+        .tip(tl(
             "Worked out from what each side changed since they parted: the same or \
              adjacent lines. GitLab lists them exactly when you resolve the conflicts.",
         ));
@@ -1324,14 +1332,17 @@ fn conflict_files(
                     names.join(", ")
                 ),
             ))
-            .truncate(),
+            .truncate()
+            .show_tooltip_when_elided(false),
         )
-        .on_hover_text(
-            others
-                .iter()
-                .map(|f| f.path.as_str())
-                .collect::<Vec<_>>()
-                .join("\n"),
+        .rich(
+            Tip::new().mono(
+                others
+                    .iter()
+                    .map(|f| f.path.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
         );
     }
     picked
@@ -1390,7 +1401,7 @@ fn tree_rows(
     for path in &folder.files {
         let response = tree_row(ui, theme, depth, file_name(path), theme.tones.red.fg)
             .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text(format!("{path}\n{}", tl("Show it in Changes")));
+            .rich(Tip::new().mono(*path).hint(tl("Show it in Changes")));
         if response.clicked() {
             picked = Some((*path).to_string());
         }
@@ -1657,7 +1668,7 @@ fn thread_card(ui: &mut Ui, theme: &Theme, thread: &Thread, code: &[String], me:
                                 if waiting {
                                     ui.label(muted(theme, when));
                                     ui.add(Chip::new(tl("Your turn"), theme.tones.orange))
-                                        .on_hover_text(tl("The last note is someone else's"));
+                                        .tip(tl("The last note is someone else's"));
                                 } else {
                                     ui.label(muted(theme, when));
                                 }
@@ -1682,9 +1693,10 @@ fn thread_card(ui: &mut Ui, theme: &Theme, thread: &Thread, code: &[String], me:
                                         };
                                         ui.add(
                                             egui::Label::new(mono(text, theme.text_size - 1.5))
-                                                .truncate(),
+                                                .truncate()
+                                                .show_tooltip_when_elided(false),
                                         )
-                                        .on_hover_text(path);
+                                        .rich(Tip::new().mono(path));
                                     }
                                     _ => {
                                         ui.label(muted(theme, tl("General")));
@@ -1874,26 +1886,36 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     );
                 });
                 fixed(&mut row, title, |ui| {
-                    ui.add(egui::Label::new(&commit.fingerprint.title).truncate())
-                        .on_hover_text(format!(
-                            "{}\n{}",
-                            commit.fingerprint.title, commit.fingerprint.author_email
-                        ));
+                    ui.add(
+                        egui::Label::new(&commit.fingerprint.title)
+                            .truncate()
+                            .show_tooltip_when_elided(false),
+                    )
+                    .rich(
+                        Tip::new()
+                            .title(&commit.fingerprint.title)
+                            .text(&commit.fingerprint.author_email),
+                    );
                 });
                 fixed(&mut row, author_width, |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     let author = commit.author();
-                    let who = format!("{author}\n{}", commit.fingerprint.author_email);
-                    avatar(ui, &theme, author, AVATAR).on_hover_text(&who);
+                    let who = || {
+                        Tip::new()
+                            .person(author)
+                            .text(&commit.fingerprint.author_email)
+                    };
+                    avatar(ui, &theme, author, AVATAR).rich(who());
                     ui.add(
                         egui::Label::new(
                             RichText::new(author)
                                 .font(author_font.clone())
                                 .color(theme.palette.text_secondary),
                         )
-                        .truncate(),
+                        .truncate()
+                        .show_tooltip_when_elided(false),
                     )
-                    .on_hover_text(who);
+                    .rich(who());
                 });
                 fixed(&mut row, date_width, |ui| {
                     ui.label(muted(&theme, date.as_str()));
@@ -1913,7 +1935,7 @@ fn commits(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
                     };
                     centered(&mut row, *w, |ui| {
                         ui.label(RichText::new(glyph).color(tone.fg))
-                            .on_hover_text(format!("{b}: {label}"));
+                            .rich(Tip::new().mono(b).chip(format!("{glyph} {label}"), tone));
                     });
                 }
                 ui.painter().hline(
@@ -1947,7 +1969,11 @@ fn signature_chip(
             );
         })
         .response
-        .on_hover_text(tones::signature_detail(check));
+        .rich(
+            Tip::new()
+                .chip(format!("{glyph} {label}"), tone)
+                .text(tones::signature_detail(check)),
+        );
 }
 
 /// A column `width` wide, its content centered.
@@ -2110,8 +2136,12 @@ fn where_it_is(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>)
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 10.0;
             fixed(ui, name_width, |ui| {
-                ui.add(egui::Label::new(mono(&row.branch, theme.text_size - 1.5)).truncate())
-                    .on_hover_text(&row.branch);
+                ui.add(
+                    egui::Label::new(mono(&row.branch, theme.text_size - 1.5))
+                        .truncate()
+                        .show_tooltip_when_elided(false),
+                )
+                .rich(Tip::new().mono(&row.branch));
             });
             fixed(ui, chip_width, |ui| {
                 ui.add(Chip::new(&label, tone).glyph(glyph));
@@ -2199,9 +2229,14 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
         if mine {
             text = text.color(theme.tones.blue.fg);
         }
-        let response = response | ui.add(egui::Label::new(text).truncate());
-        if let Some(handle) = handle {
-            response.on_hover_text(format!("@{handle}"));
+        let response = response
+            | ui.add(
+                egui::Label::new(text)
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            );
+        if handle.is_some() {
+            response.rich(Tip::new().person(display));
         }
     };
     let caption_width = [
@@ -2247,12 +2282,11 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                     .approved_by
                     .iter()
                     .any(|a| reviewer.contains(&format!("@{a}")));
-                let hover = if approved {
-                    tf("{who} approved", &[("who", name)])
-                } else {
-                    name.to_string()
-                };
-                avatar(ui, &theme, name, 20.0).on_hover_text(hover);
+                let mut hover = Tip::new().person(reviewer);
+                if approved {
+                    hover = hover.dot(theme.tones.green.fg, tf("{who} approved", &[("who", name)]));
+                }
+                avatar(ui, &theme, name, 20.0).rich(hover);
             }
         }
     });
@@ -2285,10 +2319,11 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                     egui::Label::new(
                         RichText::new(names.join(", ")).font(fonts::medium(theme.text_size - 0.5)),
                     )
-                    .truncate(),
+                    .truncate()
+                    .show_tooltip_when_elided(false),
                 );
                 let response = response.map_or(label.clone(), |r| r | label);
-                response.on_hover_text(several.join("\n"));
+                response.rich(several.iter().fold(Tip::new(), |tip, d| tip.person(d)));
             }
         }
     });
@@ -2343,7 +2378,7 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
                         .sense(Sense::click()),
                     )
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Open the ticket"));
+                    .tip(tl("Open the ticket"));
                 if id.clicked() {
                     pick = Some(Action::OpenSelectedTicket);
                 }
@@ -2351,9 +2386,14 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
                     egui::Label::new(
                         RichText::new(&ticket.subject).font(fonts::medium(theme.text_size)),
                     )
-                    .truncate(),
+                    .truncate()
+                    .show_tooltip_when_elided(false),
                 )
-                .on_hover_text(&ticket.subject);
+                .rich(
+                    Tip::new()
+                        .ticket(&ticket.id, &ticket.subject)
+                        .chip(&ticket.status, theme.tones.blue),
+                );
             });
         });
     });
@@ -2404,7 +2444,7 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
             if button(ui, &theme, Some(Icon::Clock), tl("Log time"), true)
-                .on_hover_text(tl("Log time on this ticket (L)"))
+                .tip(tl("Log time on this ticket (L)"))
                 .clicked()
             {
                 pick = Some(Action::OpenLogTime);
@@ -2416,7 +2456,7 @@ fn ticket(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) -> Option<Action> {
                 tl("Open the ticket"),
                 false,
             )
-            .on_hover_text(&ticket.url)
+            .rich(Tip::plain(tl("Open the ticket")).mono(&ticket.url))
             .clicked()
             {
                 pick = Some(Action::OpenSelectedTicket);
@@ -2688,12 +2728,15 @@ fn approvals(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
                             let approved =
                                 rule.approved_by.iter().any(|a| a.username == user.username);
                             let response = avatar(ui, &theme, &user.name, 18.0);
-                            let hover = if approved {
-                                tf("{who} approved", &[("who", &user.name)])
-                            } else {
-                                user.name.clone()
-                            };
-                            response.on_hover_text(hover);
+                            let mut hover =
+                                Tip::new().person(&format!("{} (@{})", user.name, user.username));
+                            if approved {
+                                hover = hover.dot(
+                                    theme.tones.green.fg,
+                                    tf("{who} approved", &[("who", &user.name)]),
+                                );
+                            }
+                            response.rich(hover);
                         }
                     });
                 });

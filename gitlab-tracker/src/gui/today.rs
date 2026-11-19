@@ -6,6 +6,7 @@
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, CornerRadius, Layout, RichText, Sense, Ui, Vec2};
 
+use super::tip::{Tip, TipExt};
 use super::widgets::{avatar, card, mono, muted, page_title, split_person};
 use super::{tones, GuiApp, SlotState};
 use crate::app::App;
@@ -352,7 +353,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     tl("Copy my stand-up"),
                     false,
                 )
-                .on_hover_text(tl(
+                .tip(tl(
                     "What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting",
                 ))
                 .clicked();
@@ -472,7 +473,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                                 &theme,
                                 tf("{section} · nothing yet", &[("section", kind.title())]),
                             ))
-                            .on_hover_text(kind.empty());
+                            .tip(kind.empty());
                         });
                 }
             });
@@ -869,11 +870,19 @@ fn feed_card(ui: &mut Ui, theme: &Theme, changes: &[Change], several: bool) -> O
             if let Some(when) = change.when {
                 detail = format!("{} · {detail}", when.format("%H:%M"));
             }
-            inner
-                .add(egui::Label::new(muted(theme, detail).size(theme.text_size - 2.0)).truncate());
+            inner.add(
+                egui::Label::new(muted(theme, detail).size(theme.text_size - 2.0))
+                    .truncate()
+                    .show_tooltip_when_elided(false),
+            );
             if response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .on_hover_text(tl("Open its page"))
+                .rich(
+                    Tip::new()
+                        .mr(&change.id, &change.title)
+                        .text(&change.text)
+                        .hint(tl("Open its page")),
+                )
                 .clicked()
             {
                 picked = Some(FeedClick::Open(change.tab, change.id.clone()));
@@ -989,13 +998,13 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<Ro
         },
     );
     let (name, _) = split_person(&item.author);
-    avatar(&mut line, theme, name, 18.0).on_hover_text(name);
+    avatar(&mut line, theme, name, 18.0).rich(Tip::new().person(&item.author));
     let mut click = None;
     line.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 12.0;
         if let Some(reminder) = &item.reminder {
             if super::widgets::button(ui, theme, None, tl("Copy a reminder"), false)
-                .on_hover_text(reminder)
+                .tip(reminder)
                 .clicked()
             {
                 ui.ctx().copy_text(reminder.clone());
@@ -1022,7 +1031,7 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<Ro
                     .size(theme.text_size - 1.5)
                     .color(color),
             )
-            .on_hover_text(tl("Since when it waits"));
+            .tip(tl("Since when it waits"));
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             super::widgets::centered_block(ui, ("today", &item.project, &item.id), |ui| {
@@ -1053,7 +1062,11 @@ fn row(ui: &mut Ui, theme: &Theme, item: &Item, show_project: bool) -> Option<Ro
     }
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(tl("Open its page"))
+        .rich(
+            Tip::new()
+                .mr(&item.id, &item.title)
+                .hint(tl("Open its page")),
+        )
         .clicked()
         .then_some(RowClick::Open)
 }
@@ -1067,16 +1080,16 @@ const SNOOZE_ROW: f32 = 54.0;
 /// the MR on top, then each choice with its icon, the day and time it wakes
 /// (local time) and how far away that is.
 fn snooze_menu(ui: &mut Ui, theme: &Theme, id: &str, title: &str) -> Option<Until> {
-    let response = super::widgets::icon_button(
+    let response = super::widgets::icon_button_tip(
         ui,
         tl("Snooze"),
         super::icons::Icon::Moon,
         &theme.outlined_icon_button(),
         theme.spacing.control_height + 2.0,
-    )
-    .on_hover_text(tl(
-        "Out of Today until then; back early on a push, a failed pipeline or a new comment",
-    ));
+        Tip::new().title(tl("Snooze")).text(tl(
+            "Out of Today until then; back early on a push, a failed pipeline or a new comment",
+        )),
+    );
     let frame = egui::Frame::new()
         .fill(theme.palette.raised)
         .stroke(egui::Stroke::new(1.0, theme.palette.border))
@@ -1338,7 +1351,7 @@ fn snoozed_card<'a>(
         });
         if response
             .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text(tl(if open { "Fold" } else { "Unfold" }))
+            .tip(tl(if open { "Fold" } else { "Unfold" }))
             .clicked()
         {
             ui.data_mut(|d| d.insert_temp(id, !open));
@@ -1413,7 +1426,11 @@ fn snoozed_card<'a>(
             if click.is_none()
                 && response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Open its page"))
+                    .rich(
+                        Tip::new()
+                            .mr(&item.id, &item.title)
+                            .hint(tl("Open its page")),
+                    )
                     .clicked()
             {
                 click = Some((*item, RowClick::Open));

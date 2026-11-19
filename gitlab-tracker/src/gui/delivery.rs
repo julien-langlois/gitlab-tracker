@@ -15,6 +15,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2}
 use super::board::{self, Figure, GAP};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button, split_person};
 use super::GuiApp;
 use crate::app::App;
@@ -907,7 +908,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery) {
                 Some(stage.tone(&theme).fg),
                 false,
             )
-            .on_hover_text(stage.hint());
+            .rich(Tip::new().title(stage.label()).text(stage.hint()));
         }
     });
     board::nav_note(
@@ -1139,7 +1140,7 @@ fn undo_card(
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(format!("{title}\n{hint}"));
+                        .rich(Tip::new().mr(id, title).text(hint));
                     if r.clicked() {
                         undone_click = Some(id.clone());
                     }
@@ -1442,7 +1443,7 @@ fn steps_card(ui: &mut Ui, theme: &Theme, d: &Delivery) {
                             .rect_filled(fill, CornerRadius::same(3), tone.fg);
                     }
                 }
-                response.on_hover_text(stage.hint());
+                response.rich(Tip::new().title(stage.label()).text(stage.hint()));
             }
         },
     );
@@ -1828,13 +1829,11 @@ fn aging_card(
                     .unwrap_or_default();
                 let response = response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(format!(
-                        "!{} {}\n{} · {}{rounds}",
-                        a.id,
-                        a.title,
+                    .rich(Tip::new().mr(&a.id, &a.title).text(format!(
+                        "{} · {}{rounds}",
                         split_person(&a.author).0,
                         tf("open for {time}", &[("time", &board::duration_text(a.age))]),
-                    ));
+                    )));
                 if response.clicked() {
                     *picked = Some(a.id.clone());
                 }

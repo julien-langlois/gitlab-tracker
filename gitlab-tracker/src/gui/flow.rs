@@ -6,6 +6,7 @@ use bevel_theme::{fonts, Theme, Tone};
 use chrono::{DateTime, Utc};
 use egui::{CornerRadius, Margin, RichText, Sense, Stroke, Ui, Vec2};
 
+use super::tip::TipExt;
 use super::widgets::muted;
 use crate::app::App;
 use crate::i18n::{tf, tl, tn};
@@ -255,7 +256,7 @@ pub fn flow_card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<(String, Strin
                     );
                     if response
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text(tl("Show these MRs in the list"))
+                        .tip(tl("Show these MRs in the list"))
                         .clicked()
                     {
                         picked = Some((s.stage.key(), s.name.clone()));
@@ -566,7 +567,7 @@ fn tile(ui: &mut Ui, theme: &Theme, t: &Trend) {
                         .font(fonts::semibold(theme.text_size - 1.5))
                         .color(tone.fg),
                 )
-                .on_hover_text(tf(
+                .tip(tf(
                     "against {avg} on average the weeks before",
                     &[("avg", &(t.format)(avg))],
                 ));

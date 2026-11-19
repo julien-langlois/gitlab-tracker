@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use bevel_theme::{fonts, Theme, Tone};
 use egui::{CornerRadius, Margin, RichText, Sense, Stroke, Vec2};
 
+use super::tip::TipExt;
 use super::widgets::muted;
 use super::{tones, GuiApp};
 use crate::app::App;
@@ -229,7 +230,7 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
                         Sense::click(),
                     )
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(tl("Open this MR's page · ✕ dismisses it"));
+                    .tip(tl("Open this MR's page · ✕ dismisses it"));
                 if response.clicked() {
                     let on_close = response
                         .interact_pointer_pos()
@@ -685,7 +686,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
 
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(if past.kind == Kind::ScheduleFailed {
+        .tip(if past.kind == Kind::ScheduleFailed {
             tl("Open the CI page")
         } else {
             tl("Open its MR page")

@@ -12,6 +12,7 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Ui, Vec2};
 use super::board::{self, GAP};
 use super::rail_badges::Badge;
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button, split_person, FieldLook};
 use super::{GuiApp, SlotState};
 use crate::app::App;
@@ -905,7 +906,14 @@ fn event_row(
         theme.palette.text_muted,
         (right - text_left).max(0.0),
     );
-    let response = response.on_hover_text(tl("Double click: show the MR"));
+    let mut tip = Tip::new().mr(&event.id, &event.title);
+    if let Some((label, tone)) = &event.chip {
+        tip = tip.chip(label.as_str(), *tone);
+    }
+    let response = response.rich(
+        tip.text(&event.detail)
+            .hint(tl("Double click: show the MR")),
+    );
     let key = ("journal", event.tab, &event.id, event.when, &event.what);
     if super::widgets::double_clicked(ui, &response, key) {
         Some(RowClick::Open)
@@ -1003,12 +1011,15 @@ fn activity_card(ui: &mut Ui, theme: &Theme, events: &[&Event], days: i64, now: 
             } else {
                 buckets[i].format("%Y-%m-%d").to_string()
             };
-            let mut tip = format!("{when} · {}", tn(sum as u64, "{n} event", "{n} events"));
+            let mut tip = Tip::new().title(format!(
+                "{when} · {}",
+                tn(sum as u64, "{n} event", "{n} events")
+            ));
             for (kind, k) in day {
-                tip.push_str(&format!("\n{} · {k}", kind.short()));
+                tip = tip.dot(kind.tone(theme).fg, format!("{} · {k}", kind.short()));
             }
             ui.interact(column, ui.scope_id().with(("bucket", i)), Sense::hover())
-                .on_hover_text(tip);
+                .rich(tip);
         }
         // The labels: as many as fit, evenly spread, the last one always.
         let (labels, _) =

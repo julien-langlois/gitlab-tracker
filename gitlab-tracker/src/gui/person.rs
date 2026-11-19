@@ -16,6 +16,7 @@ use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Rect, Sense, Ui
 
 use super::board::{self, Figure, GAP};
 use super::team::{self, Analysis, Level, Person, PERIODS};
+use super::tip::{Tip, TipExt};
 use super::widgets::{avatar, button, muted, primary_button, semibold};
 use super::{GuiApp, Page};
 use crate::app::App;
@@ -796,28 +797,37 @@ fn activity_card(ui: &mut Ui, theme: &Theme, profile: &Profile, now: DateTime<Ut
                 ui.scope_id().with(("week", i)),
                 Sense::hover(),
             )
-            .on_hover_text(format!(
-                "{}\n{}\n{}\n{}",
-                tf(
-                    "Week of {date}",
-                    &[("date", &monday.format("%d/%m").to_string())]
-                ),
-                tn(
-                    u64::from(w.reviews),
-                    "{n} review given",
-                    "{n} reviews given"
-                ),
-                tn(
-                    u64::from(w.merged),
-                    "{n} MR of theirs merged",
-                    "{n} MRs of theirs merged"
-                ),
-                tn(
-                    u64::from(w.asked),
-                    "{n} review asked of them",
-                    "{n} reviews asked of them"
-                ),
-            ));
+            .rich(
+                Tip::new()
+                    .title(tf(
+                        "Week of {date}",
+                        &[("date", &monday.format("%d/%m").to_string())],
+                    ))
+                    .dot(
+                        reviews_color,
+                        tn(
+                            u64::from(w.reviews),
+                            "{n} review given",
+                            "{n} reviews given",
+                        ),
+                    )
+                    .dot(
+                        merged_color,
+                        tn(
+                            u64::from(w.merged),
+                            "{n} MR of theirs merged",
+                            "{n} MRs of theirs merged",
+                        ),
+                    )
+                    .dot(
+                        asked_color,
+                        tn(
+                            u64::from(w.asked),
+                            "{n} review asked of them",
+                            "{n} reviews asked of them",
+                        ),
+                    ),
+            );
         }
         let painter = ui.painter();
         painter.add(egui::Shape::line(
@@ -980,7 +990,7 @@ fn partners_card(ui: &mut Ui, theme: &Theme, analysis: &Analysis, person: &Perso
                         color,
                         known,
                     );
-                    if known && response.on_hover_text(tl("Open their page")).clicked() {
+                    if known && response.tip(tl("Open their page")).clicked() {
                         *go = Go::Person(login.clone());
                     }
                 }

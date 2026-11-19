@@ -14,6 +14,7 @@ use super::board::{self, GAP};
 use super::promote::{self, Row, Stage};
 use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
+use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button};
 use super::GuiApp;
 use crate::app::{App, Focus};
@@ -240,7 +241,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, model: &Model, overview: Option<&ProjectOver
                 Some(role_color(b.role, &theme)),
                 selected,
             )
-            .on_hover_text(tl("Show what this branch has that the next one lacks"))
+            .tip(tl("Show what this branch has that the next one lacks"))
             .clicked()
             {
                 let to = if i + 1 < model.branches.len() {
@@ -777,7 +778,7 @@ fn branch_card(
                 Sense::click(),
             )
             .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .on_hover_text(tf(
+            .tip(tf(
                 "What {from} has that {to} lacks",
                 &[("from", &b.name), ("to", &model.branches[i + 1].name)],
             ));
@@ -969,7 +970,7 @@ fn matrix_card(
                             ("to", &model.branches[j].name),
                         ],
                     );
-                    if response.on_hover_text(hover).clicked() {
+                    if response.tip(hover).clicked() {
                         *picked = Some((i, j));
                     }
                 }
@@ -1077,7 +1078,7 @@ fn deployments_card(
                     ui.scope_id().with(("lane", env.as_str())),
                     Sense::hover(),
                 )
-                .on_hover_text(&name);
+                .tip(&name);
             }
             let track = Rect::from_min_max(
                 egui::pos2(line.left() + label_w, line.top()),
@@ -1128,18 +1129,21 @@ fn deployments_card(
                         .with(("dep", env.as_str(), d.created_at.as_str())),
                     Sense::hover(),
                 )
-                .on_hover_text(format!(
-                    "{} · {} · {}\n{} {}",
-                    d.environment,
-                    d.sha.chars().take(8).collect::<String>(),
-                    d.status,
-                    board::ago(at, now),
-                    if d.user.is_empty() {
-                        String::new()
-                    } else {
-                        tf("by {name}", &[("name", &d.user)])
-                    },
-                ));
+                .rich(
+                    Tip::new()
+                        .title(&d.environment)
+                        .dot(color, d.status.as_str())
+                        .mono(d.sha.chars().take(8).collect::<String>())
+                        .text(format!(
+                            "{} {}",
+                            board::ago(at, now),
+                            if d.user.is_empty() {
+                                String::new()
+                            } else {
+                                tf("by {name}", &[("name", &d.user)])
+                            },
+                        )),
+                );
             }
         }
         // The dates under the lanes: today on the right, then the others
@@ -1285,8 +1289,7 @@ fn waiting_card(
                     theme.palette.text,
                     text_right - rw - 16.0 - (left + w + 10.0),
                 );
-                let response =
-                    response.on_hover_text(tl("Click: pick the pair · double click: show the MR"));
+                let response = response.tip(tl("Click: pick the pair · double click: show the MR"));
                 if super::widgets::double_clicked(ui, &response, ("env", &id, i)) {
                     *open = Some(id.clone());
                 } else if response.clicked() {
