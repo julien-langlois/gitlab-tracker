@@ -553,9 +553,9 @@ fn opened(app: &App, mr: &TrackedMr, me: Option<&str>, mut step: NextStep) -> Ne
         let asked = pending
             .iter()
             .filter_map(|r| {
-                review
-                    .and_then(|rv| rv.review_requested_at.get(login(r)))
-                    .and_then(|at| parse(at))
+                let rv = review?;
+                let at = parse(rv.review_requested_at.get(login(r))?)?;
+                Some(crate::utils::waits_from(rv, at))
             })
             .max();
         let answered_at = answered.iter().filter_map(|t| parse(&t.last_note_at)).max();
@@ -660,15 +660,17 @@ pub fn median(mut values: Vec<f64>) -> Option<f64> {
 }
 
 /// How long a first review usually takes in `app`, in days: the median from
-/// creation to the first review, over the MRs that had one.
+/// up for review (out of draft, else the review request, else the opening)
+/// to the first review, over the MRs that had one.
 pub fn usual_first_review_days(app: &App) -> Option<f64> {
     median(
         app.mrs
             .iter()
             .filter_map(|mr| {
-                let created = parse(mr.created_at.as_deref()?)?;
-                let first = parse(mr.review.as_ref()?.first_review_at.as_deref()?)?;
-                Some((first - created).num_minutes().max(0) as f64 / 1440.0)
+                let review = mr.review.as_ref()?;
+                let from = parse(review.up_for_review_at().or(mr.created_at.as_deref())?)?;
+                let first = parse(review.first_review_at.as_deref()?)?;
+                Some((first - from).num_minutes().max(0) as f64 / 1440.0)
             })
             .collect(),
     )

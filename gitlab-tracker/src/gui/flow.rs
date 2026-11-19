@@ -368,9 +368,11 @@ pub fn trends(app: &App, now: DateTime<Utc>, period: Period) -> Vec<Trend> {
     let first_review = by_week(
         mrs()
             .filter_map(|m| {
-                let created = parse(m.created_at.as_deref())?;
-                let first = parse(m.review.as_ref()?.first_review_at.as_deref())?;
-                Some((first, days_of(created, first)))
+                // From up for review: out of draft, else the request.
+                let review = m.review.as_ref()?;
+                let from = parse(review.up_for_review_at().or(m.created_at.as_deref()))?;
+                let first = parse(review.first_review_at.as_deref())?;
+                Some((first, days_of(from, first)))
             })
             .collect(),
         now,

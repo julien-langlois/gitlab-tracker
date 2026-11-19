@@ -350,3 +350,26 @@ async fn the_pages_read_from_the_same_history() {
     assert_eq!(tag, "v2.3.0");
     assert!(!titles.is_empty());
 }
+
+#[tokio::test]
+async fn the_demo_has_drafts_reviewed_along_the_way() {
+    let app = demo_app(AppConfig::default()).await;
+    let drafted: Vec<_> = app
+        .mrs
+        .iter()
+        .filter(|m| m.review.as_ref().is_some_and(|r| r.ready_at.is_some()))
+        .collect();
+    assert!(drafted.len() >= 2, "MRs opened as drafts then marked ready");
+    for mr in &drafted {
+        let review = mr.review.as_ref().unwrap();
+        println!("!{} {}", mr.id, mr.title);
+        assert!(review.was_draft, "!{}", mr.id);
+        // The review proper starts once ready.
+        let ready = time(review.ready_at.as_deref().unwrap());
+        let first = time(review.first_review_at.as_deref().unwrap());
+        assert!(ready <= first, "!{} reviewed before ready", mr.id);
+    }
+    assert!(drafted
+        .iter()
+        .any(|m| m.review.as_ref().unwrap().draft_comments > 0));
+}

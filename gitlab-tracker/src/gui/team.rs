@@ -300,7 +300,9 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64, bots: bool) -> Analysis
                 .and_then(|at| board::parse_time(at))
                 .filter(|at| *at >= requested);
             if let Some(at) = answered {
-                let days = board::days_between(requested, at);
+                // Asked on a draft: the answer is waited for once it is ready.
+                let days =
+                    board::days_between(crate::utils::waits_from(review, requested), at).max(0.0);
                 if requested >= start {
                     responses.entry(reviewer.clone()).or_default().push(days);
                     now_period.push(days);

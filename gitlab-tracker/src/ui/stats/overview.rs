@@ -185,6 +185,26 @@ fn render_cycle_time_block(f: &mut Frame, report: &StatReport, area: Rect) {
         rows[2],
     );
 
+    // The time to merge without the development: from out of draft (else
+    // the first review request).
+    if let Some(ready) = agg.ready_to_merge_median_hours {
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("  Ready   ", Style::default().fg(theme::muted())),
+                Span::styled(
+                    format!(
+                        "{:>5.1} h ({:.1}d)  median, ready → merged · {} MRs",
+                        ready,
+                        ready / 24.0,
+                        agg.ready_to_merge_sample_size
+                    ),
+                    Style::default().fg(theme::muted_dim()),
+                ),
+            ])),
+            rows[3],
+        );
+    }
+
     let spread = p90 - median;
     f.render_widget(
         Paragraph::new(Line::from(vec![

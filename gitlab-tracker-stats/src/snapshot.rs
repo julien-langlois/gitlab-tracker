@@ -127,6 +127,12 @@ pub struct MrStatsSnapshot {
     /// When the MR was last updated.
     pub updated_at: Option<String>,
 
+    /// When the MR was put up for review: out of draft for one opened as a
+    /// draft, else its first review request. `None` when not known (no review
+    /// timeline read, or a row written before it was recorded).
+    #[serde(default)]
+    pub ready_at: Option<String>,
+
     // ── Diff statistics ───────────────────────────────────────────────────────
     /// Number of files touched.
     pub files_changed: u32,

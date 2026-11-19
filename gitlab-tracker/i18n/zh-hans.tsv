@@ -1663,15 +1663,28 @@ rail	Stacks	堆叠
 	< 1 month	< 1 个月
 	more	更长
 	< 1 h	< 1 小时
-	Before the review	评审前
+	In development	开发中
+	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	从创建到退出草稿（标记为就绪）。从未是草稿的 MR：到第一次请求评审为止。草稿期间的评论属于过程中的评审，计入此步骤。
+	From ready for review to the first review by someone else (bots left out).	从就绪待评审到他人的第一次评审（不含机器人）。
+	From the first review to the approval: the back and forth.	从第一次评审到批准：来回修改。
+	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	工作开始时以草稿创建的 MR，在标记为就绪之前都处于开发中。草稿期间的评论属于过程中的评审：计入这里，不算第一次评审，也不算轮次。
+	Never a draft	从未是草稿
+	Nothing in GitLab tells when the work on these MRs ended. Their development ends at the first review request: when the reviewers were asked at the opening, the writing counts as waiting for a review. Open the MRs as drafts and mark them ready to split them.	GitLab 中没有任何信息说明这些 MR 的工作何时结束。它们的开发在第一次请求评审时结束：如果在创建时就请求了评审人，编写时间会算作等待评审。以草稿创建 MR，完成后标记为就绪，即可区分两者。
+	Ready for review	就绪待评审
+	Marked ready for review	已标记为就绪
+	marked ready for review	已标记为就绪
+	Ready	就绪
+	Ready → merge	就绪 → 合并
+	median · P75 {p75} · {n} MRs	中位数 · P75 {p75} · {n} 个 MR
+	From the opening to the merge: the whole cycle. An MR opened as a draft when the work starts has its development in it.	从创建到合并：完整周期。工作开始时以草稿创建的 MR 包含其开发时间。
+	From up for review to the merge: out of draft for an MR opened as a draft, else its first review request. The time to merge without the development. MRs recorded before this was known are not in it.	从待评审到合并：以草稿创建的 MR 从退出草稿算起，否则从第一次请求评审算起。即不含开发的合并时间。在记录此信息之前的 MR 不计入。
+@plural	{n} of {total} opened as a draft, {along} reviewed along the way|{n} of {total} opened as drafts, {along} reviewed along the way	{total} 个中有 {n} 个以草稿创建，{along} 个在过程中评审
+@plural	{n} never a draft: development counted up to the review request|{n} never drafts: development counted up to the review request	{n} 个从未是草稿：开发时间计算到请求评审为止
 	Waiting for the merge	等待合并
 	Waiting for production	等待上线
 	Elite	精英
 	High	高
 	Low	低
-	From the opening to the first review request.	从开启到首次请求评审。
-	From the review request to the first review.	从请求评审到首次评审。
-	From the first review to the approval.	从首次评审到批准。
 	From the approval to the merge.	从批准到合并。
 	From the merge to the arrival on the last branch.	从合并到抵达最后一个分支。
 @plural	{n} MR merged in the period|{n} MRs merged in the period	该周期内合并了 {n} 个 MR

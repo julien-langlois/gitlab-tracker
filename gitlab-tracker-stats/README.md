@@ -21,6 +21,7 @@ Automatically records MR snapshots into a local SQLite database and computes vel
 | Metric | Description |
 | :--- | :--- |
 | **Cycle time** | Elapsed time from MR creation to merge (in hours) |
+| **Ready → merge** | Elapsed time from up for review to merge (in hours): the snapshot's `ready_at`, the move out of draft (else the first review request). The cycle time without the development, for MRs opened as drafts when the work starts |
 | **Diff size** | Total changed lines (additions + deletions) |
 | **Diff difficulty** | Pre-computed review score in \[0.0, 1.0\] (from your `complexity_profile`) |
 | **Comment count** | Unresolved review threads at snapshot time (same count as the app's Notes column) |
@@ -35,6 +36,7 @@ Aggregations operate on deduplicated MRs, not raw snapshot rows. Current-state m
 | :--- | :--- |
 | **Throughput** | MRs merged per calendar week, counted once per MR |
 | **Cycle time median, P75 & P90** | Central tendency (P50), upper quartile (P75), and long-tail indicator (P90) — all measured from MR creation to merge |
+| **Ready → merge median & P75** | The same from `ready_at`, over the merged MRs where it is known (`ready_to_merge_sample_size`) |
 | **Cycle time by author** | **Median** cycle time per MR author — robust to outlier MRs, highlights structural review patterns per contributor |
 | **Cycle time by reviewer** | **Median** cycle time per assigned reviewer — surfaces review bottlenecks without being skewed by one-off long MRs |
 | **Cycle time by milestone** | **Median** cycle time per milestone — per-sprint velocity comparison |
@@ -213,6 +215,10 @@ Idempotency is enforced at the DB level: `UNIQUE(mr_id, project_id, recorded_dat
 
 The `mr_branch_arrivals` table (migration `0002`) keeps, per project, MR and branch, the **first** arrival of an MR on a tracked branch other than its target: `arrived_at` (canonical UTC), `how` (`merge`, `cherry_pick`, `copy`) and `merged_at`. The orchestrator records it through `SqliteStatsDb::record_branch_arrival` — a later arrival of the same MR on the same branch is ignored, except that a merge date learnt since fills a missing one. Copies are dated at the copied commit's date; same-SHA arrivals at the refresh that observed them. Arrivals follow the snapshot retention.
 
+### Ready for review
+
+`mr_snapshots.ready_at` (migration `0003`) holds when the MR was put up for review — the orchestrator's choice: out of draft, else the first review request, else the opening once its review timeline is known; `NULL` when it is not. Rows written before the column existed are filled by the startup backfill (`backfill_snapshots`, like `created_at`), and only where still `NULL`.
+
 ### Schema versioning, repair and backup
 
 * The schema version is stored in `PRAGMA user_version`. Migrations are the numbered files of [`migrations/`](migrations/), embedded in the binary and applied in order on open; a shipped migration is never edited.
@@ -258,7 +264,7 @@ gitlab-tracker-stats         (library — zero TUI dependency)
     │                        record_branch_arrival / query_branch_arrivals
     │                        startup_maintenance → purge + repair_snapshots + backfill
     │
-    ├── migrations/          0001_initial.sql, 0002_branch_arrivals.sql — versioned
+    ├── migrations/          0001_initial.sql, 0002_branch_arrivals.sql, 0003_ready_at.sql — versioned
     │                        via PRAGMA user_version
     │
     ├── promotion.rs         BranchArrival / ArrivalKind, lead_times() → PromotionLeadTime

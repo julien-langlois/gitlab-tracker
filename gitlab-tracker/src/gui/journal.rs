@@ -218,6 +218,19 @@ pub fn events_of(app: &App, tab: usize, since: DateTime<Utc>, theme: &Theme) -> 
             vec![author.clone()],
         );
         if let Some(review) = &mr.review {
+            // Out of draft: the work is done, the review can start.
+            if let Some(at) = &review.ready_at {
+                push(
+                    Kind::Review,
+                    Some(at),
+                    tl("marked ready for review").to_string(),
+                    Some((tl("Ready").to_string(), t.teal)),
+                    tf("by {name}", &[("name", &name(&mr.author))]),
+                    "▸",
+                    Some(t.teal),
+                    vec![author.clone()],
+                );
+            }
             for (reviewer, at) in &review.review_requested_at {
                 push(
                     Kind::Review,

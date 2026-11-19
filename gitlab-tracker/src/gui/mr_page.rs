@@ -3068,6 +3068,12 @@ pub(super) fn timeline_steps(g: &GuiApp, mr: &TrackedMr, data: Option<&PageData>
             );
         }
         add(
+            review.ready_at.as_deref(),
+            tl("Marked ready for review").into(),
+            None,
+            t.teal.fg,
+        );
+        add(
             review.first_review_at.as_deref(),
             tl("First review").into(),
             None,
@@ -3397,10 +3403,13 @@ fn span(days: f64) -> String {
 /// its age (or cycle time), its size.
 fn compared(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
+    // From up for review (out of draft, else the request): the writing of
+    // an MR opened as a draft is not a wait.
     let first_review = |m: &TrackedMr| {
+        let review = m.review.as_ref()?;
         days(
-            m.created_at.as_deref(),
-            m.review.as_ref()?.first_review_at.as_deref(),
+            review.up_for_review_at().or(m.created_at.as_deref()),
+            review.first_review_at.as_deref(),
         )
     };
     let cycle = |m: &TrackedMr| match m.state {

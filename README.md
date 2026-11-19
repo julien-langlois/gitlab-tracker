@@ -33,7 +33,7 @@
 | [Terminal UI](docs/terminal.md) | The terminal dashboard: table, filters, inspector, cockpit, stats, shortcuts. |
 | [Configuration](docs/configuration.md) | `projects.toml` annotated, first run, token storage, environment variables. |
 | [GitLab token](docs/gitlab-token.md) | Which read-only token to create and why. |
-| [How it works](docs/how-it-works.md) | Branch presence and its limits, tracked branches, notifications. |
+| [How it works](docs/how-it-works.md) | Branch presence and its limits, tracked branches, notifications, drafts in the review metrics. |
 | [Command line](docs/cli.md) | `--project`, `checklist`, `tracker-statuses`. |
 | [Signed commits](docs/signed-commits.md) | Checking that every commit of the open MRs is signed. |
 

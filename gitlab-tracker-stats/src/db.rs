@@ -17,6 +17,7 @@ pub enum StatsError {
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_initial.sql"),
     include_str!("../migrations/0002_branch_arrivals.sql"),
+    include_str!("../migrations/0003_ready_at.sql"),
 ];
 
 /// A stored snapshot as returned by [`SqliteStatsDb::query`].
@@ -131,8 +132,8 @@ impl SqliteStatsDb {
 
     /// Startup backfill: records each snapshot at its event date
     /// ([`MrStatsSnapshot::event_recorded_at`], like the live recorder), then fills
-    /// `created_at` on that MR's rows where it is still NULL (rows inserted before
-    /// the field was tracked — INSERT OR IGNORE never updates them). Everything runs
+    /// `created_at` and `ready_at` on that MR's rows where they are still NULL (rows
+    /// inserted before the field was tracked — INSERT OR IGNORE never updates them). Everything runs
     /// in a single transaction: one fsync instead of one per row. Idempotent.
     pub async fn backfill_snapshots(&self, items: &[MrStatsSnapshot]) -> Result<(), StatsError> {
         let mut tx = self.pool.begin().await?;
@@ -141,6 +142,14 @@ impl SqliteStatsDb {
             if let Some(created_at) = &snap.created_at {
                 sqlx::query(BACKFILL_CREATED_AT_SQL)
                     .bind(created_at)
+                    .bind(&snap.project_id)
+                    .bind(&snap.mr_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            if let Some(ready_at) = &snap.ready_at {
+                sqlx::query(BACKFILL_READY_AT_SQL)
+                    .bind(ready_at)
                     .bind(&snap.project_id)
                     .bind(&snap.mr_id)
                     .execute(&mut *tx)
@@ -289,6 +298,7 @@ impl SqliteStatsDb {
                     created_at: row.get("created_at"),
                     merged_at: row.get("merged_at"),
                     updated_at: row.get("updated_at"),
+                    ready_at: row.get("ready_at"),
                     files_changed: row.get::<i64, _>("files_changed") as u32,
                     additions: row.get::<i64, _>("additions") as u32,
                     deletions: row.get::<i64, _>("deletions") as u32,
@@ -547,6 +557,8 @@ fn repair_normalize_sql() -> String {
 /// Only fills `created_at` where it is NULL — never overwrites existing data.
 const BACKFILL_CREATED_AT_SQL: &str =
     "UPDATE mr_snapshots SET created_at = ? WHERE project_id = ? AND mr_id = ? AND created_at IS NULL";
+const BACKFILL_READY_AT_SQL: &str =
+    "UPDATE mr_snapshots SET ready_at = ? WHERE project_id = ? AND mr_id = ? AND ready_at IS NULL";
 
 /// Inserts one snapshot (ignored when it already exists for this day + trigger)
 /// plus its labels and reviewers, on the caller's transaction.
@@ -570,13 +582,13 @@ async fn insert_snapshot(
             merged_by, milestone, target_branch, state,
             created_at, merged_at, updated_at,
             files_changed, additions, deletions, commits_count, diff_difficulty,
-            user_notes_count, pipeline_count, pipeline_failure_count
+            user_notes_count, pipeline_count, pipeline_failure_count, ready_at
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?
         )
         RETURNING id
         "#,
@@ -604,6 +616,7 @@ async fn insert_snapshot(
     .bind(snap.user_notes_count)
     .bind(snap.pipeline_count)
     .bind(snap.pipeline_failure_count)
+    .bind(&snap.ready_at)
     .fetch_optional(&mut *conn)
     .await?;
 
@@ -656,6 +669,7 @@ mod tests {
             created_at: created_at.map(Into::into),
             merged_at: Some("2024-01-02T00:00:00Z".into()),
             updated_at: None,
+            ready_at: None,
             files_changed: 1,
             additions: 2,
             deletions: 3,
@@ -860,5 +874,32 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(by_reviewer.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn ready_at_is_stored_then_filled_on_older_rows_only() {
+        let db = SqliteStatsDb::open(":memory:").await.unwrap();
+        // Recorded before the move to ready was known, then backfilled.
+        db.backfill_snapshots(&[snap("1", None)]).await.unwrap();
+        let ready = |at: &str| MrStatsSnapshot {
+            ready_at: Some(at.into()),
+            ..snap("1", None)
+        };
+        db.backfill_snapshots(&[ready("2023-12-31T09:00:00Z")])
+            .await
+            .unwrap();
+        // A later read never overwrites a known value.
+        db.backfill_snapshots(&[ready("2023-12-31T18:00:00Z")])
+            .await
+            .unwrap();
+        let rows = db.query(&SnapshotQuery::default()).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].snapshot.ready_at.as_deref(),
+            Some("2023-12-31T09:00:00Z")
+        );
+        let metrics = crate::metrics::PerMrMetrics::from_snapshot(&rows[0]);
+        // Merged on 2024-01-02 at midnight: 39 hours after it was ready.
+        assert_eq!(metrics.ready_to_merge_hours, Some(39.0));
     }
 }

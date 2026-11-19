@@ -125,6 +125,9 @@ pub struct GitLabMr {
     /// queue. `auto_merge_enabled` on recent GitLab versions.
     pub merge_when_pipeline_succeeds: Option<bool>,
     pub auto_merge_enabled: Option<bool>,
+    /// A draft today (GitLab ≥ 13.2; the mergeability says it otherwise,
+    /// unless a conflict hides it).
+    pub draft: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -312,7 +315,9 @@ pub struct MrThread {
 /// included). Timestamps are GitLab's RFC 3339 strings; maps are keyed by username.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct ReviewActivity {
-    /// First comment or approval by someone other than the author.
+    /// First comment or approval by someone other than the author (bots left
+    /// out) once the MR is ready: notes while it is a draft are the review
+    /// along the way, counted in [`Self::draft_comments`], not the review.
     pub first_review_at: Option<String>,
     /// Last approval still standing (cleared by a later unapproval).
     pub approved_at: Option<String>,
@@ -334,7 +339,43 @@ pub struct ReviewActivity {
     /// unapproval by the same person removes it).
     #[serde(default)]
     pub approvals: std::collections::BTreeMap<String, String>,
+    /// When the MR came out of draft for its review: its last move to ready
+    /// before the first review (the latest one while nobody reviewed yet).
+    /// `None` for an MR never in draft, or still in draft.
+    #[serde(default)]
+    pub ready_at: Option<String>,
+    /// It was a draft at some point (opened as one, or marked so later).
+    #[serde(default)]
+    pub was_draft: bool,
+    /// Comments and approvals by others while the MR was a draft: the review
+    /// along the way, on an MR opened when the work starts.
+    #[serde(default)]
+    pub draft_comments: u32,
+    /// How these were read: [`REVIEW_ACTIVITY_VERSION`] when current. Older
+    /// ones are read again, merged MRs included.
+    #[serde(default)]
+    pub version: u32,
 }
+
+impl ReviewActivity {
+    /// When the MR was put up for review, where the development ends: out of
+    /// draft for an MR that was one (`None` while it still is), else its first
+    /// review request (the oldest standing one for reads that predate it).
+    /// An MR opened ready, its reviewers asked at once, gives its opening: its
+    /// development then counts as waiting for the review, nothing tells it.
+    pub fn up_for_review_at(&self) -> Option<&str> {
+        if self.was_draft {
+            return self.ready_at.as_deref();
+        }
+        self.first_review_requested_at
+            .as_deref()
+            .or_else(|| self.review_requested_at.values().map(String::as_str).min())
+    }
+}
+
+/// The current way of reading [`ReviewActivity`]: 1 added the drafts (the
+/// move to ready, the review only after it) and left the bots out.
+pub const REVIEW_ACTIVITY_VERSION: u32 = 1;
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author
 /// and the author date, and the title (first message line) is rarely edited.
@@ -634,6 +675,14 @@ impl TrackedMr {
             created_at: self.created_at.clone(),
             merged_at: self.merged_at.clone(),
             updated_at: self.updated_at.clone(),
+            // Known once the review timeline was read the current way: out of
+            // draft, else the first request, else the opening.
+            ready_at: self
+                .review
+                .as_ref()
+                .filter(|r| r.version >= REVIEW_ACTIVITY_VERSION)
+                .and_then(|r| r.up_for_review_at().or(self.created_at.as_deref()))
+                .map(str::to_string),
             files_changed: diff.map(|d| d.files_changed).unwrap_or(0),
             additions: diff.map(|d| d.additions).unwrap_or(0),
             deletions: diff.map(|d| d.deletions).unwrap_or(0),

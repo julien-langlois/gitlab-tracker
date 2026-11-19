@@ -674,7 +674,7 @@ fn kpi(
                                 .truncate()
                                 .show_tooltip_when_elided(false),
                         )
-                        .tip(label);
+                        .rich(Tip::new().title(label).text(kpi_hint(label)));
                     });
                 });
             });
@@ -693,6 +693,17 @@ fn kpi(
         });
 }
 
+/// What a tile measures, on hovering its name; empty when the name says it.
+fn kpi_hint(label: &str) -> &'static str {
+    if label == tl("Median time to merge") {
+        tl("From the opening to the merge: the whole cycle. An MR opened as a draft when the work starts has its development in it.")
+    } else if label == tl("Ready → merge") {
+        tl("From up for review to the merge: out of draft for an MR opened as a draft, else its first review request. The time to merge without the development. MRs recorded before this was known are not in it.")
+    } else {
+        ""
+    }
+}
+
 /// The overview; returns the MRs a click on the size chart asked for (key, label).
 fn overview(
     ui: &mut Ui,
@@ -702,7 +713,7 @@ fn overview(
 ) -> Option<(String, String)> {
     let a = &report.aggregated;
     let t = &theme.tones;
-    let kpis: [(&str, String, String, Color32); 4] = [
+    let kpis: [(&str, String, String, Color32); 5] = [
         (
             tl("Merged"),
             a.merged_count.to_string(),
@@ -731,6 +742,20 @@ fn overview(
                 "P75 {} · P90 {}",
                 hours(a.cycle_time_p75_hours),
                 hours(a.cycle_time_p90_hours)
+            ),
+            theme.palette.text_muted,
+        ),
+        // The time to merge without the development: an MR opened as a draft
+        // when the work starts counts from its move to ready.
+        (
+            tl("Ready → merge"),
+            hours(a.ready_to_merge_median_hours),
+            tf(
+                "median · P75 {p75} · {n} MRs",
+                &[
+                    ("p75", &hours(a.ready_to_merge_p75_hours)),
+                    ("n", &a.ready_to_merge_sample_size.to_string()),
+                ],
             ),
             theme.palette.text_muted,
         ),
@@ -780,6 +805,14 @@ fn overview(
         ),
         trend(
             theme,
+            a.ready_to_merge_median_hours,
+            b.and_then(|b| b.ready_to_merge_median_hours),
+            Change::Relative,
+            Better::Lower,
+            |h| hours(Some(h)),
+        ),
+        trend(
+            theme,
             a.avg_pipeline_failure_rate,
             b.and_then(|b| b.avg_pipeline_failure_rate),
             Change::Points,
@@ -792,7 +825,12 @@ fn overview(
         .into_iter()
         .map(|k| (k, trends.next().flatten()))
         .collect();
-    let per_row = fit(ui, 170.0, 4);
+    // Five tiles in a row once each keeps its name whole; else three, then
+    // two (never four and a lone one).
+    let per_row = match fit(ui, 200.0, 5) {
+        4 => 3,
+        n => n,
+    };
     for chunk in cards.chunks(per_row) {
         columns(ui, per_row, |ui, i| {
             if let Some(((label, value, caption, color), trend)) = chunk.get(i) {

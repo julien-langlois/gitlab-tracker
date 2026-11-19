@@ -128,6 +128,16 @@ pub struct AggregatedStats {
     /// Number of MRs with usable merged cycle-time data.
     pub cycle_time_sample_size: usize,
 
+    /// Median and P75 of the time from up for review (out of draft, else the
+    /// first review request) to the merge: the time to merge without the
+    /// development. Over the merged MRs whose `ready_at` is known.
+    #[serde(default)]
+    pub ready_to_merge_median_hours: Option<f64>,
+    #[serde(default)]
+    pub ready_to_merge_p75_hours: Option<f64>,
+    #[serde(default)]
+    pub ready_to_merge_sample_size: usize,
+
     /// Number of MRs with usable pipeline data.
     pub pipeline_sample_size: usize,
 
@@ -271,6 +281,14 @@ pub(crate) fn compute_stats(
     let cycle_time_p75_hours = percentile(&cycle_times, 75.0);
     let cycle_time_p90_hours = percentile(&cycle_times, 90.0);
 
+    let mut ready_times: Vec<f64> = merged
+        .iter()
+        .filter_map(|m| m.ready_to_merge_hours)
+        .collect();
+    ready_times.sort_by(f64::total_cmp);
+    let ready_to_merge_median_hours = percentile(&ready_times, 50.0);
+    let ready_to_merge_p75_hours = percentile(&ready_times, 75.0);
+
     // ── Cycle time by author ──────────────────────────────────────────────────
     let cycle_time_by_author = group_median(
         merged.iter().copied(),
@@ -397,6 +415,9 @@ pub(crate) fn compute_stats(
         avg_pipeline_failure_rate,
         pipeline_data_coverage,
         cycle_time_sample_size,
+        ready_to_merge_median_hours,
+        ready_to_merge_p75_hours,
+        ready_to_merge_sample_size: ready_times.len(),
         pipeline_sample_size,
         reviewer_coverage,
         milestone_coverage,
@@ -641,6 +662,7 @@ mod tests {
                 merged_at: (trigger == SnapshotTrigger::OnMerge)
                     .then(|| "2024-01-01T10:00:00Z".into()),
                 updated_at: None,
+                ready_at: None,
                 files_changed: 1,
                 additions: lines,
                 deletions: 0,

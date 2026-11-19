@@ -6,6 +6,7 @@ follows, and when it notifies you.
 - [Branch presence](#branch-presence)
 - [Tracked branches](#tracked-branches)
 - [Desktop notifications](#desktop-notifications)
+- [The review timeline and drafts](#the-review-timeline-and-drafts)
 
 ## Branch presence
 
@@ -50,3 +51,60 @@ MR notifications include a clickable **"Open MR"** button; tracker notifications
 * **Never blocks the UI:** notifications are queued to one background worker thread that performs the (synchronous) D-Bus calls, so a slow or hung notification daemon cannot freeze the dashboard. At most 8 notifications wait for a click at once; beyond that they still show, but clicking does nothing.
 * **Anti-spam:** change notifications are suppressed during the initial sync. An MR seen for the first time (no branch set persisted yet in `tracker_<hash>.json`) records its branches silently instead of sending one toast per branch; once known, every new branch notifies, including changes made while the app was closed.
 * **Platforms:** click-to-open uses D-Bus actions on Linux (GNOME, KDE…); without a notification daemon, clicks are ignored. Build with `--no-default-features` to drop the feature and `notify-rust` (`libdbus` is still needed on Linux, by the OS keyring).
+
+## The review timeline and drafts
+
+The review measures (where the time goes, time to first review, review rounds,
+how long a reviewer takes to answer, how long a review has waited) are read from
+each MR's discussions, system notes included: "requested review from @alice",
+"approved this merge request", "added 2 commits", "marked this merge request as
+**ready**"… GitLab writes them in English whatever your language. The older
+wordings ("marked as a **Work In Progress**", "unmarked as a **Work In
+Progress**") are read too.
+
+Many teams open the MR **when the work starts**, as a draft, so everyone sees it
+move day by day and can review it along the way instead of all at the end. The
+dashboard follows that:
+
+| Moment | What marks it |
+| :--- | :--- |
+| **Opened** | The MR's creation. |
+| **Up for review** (the end of the development) | Its move out of draft (**Mark as ready**). An MR never in draft: its first review request. |
+| **First review** | The first comment or approval by someone other than the author **once the MR is ready**. Bots (Renovate, Dependabot, project and group tokens, `*-bot`) never count. |
+| **Approved**, **Merged**, **On production** | The approval, the merge, the arrival on the last tracked branch. |
+
+- **Comments while a draft** are the review along the way: they are counted
+  apart ("3 of 18 opened as drafts, 2 reviewed along the way" under *Where the
+  time goes*) and are neither the first review nor rounds.
+- **Review rounds** are the pushes after the first review: the pushes of the
+  development do not count. An MR sent back to draft after its review and marked
+  ready again keeps its first review; its rework pushes are rounds.
+- **A reviewer asked on a draft** is not waiting while the work goes on: their
+  wait (the review reminder, *Team*'s answer times, *Today*, the cockpit, the
+  next step) starts when the MR is ready.
+
+Where each measure starts:
+
+| Measure | From | To |
+| :--- | :--- | :--- |
+| *Delivery* · In development | opened | up for review |
+| *Delivery* · Waiting for a review | up for review | first review |
+| *Delivery* · In review | first review | approved |
+| *Delivery* · Waiting for the merge / for production | approved / merged | merged / on production |
+| *Cockpit*, *Flow* trend, *MR page*, a person's page · time to first review | up for review | first review |
+| *Stats* · Median time to merge (the whole cycle) | opened | merged |
+| *Stats* · Ready → merge | up for review | merged |
+| *Delivery* · DORA lead time for changes | first commit | on production |
+
+**What cannot be known.** An MR opened ready (never a draft) with its reviewers
+asked at once gives no sign of when its work ended: its development counts as
+*Waiting for a review*. *Where the time goes* counts these MRs in amber ("15
+never drafts: development counted up to the review request"). To split the two,
+open the MRs as drafts and mark them ready when the work is done.
+
+**After an update.** The timeline was read differently before drafts were
+followed: each tracked MR, merged ones included, has its discussions read once
+more at the next refresh (one request per MR, then cached again). *Stats* keeps
+its database: the MRs recorded before have their *Ready → merge* filled at the
+next start, from what the refresh read.
+

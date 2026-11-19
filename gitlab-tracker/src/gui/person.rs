@@ -139,8 +139,10 @@ pub fn profile(app: &App, who: &str, now: DateTime<Utc>, days: i64) -> Profile {
         p.seen += 1;
 
         if author == who {
+            // Up for review: out of draft, else asked; the opening for reads
+            // without a request.
             let asked = review
-                .and_then(|r| board::time_of(r.first_review_requested_at.as_deref()))
+                .and_then(|r| board::time_of(r.up_for_review_at()))
                 .or(created);
             let first = review.and_then(|r| board::time_of(r.first_review_at.as_deref()));
             let approved = review.and_then(|r| board::time_of(r.approved_at.as_deref()));
@@ -221,7 +223,7 @@ pub fn profile(app: &App, who: &str, now: DateTime<Utc>, days: i64) -> Profile {
                     if mr.approved_by.iter().any(|a| a == who) {
                         p.approved += 1;
                     }
-                    match span(Some(asked), last) {
+                    match span(Some(crate::utils::waits_from(r, asked)), last) {
                         Some(d) => {
                             let i = if d < QUICK {
                                 0

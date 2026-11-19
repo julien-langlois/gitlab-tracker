@@ -425,7 +425,12 @@ impl CountApiCalls for crate::models::TrackedMr {
         //       unchanged otherwise, like the other caches. Closed / merged: once.
         // We pessimistically assume 1 page (the common case). Extra pages are
         // rare and impossible to predict without knowing the actual count.
-        let review_recent = self.review.is_some()
+        // A timeline read an older way is read again once (`review_current`).
+        let review_known = self
+            .review
+            .as_ref()
+            .is_some_and(|r| r.version >= crate::models::REVIEW_ACTIVITY_VERSION);
+        let review_recent = review_known
             && self
                 .review_read_at
                 .as_deref()
@@ -437,7 +442,7 @@ impl CountApiCalls for crate::models::TrackedMr {
             } else {
                 2 // One discussions page + the approvals call.
             }
-        } else if self.review.is_some() {
+        } else if review_known {
             0 // Served from cache — no network call.
         } else {
             1 // At least one page fetched.
@@ -751,20 +756,69 @@ fn review_threads(discussions: &[Discussion]) -> Vec<MrThread> {
         .collect()
 }
 
+/// Whether a system note moves the MR into draft (`Some(true)`) or out of it,
+/// ready for review (`Some(false)`). GitLab's wording changed over the
+/// versions: "marked this merge request as **draft**" / "as **ready**" (with
+/// " from <sha>" when a commit message did it), and earlier "marked as a
+/// **Work In Progress**" / "unmarked as a **Work In Progress**". A checklist
+/// item ("marked the checklist item **Draft …** as completed") is not one.
+fn draft_move(body: &str) -> Option<bool> {
+    let text = body.to_lowercase().replace('*', "");
+    let draft_word = |t: &str| t.contains("draft") || t.contains("work in progress");
+    if let Some(rest) = text.strip_prefix("unmarked as a ") {
+        return draft_word(rest).then_some(false);
+    }
+    let rest = text
+        .strip_prefix("marked this merge request as ")
+        .or_else(|| text.strip_prefix("marked as a "))
+        .or_else(|| text.strip_prefix("marked as "))?;
+    if rest.starts_with("ready") {
+        Some(false)
+    } else {
+        draft_word(rest).then_some(true)
+    }
+}
+
 /// Review timeline of an MR authored by `author` (username), from its notes in
 /// chronological order. System notes are matched on GitLab's English wording
-/// ("approved this merge request", "requested review from @x", "added 2 commits"):
-/// GitLab stores them in English whatever the user's locale.
-fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
+/// ("approved this merge request", "requested review from @x", "added 2 commits",
+/// "marked this merge request as ready"): GitLab stores them in English whatever
+/// the user's locale. `draft_now`: the MR is a draft today, which says how it
+/// was opened when no note moved it in or out of draft.
+///
+/// An MR opened when the work starts is reviewed along the way while a draft:
+/// those notes are counted apart ([`ReviewActivity::draft_comments`]), and the
+/// review proper (first review, rounds) starts once it is ready. Bots' notes
+/// are never a review.
+fn review_activity(discussions: &[Discussion], author: &str, draft_now: bool) -> ReviewActivity {
     let mut notes: Vec<&DiscussionNote> = discussions.iter().flat_map(|d| &d.notes).collect();
     notes.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-    let mut activity = ReviewActivity::default();
+    let mut activity = ReviewActivity {
+        version: crate::models::REVIEW_ACTIVITY_VERSION,
+        ..ReviewActivity::default()
+    };
+    // Opened as a draft: its first move is out of draft (or, with none, it is
+    // a draft today).
+    let mut draft = notes
+        .iter()
+        .filter(|n| n.system)
+        .find_map(|n| draft_move(&n.body))
+        .map_or(draft_now, |became_draft| !became_draft);
+    activity.was_draft = draft;
     for note in notes {
         let user = note.username();
         let at = &note.created_at;
         let body = note.body.trim();
         let reviewed = if note.system {
-            if body == "approved this merge request" {
+            if let Some(became_draft) = draft_move(body) {
+                draft = became_draft;
+                if became_draft {
+                    activity.was_draft = true;
+                } else if activity.first_review_at.is_none() {
+                    activity.ready_at = Some(at.clone());
+                }
+                false
+            } else if body == "approved this merge request" {
                 activity.approved_at = Some(at.clone());
                 if !user.is_empty() {
                     activity.approvals.insert(user.to_string(), at.clone());
@@ -805,8 +859,12 @@ fn review_activity(discussions: &[Discussion], author: &str) -> ReviewActivity {
             activity
                 .last_activity_by
                 .insert(user.to_string(), at.clone());
-            if user != author && activity.first_review_at.is_none() {
-                activity.first_review_at = Some(at.clone());
+            if user != author && !crate::utils::is_bot(user) {
+                if draft {
+                    activity.draft_comments += 1;
+                } else if activity.first_review_at.is_none() {
+                    activity.first_review_at = Some(at.clone());
+                }
             }
         }
     }
@@ -1738,6 +1796,16 @@ fn needs_single_read(mr: &GitLabMr) -> bool {
 /// list entry (an optional approval may leave `updated_at` as it was).
 pub const REVIEW_MAX_AGE: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 
+/// The cached review timeline was read the current way: one read with an
+/// older [`crate::models::REVIEW_ACTIVITY_VERSION`] is read again once, even
+/// on a merged MR (its discussions are otherwise frozen).
+fn review_current(cached: &CachedMrData) -> bool {
+    cached
+        .review
+        .as_ref()
+        .is_some_and(|r| r.version >= crate::models::REVIEW_ACTIVITY_VERSION)
+}
+
 /// Whether an open MR's discussions and approvals must be read again.
 ///
 /// `unchanged`: same `updated_at` and same GitLab note count as at the last read
@@ -1751,7 +1819,7 @@ fn review_stale(
     mergeability: MergeabilityStatus,
     read_age: Option<chrono::TimeDelta>,
 ) -> bool {
-    if cached.cache_policy.notes_stale() || cached.review.is_none() || !unchanged {
+    if cached.cache_policy.notes_stale() || !review_current(cached) || !unchanged {
         return true;
     }
     let threads_moved = match blocking_resolved {
@@ -2033,7 +2101,7 @@ pub async fn fetch_gitlab_data(
             read_age,
         )
     } else {
-        !cached.cache_policy.notes_stale() && cached.review.is_some() && state_unchanged
+        !cached.cache_policy.notes_stale() && review_current(&cached) && state_unchanged
     };
     let (user_notes_count, threads, review, review_read_at) = if review_fresh {
         (
@@ -2051,7 +2119,12 @@ pub async fn fetch_gitlab_data(
                 (
                     u32::try_from(unresolved).unwrap_or(u32::MAX),
                     threads,
-                    Some(review_activity(&discussions, author)),
+                    Some(review_activity(
+                        &discussions,
+                        author,
+                        mr.draft
+                            .unwrap_or(mergeability == MergeabilityStatus::Draft),
+                    )),
                     Some(chrono::Utc::now().to_rfc3339()),
                 )
             }
@@ -2424,6 +2497,206 @@ pub(crate) mod tests {
         assert_eq!(threads.iter().filter(|t| !t.resolved).count(), 2);
     }
 
+    /// A note as GitLab's discussions list it.
+    fn note(id: u64, user: &str, system: bool, body: &str, at: &str) -> String {
+        format!(
+            r#"{{"notes": [{{"id": {id}, "system": {system}, "author": {{"username": "{user}", "name": "{user}"}},
+                "body": "{body}", "created_at": "{at}"}}]}}"#
+        )
+    }
+
+    fn activity_of(notes: &[String], draft_now: bool) -> ReviewActivity {
+        let json = format!("[{}]", notes.join(","));
+        let discussions: Vec<Discussion> = serde_json::from_str(&json).unwrap();
+        review_activity(&discussions, "dev", draft_now)
+    }
+
+    #[test]
+    fn a_draft_is_reviewed_along_the_way_and_its_review_starts_once_ready() {
+        // Opened as a draft (its first move is out of draft), a reviewer asked
+        // at once, comments and pushes during the work, then ready.
+        let activity = activity_of(
+            &[
+                note(
+                    1,
+                    "dev",
+                    true,
+                    "requested review from @alice",
+                    "2026-09-01T09:00:00Z",
+                ),
+                note(2, "alice", false, "Early thought", "2026-09-02T10:00:00Z"),
+                note(3, "dev", true, "added 1 commit", "2026-09-03T10:00:00Z"),
+                note(
+                    4,
+                    "renovate-bot",
+                    false,
+                    "Dependency dashboard",
+                    "2026-09-03T11:00:00Z",
+                ),
+                note(
+                    5,
+                    "dev",
+                    true,
+                    "marked this merge request as **ready**",
+                    "2026-09-05T09:00:00Z",
+                ),
+                note(6, "renovate-bot", false, "Rebased", "2026-09-05T09:30:00Z"),
+                note(7, "alice", false, "One more thing", "2026-09-05T14:00:00Z"),
+                note(8, "dev", true, "added 1 commit", "2026-09-05T16:00:00Z"),
+                note(
+                    9,
+                    "alice",
+                    true,
+                    "approved this merge request",
+                    "2026-09-06T09:00:00Z",
+                ),
+            ],
+            false,
+        );
+        assert!(activity.was_draft);
+        assert_eq!(activity.ready_at.as_deref(), Some("2026-09-05T09:00:00Z"));
+        assert_eq!(
+            activity.draft_comments, 1,
+            "Alice's early note; not the bot's"
+        );
+        // The first review is Alice's note once ready, not the bot's.
+        assert_eq!(
+            activity.first_review_at.as_deref(),
+            Some("2026-09-05T14:00:00Z")
+        );
+        // The push during the draft is not a round; the one after the review is.
+        assert_eq!(activity.pushes_after_review, 1);
+        assert_eq!(activity.up_for_review_at(), Some("2026-09-05T09:00:00Z"));
+        assert_eq!(activity.version, crate::models::REVIEW_ACTIVITY_VERSION);
+    }
+
+    #[test]
+    fn an_mr_never_in_draft_is_up_for_review_at_its_first_request() {
+        let activity = activity_of(
+            &[
+                note(
+                    1,
+                    "dev",
+                    true,
+                    "requested review from @alice",
+                    "2026-09-01T09:00:00Z",
+                ),
+                note(2, "alice", false, "Looks good", "2026-09-01T10:00:00Z"),
+            ],
+            false,
+        );
+        assert!(!activity.was_draft);
+        assert_eq!(activity.ready_at, None);
+        assert_eq!(activity.draft_comments, 0);
+        assert_eq!(
+            activity.first_review_at.as_deref(),
+            Some("2026-09-01T10:00:00Z")
+        );
+        assert_eq!(activity.up_for_review_at(), Some("2026-09-01T09:00:00Z"));
+    }
+
+    #[test]
+    fn a_draft_with_no_move_yet_is_told_by_its_flag() {
+        let notes = [note(
+            1,
+            "alice",
+            false,
+            "Early thought",
+            "2026-09-02T10:00:00Z",
+        )];
+        let draft = activity_of(&notes, true);
+        assert!(draft.was_draft);
+        assert_eq!(
+            (draft.draft_comments, draft.first_review_at.as_deref()),
+            (1, None)
+        );
+        assert_eq!(draft.up_for_review_at(), None, "still being written");
+        let ready = activity_of(&notes, false);
+        assert_eq!(
+            ready.first_review_at.as_deref(),
+            Some("2026-09-02T10:00:00Z")
+        );
+    }
+
+    #[test]
+    fn back_to_draft_after_the_review_keeps_the_first_ready() {
+        // Ready, reviewed, back to draft for rework, ready again: the review
+        // started at the first ready; the rework is a round.
+        let activity = activity_of(
+            &[
+                note(
+                    1,
+                    "dev",
+                    true,
+                    "marked this merge request as **ready**",
+                    "2026-09-02T09:00:00Z",
+                ),
+                note(2, "alice", false, "Needs a rework", "2026-09-02T10:00:00Z"),
+                note(
+                    3,
+                    "dev",
+                    true,
+                    "marked this merge request as **draft**",
+                    "2026-09-02T11:00:00Z",
+                ),
+                note(4, "alice", false, "Better", "2026-09-03T10:00:00Z"),
+                note(5, "dev", true, "added 2 commits", "2026-09-03T12:00:00Z"),
+                note(
+                    6,
+                    "dev",
+                    true,
+                    "marked this merge request as **ready**",
+                    "2026-09-04T09:00:00Z",
+                ),
+            ],
+            false,
+        );
+        assert_eq!(activity.ready_at.as_deref(), Some("2026-09-02T09:00:00Z"));
+        assert_eq!(
+            activity.first_review_at.as_deref(),
+            Some("2026-09-02T10:00:00Z")
+        );
+        assert_eq!(activity.draft_comments, 1);
+        assert_eq!(activity.pushes_after_review, 1);
+    }
+
+    #[test]
+    fn draft_moves_read_every_gitlab_wording() {
+        for (body, expected) in [
+            ("marked this merge request as **draft**", Some(true)),
+            ("marked this merge request as **ready**", Some(false)),
+            (
+                "marked this merge request as **draft** from 1a2b3c4",
+                Some(true),
+            ),
+            ("marked as a **Work In Progress**", Some(true)),
+            ("unmarked as a **Work In Progress**", Some(false)),
+            ("marked as a **draft**", Some(true)),
+            ("unmarked as a **draft**", Some(false)),
+            (
+                "marked the checklist item **Draft the docs** as completed",
+                None,
+            ),
+            ("changed title from **Draft: x** to **x**", None),
+            ("approved this merge request", None),
+        ] {
+            assert_eq!(draft_move(body), expected, "{body}");
+        }
+    }
+
+    #[test]
+    fn an_older_review_read_is_read_again() {
+        let mut cached = CachedMrData::default();
+        assert!(!review_current(&cached), "never read");
+        cached.review = Some(ReviewActivity::default());
+        assert!(!review_current(&cached), "read before the drafts were");
+        cached.review = Some(ReviewActivity {
+            version: crate::models::REVIEW_ACTIVITY_VERSION,
+            ..ReviewActivity::default()
+        });
+        assert!(review_current(&cached));
+    }
+
     #[test]
     fn review_activity_keeps_each_standing_approval_with_its_time() {
         let json = r#"[
@@ -2437,7 +2710,7 @@ pub(crate) mod tests {
                         "body": "approved this merge request", "created_at": "2026-09-02T09:00:00.000Z"}]}
         ]"#;
         let discussions: Vec<Discussion> = serde_json::from_str(json).unwrap();
-        let activity = review_activity(&discussions, "dev");
+        let activity = review_activity(&discussions, "dev", false);
         let approvals: Vec<(&str, &str)> = activity
             .approvals
             .iter()
@@ -2475,7 +2748,7 @@ pub(crate) mod tests {
         ]"#;
         let discussions: Vec<Discussion> = serde_json::from_str(json).unwrap();
 
-        let activity = review_activity(&discussions, "dev");
+        let activity = review_activity(&discussions, "dev", false);
         // The author's own note is not a review; Alice's comment is the first one.
         assert_eq!(
             activity.first_review_at.as_deref(),
@@ -2707,7 +2980,10 @@ pub(crate) mod tests {
 
     fn reviewed(unresolved: u32) -> CachedMrData {
         CachedMrData {
-            review: Some(ReviewActivity::default()),
+            review: Some(ReviewActivity {
+                version: crate::models::REVIEW_ACTIVITY_VERSION,
+                ..ReviewActivity::default()
+            }),
             user_notes_count: unresolved,
             mergeability: Some(MergeabilityStatus::Mergeable),
             ..CachedMrData::default()
@@ -2841,7 +3117,10 @@ pub(crate) mod tests {
         use GitlabMrState::{Merged, Opened};
         // Open, mergeable, reviewed a minute ago: no page, no discussions, no approvals.
         let mut mr = tracked("1", Opened, MergeabilityStatus::Mergeable);
-        mr.review = Some(ReviewActivity::default());
+        mr.review = Some(ReviewActivity {
+            version: crate::models::REVIEW_ACTIVITY_VERSION,
+            ..ReviewActivity::default()
+        });
         mr.review_read_at = Some(chrono::Utc::now().to_rfc3339());
         mr.milestone_events = Some(Vec::new());
         let e = mr.estimate(&Opened, false);
@@ -2960,7 +3239,10 @@ pub(crate) mod tests {
         let unchanged_review = CachedMrData {
             updated_at: Some(UPDATED.into()),
             cached_state: Some(GitlabMrState::Opened),
-            review: Some(ReviewActivity::default()),
+            review: Some(ReviewActivity {
+                version: crate::models::REVIEW_ACTIVITY_VERSION,
+                ..ReviewActivity::default()
+            }),
             review_read_at: Some(chrono::Utc::now().to_rfc3339()),
             notes_seen: Some(3),
             mergeability: Some(MergeabilityStatus::Mergeable),

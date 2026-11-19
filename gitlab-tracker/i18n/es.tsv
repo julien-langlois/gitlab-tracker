@@ -1663,15 +1663,28 @@ rail	Stacks	Pilas
 	< 1 month	< 1 mes
 	more	más
 	< 1 h	< 1 h
-	Before the review	Antes de la revisión
+	In development	En desarrollo
+	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	Desde la apertura hasta salir del borrador (marcada como lista). Una MR que nunca fue borrador: hasta su primera solicitud de revisión. Los comentarios durante el borrador son la revisión sobre la marcha y quedan en este paso.
+	From ready for review to the first review by someone else (bots left out).	Desde lista para revisión hasta la primera revisión de otra persona (sin bots).
+	From the first review to the approval: the back and forth.	De la primera revisión a la aprobación: las idas y vueltas.
+	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Una MR abierta como borrador al empezar el trabajo está en desarrollo hasta que se marca como lista. Los comentarios durante el borrador son la revisión sobre la marcha: cuentan aquí, no como primera revisión ni como rondas.
+	Never a draft	Nunca borrador
+	Nothing in GitLab tells when the work on these MRs ended. Their development ends at the first review request: when the reviewers were asked at the opening, the writing counts as waiting for a review. Open the MRs as drafts and mark them ready to split them.	Nada en GitLab indica cuándo terminó el trabajo en estas MR. Su desarrollo termina en la primera solicitud de revisión: si los revisores se pidieron al abrirla, la escritura cuenta como espera de revisión. Abra las MR como borrador y márquelas como listas para separarlo.
+	Ready for review	Lista para revisión
+	Marked ready for review	Marcada como lista
+	marked ready for review	marcada como lista
+	Ready	Lista
+	Ready → merge	Lista → fusión
+	median · P75 {p75} · {n} MRs	mediana · P75 {p75} · {n} MR
+	From the opening to the merge: the whole cycle. An MR opened as a draft when the work starts has its development in it.	De la apertura a la fusión: el ciclo completo. Una MR abierta como borrador al empezar el trabajo incluye su desarrollo.
+	From up for review to the merge: out of draft for an MR opened as a draft, else its first review request. The time to merge without the development. MRs recorded before this was known are not in it.	De lista para revisión a la fusión: la salida del borrador para una MR abierta como borrador, si no su primera solicitud de revisión. El tiempo hasta la fusión sin el desarrollo. Las MR registradas antes de conocerse no están incluidas.
+@plural	{n} of {total} opened as a draft, {along} reviewed along the way|{n} of {total} opened as drafts, {along} reviewed along the way	{n} de {total} abierta como borrador, {along} revisadas sobre la marcha|{n} de {total} abiertas como borrador, {along} revisadas sobre la marcha
+@plural	{n} never a draft: development counted up to the review request|{n} never drafts: development counted up to the review request	{n} nunca borrador: desarrollo contado hasta la solicitud de revisión|{n} nunca borradores: desarrollo contado hasta la solicitud de revisión
 	Waiting for the merge	Esperando la fusión
 	Waiting for production	Esperando producción
 	Elite	Élite
 	High	Alto
 	Low	Bajo
-	From the opening to the first review request.	De la apertura a la primera solicitud de revisión.
-	From the review request to the first review.	De la solicitud de revisión a la primera revisión.
-	From the first review to the approval.	De la primera revisión a la aprobación.
 	From the approval to the merge.	De la aprobación a la fusión.
 	From the merge to the arrival on the last branch.	De la fusión a la llegada a la última rama.
 @plural	{n} MR merged in the period|{n} MRs merged in the period	{n} MR fusionada en el periodo|{n} MR fusionadas en el periodo

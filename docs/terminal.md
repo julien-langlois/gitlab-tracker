@@ -304,7 +304,7 @@ event. The schema is versioned; legacy rows are repaired once (after a backup to
 
 | Tab | Content |
 | :--- | :--- |
-| **Overview** | Throughput, cycle time P50/P75/P90, backlog aging, flow pressure, top delivery signal |
+| **Overview** | Throughput, cycle time P50/P75/P90 (from the opening) and the median from ready for review (out of draft; see [drafts](how-it-works.md#the-review-timeline-and-drafts)), backlog aging, flow pressure, top delivery signal |
 | **Flow** | Median cycle time by author, reviewer and milestone; promotion lead time per branch |
 | **Quality** | Data confidence, pipeline / reviewer / milestone coverage, MR size buckets |
 | **Forecasts** | Poisson throughput forecasts, pressure signals, anomalies against the historical baseline |

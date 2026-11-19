@@ -1259,13 +1259,7 @@ pub fn first_name(display: &str) -> &str {
     crate::next_step::first_name(display)
 }
 
-/// Whether a person's display string or login looks like a bot account.
-pub fn is_bot(display: &str) -> bool {
-    let lower = display.to_lowercase();
-    ["bot", "renovate", "dependabot", "gitlab-ci", "project_"]
-        .iter()
-        .any(|word| lower.contains(word))
-}
+pub use crate::utils::is_bot;
 
 /// A muted caption under a figure or a list, small.
 pub fn caption(ui: &mut Ui, theme: &Theme, text: &str) {

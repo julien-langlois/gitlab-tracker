@@ -20,6 +20,12 @@ pub struct PerMrMetrics {
     /// `None` when `created_at` or `merged_at` is absent.
     pub cycle_time_hours: Option<f64>,
 
+    /// From up for review (out of draft, else the first review request) to
+    /// the merge, in hours: the time to merge without the development, for an
+    /// MR opened as a draft when the work starts. `None` when `ready_at` is
+    /// not known.
+    pub ready_to_merge_hours: Option<f64>,
+
     /// Total changed lines (additions + deletions).
     pub diff_size: u32,
 
@@ -49,6 +55,11 @@ impl PerMrMetrics {
             snap.snapshot.merged_at.as_deref(),
         );
 
+        let ready_to_merge_hours = compute_duration_hours(
+            snap.snapshot.ready_at.as_deref(),
+            snap.snapshot.merged_at.as_deref(),
+        );
+
         let diff_size = snap.snapshot.additions + snap.snapshot.deletions;
 
         let pipeline_failure_rate = if snap.snapshot.pipeline_count > 0 {
@@ -70,6 +81,7 @@ impl PerMrMetrics {
             milestone: snap.snapshot.milestone.clone(),
             trigger: snap.snapshot.trigger,
             cycle_time_hours,
+            ready_to_merge_hours,
             commits_count: snap.snapshot.commits_count,
             diff_size,
             diff_difficulty: snap.snapshot.diff_difficulty,

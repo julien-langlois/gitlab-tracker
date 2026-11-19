@@ -155,8 +155,8 @@ and the terminal UI keeps it.
 Where MRs wait (review, author, approved but not merged, between branches) with
 the bottleneck; the headline counters (blocked, to review, next release, oldest);
 the attention, delivery, quality and release cards; four weekly trends (merges,
-time to first review, lead time to production, CI success); then the MRs that
-need attention, most urgent first.
+time to first review — from ready for review —, lead time to production, CI
+success); then the MRs that need attention, most urgent first.
 **Open MRs by label** gives, for each label, how many open MRs carry it, where
 they wait (the next step, as the table's chips), their median age and the oldest;
 sorted by count or by age. A click on a label lists its MRs in the table, a click
@@ -213,6 +213,17 @@ a burn-up, its tickets' time and its people. Copies as release notes.
 The four DORA measures (deployment frequency, lead time, change failure rate,
 time to restore), each in its band from Elite to Low; where the time goes in each
 merged MR's path; the review rounds; and the open MRs by step and age.
+
+**Where the time goes** cuts each merged MR's path in five steps, coloured by
+who has the MR: the team at work in cool hues (teal *In development*, blue *In
+review*), the waits in warm ones (amber *Waiting for a review*, orange *Waiting
+for the merge*), and purple after the merge (*Waiting for production*). The
+development ends when the MR leaves draft, else at its first review request;
+comments while a draft are the review along the way, not the first review nor
+rounds. Under the steps: how many MRs were opened as drafts and reviewed along
+the way, and, in amber, how many never were a draft (their development cannot
+be told from their wait). See [the review timeline and
+drafts](how-it-works.md#the-review-timeline-and-drafts).
 
 **Reverts and hotfixes** lists what had to be undone or patched in the period:
 each revert with the MR it undoes, how long after its merge, and how far that MR
@@ -346,7 +357,12 @@ failure rate, backlog health and insights, then flow, quality, forecasts and
 correlations, from the local stats database (see
 [Analytics and velocity stats](terminal.md#analytics-and-velocity-stats)).
 
-![Stats: throughput, time to merge by size, backlog health](assets/desktop/stats.png)
+Two times to merge sit side by side: **Median time to merge**, from the opening
+(the whole cycle, development included), and **Ready → merge**, from the move
+out of draft (else the first review request): the time to merge without the
+development, for MRs opened as drafts when the work starts.
+
+![Stats: throughput, time to merge and ready → merge, by size, backlog health](assets/desktop/stats.png)
 
 ## Settings and columns
 

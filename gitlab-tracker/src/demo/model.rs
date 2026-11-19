@@ -51,6 +51,9 @@ pub enum Ev {
     Rebase(Ci),
     /// A review asked of someone.
     Ask(&'static Person),
+    /// Out of draft, ready for review: the MR was opened as a draft, when the
+    /// work started.
+    Ready,
     /// A new thread: who, its key in this MR, the file and line (or none), the note.
     Note(
         &'static Person,

@@ -415,7 +415,7 @@ impl World {
                     built.approved.retain(|(p, _)| *p != by);
                     built.approved.push((by, *at));
                 }
-                Ev::Changes(_) => {}
+                Ev::Changes(_) | Ev::Ready => {}
                 Ev::Merge(by) => built.merged = Some((*at, by)),
                 Ev::Close(by) => built.closed = Some((*at, by)),
             }
@@ -845,18 +845,38 @@ impl World {
     fn review(&self, i: usize) -> ReviewActivity {
         let mr = &self.mrs[i];
         let author = mr.spec.author;
-        let mut review = ReviewActivity::default();
+        let mut review = ReviewActivity {
+            version: crate::models::REVIEW_ACTIVITY_VERSION,
+            ..ReviewActivity::default()
+        };
         let mut first_review: Option<At> = None;
         let mut activity: BTreeMap<String, At> = BTreeMap::new();
         let mut pushes: Vec<At> = Vec::new();
+        // Opened as a draft: it has a move to ready, or is a draft today. Notes
+        // while a draft are the review along the way, not the review.
+        let mut draft = mr.events.iter().any(|(_, ev)| matches!(ev, Ev::Ready))
+            || mr.spec.mergeability == MergeabilityStatus::Draft;
+        review.was_draft = draft;
+        let mut draft_comments = 0;
+        let mut ready: Option<At> = None;
         for (at, ev) in &mr.events {
             let mut act = |who: &'static Person, at: At| {
                 activity.insert(who.login.into(), at);
-                if who != author && first_review.is_none() {
-                    first_review = Some(at);
+                if who != author {
+                    if draft {
+                        draft_comments += 1;
+                    } else if first_review.is_none() {
+                        first_review = Some(at);
+                    }
                 }
             };
             match *ev {
+                Ev::Ready => {
+                    draft = false;
+                    if first_review.is_none() {
+                        ready = Some(*at);
+                    }
+                }
                 Ev::Push(..) | Ev::Rebase(_) => pushes.push(*at),
                 Ev::Ask(person) => {
                     review
@@ -872,6 +892,8 @@ impl World {
             }
         }
         review.first_review_at = first_review.map(iso);
+        review.ready_at = ready.map(iso);
+        review.draft_comments = draft_comments;
         review.approved_at = mr.approved.iter().map(|(_, at)| *at).max().map(iso);
         review.approvals = mr
             .approved

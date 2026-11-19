@@ -9,6 +9,16 @@ pub fn matches_gitlab_username(display: &str, username: &str) -> bool {
     display.contains(format!("@{}", username).as_str())
 }
 
+/// Whether a person's display string or login looks like a bot account
+/// (Renovate, Dependabot, a project or group access token, a `*-bot`): its
+/// notes are not a review.
+pub fn is_bot(display: &str) -> bool {
+    let lower = display.to_lowercase();
+    ["bot", "renovate", "dependabot", "gitlab-ci", "project_"]
+        .iter()
+        .any(|word| lower.contains(word))
+}
+
 /// Whether an MR waits for `username`'s review: open, not a draft, `username`
 /// among its reviewers (display strings) and not among its current approvers.
 pub fn awaiting_review_by(
@@ -27,17 +37,35 @@ pub fn awaiting_review_by(
 }
 
 /// Since when `username` has been asked to review: their latest review request,
-/// else the MR creation (requests made before the discussions were read).
+/// else the MR creation (requests made before the discussions were read); a
+/// request made while the MR was a draft waits from its move to ready.
 pub fn review_waiting_since(
     review: Option<&crate::models::ReviewActivity>,
     created_at: Option<&str>,
     username: &str,
 ) -> Option<DateTime<Utc>> {
-    review
+    let asked = review
         .and_then(|r| r.review_requested_at.get(username))
         .map(String::as_str)
         .or(created_at)
-        .and_then(|at| DateTime::parse_from_rfc3339(at).ok())
+        .and_then(parse_utc)?;
+    Some(review.map_or(asked, |r| waits_from(r, asked)))
+}
+
+/// When a review asked at `asked` starts to wait: then, or when the MR came
+/// out of draft if it was one at the time. A reviewer asked at the opening
+/// of a draft is not late while the work goes on.
+pub fn waits_from(review: &crate::models::ReviewActivity, asked: DateTime<Utc>) -> DateTime<Utc> {
+    review
+        .ready_at
+        .as_deref()
+        .and_then(parse_utc)
+        .map_or(asked, |ready| ready.max(asked))
+}
+
+fn parse_utc(at: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(at)
+        .ok()
         .map(|at| at.with_timezone(&Utc))
 }
 

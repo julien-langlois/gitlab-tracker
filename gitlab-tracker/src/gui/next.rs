@@ -398,8 +398,11 @@ fn parse(at: Option<&str>) -> Option<chrono::DateTime<chrono::Utc>> {
 /// A stage's name, when it was reached, and whether it was.
 type Milestone = (String, Option<chrono::DateTime<chrono::Utc>>, bool);
 
+/// Where "Ready for review" sits in [`milestones`].
+const READY: usize = 1;
+
 /// Where "Approved" sits in [`milestones`].
-const APPROVED: usize = 2;
+const APPROVED: usize = 3;
 
 /// When each approval still standing on `mr` was given, oldest first.
 fn approvals(mr: &TrackedMr) -> Vec<chrono::DateTime<chrono::Utc>> {
@@ -425,16 +428,30 @@ fn nth_approval(n: usize) -> String {
     }
 }
 
-/// When each stage of `mr` was reached: created, first review, approved,
-/// merged, then each branch up its flow. `None`: not reached (or not known).
+/// When each stage of `mr` was reached: created, ready for review, first
+/// review, approved, merged, then each branch up its flow. `None`: not
+/// reached (or not known).
 fn milestones(app: &crate::app::App, mr: &TrackedMr) -> Vec<Milestone> {
     let review = mr.review.as_ref();
     let merged = mr.state == crate::models::GitlabMrState::Merged;
+    let created = parse(mr.created_at.as_deref());
+    // Ready for review: out of draft; an MR never in draft, at its first
+    // review request (else its opening). Its development is the hop before.
+    let was_draft = review.map_or(
+        mr.mergeability == crate::models::MergeabilityStatus::Draft,
+        |r| r.was_draft,
+    );
+    let ready = if was_draft {
+        parse(review.and_then(|r| r.ready_at.as_deref()))
+    } else {
+        parse(review.and_then(|r| r.up_for_review_at())).or(created)
+    };
     let mut out = vec![
+        (tl("Created").to_string(), created, true),
         (
-            tl("Created").to_string(),
-            parse(mr.created_at.as_deref()),
-            true,
+            tl("Ready for review").to_string(),
+            ready,
+            ready.is_some() || merged,
         ),
         (
             tl("First review").to_string(),
@@ -559,7 +576,9 @@ fn stages_of(app: &crate::app::App, mr: &TrackedMr) -> Vec<Stage> {
                 label: label.clone(),
                 at: *at,
                 took,
-                usual: if i == 0 { None } else { usual(i) },
+                // The development (to ready for review) has no usual time: its
+                // length is the work's, not a delay.
+                usual: if i <= READY { None } else { usual(i) },
                 reached: *reached,
                 current: is_current,
             }
@@ -751,7 +770,8 @@ mod tests {
     #[test]
     fn several_approvals_become_a_stage_each_timed_from_the_one_before() {
         let mut stages = vec![
-            stage("Created", Some("2026-09-01T09:00:00Z"), true),
+            stage("Created", Some("2026-08-31T09:00:00Z"), true),
+            stage("Ready for review", Some("2026-09-01T09:00:00Z"), true),
             stage("First review", Some("2026-09-02T09:00:00Z"), true),
             stage("Approved", Some("2026-09-05T09:00:00Z"), true),
             stage("Merged", None, false),
@@ -766,26 +786,28 @@ mod tests {
             labels,
             [
                 "Created",
+                "Ready for review",
                 "First review",
                 "First approval",
                 "Second approval",
                 "Merged"
             ]
         );
-        assert_eq!(stages[2].took, Some(1.0));
-        assert_eq!(stages[3].took, Some(2.0));
-        assert_eq!(stages[3].usual, None);
+        assert_eq!(stages[3].took, Some(1.0));
+        assert_eq!(stages[4].took, Some(2.0));
+        assert_eq!(stages[4].usual, None);
     }
 
     #[test]
     fn a_single_approval_stays_approved() {
         let mut stages = vec![
             stage("Created", Some("2026-09-01T09:00:00Z"), true),
+            stage("Ready for review", Some("2026-09-01T09:00:00Z"), true),
             stage("First review", None, true),
             stage("Approved", Some("2026-09-05T09:00:00Z"), true),
         ];
         split_approvals(&mut stages, &[parse(Some("2026-09-05T09:00:00Z")).unwrap()]);
-        assert_eq!(stages.len(), 3);
-        assert_eq!(stages[2].label, "Approved");
+        assert_eq!(stages.len(), 4);
+        assert_eq!(stages[3].label, "Approved");
     }
 }

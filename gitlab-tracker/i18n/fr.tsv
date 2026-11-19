@@ -1663,15 +1663,28 @@ rail	Stacks	Piles
 	< 1 month	< 1 mois
 	more	plus
 	< 1 h	< 1 h
-	Before the review	Avant la relecture
+	In development	En développement
+	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	De l'ouverture à la sortie du brouillon (passage en Ready). Une MR jamais en brouillon : jusqu'à sa première demande de relecture. Les commentaires pendant le brouillon sont la relecture au fil de l'eau et restent dans cette étape.
+	From ready for review to the first review by someone else (bots left out).	Du passage en Ready à la première relecture par quelqu'un d'autre (bots exclus).
+	From the first review to the approval: the back and forth.	De la première relecture à l'approbation : les allers-retours.
+	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Une MR ouverte en brouillon au début du travail est en développement jusqu'à son passage en Ready. Les commentaires pendant le brouillon sont la relecture au fil de l'eau : ils comptent ici, ni comme première relecture ni comme allers-retours.
+	Never a draft	Jamais en brouillon
+	Nothing in GitLab tells when the work on these MRs ended. Their development ends at the first review request: when the reviewers were asked at the opening, the writing counts as waiting for a review. Open the MRs as drafts and mark them ready to split them.	Rien dans GitLab ne dit quand le travail sur ces MR s'est terminé. Leur développement s'arrête à la première demande de relecture : si les relecteurs ont été demandés à l'ouverture, l'écriture compte comme attente de relecture. Ouvrez les MR en brouillon et passez-les en Ready pour séparer les deux.
+	Ready for review	Prête pour relecture
+	Marked ready for review	Passée en Ready
+	marked ready for review	passée en Ready
+	Ready	Ready
+	Ready → merge	Ready → fusion
+	median · P75 {p75} · {n} MRs	médiane · P75 {p75} · {n} MR
+	From the opening to the merge: the whole cycle. An MR opened as a draft when the work starts has its development in it.	De l'ouverture à la fusion : le cycle complet. Une MR ouverte en brouillon au début du travail y a son développement.
+	From up for review to the merge: out of draft for an MR opened as a draft, else its first review request. The time to merge without the development. MRs recorded before this was known are not in it.	Du passage en relecture à la fusion : la sortie du brouillon pour une MR ouverte en brouillon, sinon sa première demande de relecture. Le délai de fusion sans le développement. Les MR enregistrées avant que cette date soit connue n'y sont pas.
+@plural	{n} of {total} opened as a draft, {along} reviewed along the way|{n} of {total} opened as drafts, {along} reviewed along the way	{n} sur {total} ouverte en brouillon, {along} relue au fil de l'eau|{n} sur {total} ouvertes en brouillon, {along} relues au fil de l'eau
+@plural	{n} never a draft: development counted up to the review request|{n} never drafts: development counted up to the review request	{n} jamais en brouillon : développement compté jusqu'à la demande de relecture|{n} jamais en brouillon : développement compté jusqu'à la demande de relecture
 	Waiting for the merge	En attente de fusion
 	Waiting for production	En attente de production
 	Elite	Élite
 	High	Élevé
 	Low	Faible
-	From the opening to the first review request.	De l'ouverture à la première demande de relecture.
-	From the review request to the first review.	De la demande de relecture à la première relecture.
-	From the first review to the approval.	De la première relecture à l'approbation.
 	From the approval to the merge.	De l'approbation à la fusion.
 	From the merge to the arrival on the last branch.	De la fusion à l'arrivée sur la dernière branche.
 @plural	{n} MR merged in the period|{n} MRs merged in the period	{n} MR fusionnée sur la période|{n} MR fusionnées sur la période

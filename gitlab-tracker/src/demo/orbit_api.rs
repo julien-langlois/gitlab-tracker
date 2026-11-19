@@ -534,7 +534,12 @@ SELECT partman.create_parent('public.scan_events', 'scanned_at', 'native', 'mont
 "#)]))
             .shipped(&[&SARAH, &ALEX], d(27, 9, 0), d(25, 14, 0), d(19, 16, 0), d(19, 16, 30),
                 ("The Swiss template has no customs declaration block.", "Added: CH, NO and GB get it now."),
-                Some("fix(labels): Customs block outside the EU")),
+                Some("fix(labels): Customs block outside the EU"))
+            // Opened as a draft when the work started, reviewed along the way.
+            .at(d(26, 11, 0), Note(&SARAH, "early", Some(("src/labels/templates.rs", 12)), "One template per country will not scale: per customs zone instead?"))
+            .at(d(26, 11, 30), Reply(&MARINA, "early", "Good call: EU, CH and the rest."))
+            .at(d(26, 11, 31), Resolve(&MARINA, "early"))
+            .at(d(25, 11, 0), Ready),
         MrSpec::new("argon2-keys", "fix(auth): Hash API keys with Argon2id", &ALEX)
             .branch("fix/4101-argon2-api-keys", "main")
             .milestone("Security audit")
@@ -599,7 +604,8 @@ async fn v2_responses_do_not_change() {
             .file(snapshots())
             .shipped(&[&ALEX, &MARINA], d(9, 10, 0), d(8, 9, 30), d(7, 11, 0), d(7, 11, 20),
                 ("Redact the dates, or every snapshot changes each day.", "Redacted with `[date]`."),
-                Some("test(api): Redact dates in the snapshots")),
+                Some("test(api): Redact dates in the snapshots"))
+            .at(d(8, 9, 0), Ready),
         MrSpec::new("delay-emails", "feat(notif): Email the sender when a parcel is delayed", &JULIEN)
             .branch("feat/4120-delay-emails", "main")
             .milestone("v2.4.0")
@@ -669,7 +675,10 @@ pub async fn on_eta_change(ctx: &Ctx, shipment: &Shipment, old: Eta, new: Eta) -
 "#)]))
             .shipped(&[&MARINA, &ALEX], d(7, 10, 0), d(5, 15, 0), d(3, 11, 0), d(3, 14, 0),
                 ("Divisor 5000 is the road one: air freight uses 6000.", "Per carrier now, from `carriers.volumetric_divisor`."),
-                Some("feat(quotes): Volumetric divisor per carrier")),
+                Some("feat(quotes): Volumetric divisor per carrier"))
+            .at(d(6, 16, 0), Note(&MARINA, "early", None, "Where does the 5000 come from? A constant per carrier would be safer."))
+            .at(d(6, 16, 40), Reply(&SARAH, "early", "Road freight's: I keep it for now and look at the others."))
+            .at(d(5, 10, 0), Ready),
         MrSpec::new("oauth-pkce", "feat(auth): OAuth2 PKCE flow for the mobile app", &ALEX)
             .branch("feat/4188-oauth-pkce", "main")
             .milestone("v2.4.0")
@@ -1002,6 +1011,7 @@ pub async fn update(State(db): State<Db>, customer: Customer, Json(body): Json<P
             .at(d(3, 11, 0), Open)
             .at(d(3, 11, 1), Push(&["feat(notif): Mute flag on shipments"], Ci::Pass))
             .at(d(2, 17, 0), Push(&["wip: mute from the tracking page"], Ci::Pass))
+            .at(d(1, 10, 0), Note(&THOMAS, "scope", None, "Mute per shipment, or per customer too? The preferences MR has the customer level."))
             .status(S::Draft),
         MrSpec::new("pkce-verifier", "feat(auth): Keep the PKCE verifier across app restarts", &SARAH)
             .branch("feat/4188-pkce-verifier-store", "feat/4188-oauth-pkce")

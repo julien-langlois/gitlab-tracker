@@ -1,7 +1,7 @@
 //! The delivery page: how fast changes reach production and where the time
 //! goes on the way. The four DORA measures (deployment frequency, lead time
 //! for changes, change failure rate, time to restore), each merged MR's path
-//! cut into its steps (before review, waiting for a review, in review, waiting
+//! cut into its steps (in development, waiting for a review, in review, waiting
 //! for the merge, waiting for production), the rounds a review sends back to
 //! the author, and the open MRs placed by step and age against the usual time
 //! to merge. Everything is read from what the tracked MRs already carry, plus
@@ -54,8 +54,9 @@ impl Default for State {
 /// A step of an MR's way to production, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
-    /// Opened, no review asked yet: still being written.
-    BeforeReview,
+    /// Opened, not up for review yet: still being written. A draft until it
+    /// is marked ready; an MR never in draft, until its first review request.
+    Development,
     /// Review asked, nobody reviewed yet.
     WaitingReview,
     /// Reviewed, not approved yet: the back and forth.
@@ -68,7 +69,7 @@ pub enum Stage {
 
 impl Stage {
     pub const ALL: [Stage; 5] = [
-        Stage::BeforeReview,
+        Stage::Development,
         Stage::WaitingReview,
         Stage::InReview,
         Stage::ToMerge,
@@ -77,7 +78,7 @@ impl Stage {
 
     pub fn label(self) -> &'static str {
         tl(match self {
-            Stage::BeforeReview => "Before the review",
+            Stage::Development => "In development",
             Stage::WaitingReview => "Waiting for a review",
             Stage::InReview => "In review",
             Stage::ToMerge => "Waiting for the merge",
@@ -87,23 +88,36 @@ impl Stage {
 
     pub fn hint(self) -> &'static str {
         tl(match self {
-            Stage::BeforeReview => "From the opening to the first review request.",
-            Stage::WaitingReview => "From the review request to the first review.",
-            Stage::InReview => "From the first review to the approval.",
+            Stage::Development => "From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.",
+            Stage::WaitingReview => "From ready for review to the first review by someone else (bots left out).",
+            Stage::InReview => "From the first review to the approval: the back and forth.",
             Stage::ToMerge => "From the approval to the merge.",
             Stage::ToProduction => "From the merge to the arrival on the last branch.",
         })
     }
 
+    /// Its colour, by who has the MR: the team at work in cool hues (teal
+    /// writing, blue reviewing), the waits in warm ones (amber for a review,
+    /// orange for the merge), and purple after the merge, the release's time.
+    /// Cool and warm alternate along the path, so no two neighbours look
+    /// alike.
     pub fn tone(self, theme: &Theme) -> Tone {
         let t = &theme.tones;
         match self {
-            Stage::BeforeReview => t.gray,
+            Stage::Development => t.teal,
             Stage::WaitingReview => t.amber,
             Stage::InReview => t.blue,
-            Stage::ToMerge => t.teal,
+            Stage::ToMerge => t.orange,
             Stage::ToProduction => t.purple,
         }
+    }
+
+    /// A wait: nobody works on the MR, the time to cut first.
+    pub fn is_wait(self) -> bool {
+        matches!(
+            self,
+            Stage::WaitingReview | Stage::ToMerge | Stage::ToProduction
+        )
     }
 }
 
@@ -114,7 +128,13 @@ pub struct Path {
     pub title: String,
     pub author: String,
     pub created: DateTime<Utc>,
-    pub requested: Option<DateTime<Utc>>,
+    /// Put up for review: out of draft, else the first review request.
+    pub ready: Option<DateTime<Utc>>,
+    /// Never a draft: its development cannot be told from its wait for a
+    /// review when its reviewers were asked at the opening.
+    pub never_draft: bool,
+    /// Comments by others while a draft: the review along the way.
+    pub draft_comments: u32,
     pub reviewed: Option<DateTime<Utc>>,
     pub approved: Option<DateTime<Utc>>,
     pub merged: Option<DateTime<Utc>>,
@@ -132,7 +152,7 @@ impl Path {
     /// counts its current step up to `now`.
     pub fn stages(&self, now: DateTime<Utc>) -> [Option<f64>; 5] {
         let ends = [
-            self.requested,
+            self.ready,
             self.reviewed,
             self.approved,
             self.merged,
@@ -347,6 +367,14 @@ pub struct Delivery {
     pub rounds: Rounds,
     /// The reverts and hotfixes merged in the period, newest first.
     pub undos: Vec<Undo>,
+    /// Of the merged MRs: opened as (or made) a draft, and of them commented
+    /// on while a draft (reviewed along the way).
+    pub drafted: usize,
+    pub reviewed_in_draft: usize,
+    /// Of the merged MRs, with a review timeline: never a draft. Their
+    /// development ends at the first review request, at the opening when the
+    /// reviewers were asked at once.
+    pub never_draft: usize,
 }
 
 fn percentile(mut values: Vec<f64>, p: f64) -> Option<f64> {
@@ -376,15 +404,7 @@ fn rounds_of(mr: &TrackedMr) -> Option<u32> {
 pub fn path_of(app: &App, mr: &TrackedMr, last: &str) -> Option<Path> {
     let created = board::time_of(mr.created_at.as_deref())?;
     let review = mr.review.as_ref();
-    // The first request, else the oldest of the standing ones.
-    let requested = review.and_then(|r| {
-        board::time_of(r.first_review_requested_at.as_deref()).or_else(|| {
-            r.review_requested_at
-                .values()
-                .filter_map(|at| board::parse_time(at))
-                .min()
-        })
-    });
+    let ready = review.and_then(|r| board::time_of(r.up_for_review_at()));
     let merged = (mr.state == GitlabMrState::Merged)
         .then(|| board::time_of(mr.merged_at.as_deref()))
         .flatten();
@@ -405,7 +425,9 @@ pub fn path_of(app: &App, mr: &TrackedMr, last: &str) -> Option<Path> {
         title: mr.title.clone(),
         author: mr.author.clone(),
         created,
-        requested,
+        ready,
+        never_draft: review.is_some_and(|r| !r.was_draft),
+        draft_comments: review.map_or(0, |r| r.draft_comments),
         reviewed: review.and_then(|r| board::time_of(r.first_review_at.as_deref())),
         approved: review.and_then(|r| board::time_of(r.approved_at.as_deref())),
         merged,
@@ -734,6 +756,14 @@ pub fn analyze(
         if path.merged.is_some_and(|m| m >= start) {
             if let (Some(n), true) = (path.rounds, path.reviewed.is_some()) {
                 rounds.push(n);
+            }
+            if mr.review.is_some() {
+                if path.never_draft {
+                    d.never_draft += 1;
+                } else {
+                    d.drafted += 1;
+                    d.reviewed_in_draft += usize::from(path.draft_comments > 0);
+                }
             }
             d.merged.push(path);
         }
@@ -1395,18 +1425,24 @@ fn steps_card(ui: &mut Ui, theme: &Theme, d: &Delivery) {
                         ],
                     ),
                     fonts::semibold(theme.text_size - 0.5),
-                    stage.tone(theme).fg,
+                    // A wait in its colour, the time to cut; work in the text's.
+                    if stage.is_wait() {
+                        stage.tone(theme).fg
+                    } else {
+                        theme.palette.text
+                    },
                     line.width(),
                 );
                 ui.add_space(6.0);
             }
+            // A step under 1 % of the way would be a sliver: it stays in the
+            // lines below.
             let parts: Vec<(f32, Color32)> = Stage::ALL
                 .iter()
                 .map(|s| {
-                    (
-                        d.medians[*s as usize].unwrap_or(0.0) as f32,
-                        s.tone(theme).fg,
-                    )
+                    let v = d.medians[*s as usize].unwrap_or(0.0);
+                    let v = if v / total < 0.01 { 0.0 } else { v };
+                    (v as f32, s.tone(theme).fg)
                 })
                 .collect();
             board::stacked_bar(ui, theme, &parts, 16.0, 2.0);
@@ -1466,8 +1502,62 @@ fn steps_card(ui: &mut Ui, theme: &Theme, d: &Delivery) {
                 }
                 response.rich(Tip::new().title(stage.label()).text(stage.hint()));
             }
+            drafts_caption(ui, theme, d);
         },
     );
+}
+
+/// "3 of 18 opened as drafts, 2 reviewed along the way".
+fn drafts_text(d: &Delivery) -> Option<String> {
+    (d.drafted > 0).then(|| {
+        tn(
+            d.drafted as u64,
+            "{n} of {total} opened as a draft, {along} reviewed along the way",
+            "{n} of {total} opened as drafts, {along} reviewed along the way",
+        )
+        .replace("{total}", &(d.drafted + d.never_draft).to_string())
+        .replace("{along}", &d.reviewed_in_draft.to_string())
+    })
+}
+
+/// "15 never drafts: development counted up to the review request".
+fn never_draft_text(d: &Delivery) -> Option<String> {
+    (d.never_draft > 0).then(|| {
+        tn(
+            d.never_draft as u64,
+            "{n} never a draft: development counted up to the review request",
+            "{n} never drafts: development counted up to the review request",
+        )
+    })
+}
+
+/// Under the steps: how many MRs were drafts reviewed along the way, and how
+/// many never were, whose development cannot be told from their wait.
+fn drafts_caption(ui: &mut Ui, theme: &Theme, d: &Delivery) {
+    let known = d.drafted + d.never_draft;
+    if known == 0 {
+        return;
+    }
+    ui.add_space(6.0);
+    if let Some(text) = drafts_text(d) {
+        ui.add(egui::Label::new(muted(theme, &text).size(theme.text_size - 1.5)).wrap())
+            .rich(Tip::new().title(tl("Drafts")).text(tl(
+                "An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.",
+            )));
+    }
+    if let Some(text) = never_draft_text(d) {
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(text)
+                    .color(theme.tones.amber.fg)
+                    .size(theme.text_size - 1.5),
+            )
+            .wrap(),
+        )
+        .rich(Tip::new().title(tl("Never a draft")).text(tl(
+            "Nothing in GitLab tells when the work on these MRs ended. Their development ends at the first review request: when the reviewers were asked at the opening, the writing counts as waiting for a review. Open the MRs as drafts and mark them ready to split them.",
+        )));
+    }
 }
 
 fn rounds_card(ui: &mut Ui, theme: &Theme, d: &Delivery, picked: &mut Option<String>) {
@@ -2181,6 +2271,12 @@ pub fn weekly_report(
             )
         );
     }
+    for line in [drafts_text(&d), never_draft_text(&d)]
+        .into_iter()
+        .flatten()
+    {
+        let _ = writeln!(out, "- {line}");
+    }
     if d.rounds.reviewed > 0 {
         let _ = writeln!(
             out,
@@ -2322,7 +2418,9 @@ mod tests {
             title: String::new(),
             author: String::new(),
             created: at("2026-11-01T00:00:00Z"),
-            requested: Some(at("2026-11-02T00:00:00Z")),
+            ready: Some(at("2026-11-02T00:00:00Z")),
+            never_draft: true,
+            draft_comments: 0,
             reviewed: Some(at("2026-11-04T00:00:00Z")),
             approved: None,
             merged: Some(at("2026-11-05T00:00:00Z")),
@@ -2343,7 +2441,9 @@ mod tests {
             title: String::new(),
             author: String::new(),
             created: at("2026-11-01T00:00:00Z"),
-            requested: Some(at("2026-11-02T00:00:00Z")),
+            ready: Some(at("2026-11-02T00:00:00Z")),
+            never_draft: true,
+            draft_comments: 0,
             reviewed: None,
             approved: None,
             merged: None,
