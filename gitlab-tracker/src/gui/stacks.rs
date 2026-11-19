@@ -526,6 +526,8 @@ fn main(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
 
 /// Width of a level of the tree.
 const INDENT: f32 = 26.0;
+/// The author's avatar, right of a stack's row.
+const AUTHOR_AVATAR: f32 = 22.0;
 
 /// The base branch, then each MR under the one it sits on, joined by lines.
 fn stack_body(
@@ -618,16 +620,34 @@ fn stack_body(
             board::id_tone(theme),
             true,
         );
+        // The author, avatar and name, centred on the row's height.
         let author = split_person(&node.author).0;
-        let aw = board::paint_text(
-            ui,
-            egui::pos2(rect.right() - 10.0, dot.y),
-            Align2::RIGHT_CENTER,
-            author,
-            FontId::proportional(theme.text_size - 1.5),
-            theme.palette.text_muted,
-            140.0,
-        );
+        let aw = if author.is_empty() {
+            0.0
+        } else {
+            let nw = board::paint_text(
+                ui,
+                egui::pos2(rect.right() - 10.0, rect.center().y),
+                Align2::RIGHT_CENTER,
+                author,
+                FontId::proportional(theme.text_size - 1.5),
+                theme.palette.text_muted,
+                140.0,
+            );
+            let cell = egui::Rect::from_center_size(
+                egui::pos2(
+                    rect.right() - 10.0 - nw - 8.0 - AUTHOR_AVATAR / 2.0,
+                    rect.center().y,
+                ),
+                Vec2::splat(AUTHOR_AVATAR),
+            );
+            let mut cell = board::inside(ui, cell);
+            super::widgets::avatar(&mut cell, theme, author, AUTHOR_AVATAR)
+                .rich(Tip::new().person(&node.author));
+            nw + 8.0 + AUTHOR_AVATAR
+        };
+        // What the lines of the row may use, left of the author.
+        let right = rect.right() - 10.0 - if aw > 0.0 { aw + 12.0 } else { 0.0 };
         let title_x = left + ow + iw + 16.0;
         board::paint_text(
             ui,
@@ -640,7 +660,7 @@ fn stack_body(
             } else {
                 theme.palette.text
             },
-            rect.right() - 20.0 - aw - title_x,
+            right - title_x,
         );
         // Second line: the branch, then its state.
         let y2 = rect.top() + 38.0;
@@ -652,10 +672,10 @@ fn stack_body(
             &node.source,
             FontId::monospace(theme.text_size - 2.5),
             theme.palette.text_muted,
-            (rect.right() - cx) * 0.4,
+            (right - cx) * 0.4,
         ) + 10.0;
         for (text, tone) in state_tags(node, theme) {
-            if cx > rect.right() - 60.0 {
+            if cx > right - 50.0 {
                 break;
             }
             cx += board::paint_tag_within(
@@ -665,7 +685,7 @@ fn stack_body(
                 &text,
                 tone,
                 false,
-                rect.right() - 10.0 - cx,
+                right - cx,
             ) + 6.0;
         }
         // Third line: the worst problem.
@@ -684,7 +704,7 @@ fn stack_body(
                 &text,
                 fonts::medium(theme.text_size - 1.5),
                 problem.tone(theme).fg,
-                rect.right() - 10.0 - left,
+                right - left,
             );
             // The parent it names, by its title.
             ui.interact(
