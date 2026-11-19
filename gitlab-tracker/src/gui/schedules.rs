@@ -188,13 +188,104 @@ fn name(s: &ScheduleRecord) -> String {
 
 /// Column widths of the table: schedule, when, runs, next, owner (the owner
 /// dropped when narrow).
-fn columns(width: f32) -> [f32; 5] {
+/// The owner's avatar, beside their name.
+const OWNER_AVATAR: f32 = 22.0;
+
+/// The Next cell's two lines: running now, else the next run, else a dash.
+fn next_lines(s: &ScheduleRecord, now: DateTime<Utc>) -> (String, String) {
+    let running = s.runs.last().filter(|r| !finished(r.status));
+    let next = s
+        .next_run_at
+        .as_deref()
+        .and_then(board::parse_time)
+        .filter(|_| s.active);
+    if let Some(r) = running {
+        let since = board::parse_time(&r.created_at)
+            .map(|t| board::ago(t, now))
+            .unwrap_or_default();
+        (
+            tl("running").to_string(),
+            tf("started {ago}", &[("ago", &since)]),
+        )
+    } else if owner_gone(s) && s.active {
+        (
+            tl("will not run").to_string(),
+            tl("owner blocked").to_string(),
+        )
+    } else if let Some(at) = next {
+        (
+            crate::snooze::when_text(at, &chrono::Local::now()),
+            tf("in {left}", &[("left", &crate::freeze::left_text(now, at))]),
+        )
+    } else {
+        (board::dash().to_string(), String::new())
+    }
+}
+
+/// The owner's account state, when it no longer runs anything.
+fn owner_state_text(s: &ScheduleRecord) -> String {
+    match s.owner_state.as_str() {
+        "blocked" | "blocked_pending_approval" => tl("account blocked").to_string(),
+        "deactivated" => tl("account deactivated").to_string(),
+        "banned" => tl("account banned").to_string(),
+        other => tf("account {state}", &[("state", other)]),
+    }
+}
+
+/// What When, Next and Owner need to show every schedule whole.
+struct Needs {
+    when: f32,
+    next: f32,
+    owner: f32,
+}
+
+/// The columns: When, Next and Owner as wide as their widest line as long
+/// as Schedule keeps room for its names, the rest to Schedule.
+fn columns(width: f32, need: &Needs) -> [f32; 5] {
     let runs = SCHEDULE_RUNS as f32 * 13.0;
-    let when = 170.0;
-    let next = 130.0;
-    let owner = if width > 760.0 { 140.0 } else { 0.0 };
-    let name = (width - runs - when - next - owner - 48.0).max(120.0);
+    let next = need.next.clamp(90.0, 160.0);
+    let owner = if width > 760.0 {
+        need.owner.clamp(110.0, 220.0)
+    } else {
+        0.0
+    };
+    let free = width - runs - next - owner - 48.0;
+    let when = need.when.min(free - 200.0).max(170.0);
+    let name = (free - when).max(120.0);
     [name, when, runs, next, owner]
+}
+
+fn needs(ui: &Ui, theme: &Theme, schedules: &[ScheduleRecord], now: DateTime<Utc>) -> Needs {
+    let measure = |text: &str, font: FontId| {
+        ui.painter()
+            .layout_no_wrap(text.to_string(), font, Color32::WHITE)
+            .size()
+            .x
+    };
+    let line = FontId::proportional(theme.text_size - 1.0);
+    let small = FontId::proportional(theme.text_size - 2.0);
+    let widest =
+        |f: &dyn Fn(&ScheduleRecord) -> f32| schedules.iter().map(f).fold(0.0, f32::max) + 12.0;
+    Needs {
+        when: widest(&|s| {
+            let words = humanize(&s.cron).unwrap_or_else(|| s.cron.clone());
+            let cron = format!("{} · {}", s.cron, s.zone);
+            measure(&words, line.clone())
+                .max(measure(&cron, FontId::monospace(theme.text_size - 2.0)))
+        }),
+        next: widest(&|s| {
+            let (first, second) = next_lines(s, now);
+            measure(&first, line.clone()).max(measure(&second, small.clone()))
+        }),
+        owner: widest(&|s| {
+            let state = if owner_gone(s) {
+                measure(&owner_state_text(s), small.clone())
+            } else {
+                0.0
+            };
+            OWNER_AVATAR + 8.0 + measure(&s.owner, line.clone()).max(state)
+        }),
+    }
 }
 
 /// The card of the schedules; the url to open when a run or the GitLab link
@@ -213,7 +304,7 @@ pub fn card(
     );
     board::card(ui, theme, tl("Pipeline schedules"), &note, 0.0, |ui| {
         let width = ui.available_width();
-        let cols = columns(width);
+        let cols = columns(width, &needs(ui, theme, schedules, now));
         header(ui, theme, &cols);
         for (i, s) in schedules.iter().enumerate() {
             if let Some(url) = row(ui, theme, s, &cols, now, i + 1 == schedules.len()) {
@@ -375,7 +466,7 @@ fn row(
         egui::pos2(x, bottom),
         Align2::LEFT_CENTER,
         &format!("{} · {}", s.cron, s.zone),
-        FontId::monospace(theme.text_size - 3.0),
+        FontId::monospace(theme.text_size - 2.0),
         theme.palette.text_muted,
         cols[1] - 8.0,
     );
@@ -428,32 +519,7 @@ fn row(
     x += cols[2] + 12.0;
     // Next: running now, else the next run, else a dash.
     let running = s.runs.last().filter(|r| !finished(r.status));
-    let next = s
-        .next_run_at
-        .as_deref()
-        .and_then(board::parse_time)
-        .filter(|_| s.active);
-    let (first, second) = if let Some(r) = running {
-        let since = board::parse_time(&r.created_at)
-            .map(|t| board::ago(t, now))
-            .unwrap_or_default();
-        (
-            tl("running").to_string(),
-            tf("started {ago}", &[("ago", &since)]),
-        )
-    } else if owner_gone(s) && s.active {
-        (
-            tl("will not run").to_string(),
-            tl("owner blocked").to_string(),
-        )
-    } else if let Some(at) = next {
-        (
-            crate::snooze::when_text(at, &chrono::Local::now()),
-            tf("in {left}", &[("left", &crate::freeze::left_text(now, at))]),
-        )
-    } else {
-        (board::dash().to_string(), String::new())
-    };
+    let (first, second) = next_lines(s, now);
     paint_text(
         ui,
         egui::pos2(x, top),
@@ -480,9 +546,19 @@ fn row(
     // The owner, flagged when their account no longer runs anything.
     if cols[4] > 0.0 {
         let gone = owner_gone(s);
+        if !s.owner.is_empty() {
+            let cell =
+                Rect::from_min_size(egui::pos2(x, rect.top()), Vec2::new(OWNER_AVATAR, height));
+            let mut cell = board::inside(ui, cell);
+            super::widgets::avatar(&mut cell, theme, &s.owner, OWNER_AVATAR)
+                .rich(Tip::new().person(&s.owner));
+        }
+        let x = x + OWNER_AVATAR + 8.0;
+        // One line centred on the avatar, two lines centred together.
+        let name_y = if gone { top } else { rect.center().y };
         paint_text(
             ui,
-            egui::pos2(x, top),
+            egui::pos2(x, name_y),
             Align2::LEFT_CENTER,
             if s.owner.is_empty() {
                 board::dash()
@@ -491,22 +567,17 @@ fn row(
             },
             FontId::proportional(theme.text_size - 1.0),
             if gone { theme.tones.amber.fg } else { text },
-            cols[4] - 4.0,
+            cols[4] - OWNER_AVATAR - 12.0,
         );
         if gone {
             paint_text(
                 ui,
                 egui::pos2(x, bottom),
                 Align2::LEFT_CENTER,
-                &match s.owner_state.as_str() {
-                    "blocked" | "blocked_pending_approval" => tl("account blocked").to_string(),
-                    "deactivated" => tl("account deactivated").to_string(),
-                    "banned" => tl("account banned").to_string(),
-                    other => tf("account {state}", &[("state", other)]),
-                },
+                &owner_state_text(s),
                 small,
                 theme.tones.amber.fg,
-                cols[4] - 4.0,
+                cols[4] - OWNER_AVATAR - 12.0,
             );
         }
     }
