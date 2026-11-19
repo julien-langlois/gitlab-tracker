@@ -1080,12 +1080,14 @@ const SNOOZE_ROW: f32 = 54.0;
 /// the MR on top, then each choice with its icon, the day and time it wakes
 /// (local time) and how far away that is.
 fn snooze_menu(ui: &mut Ui, theme: &Theme, id: &str, title: &str) -> Option<Until> {
-    let response = super::widgets::icon_button_tip(
+    let response = super::widgets::button(
         ui,
+        theme,
+        Some(super::icons::Icon::Moon),
         tl("Snooze"),
-        super::icons::Icon::Moon,
-        &theme.outlined_icon_button(),
-        theme.spacing.control_height + 2.0,
+        false,
+    )
+    .rich(
         Tip::new().title(tl("Snooze")).text(tl(
             "Out of Today until then; back early on a push, a failed pipeline or a new comment",
         )),

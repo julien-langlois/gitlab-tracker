@@ -443,10 +443,10 @@
 	git clone command copied	git-clone-Befehl kopiert
 	no clipboard available	keine Zwischenablage verfügbar
 	Copy failed	Kopieren fehlgeschlagen
-	{n} merged	{n} gemergt
-	{n} closed	{n} geschlossen
-	{n} new on a branch	{n} neu in einem Branch
-	{n} CI failing	{n} CI fehlgeschlagen
+@plural	{n} merged|{n} merged	{n} gemergt|{n} gemergt
+@plural	{n} closed|{n} closed	{n} geschlossen|{n} geschlossen
+@plural	{n} new on a branch|{n} new on a branch	{n} neu in einem Branch|{n} neu in einem Branch
+@plural	{n} CI failing|{n} CI failing	{n} CI fehlgeschlagen|{n} CI fehlgeschlagen
 	Since last session: {changes}	Seit der letzten Sitzung: {changes}
 	Refresh already running — wait for it to finish	Aktualisierung läuft bereits — bitte warten
 	No activities loaded	Keine Aktivitäten geladen

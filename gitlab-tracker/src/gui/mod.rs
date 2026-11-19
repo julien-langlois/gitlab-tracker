@@ -78,6 +78,7 @@ const TITLEBAR_PREFIX: bevel_window::Prefix = bevel_window::Prefix::new("GITLAB_
 /// a window first.
 pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Result<()> {
     gitlab_tracker_core::secrets::set_interactive(false);
+    install_language().await;
     let probe = project.clone();
     let missing = tokio::task::spawn_blocking(move || setup::missing_tokens(&probe))
         .await
@@ -102,6 +103,14 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
         shared,
         demo: false,
     })
+}
+
+/// Speaks the window's language before the session is built: what the session
+/// writes while loading (the "Since last session" digest, flashes) is then
+/// translated too, not left in English.
+async fn install_language() {
+    i18n::install();
+    i18n::set_language(crate::storage::load_projects_toml().await.language.as_deref());
 }
 
 /// The demo's notifications of the last hours, kept for the bell (no toast:
@@ -155,6 +164,7 @@ fn seed_demo_bell(toasts: &mut toasts::Toasts, app: &App, tones: &bevel_theme::T
 /// The window on the demo project (`gitlab-tracker --demo gui`): mock data,
 /// no token, no network and no disk writes.
 pub async fn run_demo(global_config: AppConfig) -> anyhow::Result<()> {
+    install_language().await;
     let first = crate::demo::demo_app(global_config.clone()).await;
     let session = demo_session(first);
     // A second project, in a tab of its own: the mobile app of the same team.

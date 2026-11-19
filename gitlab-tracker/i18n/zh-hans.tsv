@@ -443,10 +443,10 @@
 	git clone command copied	已复制 git clone 命令
 	no clipboard available	剪贴板不可用
 	Copy failed	复制失败
-	{n} merged	{n} 个已合并
-	{n} closed	{n} 个已关闭
-	{n} new on a branch	{n} 个新进入分支
-	{n} CI failing	{n} 个 CI 失败
+@plural	{n} merged|{n} merged	{n} 个已合并
+@plural	{n} closed|{n} closed	{n} 个已关闭
+@plural	{n} new on a branch|{n} new on a branch	{n} 个新进入分支
+@plural	{n} CI failing|{n} CI failing	{n} 个 CI 失败
 	Since last session: {changes}	自上次会话以来：{changes}
 	Refresh already running — wait for it to finish	刷新已在进行中 — 请等待完成
 	No activities loaded	未加载任何活动

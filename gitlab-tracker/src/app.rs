@@ -1612,6 +1612,8 @@ fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> 
             ci_failing += 1;
         }
     }
+    // Same words in English for one or many, but not in every language
+    // ("1 fusionnée", "2 fusionnées").
     let parts: Vec<String> = [
         (merged, "{n} merged"),
         (closed, "{n} closed"),
@@ -1620,7 +1622,7 @@ fn session_digest(baseline: &HashMap<String, MrBaseline>, mrs: &[TrackedMr]) -> 
     ]
     .into_iter()
     .filter(|(n, _)| *n > 0)
-    .map(|(n, label)| tf(label, &[("n", &n.to_string())]))
+    .map(|(n, label)| crate::i18n::tn(n as u64, label, label))
     .collect();
     (!parts.is_empty()).then(|| {
         tf(

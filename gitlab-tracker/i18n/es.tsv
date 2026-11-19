@@ -443,10 +443,10 @@
 	git clone command copied	Comando git clone copiado
 	no clipboard available	no hay portapapeles disponible
 	Copy failed	Error al copiar
-	{n} merged	{n} fusionadas
-	{n} closed	{n} cerradas
-	{n} new on a branch	{n} nuevas en una rama
-	{n} CI failing	{n} con CI fallando
+@plural	{n} merged|{n} merged	{n} fusionada|{n} fusionadas
+@plural	{n} closed|{n} closed	{n} cerrada|{n} cerradas
+@plural	{n} new on a branch|{n} new on a branch	{n} nueva en una rama|{n} nuevas en una rama
+@plural	{n} CI failing|{n} CI failing	{n} con CI fallando|{n} con CI fallando
 	Since last session: {changes}	Desde la última sesión: {changes}
 	Refresh already running — wait for it to finish	Ya hay una actualización en curso — espera a que termine
 	No activities loaded	No hay actividades cargadas
