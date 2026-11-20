@@ -964,7 +964,7 @@ date	Merged	合并时间
 	Copy git clone	复制 git clone
 	git clone -b <source branch> <ssh url>	git clone -b <源分支> <ssh 地址>
 	All resolved	全部已解决
-	rules met	条规则已满足
+@plural	rule met|rules met	条规则已满足
 	approvals	个批准
 @plural	approval|approvals	个批准
 	Approvals	批准
@@ -982,7 +982,7 @@ date	Merged	合并时间
 	They do not block the merge here.	在此项目中它们不阻止合并。
 	Every thread resolved	所有讨论已解决
 	Every approval rule met	所有批准规则已满足
-	Approvals: {met} of {total} rules met	批准：{total} 条规则中已满足 {met} 条
+@plural	Approvals: {met} of {n} rule met|Approvals: {met} of {n} rules met	批准：{n} 条规则中已满足 {met} 条
 	Approved by {who}	已由 {who} 批准
 	Not approved yet	尚未批准
 	The project merges fast-forward only: rebase first.	项目仅允许快进合并：请先变基。

@@ -585,7 +585,8 @@ fn facts(
                 rules.iter().filter(|r| r.approved).count(),
                 rules.len()
             ),
-            tl("rules met").to_string(),
+            // The number of rules is above it: the word in its form.
+            tn(rules.len() as u64, "rule met", "rules met"),
         ),
         None => (
             mr.approved_by.len().to_string(),
@@ -1271,13 +1272,12 @@ pub fn checks(
                     .collect();
                 push(
                     Verdict::Warns,
-                    tf(
-                        "Approvals: {met} of {total} rules met",
-                        &[
-                            ("met", &met.to_string()),
-                            ("total", &rules.len().to_string()),
-                        ],
-                    ),
+                    tn(
+                        rules.len() as u64,
+                        "Approvals: {met} of {n} rule met",
+                        "Approvals: {met} of {n} rules met",
+                    )
+                    .replace("{met}", &met.to_string()),
                     waiting.join(" · "),
                 );
             }

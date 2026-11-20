@@ -964,7 +964,7 @@ date	Merged	Mesclada
 	Copy git clone	Copiar git clone
 	git clone -b <source branch> <ssh url>	git clone -b <branch de origem> <url ssh>
 	All resolved	Todas resolvidas
-	rules met	regras cumpridas
+@plural	rule met|rules met	regra cumprida|regras cumpridas
 	approvals	aprovações
 @plural	approval|approvals	aprovação|aprovações
 	Approvals	Aprovações
@@ -982,7 +982,7 @@ date	Merged	Mesclada
 	They do not block the merge here.	Aqui elas não bloqueiam a mesclagem.
 	Every thread resolved	Todas as threads resolvidas
 	Every approval rule met	Todas as regras de aprovação cumpridas
-	Approvals: {met} of {total} rules met	Aprovações: {met} de {total} regras cumpridas
+@plural	Approvals: {met} of {n} rule met|Approvals: {met} of {n} rules met	Aprovações: {met} de {n} regra cumprida|Aprovações: {met} de {n} regras cumpridas
 	Approved by {who}	Aprovada por {who}
 	Not approved yet	Ainda não aprovada
 	The project merges fast-forward only: rebase first.	O projeto só mescla em fast-forward: faça rebase antes.

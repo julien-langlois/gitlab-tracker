@@ -2138,13 +2138,14 @@ pub async fn fetch_gitlab_data(
         }
     };
     // Approvers change while the MR is open (approvals, resets on push): read with
-    // the discussions, frozen afterwards.
-    let fetched = if state == GitlabMrState::Opened && !review_fresh {
+    // the discussions, once more when it leaves open (approved and merged between
+    // two refreshes), frozen afterwards.
+    let fetched = if !review_fresh {
         fetch_approved_by(ctx, mr_id).await
     } else {
         None
     };
-    let (approved_by, approvers) = match fetched {
+    let (approved_by, approvers): (Vec<String>, Vec<String>) = match fetched {
         Some(users) => users
             .into_iter()
             .map(|u| {
@@ -2157,6 +2158,15 @@ pub async fn fetch_gitlab_data(
             })
             .unzip(),
         None => (cached.approved_by.clone(), cached.approvers.clone()),
+    };
+    // A closed MR whose approvals were never read (merged before a refresh saw it
+    // approved) still has them in its system notes: frozen there, they no longer
+    // move with a push.
+    let approved_by = match review.as_ref() {
+        Some(r) if approved_by.is_empty() && state != GitlabMrState::Opened => {
+            r.approvals.keys().cloned().collect()
+        }
+        _ => approved_by,
     };
     // Recorded only with a successful read, so a failed one is retried next cycle.
     let notes_seen = if review_read_at != cached.review_read_at {
@@ -3286,14 +3296,15 @@ pub(crate) mod tests {
             .as_ref()
             .and_then(|d| d.commits_behind);
         assert_eq!(behind, Some(2));
-        // Unchanged open MR: review kept. Never-read open MR: read. Merged: no approvals.
+        // Unchanged open MR: review kept. Never-read open or merged MR: read, the
+        // merged one too (approved and merged between two refreshes).
         assert_eq!(
             count("/merge_requests/2/discussions") + count("/merge_requests/2/approvals"),
             0
         );
         assert_eq!(count("/merge_requests/3/discussions"), 1);
         assert_eq!(count("/merge_requests/3/approvals"), 1);
-        assert_eq!(count("/merge_requests/1/approvals"), 0);
+        assert_eq!(count("/merge_requests/1/approvals"), 1);
         assert_eq!(loaded["3"].data.notes_seen, None); // the list gave no count for it
         assert!(loaded["3"].data.review_read_at.is_some());
     }

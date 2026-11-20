@@ -964,7 +964,7 @@ date	Merged	Gemergt
 	Copy git clone	git clone kopieren
 	git clone -b <source branch> <ssh url>	git clone -b <Quell-Branch> <SSH-URL>
 	All resolved	Alle gelöst
-	rules met	Regeln erfüllt
+@plural	rule met|rules met	Regel erfüllt|Regeln erfüllt
 	approvals	Genehmigungen
 @plural	approval|approvals	Genehmigung|Genehmigungen
 	Approvals	Genehmigungen
@@ -982,7 +982,7 @@ date	Merged	Gemergt
 	They do not block the merge here.	Sie blockieren das Mergen hier nicht.
 	Every thread resolved	Alle Threads gelöst
 	Every approval rule met	Alle Genehmigungsregeln erfüllt
-	Approvals: {met} of {total} rules met	Genehmigungen: {met} von {total} Regeln erfüllt
+@plural	Approvals: {met} of {n} rule met|Approvals: {met} of {n} rules met	Genehmigungen: {met} von {n} Regel erfüllt|Genehmigungen: {met} von {n} Regeln erfüllt
 	Approved by {who}	Genehmigt von {who}
 	Not approved yet	Noch nicht genehmigt
 	The project merges fast-forward only: rebase first.	Das Projekt mergt nur per Fast-Forward: zuerst rebasen.

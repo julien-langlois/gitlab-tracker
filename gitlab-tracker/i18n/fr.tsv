@@ -964,7 +964,7 @@ date	Merged	Fusionnée
 	Copy git clone	Copier git clone
 	git clone -b <source branch> <ssh url>	git clone -b <branche source> <url ssh>
 	All resolved	Toutes résolues
-	rules met	règles remplies
+@plural	rule met|rules met	règle remplie|règles remplies
 	approvals	approbations
 @plural	approval|approvals	approbation|approbations
 	Approvals	Approbations
@@ -982,7 +982,7 @@ date	Merged	Fusionnée
 	They do not block the merge here.	Elles ne bloquent pas la fusion ici.
 	Every thread resolved	Toutes les discussions résolues
 	Every approval rule met	Toutes les règles d'approbation remplies
-	Approvals: {met} of {total} rules met	Approbations : {met} règle(s) remplie(s) sur {total}
+@plural	Approvals: {met} of {n} rule met|Approvals: {met} of {n} rules met	Approbations : {met} sur {n} règle remplie|Approbations : {met} sur {n} règles remplies
 	Approved by {who}	Approuvée par {who}
 	Not approved yet	Pas encore approuvée
 	The project merges fast-forward only: rebase first.	Le projet ne fusionne qu'en fast-forward : rebasez d'abord.
