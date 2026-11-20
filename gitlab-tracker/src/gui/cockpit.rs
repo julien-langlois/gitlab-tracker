@@ -118,7 +118,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             ui.add_space(12.0);
             let from_list = needs_attention(ui, &theme, &urgent);
             ui.add_space(12.0);
-            if let Some(click) = super::labels::card(ui, &theme, &g.app) {
+            if let Some(click) = super::labels::card(ui, &theme, &g.app, &g.memo.labels) {
                 by_label = Some(click);
             }
             pick = pick.take().or(from_tiles).or(from_cards).or(from_list);

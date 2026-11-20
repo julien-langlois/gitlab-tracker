@@ -260,12 +260,15 @@ pub fn card(
     ui: &mut Ui,
     theme: &Theme,
     app: &App,
+    memo: &super::memo::Memo<(bool, bool), Vec<Spot>>,
     by_file: bool,
     lockfiles: bool,
     picked: Option<&str>,
 ) -> Option<Click> {
     let now = Utc::now();
-    let spots = analyze(app, by_file, lockfiles, now);
+    let spots = memo.get(&app.project_id, (by_file, lockfiles), || {
+        analyze(app, by_file, lockfiles, now)
+    });
     let mut click = None;
     theme
         .card_frame()

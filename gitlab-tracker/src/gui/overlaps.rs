@@ -309,8 +309,15 @@ fn hot_spots(app: &App, now: DateTime<Utc>) -> Vec<(String, usize)> {
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
-    let overlaps = analyze(&g.app, g.overlaps.lockfiles, g.overlaps.drafts);
-    let hot = hot_spots(&g.app, now);
+    let key = (g.overlaps.lockfiles, g.overlaps.drafts);
+    let overlaps = g
+        .memo
+        .overlaps
+        .get(&g.app.project_id, key, || analyze(&g.app, key.0, key.1));
+    let hot = g
+        .memo
+        .hot
+        .get(&g.app.project_id, (), || hot_spots(&g.app, now));
     let pair = g
         .overlaps
         .pair
@@ -551,6 +558,7 @@ fn main(
     let folder_filter = g.overlaps.folder.clone();
     let my_login = me(&g.app);
     let app = &g.app;
+    let spots_memo = &g.memo.spots;
     let (spots_by_file, lockfiles) = (g.overlaps.spots_by_file, g.overlaps.lockfiles);
     let spot = g.overlaps.spot.clone();
     let mut spot_click = None;
@@ -562,8 +570,15 @@ fn main(
         420.0,
         |ui| hot_card(ui, &theme, hot),
         |ui| {
-            spot_click =
-                super::hotspots::card(ui, &theme, app, spots_by_file, lockfiles, spot.as_deref());
+            spot_click = super::hotspots::card(
+                ui,
+                &theme,
+                app,
+                spots_memo,
+                spots_by_file,
+                lockfiles,
+                spot.as_deref(),
+            );
         },
     );
     ui.add_space(GAP);
@@ -1669,7 +1684,11 @@ fn report(overlaps: &Overlaps) -> String {
 /// with one of mine when the username is known), in the tone of the worst: the
 /// same lines, close lines, the same file.
 pub fn badge(g: &GuiApp) -> Option<Badge> {
-    let overlaps = analyze(&g.app, g.overlaps.lockfiles, g.overlaps.drafts);
+    let key = (g.overlaps.lockfiles, g.overlaps.drafts);
+    let overlaps = g
+        .memo
+        .overlaps
+        .get(&g.app.project_id, key, || analyze(&g.app, key.0, key.1));
     let known = me(&g.app).is_some();
     let pairs: Vec<Level> = overlaps
         .pairs

@@ -27,6 +27,7 @@ mod jump;
 mod keys;
 mod labels;
 mod markdown;
+mod memo;
 mod merge_queue;
 mod milestones;
 mod mr_page;
@@ -399,6 +400,8 @@ struct GuiApp {
     members: HashMap<String, Vec<String>>,
     /// The rail's badges of the pages under its rule, kept for a moment.
     rail_badges: rail_badges::Cache,
+    /// The pages' analyses, kept between frames.
+    memo: memo::Memos,
     /// The counters when the list was first complete: the cockpit's trends.
     baseline: Option<Baseline>,
     /// The cockpit hides its counters at zero.
@@ -572,6 +575,7 @@ impl GuiApp {
             language,
             members,
             rail_badges: rail_badges::Cache::default(),
+            memo: memo::Memos::default(),
             baseline,
             hide_zeros: false,
             group_by: table::GroupBy::None,
@@ -744,6 +748,7 @@ impl GuiApp {
         if self.demo {
             while let Ok(event) = self.events.try_recv() {
                 crate::demo::apply_demo_event(&mut self.app, event);
+                memo::changed();
             }
             return;
         }
@@ -1545,6 +1550,7 @@ fn drain_events(
     let mut needs_save = false;
     while let Ok(event) = events.try_recv() {
         needs_save |= app.apply_event(event, api_semaphore.clone(), tx, last_known_branches);
+        memo::changed();
     }
     app.flush_pending_sort();
     app.ensure_time_entries(tx);
@@ -1675,6 +1681,7 @@ impl Tab {
         if demo {
             while let Ok(event) = self.events.try_recv() {
                 crate::demo::apply_demo_event(&mut self.app, event);
+                memo::changed();
             }
         } else if drain_events(
             &mut self.app,

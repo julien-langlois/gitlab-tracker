@@ -335,7 +335,7 @@ pub fn stacks(app: &App) -> Vec<Stack> {
 // ── The page ─────────────────────────────────────────────────────────────────
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
-    let all = stacks(&g.app);
+    let all = g.memo.stacks.get(&g.app.project_id, (), || stacks(&g.app));
     if g.stacks
         .stack
         .as_ref()
@@ -899,7 +899,7 @@ fn inspector(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
 
 /// The MRs of a stack to retarget (red) or rebase (orange).
 pub fn badge(g: &GuiApp) -> Option<Badge> {
-    let all = stacks(&g.app);
+    let all = g.memo.stacks.get(&g.app.project_id, (), || stacks(&g.app));
     let nodes: Vec<&Node> = all
         .iter()
         .flat_map(|s| &s.nodes)

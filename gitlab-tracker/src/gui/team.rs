@@ -420,7 +420,10 @@ pub(super) fn busiest(matrix: &BTreeMap<String, BTreeMap<String, u32>>) -> Optio
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
     let days = PERIODS[g.team.period.min(PERIODS.len() - 1)].0;
-    let analysis = analyze(&g.app, now, days, g.team.bots);
+    let bots = g.team.bots;
+    let analysis = g.memo.team.get(&g.app.project_id, (days, bots), || {
+        analyze(&g.app, now, days, bots)
+    });
     let reminder = g.app.config.review_reminder_hours.max(1) as f64 / 24.0;
     // The person shown: the one picked, else the most loaded.
     let shown = g
@@ -1888,7 +1891,9 @@ fn summary(analysis: &Analysis, now: DateTime<Utc>) -> String {
 /// twice that delay, else orange), else the overloaded reviewers (amber).
 pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
     let days = PERIODS[g.team.period.min(PERIODS.len() - 1)].0;
-    let analysis = analyze(&g.app, now, days, false);
+    let analysis = g.memo.team.get(&g.app.project_id, (days, false), || {
+        analyze(&g.app, now, days, false)
+    });
     let reminder = g.app.config.review_reminder_hours.max(1) as f64 / 24.0;
     let tones = &g.theme.tones;
     let mut late: Vec<(&Person, &Waiting, f64)> = analysis

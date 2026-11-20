@@ -517,7 +517,10 @@ fn projection(m: &Milestone, weekly: &[u32], now: DateTime<Utc>) -> Option<Naive
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
-    let all = milestones(&g.app);
+    let all = g
+        .memo
+        .milestones
+        .get(&g.app.project_id, (), || milestones(&g.app));
     let ctx = ui.ctx().clone();
     let overview = g.details.project(&g.app, &ctx).cloned();
     let weekly = weekly_merges(&g.app, overview.as_ref(), now);
@@ -1637,7 +1640,10 @@ fn release_notes(m: &Milestone, last: &str) -> String {
 /// projection lands 2 days or less before the date (or cannot be made), green
 /// when on schedule.
 pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
-    let all = milestones(&g.app);
+    let all = g
+        .memo
+        .milestones
+        .get(&g.app.project_id, (), || milestones(&g.app));
     // Sorted by due date: the first undone with a date is the next.
     let m = all
         .iter()

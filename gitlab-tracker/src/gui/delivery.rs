@@ -898,7 +898,10 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let days = PERIODS[g.delivery.period.min(PERIODS.len() - 1)].0;
     let ctx = ui.ctx().clone();
     let overview = g.details.project(&g.app, &ctx).cloned();
-    let d = analyze(&g.app, overview.as_ref(), now, days);
+    let known = overview.is_some();
+    let d = g.memo.delivery.get(&g.app.project_id, (days, known), || {
+        analyze(&g.app, overview.as_ref(), now, days)
+    });
     let entries = vec![
         Entry::new("undos", tl("Reverts and hotfixes")).count(d.undos.len()),
         Entry::new("steps", tl("Where the time goes")),
@@ -2376,7 +2379,9 @@ pub fn weekly_report(
 
 /// The open MRs older than 85 % of the merged ones; red when one is twice as old.
 pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
-    let d = analyze(&g.app, None, now, 30);
+    let d = g.memo.delivery.get(&g.app.project_id, (30, false), || {
+        analyze(&g.app, None, now, 30)
+    });
     let p85 = d.p85?;
     let late: Vec<&Aging> = d.open.iter().filter(|a| a.age >= p85).collect();
     if late.is_empty() {

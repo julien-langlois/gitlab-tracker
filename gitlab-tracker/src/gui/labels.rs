@@ -136,8 +136,14 @@ fn age_color(theme: &Theme, app: &App, days: f64) -> egui::Color32 {
 }
 
 /// The card. `None` when no open MR carries a label.
-pub fn card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<Click> {
-    let (mut rows, unlabelled) = analyze(app, Utc::now());
+pub fn card(
+    ui: &mut Ui,
+    theme: &Theme,
+    app: &App,
+    memo: &super::memo::Memo<(), (Vec<LabelRow>, usize)>,
+) -> Option<Click> {
+    let kept = memo.get(&app.project_id, (), || analyze(app, Utc::now()));
+    let (mut rows, unlabelled) = (kept.0.clone(), kept.1);
     if rows.is_empty() {
         return None;
     }

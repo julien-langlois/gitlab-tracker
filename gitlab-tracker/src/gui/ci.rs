@@ -380,7 +380,10 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64) -> Ci {
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
     let days = PERIODS[g.ci.period.min(PERIODS.len() - 1)].0;
-    let ci = analyze(&g.app, now, days);
+    let ci = g
+        .memo
+        .ci
+        .get(&g.app.project_id, days, || analyze(&g.app, now, days));
     let ctx = ui.ctx().clone();
     let overview = g.details.project(&g.app, &ctx).cloned();
     let selected =
@@ -1628,7 +1631,10 @@ fn inspector(
 /// often than in the first half of the period (amber).
 pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
     let days = PERIODS[g.ci.period.min(PERIODS.len() - 1)].0;
-    let ci = analyze(&g.app, now, days);
+    let ci = g
+        .memo
+        .ci
+        .get(&g.app.project_id, days, || analyze(&g.app, now, days));
     let tones = &g.theme.tones;
     if !ci.blocked.is_empty() {
         let flaky = ci.blocked.iter().filter(|b| b.flaky).count();
