@@ -191,7 +191,8 @@ const ROW_H: f32 = 52.0;
 /// The matrix's columns: the owners, then one per person.
 const OWNERS_W: f32 = 280.0;
 const PERSON_W: f32 = 30.0;
-/// Files listed as known by nobody else, until unfolded.
+/// Files listed as known by nobody else, and rows of the matrix, until
+/// unfolded.
 const LONELY_SHOWN: usize = 10;
 /// People in the matrix at most.
 const MATRIX_PEOPLE: usize = 8;
@@ -624,7 +625,7 @@ fn by_file(ui: &mut Ui, theme: &Theme, s: &Suggestions, mr_id: &str) {
     egui::CollapsingHeader::new(RichText::new(tl("By file")).font(fonts::medium(theme.text_size)))
         .id_salt(("reviewers-by-file", mr_id))
         .default_open(false)
-        .show(ui, |ui| matrix(ui, theme, s));
+        .show(ui, |ui| matrix(ui, theme, s, mr_id));
 }
 
 /// A file's owners: each person by name with their avatar (groups, roles
@@ -669,7 +670,7 @@ fn owners_cell(ui: &mut Ui, theme: &Theme, s: &Suggestions, f: &crate::owners::F
     }
 }
 
-fn matrix(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
+fn matrix(ui: &mut Ui, theme: &Theme, s: &Suggestions, mr_id: &str) {
     // The people suggested first, then the others who know a file (the
     // reviewers already asked).
     let mut people: Vec<&str> = s.people.iter().map(|p| p.login.as_str()).collect();
@@ -708,14 +709,17 @@ fn matrix(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
             });
         }
     });
-    for (i, f) in s.files.iter().enumerate() {
+    let count = s.files.len();
+    let unfold_id = ui.make_persistent_id(("reviewers-matrix", mr_id));
+    let all = ui.data(|d| d.get_temp::<bool>(unfold_id)).unwrap_or(false);
+    let shown = if all { count } else { count.min(LONELY_SHOWN) };
+    for f in &s.files[..shown] {
         let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 1.0), Sense::hover());
         ui.painter().hline(
             rect.x_range(),
             rect.center().y,
             egui::Stroke::new(1.0, theme.palette.border_soft),
         );
-        let _ = i;
         ui.horizontal(|ui| {
             cell(ui, path_w, row_h, false, |ui| {
                 line(ui, mono(&f.path, theme.text_size - 1.5)).tip(&f.path);
@@ -743,6 +747,17 @@ fn matrix(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
                 });
             }
         });
+    }
+    if count > LONELY_SHOWN {
+        ui.add_space(6.0);
+        let label = if all {
+            tl("Show fewer").to_string()
+        } else {
+            tn((count - LONELY_SHOWN) as u64, "{n} more", "{n} more")
+        };
+        if ui.link(label).clicked() {
+            ui.data_mut(|d| d.insert_temp(unfold_id, !all));
+        }
     }
     ui.add_space(8.0);
     ui.horizontal(|ui| {
