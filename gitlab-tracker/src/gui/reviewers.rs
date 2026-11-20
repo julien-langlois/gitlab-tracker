@@ -191,6 +191,8 @@ const ROW_H: f32 = 52.0;
 /// The matrix's columns: the owners, then one per person.
 const OWNERS_W: f32 = 280.0;
 const PERSON_W: f32 = 30.0;
+/// Files listed as known by nobody else, until unfolded.
+const LONELY_SHOWN: usize = 10;
 /// People in the matrix at most.
 const MATRIX_PEOPLE: usize = 8;
 
@@ -290,7 +292,7 @@ fn body(ui: &mut Ui, theme: &Theme, s: &Suggestions, mr: &TrackedMr) -> Option<S
         }
     }
     agreement(ui, theme, s);
-    lonely(ui, theme, s);
+    lonely(ui, theme, s, &mr.id);
     if !s.lines.is_empty() {
         ui.add_space(10.0);
         ui.label(muted(theme, tl("To start a CODEOWNERS from these owners:")));
@@ -534,7 +536,7 @@ fn agreement(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
 }
 
 /// The files only the author knows, or nobody, path and reason in columns.
-fn lonely(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
+fn lonely(ui: &mut Ui, theme: &Theme, s: &Suggestions, mr_id: &str) {
     let lonely: Vec<_> = s
         .files
         .iter()
@@ -562,15 +564,22 @@ fn lonely(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
         .inner_margin(Margin::symmetric(12, 10))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(
-                RichText::new(tl("Known by nobody else yet"))
-                    .font(fonts::medium(theme.text_size))
-                    .color(amber.fg),
-            );
+            let count = lonely.len();
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(tl("Known by nobody else yet"))
+                        .font(fonts::medium(theme.text_size))
+                        .color(amber.fg),
+                );
+                ui.label(RichText::new(count.to_string()).color(amber.fg.gamma_multiply(0.7)));
+            });
             ui.add_space(4.0);
             let room = ui.available_width();
             let path_w = path_w.min(room * 0.6);
-            for f in lonely {
+            let unfold_id = ui.make_persistent_id(("reviewers-lonely", mr_id));
+            let all = ui.data(|d| d.get_temp::<bool>(unfold_id)).unwrap_or(false);
+            let shown = if all { count } else { count.min(LONELY_SHOWN) };
+            for f in &lonely[..shown] {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = GAP;
                     cell(ui, path_w, 20.0, false, |ui| {
@@ -583,6 +592,17 @@ fn lonely(ui: &mut Ui, theme: &Theme, s: &Suggestions) {
                     };
                     line(ui, muted(theme, why));
                 });
+            }
+            if count > LONELY_SHOWN {
+                ui.add_space(4.0);
+                let label = if all {
+                    tl("Show fewer").to_string()
+                } else {
+                    tn((count - LONELY_SHOWN) as u64, "{n} more", "{n} more")
+                };
+                if ui.link(label).clicked() {
+                    ui.data_mut(|d| d.insert_temp(unfold_id, !all));
+                }
             }
         });
 }
