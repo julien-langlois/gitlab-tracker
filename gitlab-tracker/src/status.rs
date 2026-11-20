@@ -28,7 +28,7 @@ pub enum StatusKind {
 }
 
 impl StatusKind {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "gui"))]
     pub const ALL: [StatusKind; 15] = [
         Self::Mergeable,
         Self::Open,

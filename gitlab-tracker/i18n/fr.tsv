@@ -2236,3 +2236,40 @@ rail	Releases	Releases
 	▲ ▼ the way the figure went	▲ ▼ le sens dans lequel le chiffre a bougé
 @plural	{n} MR merged then|{n} MRs merged then	{n} MR fusionnée alors|{n} MR fusionnées alors
 	nothing to compare before	rien à comparer avant
+	A view of that name exists: saving replaces it.	Une vue de ce nom existe : l'enregistrer la remplace.
+	Back to the view as it was saved	Revenir à la vue telle qu'enregistrée
+	Delete	Supprimer
+	From the other projects of projects.toml: copied into this one.	Depuis les autres projets de projects.toml : copiées dans celui-ci.
+	Import views	Importer des vues
+	Import views from another project	Importer les vues d'un autre projet
+	Keep the table as it is now in this view	Garder la table telle qu'elle est dans cette vue
+	Kept with the project in projects.toml.	Gardée avec le projet dans projects.toml.
+	Key {n}	Touche {n}
+	Key {n}, and in the palette (Ctrl K)	Touche {n}, et dans la palette (Ctrl K)
+	MR number	Numéro de MR
+	My view	Ma vue
+	My views	Mes vues
+	No other project has saved views yet.	Aucun autre projet n'a encore de vue enregistrée.
+	Save as a view	Enregistrer comme vue
+	Save the table as a view	Enregistrer la table comme vue
+	Save the view	Enregistrer la vue
+	Search	Recherche
+	Set the filters, the search and the order, then + to keep them under a name.	Réglez les filtres, la recherche et l'ordre, puis + pour les garder sous un nom.
+	Sort and grouping	Tri et regroupement
+	Update with the table	Mettre à jour avec la table
+	View {name} deleted	Vue {name} supprimée
+	View {name} saved	Vue {name} enregistrée
+	View {name} updated	Vue {name} mise à jour
+	What it keeps	Ce qu'elle garde
+	e.g. Payments, not in production	ex. Paiements, pas en production
+	empty	vide
+	empty: it clears the search	vide : elle efface la recherche
+	merged MRs hidden	MR fusionnées masquées
+	modified	modifiée
+	no filter	aucun filtre
+	not tracked here: {list}	non suivies ici : {list}
+@plural	Import {n} view|Import {n} views	Importer {n} vue|Importer {n} vues
+@plural	{n} column|{n} columns	{n} colonne|{n} colonnes
+@plural	{n} column shown|{n} columns shown	{n} colonne affichée|{n} colonnes affichées
+@plural	{n} view imported|{n} views imported	{n} vue importée|{n} vues importées
+saved view	Restore	Rétablir

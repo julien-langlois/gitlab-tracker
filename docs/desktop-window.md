@@ -75,6 +75,21 @@ the MR's changed files with their patches (**Changes**) and, for a failed job,
 the end of its log (**Log**, in Pipelines). A click on a desktop notification
 brings the window forward on that MR, in its tab.
 
+**My views.** The table as it is set — the filters (the filter and its value,
+the next-step view, the status picked, merged MRs hidden), the search, the sort
+and grouping, the columns — can be kept under a name with **+** at the top of
+the sidebar, choosing which of those parts the view keeps (a part it does not
+keep is left as it is when it applies). The views are the project's: they are
+saved with it in `projects.toml` (`[[project.views]]`, see
+[configuration](configuration.md)), so they can be shared or written by hand.
+The keys `1` to `9` apply the first nine, and the palette (`Ctrl+K`) lists them
+all. Once the table leaves the view applied, it reads **• modified**, with
+**Save** (keep the table as it is now in the view) and **Restore**; a right
+click on a view updates or deletes it. The ⤓ button **imports** views from the
+project's other entries in `projects.toml`: they are copied in (renamed when the
+name is taken), and one filtering on a branch this project does not track is
+pointed out.
+
 **Export** writes the MRs picked, those of the view or every tracked MR as a CSV
 file, a Markdown table or a list to paste in a chat: the columns shown (or all of
 them), each tracked branch, and the links to GitLab (a URL column in CSV). A

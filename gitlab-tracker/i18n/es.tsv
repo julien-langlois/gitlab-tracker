@@ -2236,3 +2236,40 @@ rail	Releases	Releases
 	▲ ▼ the way the figure went	▲ ▼ hacia dónde se movió la cifra
 @plural	{n} MR merged then|{n} MRs merged then	{n} MR fusionada entonces|{n} MR fusionadas entonces
 	nothing to compare before	nada que comparar antes
+	A view of that name exists: saving replaces it.	Ya existe una vista con ese nombre: guardarla la reemplaza.
+	Back to the view as it was saved	Volver a la vista tal como se guardó
+	Delete	Eliminar
+	From the other projects of projects.toml: copied into this one.	De los otros proyectos de projects.toml: se copian en este.
+	Import views	Importar vistas
+	Import views from another project	Importar vistas de otro proyecto
+	Keep the table as it is now in this view	Guardar la tabla tal como está en esta vista
+	Kept with the project in projects.toml.	Se guarda con el proyecto en projects.toml.
+	Key {n}	Tecla {n}
+	Key {n}, and in the palette (Ctrl K)	Tecla {n}, y en la paleta (Ctrl K)
+	MR number	Número de MR
+	My view	Mi vista
+	My views	Mis vistas
+	No other project has saved views yet.	Ningún otro proyecto tiene vistas guardadas todavía.
+	Save as a view	Guardar como vista
+	Save the table as a view	Guardar la tabla como vista
+	Save the view	Guardar la vista
+	Search	Búsqueda
+	Set the filters, the search and the order, then + to keep them under a name.	Ajusta los filtros, la búsqueda y el orden, luego + para guardarlos con un nombre.
+	Sort and grouping	Orden y agrupación
+	Update with the table	Actualizar con la tabla
+	View {name} deleted	Vista {name} eliminada
+	View {name} saved	Vista {name} guardada
+	View {name} updated	Vista {name} actualizada
+	What it keeps	Qué guarda
+	e.g. Payments, not in production	p. ej. Pagos, no en producción
+	empty	vacía
+	empty: it clears the search	vacía: borra la búsqueda
+	merged MRs hidden	MR fusionadas ocultas
+	modified	modificada
+	no filter	sin filtro
+	not tracked here: {list}	no seguidas aquí: {list}
+@plural	Import {n} view|Import {n} views	Importar {n} vista|Importar {n} vistas
+@plural	{n} column|{n} columns	{n} columna|{n} columnas
+@plural	{n} column shown|{n} columns shown	{n} columna visible|{n} columnas visibles
+@plural	{n} view imported|{n} views imported	{n} vista importada|{n} vistas importadas
+saved view	Restore	Restablecer

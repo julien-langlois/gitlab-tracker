@@ -139,6 +139,9 @@ pub struct ProjectEntry {
     /// Which optional columns are visible in the MR table for this project.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visible_columns: Option<crate::config::VisibleColumns>,
+    /// The merge request table's views saved by name (`[[project.views]]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub views: Vec<crate::saved_views::SavedView>,
     /// Label colour overrides: maps a label pattern (e.g. "deploy::*") to bg/fg colours.
     /// Keys may contain `::` and `*` — serialised as quoted TOML keys automatically.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1243,6 +1246,17 @@ fn apply_env_overrides_with_prefix(config: AppConfig, prefix: &str) -> AppConfig
 pub fn merges_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> {
     let name = tracker_state_file_name(gitlab_url, project_id).replacen("tracker_", "merges_", 1);
     Some(get_save_dir()?.join(name))
+}
+
+/// Saves the merge request table's views of a project.
+#[cfg(feature = "gui")]
+pub async fn save_views_async(
+    views: &[crate::saved_views::SavedView],
+    gitlab_url: &str,
+    project_id: &str,
+) -> bool {
+    let views = views.to_vec();
+    update_project_entry(gitlab_url, project_id, |entry| entry.views = views).await
 }
 
 /// Where the merged MRs read for the reviewer suggestions are kept between

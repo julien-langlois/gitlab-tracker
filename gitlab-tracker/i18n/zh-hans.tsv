@@ -2236,3 +2236,40 @@ rail	Releases	发布
 	▲ ▼ the way the figure went	▲ ▼ 数值变化的方向
 @plural	{n} MR merged then|{n} MRs merged then	当时合并了 {n} 个 MR
 	nothing to compare before	之前没有可对比的数据
+	A view of that name exists: saving replaces it.	已有同名视图：保存将替换它。
+	Back to the view as it was saved	恢复为保存时的视图
+	Delete	删除
+	From the other projects of projects.toml: copied into this one.	来自 projects.toml 中的其他项目：复制到本项目。
+	Import views	导入视图
+	Import views from another project	从其他项目导入视图
+	Keep the table as it is now in this view	将当前表格保存到此视图
+	Kept with the project in projects.toml.	随项目保存在 projects.toml 中。
+	Key {n}	按键 {n}
+	Key {n}, and in the palette (Ctrl K)	按键 {n}，也可在命令面板中使用（Ctrl K）
+	MR number	MR 编号
+	My view	我的视图
+	My views	我的视图
+	No other project has saved views yet.	其他项目尚未保存视图。
+	Save as a view	保存为视图
+	Save the table as a view	将表格保存为视图
+	Save the view	保存视图
+	Search	搜索
+	Set the filters, the search and the order, then + to keep them under a name.	设置筛选、搜索和排序，然后点 + 以名称保存。
+	Sort and grouping	排序与分组
+	Update with the table	用当前表格更新
+	View {name} deleted	已删除视图 {name}
+	View {name} saved	已保存视图 {name}
+	View {name} updated	已更新视图 {name}
+	What it keeps	保存内容
+	e.g. Payments, not in production	例如：支付，未上线
+	empty	空
+	empty: it clears the search	空：将清除搜索
+	merged MRs hidden	隐藏已合并 MR
+	modified	已修改
+	no filter	无筛选
+	not tracked here: {list}	此处未跟踪：{list}
+@plural	Import {n} view|Import {n} views	导入 {n} 个视图
+@plural	{n} column|{n} columns	{n} 列
+@plural	{n} column shown|{n} columns shown	显示 {n} 列
+@plural	{n} view imported|{n} views imported	已导入 {n} 个视图
+saved view	Restore	恢复

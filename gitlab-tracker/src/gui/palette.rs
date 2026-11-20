@@ -39,6 +39,8 @@ impl Palette {
 enum Command {
     Page(Page),
     View(usize),
+    /// A saved view of the project, by index.
+    SavedView(usize),
     Mr(String),
     Refresh,
     CopyChecklist,
@@ -198,6 +200,20 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
             text: name.to_string(),
             detail: String::new(),
             command: Command::Page(page),
+        });
+    }
+
+    for (index, name) in super::views::listed(g) {
+        list.push(Entry {
+            kind: tl("My view"),
+            icon: Icon::Columns,
+            text: name,
+            detail: if index < 9 {
+                (index + 1).to_string()
+            } else {
+                String::new()
+            },
+            command: Command::SavedView(index),
         });
     }
 
@@ -393,6 +409,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, entry: &Entry, highlighted: bool) -> eg
 fn execute(g: &mut GuiApp, command: Command) {
     match command {
         Command::Page(page) => g.open_page(page),
+        Command::SavedView(index) => super::views::apply_at(g, index),
         Command::View(index) => {
             g.next_focus = g.app.focus.is_some().then_some(None);
             g.pending.push(Action::SetFilter {

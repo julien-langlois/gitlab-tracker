@@ -2815,6 +2815,7 @@ pub(crate) mod tests {
                 cockpit_thresholds: None,
                 stats: None,
                 visible_columns: None,
+                views: Vec::new(),
                 label_colors: None,
                 signed_commits: None,
                 tracker: None,

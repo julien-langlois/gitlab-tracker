@@ -58,6 +58,7 @@ mod tones;
 #[cfg(debug_assertions)]
 mod tour;
 mod tracker;
+mod views;
 mod widgets;
 
 use std::collections::{HashMap, HashSet};
@@ -404,6 +405,8 @@ struct GuiApp {
     rail_badges: rail_badges::Cache,
     /// The pages' analyses, kept between frames.
     memo: memo::Memos,
+    /// The table's saved views: the one applied, the dialog open.
+    views: views::State,
     /// The counters when the list was first complete: the cockpit's trends.
     baseline: Option<Baseline>,
     /// The cockpit hides its counters at zero.
@@ -578,6 +581,7 @@ impl GuiApp {
             members,
             rail_badges: rail_badges::Cache::default(),
             memo: memo::Memos::default(),
+            views: views::State::default(),
             baseline,
             hide_zeros: false,
             group_by: table::GroupBy::None,

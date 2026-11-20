@@ -165,6 +165,8 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 2.0;
+            super::views::section(g, ui);
+            ui.add_space(12.0);
             egui::Frame::new()
                 .inner_margin(Margin {
                     left: 6,

@@ -2236,3 +2236,40 @@ rail	Releases	Releases
 	▲ ▼ the way the figure went	▲ ▼ die Richtung, in die sich der Wert bewegt hat
 @plural	{n} MR merged then|{n} MRs merged then	{n} MR damals gemergt|{n} MRs damals gemergt
 	nothing to compare before	nichts zum Vergleichen davor
+	A view of that name exists: saving replaces it.	Eine Ansicht mit diesem Namen existiert: Speichern ersetzt sie.
+	Back to the view as it was saved	Zurück zur gespeicherten Ansicht
+	Delete	Löschen
+	From the other projects of projects.toml: copied into this one.	Aus den anderen Projekten in projects.toml: in dieses kopiert.
+	Import views	Ansichten importieren
+	Import views from another project	Ansichten aus einem anderen Projekt importieren
+	Keep the table as it is now in this view	Die Tabelle so in dieser Ansicht speichern
+	Kept with the project in projects.toml.	Mit dem Projekt in projects.toml gespeichert.
+	Key {n}	Taste {n}
+	Key {n}, and in the palette (Ctrl K)	Taste {n} und in der Palette (Strg K)
+	MR number	MR-Nummer
+	My view	Meine Ansicht
+	My views	Meine Ansichten
+	No other project has saved views yet.	Noch kein anderes Projekt hat gespeicherte Ansichten.
+	Save as a view	Als Ansicht speichern
+	Save the table as a view	Die Tabelle als Ansicht speichern
+	Save the view	Ansicht speichern
+	Search	Suche
+	Set the filters, the search and the order, then + to keep them under a name.	Filter, Suche und Reihenfolge einstellen, dann + zum Speichern unter einem Namen.
+	Sort and grouping	Sortierung und Gruppierung
+	Update with the table	Mit der Tabelle aktualisieren
+	View {name} deleted	Ansicht {name} gelöscht
+	View {name} saved	Ansicht {name} gespeichert
+	View {name} updated	Ansicht {name} aktualisiert
+	What it keeps	Was sie speichert
+	e.g. Payments, not in production	z. B. Zahlungen, nicht in Produktion
+	empty	leer
+	empty: it clears the search	leer: sie leert die Suche
+	merged MRs hidden	gemergte MRs ausgeblendet
+	modified	geändert
+	no filter	kein Filter
+	not tracked here: {list}	hier nicht verfolgt: {list}
+@plural	Import {n} view|Import {n} views	{n} Ansicht importieren|{n} Ansichten importieren
+@plural	{n} column|{n} columns	{n} Spalte|{n} Spalten
+@plural	{n} column shown|{n} columns shown	{n} Spalte sichtbar|{n} Spalten sichtbar
+@plural	{n} view imported|{n} views imported	{n} Ansicht importiert|{n} Ansichten importiert
+saved view	Restore	Wiederherstellen

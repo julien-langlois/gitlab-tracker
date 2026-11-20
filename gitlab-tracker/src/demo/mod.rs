@@ -125,6 +125,7 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
             enforce: true,
             ..Default::default()
         }),
+        views: demo_views(spec.id == worlds()[0].spec.id),
         ..Default::default()
     };
     let mut app = App::new(AppInit {
@@ -311,6 +312,54 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
     world(&app.project_id)
         .map(World::overview)
         .unwrap_or_default()
+}
+
+/// The back end's saved views, to show them (the Android app has none, to
+/// import them into).
+fn demo_views(back_end: bool) -> Vec<crate::saved_views::SavedView> {
+    use crate::saved_views::{Filters, Order, SavedView};
+    if !back_end {
+        return Vec::new();
+    }
+    let updated = |group: &str| Order {
+        sort: "updated".into(),
+        descending: true,
+        group: group.into(),
+    };
+    vec![
+        SavedView {
+            name: "Not in production".into(),
+            filters: Some(Filters {
+                filter: "absent_from_branch".into(),
+                value: "production".into(),
+                hide_merged: false,
+                ..Filters::default()
+            }),
+            search: Some(String::new()),
+            order: Some(updated("next_step")),
+            columns: None,
+        },
+        SavedView {
+            name: "My reviews".into(),
+            filters: Some(Filters {
+                filter: "all".into(),
+                // `Bucket::OnMe.key()` (the window's "Waiting on me").
+                focus: Some("next:me".into()),
+                hide_merged: true,
+                ..Filters::default()
+            }),
+            search: Some(String::new()),
+            order: Some(updated("none")),
+            columns: None,
+        },
+        SavedView {
+            name: "By status".into(),
+            filters: None,
+            search: None,
+            order: Some(updated("status")),
+            columns: None,
+        },
+    ]
 }
 
 /// The merged MRs the reviewer suggestions read: the demo's own, as GitLab

@@ -231,7 +231,7 @@ impl GroupBy {
         GroupBy::NextStep,
     ];
 
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         tl(match self {
             GroupBy::None => "No grouping",
             GroupBy::Status => "By status",

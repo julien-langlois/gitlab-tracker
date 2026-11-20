@@ -166,6 +166,11 @@ pub(super) fn character(g: &mut GuiApp, c: char) {
         g.team.step += if c == 'j' { 1 } else { -1 };
         return;
     }
+    // 1 to 9: the project's saved views.
+    if let Some(n) = c.to_digit(10).filter(|n| *n >= 1) {
+        super::views::key(g, n as usize);
+        return;
+    }
     let action = match c {
         'j' => {
             g.app.next_row();

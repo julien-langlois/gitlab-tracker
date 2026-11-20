@@ -120,6 +120,24 @@ tracker_ticket = true
 diff_stats    = true   # "Effort" column (🟢/🟡/🔴 chip badge based on diff size)
 commits_behind  = false  # "Behind" column — commits the source branch is behind the target
 
+# Saved views of the MR table (the window's "My views"; keys 1 to 9). Saved by
+# the window; written by hand too. Each part is optional: a view without it
+# leaves that part of the table as it is.
+[[project.views]]
+name = "Not in production"
+search = ""                              # empty: clears the search
+[project.views.filters]
+filter = "absent_from_branch"            # a filter's id ("all" for none)
+value = "production"                     # its value, for a filter that takes one
+focus = "next:me"                        # optional next-step view ("next:me", "next:others", "next:deploy")
+status = "NotApproved"                   # optional status, as the status bar picks it
+hide_merged = true
+[project.views.order]
+sort = "updated"                         # "updated", "id", "milestone" or "title"
+descending = true
+group = "next_step"                      # "none", "status", "milestone", "author" or "next_step"
+# columns = ["status", "next_step"]      # optional: the columns shown, by id
+
 # Label colour overrides — exact names or wildcard patterns (e.g. "deploy::*").
 # Accepted colour values: named colours ("red", "cyan", "dark_gray", …) or hex codes ("#D32F2F").
 [project.label_colors]

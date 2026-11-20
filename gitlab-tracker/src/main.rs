@@ -27,6 +27,7 @@ mod next_step;
 mod notify;
 #[cfg(feature = "gui")]
 mod owners;
+mod saved_views;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
