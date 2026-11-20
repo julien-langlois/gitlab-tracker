@@ -1087,11 +1087,9 @@ fn snooze_menu(ui: &mut Ui, theme: &Theme, id: &str, title: &str) -> Option<Unti
         tl("Snooze"),
         false,
     )
-    .rich(
-        Tip::new().title(tl("Snooze")).text(tl(
-            "Out of Today until then; back early on a push, a failed pipeline or a new comment",
-        )),
-    );
+    .rich(Tip::new().title(tl("Snooze")).text(tl(
+        "Out of Today until then; back early on a push, a failed pipeline or a new comment",
+    )));
     let frame = egui::Frame::new()
         .fill(theme.palette.raised)
         .stroke(egui::Stroke::new(1.0, theme.palette.border))
