@@ -27,8 +27,33 @@ A desktop notification fires when an MR newly reaches a branch through a copy. T
 Tracked branches (the columns shown in the MR table) are resolved in this priority order at startup:
 
 1. **`tracked_branches`** in `projects.toml` — the canonical source, written by the app whenever you add or remove a branch.
-2. **`branches`** in `tracker_<hash>.json` — legacy field from older versions, migrated silently to `projects.toml` on first startup and never written again.
+2. **`branches`** in `tracker_<hash>.json` — legacy field from older versions, migrated silently to `projects.toml` on first startup and never written again (see [Local state](#local-state)).
 3. **`default_branches`** in `projects.toml` — used on the very first run before any branch has been tracked interactively.
+
+## Local state
+
+The tracked MRs live in a SQLite database, `tracker.db`, in the config directory (`~/.config/gitlab-tracker/` on Linux), one set of tables for every project. It holds what the app needs to start with your MRs already there (their GitLab data, flags, snoozes, tickets, the branches they reached), and their history:
+
+* **`mrs`**: one row per MR ever tracked, its main fields in columns and its full data as JSON. An MR removed from the dashboard keeps its row, out of the list, and comes back with its history when added again.
+* **`mr_events`**: every change the app sees, appended, never rewritten: `approved`, `unapproved`, `merged`, `pipeline`, `label_added`, `reviewer_added`, `thread_opened`, `thread_resolved`, `branch_reached`, `mergeability`, `ticket_status`, `flagged`… Each one has the date the app saw it (`seen_at`) and, when GitLab gives it, the date it happened (`at`) and by whom. An MR seen for the first time gets the history its data already tells: opened, review requests, approvals, pipelines, threads, milestone moves, merge.
+* **`mr_pipelines`**, **`mr_threads`**: every pipeline and review thread seen, kept after GitLab's lists move on; **`mr_labels`**, **`mr_people`**: current labels, reviewers and approvers, to query.
+* **`project_merges`**: when each MR of the project merged, tracked or not (Delivery's pace). **`merged_mrs`**, **`merged_mr_people`**, **`merged_mr_paths`**, **`people`**: the project's merged MRs, their reviewers, approvers and changed files (the reviewer suggestions). The window reads them over their period (8 weeks, 90 days); the rows stay after it.
+* **`settings`**: the window's preferences (page, theme, open tabs…).
+
+Only the files you edit by hand stay files: `projects.toml` and `config.json`.
+
+Read it with any SQLite client, e.g. the approvals of the last week, or who changed a directory most:
+
+```sh
+sqlite3 ~/.config/gitlab-tracker/tracker.db \
+  "SELECT mr_id, actor, at FROM mr_events WHERE kind = 'approved' AND at >= date('now', '-7 days')"
+sqlite3 ~/.config/gitlab-tracker/tracker.db \
+  "SELECT m.author, COUNT(DISTINCT m.mr_iid) FROM merged_mrs m
+   JOIN merged_mr_paths p USING (project, mr_iid)
+   WHERE p.path LIKE 'src/api/%' GROUP BY m.author ORDER BY 2 DESC"
+```
+
+**From the JSON files:** the versions before `tracker.db` kept all this in JSON files: `tracker_<hash>.json`, `merges_<hash>.json`, `owners_<hash>.json` and `gui.json`. The first launch imports each one on its own, the first time it is needed, then renames it `….imported` (kept as a backup, no longer read). `gitlab-tracker import-state` does the same by hand for every project of `projects.toml` (or `--project <name>`), and prints what it imported.
 
 ## Desktop notifications
 
@@ -49,7 +74,7 @@ MR notifications include a clickable **"Open MR"** button; tracker notifications
 | ✅ Status transitioned *(tracker)* | An automatic tracker status transition succeeded |
 
 * **Never blocks the UI:** notifications are queued to one background worker thread that performs the (synchronous) D-Bus calls, so a slow or hung notification daemon cannot freeze the dashboard. At most 8 notifications wait for a click at once; beyond that they still show, but clicking does nothing.
-* **Anti-spam:** change notifications are suppressed during the initial sync. An MR seen for the first time (no branch set persisted yet in `tracker_<hash>.json`) records its branches silently instead of sending one toast per branch; once known, every new branch notifies, including changes made while the app was closed.
+* **Anti-spam:** change notifications are suppressed during the initial sync. An MR seen for the first time (no branch set persisted yet in `tracker.db`) records its branches silently instead of sending one toast per branch; once known, every new branch notifies, including changes made while the app was closed.
 * **Platforms:** click-to-open uses D-Bus actions on Linux (GNOME, KDE…); without a notification daemon, clicks are ignored. Build with `--no-default-features` to drop the feature and `notify-rust` (`libdbus` is still needed on Linux, by the OS keyring).
 
 ## The review timeline and drafts

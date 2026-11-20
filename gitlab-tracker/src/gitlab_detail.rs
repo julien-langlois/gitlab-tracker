@@ -779,7 +779,7 @@ pub async fn fetch_project(
     target: ProjectTarget,
     branches: Vec<String>,
     merges: MergeHistory,
-    cache: Option<std::path::PathBuf>,
+    cache: Option<crate::storage::ProjectStore>,
 ) -> ProjectOverview {
     let target = target.as_target();
     let deployments = project_deployments(&target);
@@ -791,12 +791,20 @@ pub async fn fetch_project(
     let merges = async {
         // Not known in this session yet: what the last launch left on disk.
         let known = match (&merges.read_at, &cache) {
-            (None, Some(path)) => load_merges(path).await.unwrap_or(merges),
+            (None, Some(store)) => store
+                .load_merges()
+                .await
+                .map(|mut h| {
+                    // The database keeps them all: the period's only.
+                    retain_period(&mut h.merged, chrono::Utc::now());
+                    h
+                })
+                .unwrap_or(merges),
             _ => merges,
         };
         let updated = project_merges(&target, known.clone()).await;
-        if let Some(path) = cache.filter(|_| updated != known) {
-            save_merges(&path, &updated).await;
+        if let Some(store) = cache.filter(|_| updated != known) {
+            store.save_merges(&updated, &known).await;
         }
         updated
     };
@@ -1146,38 +1154,23 @@ async fn project_merges(target: &Target, known: MergeHistory) -> MergeHistory {
             }
         }
     }
-    merged.retain(|_, at| {
-        chrono::DateTime::parse_from_rfc3339(at)
-            .is_ok_and(|t| t.with_timezone(&chrono::Utc) >= start)
-    });
+    retain_period(&mut merged, now);
     MergeHistory {
         merged,
         read_at: Some(read_at),
     }
 }
 
-/// The merge history a previous launch saved, if any (a file that cannot be
-/// read is ignored: the next read starts over).
-async fn load_merges(path: &std::path::Path) -> Option<MergeHistory> {
-    let text = tokio::fs::read_to_string(path).await.ok()?;
-    match serde_json::from_str(&text) {
-        Ok(history) => Some(history),
-        Err(e) => {
-            tracing::warn!(error = %e, path = ?path, "Unreadable merge history, read again");
-            None
-        }
-    }
-}
-
-async fn save_merges(path: &std::path::Path, history: &MergeHistory) {
-    match serde_json::to_string(history) {
-        Ok(text) => {
-            if let Err(e) = crate::storage::write_atomic(path, &text).await {
-                tracing::warn!(error = %e, path = ?path, "Could not save the merge history");
-            }
-        }
-        Err(e) => tracing::warn!(error = %e, "Could not serialise the merge history"),
-    }
+/// Only the merges of the last [`MERGE_HISTORY_DAYS`] days.
+fn retain_period(
+    merged: &mut std::collections::BTreeMap<u64, String>,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let start = now - chrono::Duration::days(MERGE_HISTORY_DAYS);
+    merged.retain(|_, at| {
+        chrono::DateTime::parse_from_rfc3339(at)
+            .is_ok_and(|t| t.with_timezone(&chrono::Utc) >= start)
+    });
 }
 
 async fn project_deployments(target: &Target) -> Vec<DeploymentRecord> {

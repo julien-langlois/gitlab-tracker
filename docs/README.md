@@ -8,6 +8,6 @@ The [main README](https://github.com/julien-langlois/gitlab-tracker/blob/main/RE
 | [Terminal UI](terminal.md) | The terminal dashboard: table, filters, inspector, cockpit, stats, keyboard shortcuts. |
 | [Configuration](configuration.md) | `projects.toml` annotated, first run, token storage, `.env`, environment variables, which setting wins. |
 | [GitLab token](gitlab-token.md) | Which fine-grained token to create, the permissions it needs and why, checking and replacing it. |
-| [How it works](how-it-works.md) | Branch presence and its limits, tracked branches, desktop notifications, the review timeline and drafts. |
+| [How it works](how-it-works.md) | Branch presence and its limits, tracked branches, the local state and its history, desktop notifications, the review timeline and drafts. |
 | [Command line](cli.md) | `--project`, `checklist`, `tracker-statuses`. |
 | [Signed commits](signed-commits.md) | Checking that every commit of the open MRs is signed, rebases from GitLab included. |

@@ -37,6 +37,10 @@ pub enum Command {
         #[arg(long)]
         absent_from: Option<String>,
     },
+    /// Import the tracker state of the versions before tracker.db (tracker_<hash>.json)
+    /// into tracker.db: what the first launch does on its own. Every project of
+    /// projects.toml, or the one given with --project.
+    ImportState,
     /// Open the desktop window instead of the terminal UI.
     #[cfg(feature = "gui")]
     Gui,
@@ -78,8 +82,13 @@ pub async fn resolve_project(args: &Args) -> ProjectEntry {
 pub async fn run_command(
     command: Option<&Command>,
     project: &ProjectEntry,
+    one_project: bool,
 ) -> anyhow::Result<bool> {
     match command {
+        Some(Command::ImportState) => {
+            import_state(project, one_project).await?;
+            Ok(true)
+        }
         Some(Command::TrackerStatuses) => {
             print_tracker_statuses(project).await?;
             Ok(true)
@@ -89,6 +98,26 @@ pub async fn run_command(
         #[cfg(feature = "gui")]
         Some(Command::Gui) => Ok(false),
     }
+}
+
+async fn import_state(project: &ProjectEntry, one_project: bool) -> anyhow::Result<()> {
+    let projects = if one_project {
+        vec![project.clone()]
+    } else {
+        load_projects_toml().await.projects
+    };
+    for p in &projects {
+        let name = p.name.as_deref().unwrap_or(&p.project_id);
+        match crate::storage::import_state_command(&p.gitlab_url, &p.project_id).await {
+            Ok(Some(report)) => println!(
+                "{name}: {} MRs imported, {} events of their history",
+                report.mrs, report.events
+            ),
+            Ok(None) => println!("{name}: no state file to import"),
+            Err(e) => println!("{name}: {e}"),
+        }
+    }
+    Ok(())
 }
 
 async fn print_tracker_statuses(project: &ProjectEntry) -> anyhow::Result<()> {

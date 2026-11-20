@@ -189,7 +189,7 @@ All shortcuts are registered automatically via `inventory::submit!` and appear i
 
 ## 🗄️ Data storage
 
-Snapshots are stored in a **SQLite database** alongside the `tracker_<hash>.json` state files in the XDG config directory:
+Snapshots are stored in a **SQLite database** alongside the tracker's state (`tracker.db`) in the XDG config directory:
 
 | Platform | Path |
 | :--- | :--- |

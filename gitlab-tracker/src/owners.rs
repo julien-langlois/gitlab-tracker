@@ -954,13 +954,21 @@ struct Read {
 pub async fn read_history(
     target: ProjectTarget,
     known: History,
-    cache: Option<std::path::PathBuf>,
+    cache: Option<crate::storage::ProjectStore>,
 ) -> History {
+    let now = Utc::now();
     let known = match (&known.read_at, &cache) {
-        (None, Some(path)) => load(path).await.unwrap_or(known),
+        (None, Some(store)) => store
+            .load_owners()
+            .await
+            .map(|mut h| {
+                // The database keeps them all: the period's only.
+                h.trim(now);
+                h
+            })
+            .unwrap_or(known),
         _ => known,
     };
-    let now = Utc::now();
     let start = now - chrono::Duration::days(HISTORY_DAYS);
     let since = known
         .read_at()
@@ -996,8 +1004,8 @@ pub async fn read_history(
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
     );
     history.trim(now);
-    if let Some(path) = cache.filter(|_| history != known) {
-        save(&path, &history).await;
+    if let Some(store) = cache.filter(|_| history != known) {
+        store.save_owners(&history, &known).await;
     }
     history
 }
@@ -1267,28 +1275,6 @@ async fn rest(
         }
     }
     Ok(read)
-}
-
-async fn load(path: &std::path::Path) -> Option<History> {
-    let text = tokio::fs::read_to_string(path).await.ok()?;
-    match serde_json::from_str(&text) {
-        Ok(history) => Some(history),
-        Err(e) => {
-            tracing::warn!(error = %e, path = ?path, "Unreadable merged MRs, read again");
-            None
-        }
-    }
-}
-
-async fn save(path: &std::path::Path, history: &History) {
-    match serde_json::to_string(history) {
-        Ok(text) => {
-            if let Err(e) = crate::storage::write_atomic(path, &text).await {
-                tracing::warn!(error = %e, path = ?path, "Could not save the merged MRs");
-            }
-        }
-        Err(e) => tracing::warn!(error = %e, "Could not serialise the merged MRs"),
-    }
 }
 
 #[cfg(test)]

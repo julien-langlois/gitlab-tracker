@@ -205,7 +205,7 @@ impl Details {
                     .project_ready()
                     .map(|o| o.merges.clone())
                     .unwrap_or_default();
-                let cache = crate::storage::merges_cache_path(&app.base_url, &app.project_id);
+                let cache = crate::storage::project_store(&app.base_url, &app.project_id);
                 Self::fetch(ctx, async move {
                     Ok(crate::gitlab_detail::fetch_project(target, branches, merges, cache).await)
                 })
@@ -270,7 +270,7 @@ impl Details {
                     Some((_, Fetch::Ready(h))) => h.clone(),
                     _ => crate::owners::History::default(),
                 };
-                let cache = crate::storage::owners_cache_path(&app.base_url, &app.project_id);
+                let cache = crate::storage::project_store(&app.base_url, &app.project_id);
                 Self::fetch(ctx, async move {
                     Ok(crate::owners::read_history(target, known, cache).await)
                 })

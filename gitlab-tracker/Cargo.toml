@@ -3,7 +3,7 @@ name = "gitlab-tracker"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-# The window (bevel, feature `gui`) needs 1.95, the stats database (sqlx 0.9) 1.94;
+# The window (bevel, feature `gui`) needs 1.95, the databases (sqlx 0.9) 1.94;
 # the other crates keep the workspace's.
 rust-version = "1.95"
 license.workspace = true
@@ -60,6 +60,8 @@ tokio = { workspace = true, features = [
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# The tracker's state: tracked MRs and their day-to-day history (tracker.db).
+sqlx.workspace = true
 # Patch-ids of commits, to recognise a signed commit GitLab rebased.
 sha2 = "0.10"
 dotenvy = "0.15"

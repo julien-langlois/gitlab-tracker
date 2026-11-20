@@ -96,8 +96,8 @@ about 10 seconds.
 ## Flags and filters
 
 `Space` flags an MR with a star (★) in the title column. Flags persist across
-restarts in a per-tenant state file (`tracker_<hash>.json`, hashed from the
-GitLab URL and project ID).
+restarts in the local database (`tracker.db`, see [Local
+state](how-it-works.md#local-state)).
 
 `F` opens the filter picker:
 

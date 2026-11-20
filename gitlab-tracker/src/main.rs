@@ -35,6 +35,7 @@ mod signatures;
 // Set and shown by the window; the terminal UI only keeps it in the state file.
 #[cfg_attr(not(feature = "gui"), allow(dead_code))]
 mod snooze;
+mod state_db;
 mod status;
 mod storage;
 mod ui;
@@ -651,7 +652,7 @@ async fn main() -> anyhow::Result<()> {
     if matches!(args.command, Some(cli::Command::Gui)) {
         return gui::run(global_config, project).await;
     }
-    if cli::run_command(args.command.as_ref(), &project).await? {
+    if cli::run_command(args.command.as_ref(), &project, args.project.is_some()).await? {
         return Ok(());
     }
 

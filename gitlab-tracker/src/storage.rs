@@ -1239,15 +1239,6 @@ fn apply_env_overrides_with_prefix(config: AppConfig, prefix: &str) -> AppConfig
 ///
 /// The hash is computed over the canonical form `"<url>|<project_id>"` so that
 /// different (url, id) pairs never collide even when one is a prefix of the other.
-/// Where the project's merge history is kept between launches:
-/// `merges_<hash>.json`, the hash of its state file. `None` without a config
-/// directory (and under test).
-#[cfg(feature = "gui")]
-pub fn merges_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> {
-    let name = tracker_state_file_name(gitlab_url, project_id).replacen("tracker_", "merges_", 1);
-    Some(get_save_dir()?.join(name))
-}
-
 /// Saves the merge request table's views of a project.
 #[cfg(feature = "gui")]
 pub async fn save_views_async(
@@ -1259,12 +1250,167 @@ pub async fn save_views_async(
     update_project_entry(gitlab_url, project_id, |entry| entry.views = views).await
 }
 
-/// Where the merged MRs read for the reviewer suggestions are kept between
-/// launches: `owners_<hash>.json`. `None` without a config directory.
+/// A project's caches in `tracker.db`: the merges (Delivery's pace) and the
+/// merged MRs' owners (the reviewer suggestions). The JSON file each one had
+/// before (`merges_<hash>.json`, `owners_<hash>.json`) is imported on first
+/// use, then renamed `….imported`. `None` without a config directory.
 #[cfg(feature = "gui")]
-pub fn owners_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> {
-    let name = tracker_state_file_name(gitlab_url, project_id).replacen("tracker_", "owners_", 1);
-    Some(get_save_dir()?.join(name))
+pub fn project_store(gitlab_url: &str, project_id: &str) -> Option<ProjectStore> {
+    Some(ProjectStore {
+        dir: get_save_dir()?,
+        gitlab_url: gitlab_url.to_string(),
+        project_id: project_id.to_string(),
+    })
+}
+
+#[cfg(feature = "gui")]
+#[derive(Debug, Clone)]
+pub struct ProjectStore {
+    dir: PathBuf,
+    gitlab_url: String,
+    project_id: String,
+}
+
+#[cfg(feature = "gui")]
+impl ProjectStore {
+    fn legacy_file(&self, prefix: &str) -> PathBuf {
+        let name = tracker_state_file_name(&self.gitlab_url, &self.project_id)
+            .replacen("tracker_", prefix, 1);
+        self.dir.join(name)
+    }
+
+    /// The merges saved by earlier launches, over any period.
+    pub async fn load_merges(&self) -> Option<crate::gitlab_detail::MergeHistory> {
+        let db = log_err(crate::state_db::open_in(&self.dir).await)?;
+        match log_err(db.load_merges(&self.gitlab_url, &self.project_id).await)? {
+            Some(history) => Some(history),
+            None => {
+                let path = self.legacy_file("merges_");
+                let history: crate::gitlab_detail::MergeHistory = read_legacy(&path).await?;
+                let saved = db
+                    .save_merges(
+                        &self.gitlab_url,
+                        &self.project_id,
+                        &history,
+                        &Default::default(),
+                    )
+                    .await;
+                imported(&path, log_err(saved).is_some()).await;
+                Some(history)
+            }
+        }
+    }
+
+    pub async fn save_merges(
+        &self,
+        history: &crate::gitlab_detail::MergeHistory,
+        known: &crate::gitlab_detail::MergeHistory,
+    ) {
+        if let Some(db) = log_err(crate::state_db::open_in(&self.dir).await) {
+            log_err(
+                db.save_merges(&self.gitlab_url, &self.project_id, history, known)
+                    .await,
+            );
+        }
+    }
+
+    /// The merged MRs saved by earlier launches, over any period.
+    pub async fn load_owners(&self) -> Option<crate::owners::History> {
+        let db = log_err(crate::state_db::open_in(&self.dir).await)?;
+        match log_err(db.load_owners(&self.gitlab_url, &self.project_id).await)? {
+            Some(history) => Some(history),
+            None => {
+                let path = self.legacy_file("owners_");
+                let history: crate::owners::History = read_legacy(&path).await?;
+                let saved = db
+                    .save_owners(
+                        &self.gitlab_url,
+                        &self.project_id,
+                        &history,
+                        &Default::default(),
+                    )
+                    .await;
+                imported(&path, log_err(saved).is_some()).await;
+                Some(history)
+            }
+        }
+    }
+
+    pub async fn save_owners(
+        &self,
+        history: &crate::owners::History,
+        known: &crate::owners::History,
+    ) {
+        if let Some(db) = log_err(crate::state_db::open_in(&self.dir).await) {
+            log_err(
+                db.save_owners(&self.gitlab_url, &self.project_id, history, known)
+                    .await,
+            );
+        }
+    }
+}
+
+#[cfg(feature = "gui")]
+/// The value, an error logged.
+fn log_err<T>(result: anyhow::Result<T>) -> Option<T> {
+    result
+        .map_err(|e| tracing::error!(error = %e, "tracker.db"))
+        .ok()
+}
+
+#[cfg(feature = "gui")]
+/// A JSON file of the versions before `tracker.db`; `None` when absent or
+/// unreadable (ignored then: the next read starts over).
+async fn read_legacy<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
+    let text = tokio::fs::read_to_string(path).await.ok()?;
+    match serde_json::from_str(&text) {
+        Ok(value) => Some(value),
+        Err(e) => {
+            tracing::warn!(error = %e, path = ?path, "Unreadable JSON file, not imported");
+            None
+        }
+    }
+}
+
+#[cfg(feature = "gui")]
+/// Renames an imported JSON file `….imported`: kept, no longer read.
+async fn imported(path: &Path, done: bool) {
+    if done {
+        let mut to = path.as_os_str().to_owned();
+        to.push(".imported");
+        let _ = tokio::fs::rename(path, &to).await;
+        tracing::info!(from = ?path, "Imported into tracker.db");
+    }
+}
+
+#[cfg(feature = "gui")]
+/// A setting saved in `tracker.db` (`gui`: the window's preferences), the JSON
+/// file it had before (`legacy`, in the config directory) imported on first use.
+pub async fn load_setting<T: serde::de::DeserializeOwned + serde::Serialize>(
+    name: &str,
+    legacy: &str,
+) -> Option<T> {
+    let dir = get_save_dir()?;
+    let db = log_err(crate::state_db::open_in(&dir).await)?;
+    if let Some(json) = log_err(db.setting(name).await)? {
+        return serde_json::from_str(&json).ok();
+    }
+    let path = dir.join(legacy);
+    let value: T = read_legacy(&path).await?;
+    let json = serde_json::to_string(&value).ok()?;
+    imported(&path, log_err(db.set_setting(name, &json).await).is_some()).await;
+    Some(value)
+}
+
+#[cfg(feature = "gui")]
+pub async fn save_setting<T: serde::Serialize>(name: &str, value: &T) {
+    let Some(dir) = get_save_dir() else { return };
+    let Ok(json) = serde_json::to_string(value) else {
+        return;
+    };
+    if let Some(db) = log_err(crate::state_db::open_in(&dir).await) {
+        log_err(db.set_setting(name, &json).await);
+    }
 }
 
 fn tracker_state_file_name(gitlab_url: &str, project_id: &str) -> String {
@@ -1327,7 +1473,11 @@ async fn migrate_tracker_state_file(
     }
 }
 
-/// Loads the tracker state and performs one-shot silent migrations:
+/// Loads the tracker state of a project from `tracker.db` (see [`crate::state_db`]).
+///
+/// A project not in the database yet has its `tracker_<hash>.json` imported,
+/// once, then renamed `tracker_<hash>.json.imported` (kept as a backup). On the
+/// way, the older one-shot migrations of that file still run:
 ///   - Renames `tracker_state.json` to the tenant-scoped `tracker_<hash>.json`
 ///   - Backfills `tracked_branches` from the state file into `projects.toml`
 ///
@@ -1346,50 +1496,155 @@ pub async fn load_state_async(
     Option<String>,
     HashSet<String>,
 ) {
+    let empty = || (vec![], vec![], HashMap::new(), None, HashSet::new());
     let Some(config_dir) = get_save_dir() else {
-        return (vec![], vec![], HashMap::new(), None, HashSet::new());
+        return empty();
     };
-
-    // One-shot silent rename: tracker_state.json → tracker_<hash>.json.
-    migrate_tracker_state_file(&config_dir, gitlab_url, project_id).await;
-
-    let file_name = tracker_state_file_name(gitlab_url, project_id);
-    let path = config_dir.join(&file_name);
-
-    if let Ok(content) = tokio::fs::read_to_string(&path).await {
-        let parsed = serde_json::from_str::<SavedState>(&content);
-        if let Err(e) = &parsed {
-            backup_corrupt_file(&path, e).await;
+    let db = match crate::state_db::open_in(&config_dir).await {
+        Ok(db) => Some(db),
+        Err(e) => {
+            tracing::error!(error = %e, "Cannot open tracker.db: state read from the JSON file, not saved");
+            None
         }
-        if let Ok(state) = parsed {
-            // One-shot migration: if the state file has branches and
-            // projects.toml does not yet, backfill projects.toml now.
-            if !state.branches.is_empty() {
-                let mut cfg = load_projects_toml().await;
-                // Target the project this state file belongs to, not the first one.
-                let entry = find_project_mut(&mut cfg, gitlab_url, project_id);
-                if let Some(entry) = entry.filter(|p| p.tracked_branches.is_none()) {
-                    entry.tracked_branches = Some(state.branches.clone());
-                    save_projects_toml(&cfg).await;
-                    tracing::info!(
-                        "Migrated tracked branches from {} to projects.toml",
-                        file_name
-                    );
-                }
+    };
+    if let Some(db) = &db {
+        match db.load(gitlab_url, project_id).await {
+            Ok(Some((mrs, project))) => {
+                return (
+                    mrs,
+                    vec![],
+                    project.last_known_branches,
+                    project.discovery_started_at,
+                    project.dismissed_mr_ids,
+                )
             }
-            let discovery_started_at = state.discovery_started_at.clone();
-            let dismissed_mr_ids = state.dismissed_mr_ids.clone();
-            return (
-                state.mrs,
-                state.branches,
-                state.last_known_branches,
-                discovery_started_at,
-                dismissed_mr_ids,
-            );
+            Ok(None) => {}
+            Err(e) => {
+                tracing::error!(error = %e, "Cannot read tracker.db");
+                return empty();
+            }
         }
     }
 
-    (vec![], vec![], HashMap::new(), None, HashSet::new())
+    let Some(state) = read_state_file(&config_dir, gitlab_url, project_id).await else {
+        return empty();
+    };
+    let branches = state.branches.clone();
+    if let Some(db) = &db {
+        import_state_file(db, &config_dir, gitlab_url, project_id, state.clone()).await;
+    }
+    (
+        state.mrs,
+        branches,
+        state.last_known_branches,
+        state.discovery_started_at,
+        state.dismissed_mr_ids,
+    )
+}
+
+/// The project's `tracker_<hash>.json`, as the versions before `tracker.db`
+/// wrote it, with its own one-shot migrations; `None` when absent or unreadable
+/// (moved aside to `.bak` then).
+async fn read_state_file(
+    config_dir: &Path,
+    gitlab_url: &str,
+    project_id: &str,
+) -> Option<SavedState> {
+    // One-shot silent rename: tracker_state.json → tracker_<hash>.json.
+    migrate_tracker_state_file(config_dir, gitlab_url, project_id).await;
+
+    let file_name = tracker_state_file_name(gitlab_url, project_id);
+    let path = config_dir.join(&file_name);
+    let content = tokio::fs::read_to_string(&path).await.ok()?;
+    let state = match serde_json::from_str::<SavedState>(&content) {
+        Ok(state) => state,
+        Err(e) => {
+            backup_corrupt_file(&path, &e).await;
+            return None;
+        }
+    };
+    // One-shot migration: if the state file has branches and
+    // projects.toml does not yet, backfill projects.toml now.
+    if !state.branches.is_empty() {
+        let mut cfg = load_projects_toml().await;
+        // Target the project this state file belongs to, not the first one.
+        let entry = find_project_mut(&mut cfg, gitlab_url, project_id);
+        if let Some(entry) = entry.filter(|p| p.tracked_branches.is_none()) {
+            entry.tracked_branches = Some(state.branches.clone());
+            save_projects_toml(&cfg).await;
+            tracing::info!(
+                "Migrated tracked branches from {} to projects.toml",
+                file_name
+            );
+        }
+    }
+    Some(state)
+}
+
+/// Imports `state` (read from `tracker_<hash>.json`) into the database, then
+/// renames the file `….json.imported`: kept, no longer read.
+async fn import_state_file(
+    db: &crate::state_db::StateDb,
+    config_dir: &Path,
+    gitlab_url: &str,
+    project_id: &str,
+    state: SavedState,
+) -> Option<crate::state_db::ImportReport> {
+    let path = config_dir.join(tracker_state_file_name(gitlab_url, project_id));
+    let now = chrono::Utc::now().to_rfc3339();
+    match db.import(gitlab_url, project_id, state, &now).await {
+        Ok(report) => {
+            let mut done = path.as_os_str().to_owned();
+            done.push(".imported");
+            let _ = tokio::fs::rename(&path, &done).await;
+            tracing::info!(
+                mrs = report.mrs,
+                events = report.events,
+                from = ?path,
+                "Tracker state imported into tracker.db"
+            );
+            Some(report)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, path = ?path, "Cannot import the tracker state into tracker.db");
+            None
+        }
+    }
+}
+
+/// Imports a project's `tracker_<hash>.json` into `tracker.db` by hand
+/// (`gitlab-tracker import-state`), with its `merges_`/`owners_<hash>.json` and
+/// `gui.json`: what the first launch does on its own.
+/// `Ok(None)` when there is no file to import; an error when the project is
+/// already in the database.
+pub async fn import_state_command(
+    gitlab_url: &str,
+    project_id: &str,
+) -> anyhow::Result<Option<crate::state_db::ImportReport>> {
+    let config_dir = get_save_dir().ok_or_else(|| anyhow::anyhow!("No config directory"))?;
+    let db = crate::state_db::open_in(&config_dir).await?;
+    if db.has_project(gitlab_url, project_id).await? {
+        anyhow::bail!(
+            "This project is already in {}",
+            config_dir.join(crate::state_db::DB_FILE).display()
+        );
+    }
+    // The window's caches of the project, and its preferences, with it.
+    #[cfg(feature = "gui")]
+    {
+        if let Some(store) = project_store(gitlab_url, project_id) {
+            store.load_merges().await;
+            store.load_owners().await;
+        }
+        load_setting::<serde_json::Value>("gui", "gui.json").await;
+    }
+    let Some(state) = read_state_file(&config_dir, gitlab_url, project_id).await else {
+        return Ok(None);
+    };
+    import_state_file(&db, &config_dir, gitlab_url, project_id, state)
+        .await
+        .map(Some)
+        .ok_or_else(|| anyhow::anyhow!("The import failed: see the log"))
 }
 
 pub async fn save_state_async(
@@ -1416,8 +1671,10 @@ pub async fn save_state_async(
 /// [`save_state_async`] writes it at once, a [`StateWriter`] in the background.
 pub struct StateFile {
     dir: PathBuf,
-    path: PathBuf,
-    state: SavedState,
+    gitlab_url: String,
+    project_id: String,
+    mrs: Vec<crate::state_db::MrRow>,
+    project: crate::state_db::ProjectState,
 }
 
 impl StateFile {
@@ -1431,38 +1688,52 @@ impl StateFile {
         project_id: &str,
     ) -> Option<Self> {
         let dir = get_save_dir()?;
-        let path = dir.join(tracker_state_file_name(gitlab_url, project_id));
-        let state = SavedState {
-            mrs: mrs
-                .iter()
-                .map(|m| SavedMr {
-                    id: m.id.clone(),
-                    found_branches: match &m.status {
-                        MrStatus::MergedIn(set) => set.clone(),
-                        _ => HashSet::new(),
-                    },
-                    flagged: m.flagged,
-                    snooze: m.snooze.clone(),
-                    linked_ticket: m.linked_ticket.clone(),
-                    data: m.data.clone(),
-                })
-                .collect(),
-            // branches is no longer persisted here — it lives in projects.toml.
-            branches: vec![],
-            last_known_branches: last_known_branches.clone(),
-            discovery_started_at: discovery_started_at.map(|s| s.to_string()),
-            dismissed_mr_ids: dismissed_mr_ids.clone(),
-        };
-        Some(Self { dir, path, state })
+        let mrs = mrs
+            .iter()
+            .map(|m| crate::state_db::MrRow {
+                id: m.id.clone(),
+                // Only a read tells the branches: loading or failed, the stored ones stay.
+                found_branches: match &m.status {
+                    MrStatus::MergedIn(set) => Some(set.clone()),
+                    _ => None,
+                },
+                flagged: m.flagged,
+                snooze: m.snooze.clone(),
+                linked_ticket: m.linked_ticket.clone(),
+                mergeability: m.mergeability,
+                data: m.data.clone(),
+            })
+            .collect();
+        Some(Self {
+            dir,
+            gitlab_url: gitlab_url.to_string(),
+            project_id: project_id.to_string(),
+            mrs,
+            project: crate::state_db::ProjectState {
+                last_known_branches: last_known_branches.clone(),
+                discovery_started_at: discovery_started_at.map(str::to_string),
+                dismissed_mr_ids: dismissed_mr_ids.clone(),
+            },
+        })
     }
 
     pub async fn write(self) {
-        let Ok(json) = serde_json::to_string_pretty(&self.state) else {
-            return;
+        let now = chrono::Utc::now().to_rfc3339();
+        let saved = match crate::state_db::open_in(&self.dir).await {
+            Ok(db) => {
+                db.save(
+                    &self.gitlab_url,
+                    &self.project_id,
+                    &self.mrs,
+                    &self.project,
+                    &now,
+                )
+                .await
+            }
+            Err(e) => Err(e),
         };
-        let _ = tokio::fs::create_dir_all(&self.dir).await;
-        if let Err(e) = write_atomic(&self.path, &json).await {
-            tracing::error!(error = %e, path = ?self.path, "Failed to write tracker state");
+        if let Err(e) = saved {
+            tracing::error!(error = %e, "Failed to save the tracker state to tracker.db");
         }
     }
 }
@@ -1904,7 +2175,8 @@ mod tests {
             "1",
         )
         .await;
-        assert!(dir.path(&tracker_state_file_name(URL, "1")).exists());
+        assert!(dir.path(crate::state_db::DB_FILE).exists());
+        assert!(!dir.path(&tracker_state_file_name(URL, "1")).exists());
 
         let (mrs, branches, loaded_known, discovery, loaded_dismissed) =
             load_state_async(URL, "1").await;
@@ -1936,7 +2208,10 @@ mod tests {
         let (_, branches, ..) = load_state_async(URL, "2").await;
         assert_eq!(branches, ["main", "staging"]);
         assert!(!dir.path("tracker_state.json").exists());
-        assert!(dir.path(&tracker_state_file_name(URL, "2")).exists());
+        // Imported into tracker.db, the file is kept aside.
+        let file = tracker_state_file_name(URL, "2");
+        assert!(!dir.path(&file).exists());
+        assert!(dir.path(&format!("{file}.imported")).exists());
         let cfg = load_projects_toml().await;
         assert_eq!(cfg.projects[0].tracked_branches, None);
         assert_eq!(
@@ -1958,6 +2233,164 @@ mod tests {
         std::fs::write(dir.path("tracker_state.json"), legacy).unwrap();
         load_state_async(URL, "2").await;
         assert!(dir.path("tracker_state.json").exists());
+    }
+
+    #[tokio::test]
+    async fn a_state_file_is_imported_once_and_reloaded_from_the_database() {
+        let dir = TempConfigDir::new("state-import");
+        let json = r#"{
+            "mrs": [
+                {"id": "12", "found_branches": ["main"], "flagged": true,
+                 "title": "Fix login", "author": "ana", "web_url": "https://g/12",
+                 "state": "merged", "merged_by": "bob",
+                 "merged_at": "2026-11-17T10:00:00Z", "approved_by": ["bob"],
+                 "source_branch": "fix", "target_branch": "main"},
+                {"id": "13", "found_branches": [], "title": "Add stats",
+                 "author": "ana", "web_url": "https://g/13",
+                 "source_branch": "stats", "target_branch": "main"}
+            ],
+            "last_known_branches": {"main": ["12"]},
+            "discovery_started_at": "2026-01-02",
+            "dismissed_mr_ids": ["3"]
+        }"#;
+        let file = tracker_state_file_name(URL, "1");
+        std::fs::write(dir.path(&file), json).unwrap();
+
+        let (mrs, _, known, discovery, dismissed) = load_state_async(URL, "1").await;
+        let ids: Vec<&str> = mrs.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, ["12", "13"]);
+        assert!(!dir.path(&file).exists());
+        assert!(dir.path(&format!("{file}.imported")).exists());
+
+        // Read again: from the database, the same.
+        let (again, _, known2, discovery2, dismissed2) = load_state_async(URL, "1").await;
+        let ids2: Vec<&str> = again.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids2, ["12", "13"]);
+        assert!(again[0].flagged && again[0].found_branches.contains("main"));
+        assert_eq!(again[0].data.approved_by, ["bob"]);
+        assert_eq!(
+            (known2, discovery2, dismissed2),
+            (known, discovery, dismissed)
+        );
+
+        // By hand: already there.
+        assert!(import_state_command(URL, "1").await.is_err());
+        // Its history, dated by GitLab.
+        let db = crate::state_db::open_in(&dir.0).await.unwrap();
+        let kinds: Vec<&str> = db
+            .events_of(URL, "1", "12")
+            .await
+            .unwrap()
+            .iter()
+            .map(|e| e.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                "tracked",
+                "opened",
+                "approved",
+                "merged",
+                "branch_reached",
+                "flagged"
+            ]
+        );
+    }
+
+    #[cfg(feature = "gui")]
+    #[tokio::test]
+    async fn the_caches_and_window_prefs_are_imported_then_kept_in_the_database() {
+        use crate::gitlab_detail::MergeHistory;
+        use crate::owners::{History, Merge};
+        let dir = TempConfigDir::new("caches");
+        let hash = tracker_state_file_name(URL, "1");
+        let merges_file = hash.replacen("tracker_", "merges_", 1);
+        let owners_file = hash.replacen("tracker_", "owners_", 1);
+        let recent = chrono::Utc::now().to_rfc3339();
+        let merges = MergeHistory {
+            merged: [(4, recent.clone()), (1, "2020-01-01T00:00:00Z".to_string())].into(),
+            read_at: Some(recent.clone()),
+        };
+        std::fs::write(
+            dir.path(&merges_file),
+            serde_json::to_string(&merges).unwrap(),
+        )
+        .unwrap();
+        let merge = Merge {
+            merged_at: recent.clone(),
+            author: "ana".into(),
+            reviewers: vec!["zoe".into(), "bob".into()],
+            approvers: vec!["bob".into()],
+            paths: vec!["b.rs".into(), "a.rs".into()],
+        };
+        let owners = History {
+            merges: [(4, merge.clone())].into(),
+            people: [("ana".to_string(), "Ana".to_string())].into(),
+            read_at: Some(recent.clone()),
+        };
+        std::fs::write(
+            dir.path(&owners_file),
+            serde_json::to_string(&owners).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path("gui.json"),
+            r#"{"page": "delivery", "light": true}"#,
+        )
+        .unwrap();
+
+        // The caches first (a page opened before the MRs were saved): the
+        // project's state file is still imported after.
+        let store = project_store(URL, "1").unwrap();
+        assert_eq!(store.load_merges().await, Some(merges.clone()));
+        assert_eq!(store.load_owners().await, Some(owners.clone()));
+        assert!(!dir.path(&merges_file).exists() && !dir.path(&owners_file).exists());
+        std::fs::write(
+            dir.path(&hash),
+            r#"{"mrs": [{"id": "4", "found_branches": [], "title": "T", "web_url": "https://g/4"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(load_state_async(URL, "1").await.0.len(), 1);
+
+        // Read back from the database, orders kept; a new read adds to them.
+        assert_eq!(store.load_owners().await, Some(owners.clone()));
+        let mut more = owners.clone();
+        more.merges.insert(
+            5,
+            Merge {
+                author: "bob".into(),
+                ..merge
+            },
+        );
+        store.save_owners(&more, &owners).await;
+        assert_eq!(store.load_owners().await.unwrap().merges.len(), 2);
+        // Out of the period, still in the database: the history.
+        assert!(store.load_merges().await.unwrap().merged.contains_key(&1));
+
+        let prefs: serde_json::Value = load_setting("gui", "gui.json").await.unwrap();
+        assert_eq!(prefs["page"], "delivery");
+        assert!(!dir.path("gui.json").exists());
+        save_setting("gui", &serde_json::json!({"page": "today"})).await;
+        let prefs: serde_json::Value = load_setting("gui", "gui.json").await.unwrap();
+        assert_eq!(prefs["page"], "today");
+    }
+
+    /// The window saves from its UI thread, blocking inside the runtime.
+    #[test]
+    fn a_save_blocking_inside_the_runtime_completes() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let _dir = TempConfigDir::new("blocking-save");
+            let mr = TrackedMr::placeholder("7".into(), "Fix".into(), None);
+            let file =
+                StateFile::new(&[mr], &HashMap::new(), None, &HashSet::new(), URL, "1").unwrap();
+            tokio::task::block_in_place(|| futures::executor::block_on(file.write()));
+            assert_eq!(load_state_async(URL, "1").await.0.len(), 1);
+        });
     }
 
     #[tokio::test]

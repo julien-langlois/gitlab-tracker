@@ -1,7 +1,8 @@
-//! The window's own preferences, kept between sessions in `gui.json` next to
-//! `projects.toml`: the page, the theme, the table's grouping and density, the
-//! tracker's board, the cockpit's zeros, the inspector's folded sections, the
-//! window's size and its open tabs. The demo neither reads nor writes them.
+//! The window's own preferences, kept between sessions in `tracker.db` (the
+//! `gui` setting; `gui.json` before, imported on first use): the page, the
+//! theme, the table's grouping and density, the tracker's board, the cockpit's
+//! zeros, the inspector's folded sections, the window's size and its open tabs.
+//! The demo neither reads nor writes them.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,31 +37,14 @@ pub struct SavedTab {
     pub id: String,
 }
 
-fn path() -> Option<std::path::PathBuf> {
-    crate::storage::get_save_dir().map(|dir| dir.join("gui.json"))
-}
-
-/// The saved preferences; the defaults when there are none or they do not parse.
+/// The saved preferences (in `tracker.db`, `gui.json` imported on first use);
+/// the defaults when there are none or they do not parse.
 pub fn load() -> Prefs {
-    path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+    super::block_on(crate::storage::load_setting("gui", "gui.json")).unwrap_or_default()
 }
 
 pub fn save(prefs: &Prefs) {
-    let Some(path) = path() else { return };
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    match serde_json::to_string_pretty(prefs) {
-        Ok(text) => {
-            if let Err(e) = std::fs::write(&path, text) {
-                tracing::warn!(error = %e, path = %path.display(), "Could not save the window preferences");
-            }
-        }
-        Err(e) => tracing::warn!(error = %e, "Could not serialise the window preferences"),
-    }
+    super::block_on(crate::storage::save_setting("gui", prefs));
 }
 
 fn page_name(page: Page) -> &'static str {

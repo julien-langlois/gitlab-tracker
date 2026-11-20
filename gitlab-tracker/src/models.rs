@@ -155,7 +155,7 @@ pub struct SavedMr {
     pub data: MrData,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SavedState {
     pub mrs: Vec<SavedMr>,
     /// Tracked branches — read-only for one-shot silent migration to `projects.toml`.
