@@ -52,6 +52,7 @@ impl SettingsEditorState {
     }
 
     /// Whether the item at `index` differs from the value it was opened with.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub fn is_modified(&self, index: usize) -> bool {
         self.items.get(index).is_some_and(|item| {
             normalize_value((item.def.read)(&self.original_project_table), &item.def) != item.value

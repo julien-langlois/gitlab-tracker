@@ -363,6 +363,7 @@ impl ReviewActivity {
     /// review request (the oldest standing one for reads that predate it).
     /// An MR opened ready, its reviewers asked at once, gives its opening: its
     /// development then counts as waiting for the review, nothing tells it.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub fn up_for_review_at(&self) -> Option<&str> {
         if self.was_draft {
             return self.ready_at.as_deref();
