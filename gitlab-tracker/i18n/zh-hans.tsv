@@ -2274,3 +2274,8 @@ rail	Releases	发布
 saved view	Restore	恢复
 	Filter: {name}	筛选：{name}
 	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ 与上一个同长度周期对比 · 绿色：更好 · 橙色：更差 · 灰色：样本太少无法判断
+	Merge !{id} first	先合并 !{id}
+	Show it in the list	在列表中显示
+	Then rebase !{id}	然后变基 !{id}
+	where the files meet	即文件交汇处
+@plural	{n} file in common|{n} files in common	{n} 个共同文件

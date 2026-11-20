@@ -2274,3 +2274,8 @@ rail	Releases	Releases
 saved view	Restore	Restablecer
 	Filter: {name}	Filtro: {name}
 	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ frente al periodo anterior de igual duración · verde: mejor · naranja: peor · gris: muy pocos para concluir
+	Merge !{id} first	Fusionar !{id} primero
+	Show it in the list	Mostrarla en la lista
+	Then rebase !{id}	Luego rebasar !{id}
+	where the files meet	donde coinciden los archivos
+@plural	{n} file in common|{n} files in common	{n} archivo en común|{n} archivos en común

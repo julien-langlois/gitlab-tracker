@@ -386,6 +386,13 @@ The open MRs that change the same files, on the same lines, a few lines apart, o
 only in the same file; a matrix of the pairs, the files changed by the most recent
 MRs, and for the pair picked where the two meet and which one to merge first.
 
+**The pair picked** spans the page under the counters, in the colour of how much
+the two overlap (red on the same lines, orange a few lines apart, amber only in the
+same file): its two MRs (a click shows one in the list), then the suggestion as
+two steps — merge this one first, and why; then rebase the other on its target —
+with **See the changes** and **Copy a message**. The inspector on the right keeps
+where they meet, file by file.
+
 **Bottlenecks**, next to the hot spots, ranks the folders (or files) where the
 stuck open MRs meet: a path scores one per open MR changing it that is in conflict,
 failing its CI, or quiet for the project's stale days, among two MRs or more. A
