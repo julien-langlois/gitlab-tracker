@@ -332,11 +332,22 @@ fn person_row(
                     ui.spacing_mut().item_spacing.x = 8.0;
                     avatar(ui, theme, &p.name, 24.0);
                     ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 3.0;
-                        line(
-                            ui,
-                            RichText::new(&p.name).font(fonts::medium(theme.text_size)),
-                        );
+                        // The name, and its chip under it when there is one,
+                        // centred on the row as a block.
+                        const BETWEEN: f32 = 3.0;
+                        let name_font = fonts::medium(theme.text_size);
+                        let chip_font = fonts::medium(theme.text_size - 2.5);
+                        let (name_h, chip_h) =
+                            ui.fonts_mut(|f| (f.row_height(&name_font), f.row_height(&chip_font)));
+                        let block = if p.standing == Standing::Knows {
+                            name_h
+                        } else {
+                            // The chip's padding: 2 points above and below.
+                            name_h + BETWEEN + chip_h + 4.0
+                        };
+                        ui.add_space(((ROW_H - block) / 2.0).max(0.0));
+                        ui.spacing_mut().item_spacing.y = BETWEEN;
+                        line(ui, RichText::new(&p.name).font(name_font));
                         standing_chip(ui, theme, p);
                     });
                 });
