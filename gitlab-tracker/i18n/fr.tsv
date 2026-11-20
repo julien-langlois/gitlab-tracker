@@ -820,7 +820,6 @@ date	Merged	Fusionnée
 	Compact	Compacte
 	One line per MR: twice as many in view	Une ligne par MR : deux fois plus à l'écran
 	Columns… (C)	Colonnes… (C)
-	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ par rapport à la période précédente de même durée · vert : mieux · rouge : moins bien
 	{min}–{max} changed lines	{min} à {max} lignes modifiées
 	{min}+ changed lines	{min} lignes modifiées ou plus
 	Median time to merge: {time}	Délai médian de fusion : {time}
@@ -2274,3 +2273,4 @@ rail	Releases	Releases
 @plural	{n} view imported|{n} views imported	{n} vue importée|{n} vues importées
 saved view	Restore	Rétablir
 	Filter: {name}	Filtre : {name}
+	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ par rapport à la période précédente de même durée · vert : mieux · orange : moins bien · gris : trop peu pour conclure

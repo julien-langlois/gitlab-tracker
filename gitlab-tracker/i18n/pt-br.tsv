@@ -820,7 +820,6 @@ date	Merged	Mesclada
 	Compact	Compacta
 	One line per MR: twice as many in view	Uma linha por MR: o dobro na tela
 	Columns… (C)	Colunas… (C)
-	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ em relação ao período anterior de mesma duração · verde: melhor · vermelho: pior
 	{min}–{max} changed lines	{min}–{max} linhas alteradas
 	{min}+ changed lines	{min}+ linhas alteradas
 	Median time to merge: {time}	Tempo mediano até a mesclagem: {time}
@@ -2274,3 +2273,4 @@ rail	Releases	Releases
 @plural	{n} view imported|{n} views imported	{n} visão importada|{n} visões importadas
 saved view	Restore	Restaurar
 	Filter: {name}	Filtro: {name}
+	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ em relação ao período anterior de mesma duração · verde: melhor · laranja: pior · cinza: poucos para concluir

@@ -820,7 +820,6 @@ date	Merged	合并时间
 	Compact	紧凑
 	One line per MR: twice as many in view	每个 MR 一行：可见数量翻倍
 	Columns… (C)	列… (C)
-	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ 与上一个等长周期相比 · 绿色：更好 · 红色：更差
 	{min}–{max} changed lines	{min}–{max} 行改动
 	{min}+ changed lines	{min}+ 行改动
 	Median time to merge: {time}	合并时间中位数：{time}
@@ -2274,3 +2273,4 @@ rail	Releases	发布
 @plural	{n} view imported|{n} views imported	已导入 {n} 个视图
 saved view	Restore	恢复
 	Filter: {name}	筛选：{name}
+	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ 与上一个同长度周期对比 · 绿色：更好 · 橙色：更差 · 灰色：样本太少无法判断

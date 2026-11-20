@@ -425,6 +425,12 @@ Two times to merge sit side by side: **Median time to merge**, from the opening
 out of draft (else the first review request): the time to merge without the
 development, for MRs opened as drafts when the work starts.
 
+Over 30 days, 90 days or a year, each figure of the overview and the review
+signals is set against the period of the same length just before, as on
+[Delivery](#delivery): ▲ or ▼ by how much, in green when it is better, orange
+when worse, grey when either period has fewer than five MRs behind it (the
+previous value on hover); the legend gives both periods' dates.
+
 ![Stats: throughput, time to merge and ready → merge, by size, backlog health](assets/desktop/stats.png)
 
 ## Settings and columns

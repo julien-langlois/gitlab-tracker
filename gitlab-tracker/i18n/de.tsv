@@ -820,7 +820,6 @@ date	Merged	Gemergt
 	Compact	Kompakt
 	One line per MR: twice as many in view	Eine Zeile pro MR: doppelt so viele im Blick
 	Columns… (C)	Spalten… (C)
-	▲ ▼ against the previous period of the same length · green: better · red: worse	▲ ▼ gegenüber dem vorherigen gleich langen Zeitraum · grün: besser · rot: schlechter
 	{min}–{max} changed lines	{min}–{max} geänderte Zeilen
 	{min}+ changed lines	{min}+ geänderte Zeilen
 	Median time to merge: {time}	Mediane Zeit bis zum Merge: {time}
@@ -2274,3 +2273,4 @@ rail	Releases	Releases
 @plural	{n} view imported|{n} views imported	{n} Ansicht importiert|{n} Ansichten importiert
 saved view	Restore	Wiederherstellen
 	Filter: {name}	Filter: {name}
+	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ gegenüber dem vorherigen Zeitraum gleicher Länge · grün: besser · orange: schlechter · grau: zu wenig für eine Aussage

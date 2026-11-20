@@ -286,7 +286,13 @@ fn main(g: &mut GuiApp, ui: &mut Ui, compact: bool) {
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = GAP;
             match tab {
-                StatsTab::Overview => pick = overview(ui, &theme, &report, &live),
+                StatsTab::Overview => {
+                    let days = match view.window.to_query_window() {
+                        Some(gitlab_tracker_stats::TimeWindow::LastDays(n)) => Some(i64::from(n)),
+                        _ => None,
+                    };
+                    pick = overview(ui, &theme, &report, &live, days);
+                }
                 StatsTab::Flow => flow(ui, &theme, &report),
                 StatsTab::Quality => quality(ui, &theme, &report),
                 StatsTab::Forecasts => forecasts(ui, &theme, &report),
@@ -430,10 +436,19 @@ struct Trend {
     previous: String,
 }
 
+/// The MRs that had pipeline data, of `s`'s.
+fn with_pipelines(s: &gitlab_tracker_stats::AggregatedStats) -> usize {
+    (s.pipeline_data_coverage * s.total_mrs as f64).round() as usize
+}
+
+/// `samples`: the cases each window's figure stands on; below
+/// [`super::delivery::MIN_SAMPLE`] on either side, the move is greyed: too few
+/// to tell, as on the Delivery page.
 fn trend(
     theme: &Theme,
     current: Option<f64>,
     previous: Option<f64>,
+    samples: (usize, usize),
     change: Change,
     better: Better,
     format: impl Fn(f64) -> String,
@@ -450,12 +465,13 @@ fn trend(
     };
     let steady = delta.abs() < 0.5;
     let up = delta > 0.0;
+    let few = samples.0 < super::delivery::MIN_SAMPLE || samples.1 < super::delivery::MIN_SAMPLE;
     let color = match better {
-        _ if steady => theme.palette.text_muted,
+        _ if steady || few => theme.palette.text_muted,
         Better::Neither => theme.palette.text_secondary,
         Better::Higher if up => theme.tones.green.fg,
         Better::Lower if !up => theme.tones.green.fg,
-        _ => theme.tones.red.fg,
+        _ => theme.tones.orange.fg,
     };
     let text = if steady {
         "≈".to_string()
@@ -465,7 +481,15 @@ fn trend(
     Some(Trend {
         text,
         color,
-        previous: tf("Previous period: {value}", &[("value", &format(previous))]),
+        previous: if few && !steady {
+            format!(
+                "{} · {}",
+                tf("Previous period: {value}", &[("value", &format(previous))]),
+                tl("too few to tell")
+            )
+        } else {
+            tf("Previous period: {value}", &[("value", &format(previous))])
+        },
     })
 }
 
@@ -710,6 +734,7 @@ fn overview(
     theme: &Theme,
     report: &StatReport,
     live: &Live,
+    days: Option<i64>,
 ) -> Option<(String, String)> {
     let a = &report.aggregated;
     let t = &theme.tones;
@@ -783,6 +808,7 @@ fn overview(
             theme,
             Some(a.merged_count as f64),
             b.map(|b| b.merged_count as f64),
+            (a.merged_count, b.map_or(0, |b| b.merged_count)),
             Change::Relative,
             Better::Higher,
             |n| format!("{n:.0}"),
@@ -791,6 +817,7 @@ fn overview(
             theme,
             a.throughput_per_week,
             b.and_then(|b| b.throughput_per_week),
+            (a.merged_count, b.map_or(0, |b| b.merged_count)),
             Change::Relative,
             Better::Higher,
             per_week,
@@ -799,6 +826,10 @@ fn overview(
             theme,
             a.cycle_time_median_hours,
             b.and_then(|b| b.cycle_time_median_hours),
+            (
+                a.cycle_time_sample_size,
+                b.map_or(0, |b| b.cycle_time_sample_size),
+            ),
             Change::Relative,
             Better::Lower,
             |h| hours(Some(h)),
@@ -807,6 +838,10 @@ fn overview(
             theme,
             a.ready_to_merge_median_hours,
             b.and_then(|b| b.ready_to_merge_median_hours),
+            (
+                a.ready_to_merge_sample_size,
+                b.map_or(0, |b| b.ready_to_merge_sample_size),
+            ),
             Change::Relative,
             Better::Lower,
             |h| hours(Some(h)),
@@ -815,6 +850,7 @@ fn overview(
             theme,
             a.avg_pipeline_failure_rate,
             b.and_then(|b| b.avg_pipeline_failure_rate),
+            (with_pipelines(a), b.map_or(0, with_pipelines)),
             Change::Points,
             Better::Lower,
             |v| percent(Some(v)),
@@ -839,10 +875,29 @@ fn overview(
         });
     }
     if b.is_some() {
-        ui.label(muted(
-            theme,
-            tl("▲ ▼ against the previous period of the same length · green: better · red: worse"),
-        ));
+        let mut legend = tl(
+            "▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell",
+        )
+        .to_string();
+        if let Some(days) = days {
+            let now = chrono::Utc::now();
+            let day = |t: chrono::DateTime<chrono::Utc>| {
+                t.with_timezone(&chrono::Local).format("%d/%m").to_string()
+            };
+            let start = now - chrono::Duration::days(days);
+            let earlier = start - chrono::Duration::days(days);
+            legend.push_str(" · ");
+            legend.push_str(&tf(
+                "{from} – {to} against {from_before} – {to_before}",
+                &[
+                    ("from", &day(start)),
+                    ("to", &day(now)),
+                    ("from_before", &day(earlier)),
+                    ("to_before", &day(start)),
+                ],
+            ));
+        }
+        ui.label(muted(theme, legend));
     }
 
     let side_by_side = ui.available_width() > 760.0;
@@ -1276,6 +1331,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         theme,
                         Some(a.avg_diff_size),
                         b.map(|b| b.avg_diff_size),
+                        (a.total_mrs, b.map_or(0, |b| b.total_mrs)),
                         Change::Relative,
                         Better::Lower,
                         lines,
@@ -1289,6 +1345,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         theme,
                         Some(a.avg_comments),
                         b.map(|b| b.avg_comments),
+                        (a.total_mrs, b.map_or(0, |b| b.total_mrs)),
                         Change::Relative,
                         Better::Neither,
                         comments,
@@ -1303,6 +1360,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         theme,
                         a.avg_comment_density,
                         b.and_then(|b| b.avg_comment_density),
+                        (a.total_mrs, b.map_or(0, |b| b.total_mrs)),
                         Change::Relative,
                         Better::Neither,
                         density,
@@ -1320,6 +1378,7 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         theme,
                         a.avg_pipeline_failure_rate,
                         b.and_then(|b| b.avg_pipeline_failure_rate),
+                        (with_pipelines(a), b.map_or(0, with_pipelines)),
                         Change::Points,
                         Better::Lower,
                         share,
@@ -1340,6 +1399,10 @@ fn quality(ui: &mut Ui, theme: &Theme, report: &StatReport) {
                         theme,
                         a.abandon_rate,
                         b.and_then(|b| b.abandon_rate),
+                        (
+                            a.merged_count + a.closed_count,
+                            b.map_or(0, |b| b.merged_count + b.closed_count),
+                        ),
                         Change::Points,
                         Better::Lower,
                         share,
