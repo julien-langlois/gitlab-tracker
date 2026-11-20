@@ -10,7 +10,7 @@
 
 use bevel_theme::{fonts, Theme, Tone};
 use chrono::{DateTime, Duration, Utc};
-use egui::{Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::board::{self, Figure, GAP};
 use super::jump::{Entry, Jumps};
@@ -37,6 +37,8 @@ pub struct State {
     pub selected: Option<String>,
     /// The shortcuts to the page's sections.
     pub jumps: Jumps,
+    /// Each figure against the period before, of the same length.
+    pub compare: bool,
 }
 
 impl Default for State {
@@ -45,6 +47,7 @@ impl Default for State {
             period: 1,
             selected: None,
             jumps: Jumps::default(),
+            compare: true,
         }
     }
 }
@@ -318,8 +321,12 @@ pub struct Dora {
     pub deploys: usize,
     pub deploys_before: usize,
     pub per_week: f64,
-    /// Median days from the first commit to production.
+    /// What reached production in the period: the deployments, else the
+    /// MRs that got there (the frequency's sample).
+    pub shipped: usize,
+    /// Median days from the first commit to production, over `leads` MRs.
     pub lead: Option<f64>,
+    pub leads: usize,
     pub lead_before: Option<f64>,
     /// Failures: failed deployments, reverts, hotfixes; over the changes.
     pub failed_deploys: usize,
@@ -680,7 +687,8 @@ fn production_deployments<'a>(
     list
 }
 
-/// The delivery of `app`'s MRs over the last `days`.
+/// The delivery of `app`'s MRs over the `days` before `now` (an earlier
+/// `now`: the period before, to compare with; nothing after it counts).
 pub fn analyze(
     app: &App,
     overview: Option<&ProjectOverview>,
@@ -709,7 +717,11 @@ pub fn analyze(
         let Some(path) = path_of(app, mr, &last) else {
             continue;
         };
-        if let Some(merged) = path.merged {
+        // Opened after the period: not in it.
+        if path.created > now {
+            continue;
+        }
+        if let Some(merged) = path.merged.filter(|m| *m <= now) {
             to_merge.push(board::days_between(path.created, merged).max(0.0));
         }
         if mr.state == GitlabMrState::Opened {
@@ -739,7 +751,7 @@ pub fn analyze(
             continue;
         }
         // DORA's lead time: from the first commit to production.
-        if let Some(delivered) = path.delivered {
+        if let Some(delivered) = path.delivered.filter(|t| *t <= now) {
             let lead = board::days_between(path.first_commit.unwrap_or(path.created), delivered);
             if delivered >= start {
                 leads.push(lead.max(0.0));
@@ -753,7 +765,7 @@ pub fn analyze(
                 leads_before.push(lead.max(0.0));
             }
         }
-        if path.merged.is_some_and(|m| m >= start) {
+        if path.merged.is_some_and(|m| m >= start && m <= now) {
             if let (Some(n), true) = (path.rounds, path.reviewed.is_some()) {
                 rounds.push(n);
             }
@@ -803,7 +815,7 @@ pub fn analyze(
     let dora = &mut d.dora;
     dora.has_deployments = !deployments.is_empty();
     let at = |dep: &DeploymentRecord| board::parse_time(&dep.created_at);
-    let in_period = |dep: &&DeploymentRecord| at(dep).is_some_and(|t| t >= start);
+    let in_period = |dep: &&DeploymentRecord| at(dep).is_some_and(|t| t >= start && t <= now);
     let in_before = |dep: &&DeploymentRecord| at(dep).is_some_and(|t| t >= before && t < start);
     dora.deploys = deployments
         .iter()
@@ -827,6 +839,8 @@ pub fn analyze(
         delivered_in_period
     };
     dora.per_week = shipped as f64 * 7.0 / days as f64;
+    dora.shipped = shipped;
+    dora.leads = leads.len();
     dora.lead = crate::next_step::median(leads);
     dora.lead_before = crate::next_step::median(leads_before);
     dora.changes = if dora.has_deployments {
@@ -891,6 +905,45 @@ pub fn slowest(medians: &[Option<f64>; 5]) -> Option<(Stage, f64)> {
         .map(|(s, m)| (s, m / total))
 }
 
+// ── Against the period before ────────────────────────────────────────────────
+
+/// Below this many on either side, a change says nothing.
+pub const MIN_SAMPLE: usize = 5;
+
+/// A figure against the period before.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Versus {
+    /// The same, to the precision shown.
+    Same,
+    /// Up or down (`up`), and whether that is better.
+    Moved { up: bool, better: bool },
+    /// Moved, on too few to tell.
+    TooFew { up: bool },
+}
+
+/// `now` against `before`, each from `n` and `n_before` cases; `better_up`:
+/// whether a rise is good news. Within `same` of each other they are the same.
+pub fn versus(
+    now: f64,
+    before: f64,
+    (n, n_before): (usize, usize),
+    better_up: bool,
+    same: f64,
+) -> Versus {
+    if (now - before).abs() <= same {
+        return Versus::Same;
+    }
+    let up = now > before;
+    if n < MIN_SAMPLE || n_before < MIN_SAMPLE {
+        Versus::TooFew { up }
+    } else {
+        Versus::Moved {
+            up,
+            better: up == better_up,
+        }
+    }
+}
+
 // ── The page ─────────────────────────────────────────────────────────────────
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
@@ -902,6 +955,15 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let d = g.memo.delivery.get(&g.app.project_id, (days, known), || {
         analyze(&g.app, overview.as_ref(), now, days)
     });
+    let before = g.delivery.compare.then(|| {
+        g.memo
+            .delivery_before
+            .get(&g.app.project_id, (days, known), || {
+                analyze(&g.app, overview.as_ref(), now - Duration::days(days), days)
+            })
+    });
+    let before = before.as_deref();
+    let period = Period { days, now };
     let entries = vec![
         Entry::new("undos", tl("Reverts and hotfixes")).count(d.undos.len()),
         Entry::new("steps", tl("Where the time goes")),
@@ -915,13 +977,59 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         sizes,
         "delivery",
         Some((|g| &mut g.delivery.jumps, entries)),
-        |g, ui| nav(g, ui, &d),
+        |g, ui| nav(g, ui, &d, before, period),
         |g, ui| inspector(g, ui, &d, now),
-        |g, ui, jumps| main(g, ui, jumps, &d, overview.as_ref(), now),
+        |g, ui, jumps| main(g, ui, jumps, &d, before, period, overview.as_ref()),
     );
 }
 
-fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery) {
+/// The period shown: its length, and its end.
+#[derive(Debug, Clone, Copy)]
+struct Period {
+    days: i64,
+    now: DateTime<Utc>,
+}
+
+impl Period {
+    /// "the 30 d before".
+    fn before_label(self) -> String {
+        tf(
+            "the {period} before",
+            &[("period", &tf("{n} d", &[("n", &self.days.to_string())]))],
+        )
+    }
+}
+
+/// "▲ from 1.2 / week · better", in green, orange, or grey when too few or
+/// the same.
+fn versus_note(theme: &Theme, v: Versus, before: &str, period: Period) -> (String, Color32) {
+    let arrow = |up: bool| if up { "▲" } else { "▼" };
+    let from = tf("from {before}", &[("before", before)]);
+    match v {
+        Versus::Same => (
+            tf("= as {period}", &[("period", &period.before_label())]),
+            theme.palette.text_muted,
+        ),
+        Versus::Moved { up, better } => (
+            format!(
+                "{} {from} · {}",
+                arrow(up),
+                if better { tl("better") } else { tl("worse") }
+            ),
+            if better {
+                theme.tones.green.fg
+            } else {
+                theme.tones.orange.fg
+            },
+        ),
+        Versus::TooFew { up } => (
+            format!("{} {from} · {}", arrow(up), tl("too few to tell")),
+            theme.palette.text_muted,
+        ),
+    }
+}
+
+fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery, before: Option<&Delivery>, period: Period) {
     let theme = g.theme;
     board::nav_header(
         ui,
@@ -938,6 +1046,75 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery) {
         if let Some(i) = board::segmented(ui, &theme, "delivery_period", &labels, g.delivery.period)
         {
             g.delivery.period = i;
+        }
+    });
+    board::nav_group(ui, &theme, tl("Compare with"), |ui| {
+        let labels = [period.before_label(), tl("Off").to_string()];
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
+        if let Some(i) = board::segmented(
+            ui,
+            &theme,
+            "delivery_compare",
+            &labels,
+            usize::from(!g.delivery.compare),
+        ) {
+            g.delivery.compare = i == 0;
+        }
+        if let Some(before) = before {
+            let day =
+                |t: DateTime<Utc>| t.with_timezone(&chrono::Local).format("%d/%m").to_string();
+            let start = period.now - Duration::days(period.days);
+            let earlier = start - Duration::days(period.days);
+            ui.add_space(6.0);
+            ui.label(
+                muted(
+                    &theme,
+                    tf(
+                        "{from} – {to} against {from_before} – {to_before}",
+                        &[
+                            ("from", &day(start)),
+                            ("to", &day(period.now)),
+                            ("from_before", &day(earlier)),
+                            ("to_before", &day(start)),
+                        ],
+                    ),
+                )
+                .size(theme.text_size - 1.5),
+            );
+            ui.label(
+                muted(
+                    &theme,
+                    tn(
+                        before.merged.len() as u64,
+                        "{n} MR merged then",
+                        "{n} MRs merged then",
+                    ),
+                )
+                .size(theme.text_size - 1.5),
+            );
+            ui.add_space(6.0);
+            let size = theme.text_size - 1.5;
+            ui.label(muted(&theme, tl("▲ ▼ the way the figure went")).size(size));
+            ui.label(
+                RichText::new(tl("green: better"))
+                    .size(size)
+                    .color(theme.tones.green.fg),
+            );
+            ui.label(
+                RichText::new(tl("orange: worse"))
+                    .size(size)
+                    .color(theme.tones.orange.fg),
+            );
+            ui.label(
+                muted(
+                    &theme,
+                    tf(
+                        "grey: too few to tell (under {n} on either side)",
+                        &[("n", &MIN_SAMPLE.to_string())],
+                    ),
+                )
+                .size(size),
+            );
         }
     });
     board::nav_group(ui, &theme, tl("Steps"), |ui| {
@@ -971,9 +1148,11 @@ fn main(
     ui: &mut Ui,
     jumps: &mut Jumps,
     d: &Delivery,
+    before: Option<&Delivery>,
+    period: Period,
     overview: Option<&ProjectOverview>,
-    now: DateTime<Utc>,
 ) {
+    let now = period.now;
     let theme = g.theme;
     let mut copy = false;
     board::heading(
@@ -995,7 +1174,7 @@ fn main(
         );
     }
     ui.add_space(14.0);
-    dora_figures(ui, &theme, d);
+    dora_figures(ui, &theme, d, before, period);
 
     let mut picked = None;
     let selected = g.delivery.selected.as_deref();
@@ -1020,11 +1199,12 @@ fn main(
         260.0,
         |ui| {
             cell.borrow_mut()
-                .section(ui, "steps", |ui| steps_card(ui, &theme, d));
+                .section(ui, "steps", |ui| steps_card(ui, &theme, d, before, period));
         },
         |ui| {
-            cell.borrow_mut()
-                .section(ui, "rounds", |ui| rounds_card(ui, &theme, d, &mut picked));
+            cell.borrow_mut().section(ui, "rounds", |ui| {
+                rounds_card(ui, &theme, d, before, period, &mut picked)
+            });
         },
     );
     ui.add_space(GAP);
@@ -1276,8 +1456,16 @@ fn trend(
     )
 }
 
-fn dora_figures(ui: &mut Ui, theme: &Theme, d: &Delivery) {
+fn dora_figures(
+    ui: &mut Ui,
+    theme: &Theme,
+    d: &Delivery,
+    before: Option<&Delivery>,
+    period: Period,
+) {
     let dora = &d.dora;
+    // Compared: the period before says it all, under each figure.
+    let comparing = before.is_some();
     let level_caption = |level: Option<Level>, detail: String| -> (String, Option<Color32>) {
         match level {
             Some(l) => (
@@ -1303,7 +1491,7 @@ fn dora_figures(ui: &mut Ui, theme: &Theme, d: &Delivery) {
     let (freq_caption, freq_color) = if dora.has_deployments {
         let delta = dora.deploys as i64 - shipped_before as i64;
         let detail = tn(dora.deploys as u64, "{n} deployment", "{n} deployments");
-        if delta == 0 {
+        if delta == 0 || comparing {
             level_caption(Some(Level::of_frequency(dora.per_week)), detail)
         } else {
             level_caption(
@@ -1318,7 +1506,7 @@ fn dora_figures(ui: &mut Ui, theme: &Theme, d: &Delivery) {
         )
     };
     let (lead_caption, lead_color) = match (dora.lead, dora.lead_before) {
-        (Some(a), Some(b)) if (a - b).abs() >= 0.05 => {
+        (Some(a), Some(b)) if (a - b).abs() >= 0.05 && !comparing => {
             let (text, color) = trend(
                 a,
                 b,
@@ -1392,122 +1580,226 @@ fn dora_figures(ui: &mut Ui, theme: &Theme, d: &Delivery) {
             caption_color: restore_color,
         },
     ];
-    board::figures(ui, theme, &figures);
+    let Some(b) = before.map(|b| &b.dora) else {
+        board::figures(ui, theme, &figures);
+        return;
+    };
+    let freq_text = |per_week: f64| {
+        if per_week >= 1.0 || per_week == 0.0 {
+            tf("{n} / week", &[("n", &format!("{per_week:.1}"))])
+        } else {
+            tf(
+                "{n} / month",
+                &[("n", &format!("{:.1}", per_week * 30.0 / 7.0))],
+            )
+        }
+    };
+    let notes = [
+        Some(versus_note(
+            theme,
+            versus(
+                dora.per_week,
+                b.per_week,
+                (dora.shipped, b.shipped),
+                true,
+                0.05,
+            ),
+            &freq_text(b.per_week),
+            period,
+        )),
+        dora.lead.zip(b.lead).map(|(now, then)| {
+            versus_note(
+                theme,
+                versus(now, then, (dora.leads, b.leads), false, 0.05),
+                &board::duration_text(then),
+                period,
+            )
+        }),
+        dora.failure_rate.zip(b.failure_rate).map(|(now, then)| {
+            versus_note(
+                theme,
+                versus(now, then, (dora.changes, b.changes), false, 0.005),
+                &board::percent(then),
+                period,
+            )
+        }),
+        dora.restore.zip(b.restore).map(|(now, then)| {
+            versus_note(
+                theme,
+                versus(now, then, (dora.restores, b.restores), false, 0.05),
+                &board::duration_text(then),
+                period,
+            )
+        }),
+    ];
+    // A figure with nothing to compare says so.
+    let notes: Vec<Option<(String, Color32)>> = notes
+        .into_iter()
+        .map(|n| {
+            n.or_else(|| {
+                Some((
+                    tl("nothing to compare before").to_string(),
+                    theme.palette.text_muted,
+                ))
+            })
+        })
+        .collect();
+    board::figures_with(ui, theme, &figures, &notes);
 }
 
 /// The median path cut into its steps: a bar, then one line per step.
-fn steps_card(ui: &mut Ui, theme: &Theme, d: &Delivery) {
-    board::card(
-        ui,
-        theme,
-        tl("Where the time goes"),
-        &tn(
-            d.merged.len() as u64,
-            "median of {n} merged MR",
-            "median of {n} merged MRs",
-        ),
-        268.0,
-        |ui| {
-            let total: f64 = d.medians.iter().flatten().sum();
-            if total <= 0.0 {
-                board::empty(ui, theme, tl("No MR merged in the period."));
-                return;
-            }
-            if let Some((stage, share)) = slowest(&d.medians) {
-                let (line, _) =
-                    ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::hover());
-                board::paint_text(
-                    ui,
-                    egui::pos2(line.left(), line.center().y),
-                    Align2::LEFT_CENTER,
-                    &tf(
-                        "Most of the time: {stage}, {share} of the way",
-                        &[
-                            ("stage", &stage.label().to_lowercase()),
-                            ("share", &board::percent(share)),
-                        ],
-                    ),
-                    fonts::semibold(theme.text_size - 0.5),
-                    // A wait in its colour, the time to cut; work in the text's.
-                    if stage.is_wait() {
-                        stage.tone(theme).fg
-                    } else {
-                        theme.palette.text
-                    },
-                    line.width(),
-                );
-                ui.add_space(6.0);
-            }
-            // A step under 1 % of the way would be a sliver: it stays in the
-            // lines below.
-            let parts: Vec<(f32, Color32)> = Stage::ALL
-                .iter()
-                .map(|s| {
-                    let v = d.medians[*s as usize].unwrap_or(0.0);
-                    let v = if v / total < 0.01 { 0.0 } else { v };
-                    (v as f32, s.tone(theme).fg)
-                })
-                .collect();
-            board::stacked_bar(ui, theme, &parts, 16.0, 2.0);
-            ui.add_space(10.0);
-            let max = d.medians.iter().flatten().fold(0.0_f64, |a, b| a.max(*b));
-            for stage in Stage::ALL {
-                let value = d.medians[stage as usize];
-                let (line, response) =
-                    ui.allocate_exact_size(Vec2::new(ui.available_width(), 28.0), Sense::hover());
-                let tone = stage.tone(theme);
-                ui.painter().circle_filled(
-                    egui::pos2(line.left() + 4.0, line.center().y),
-                    4.0,
-                    tone.fg,
-                );
-                let label_w = (line.width() * 0.42).min(200.0);
-                board::paint_text(
-                    ui,
-                    egui::pos2(line.left() + 14.0, line.center().y),
-                    Align2::LEFT_CENTER,
-                    stage.label(),
-                    FontId::proportional(theme.text_size - 0.5),
-                    theme.palette.text_secondary,
-                    label_w - 14.0,
-                );
-                let text = value.map_or_else(|| board::dash().to_string(), board::duration_text);
-                let share = value
-                    .filter(|_| total > 0.0)
-                    .map(|v| board::percent(v / total))
-                    .unwrap_or_default();
-                let value_w = 92.0;
-                board::paint_text(
-                    ui,
-                    egui::pos2(line.right(), line.center().y),
-                    Align2::RIGHT_CENTER,
-                    &format!("{text}  {share}"),
-                    FontId::proportional(theme.text_size - 1.0),
-                    theme.palette.text,
-                    value_w,
-                );
-                let track = Rect::from_min_max(
-                    egui::pos2(line.left() + label_w + 6.0, line.center().y - 3.0),
-                    egui::pos2(line.right() - value_w - 10.0, line.center().y + 3.0),
-                );
-                if track.width() > 20.0 {
-                    ui.painter().rect_filled(
-                        track,
-                        CornerRadius::same(3),
-                        theme.palette.border_soft,
-                    );
-                    if let Some(v) = value.filter(|_| max > 0.0) {
-                        let mut fill = track;
-                        fill.set_width((track.width() * (v / max) as f32).max(3.0));
-                        ui.painter()
-                            .rect_filled(fill, CornerRadius::same(3), tone.fg);
-                    }
-                }
-                response.rich(Tip::new().title(stage.label()).text(stage.hint()));
-            }
-            drafts_caption(ui, theme, d);
-        },
+fn steps_card(ui: &mut Ui, theme: &Theme, d: &Delivery, before: Option<&Delivery>, period: Period) {
+    let mut note = tn(
+        d.merged.len() as u64,
+        "median of {n} merged MR",
+        "median of {n} merged MRs",
     );
+    if before.is_some() {
+        note.push_str(" · ");
+        note.push_str(&tf(
+            "thin bar: {period}",
+            &[("period", &period.before_label())],
+        ));
+    }
+    board::card(ui, theme, tl("Where the time goes"), &note, 268.0, |ui| {
+        let total: f64 = d.medians.iter().flatten().sum();
+        if total <= 0.0 {
+            board::empty(ui, theme, tl("No MR merged in the period."));
+            return;
+        }
+        if let Some((stage, share)) = slowest(&d.medians) {
+            let (line, _) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::hover());
+            board::paint_text(
+                ui,
+                egui::pos2(line.left(), line.center().y),
+                Align2::LEFT_CENTER,
+                &tf(
+                    "Most of the time: {stage}, {share} of the way",
+                    &[
+                        ("stage", &stage.label().to_lowercase()),
+                        ("share", &board::percent(share)),
+                    ],
+                ),
+                fonts::semibold(theme.text_size - 0.5),
+                // A wait in its colour, the time to cut; work in the text's.
+                if stage.is_wait() {
+                    stage.tone(theme).fg
+                } else {
+                    theme.palette.text
+                },
+                line.width(),
+            );
+            ui.add_space(6.0);
+        }
+        // A step under 1 % of the way would be a sliver: it stays in the
+        // lines below.
+        let parts: Vec<(f32, Color32)> = Stage::ALL
+            .iter()
+            .map(|s| {
+                let v = d.medians[*s as usize].unwrap_or(0.0);
+                let v = if v / total < 0.01 { 0.0 } else { v };
+                (v as f32, s.tone(theme).fg)
+            })
+            .collect();
+        board::stacked_bar(ui, theme, &parts, 16.0, 2.0);
+        ui.add_space(10.0);
+        let then = before.map(|b| b.medians);
+        let max = d
+            .medians
+            .iter()
+            .chain(then.iter().flatten())
+            .flatten()
+            .fold(0.0_f64, |a, b| a.max(*b));
+        let samples = (d.merged.len(), before.map_or(0, |b| b.merged.len()));
+        for stage in Stage::ALL {
+            let value = d.medians[stage as usize];
+            let (line, response) =
+                ui.allocate_exact_size(Vec2::new(ui.available_width(), 28.0), Sense::hover());
+            let tone = stage.tone(theme);
+            ui.painter().circle_filled(
+                egui::pos2(line.left() + 4.0, line.center().y),
+                4.0,
+                tone.fg,
+            );
+            let label_w = (line.width() * 0.42).min(200.0);
+            board::paint_text(
+                ui,
+                egui::pos2(line.left() + 14.0, line.center().y),
+                Align2::LEFT_CENTER,
+                stage.label(),
+                FontId::proportional(theme.text_size - 0.5),
+                theme.palette.text_secondary,
+                label_w - 14.0,
+            );
+            let text = value.map_or_else(|| board::dash().to_string(), board::duration_text);
+            let share = value
+                .filter(|_| total > 0.0)
+                .map(|v| board::percent(v / total))
+                .unwrap_or_default();
+            let value_w = 92.0;
+            board::paint_text(
+                ui,
+                egui::pos2(line.right(), line.center().y),
+                Align2::RIGHT_CENTER,
+                &format!("{text}  {share}"),
+                FontId::proportional(theme.text_size - 1.0),
+                theme.palette.text,
+                value_w,
+            );
+            let track = Rect::from_min_max(
+                egui::pos2(line.left() + label_w + 6.0, line.center().y - 3.0),
+                egui::pos2(line.right() - value_w - 10.0, line.center().y + 3.0),
+            );
+            if track.width() > 20.0 {
+                ui.painter()
+                    .rect_filled(track, CornerRadius::same(3), theme.palette.border_soft);
+                if let Some(v) = value.filter(|_| max > 0.0) {
+                    let mut fill = track;
+                    fill.set_width((track.width() * (v / max) as f32).max(3.0));
+                    ui.painter()
+                        .rect_filled(fill, CornerRadius::same(3), tone.fg);
+                }
+                // The period before: a thin bar under it.
+                if let Some(v) = then.and_then(|m| m[stage as usize]).filter(|_| max > 0.0) {
+                    let ghost = Rect::from_min_size(
+                        egui::pos2(track.left(), track.bottom() + 3.0),
+                        Vec2::new((track.width() * (v / max) as f32).max(2.0), 2.0),
+                    );
+                    ui.painter().rect_filled(
+                        ghost,
+                        CornerRadius::same(1),
+                        theme.palette.text_muted.gamma_multiply(0.6),
+                    );
+                }
+            }
+            let mut tip = Tip::new().title(stage.label()).text(stage.hint());
+            if let (Some(now), Some(was)) = (value, then.and_then(|m| m[stage as usize])) {
+                // Every step is better shorter.
+                let (text, color) = versus_note(
+                    theme,
+                    versus(now, was, samples, false, now.max(was) * 0.05),
+                    &board::duration_text(was),
+                    period,
+                );
+                // The arrow by the value, in its colour.
+                if !text.starts_with('=') {
+                    board::paint_text(
+                        ui,
+                        egui::pos2(line.right() - value_w - 2.0, line.center().y),
+                        Align2::RIGHT_CENTER,
+                        &text[..text.char_indices().nth(1).map_or(text.len(), |(i, _)| i)],
+                        FontId::proportional(theme.text_size - 2.0),
+                        color,
+                        12.0,
+                    );
+                }
+                tip = tip.dot(color, text);
+            }
+            response.rich(tip);
+        }
+        drafts_caption(ui, theme, d);
+    });
 }
 
 /// "3 of 18 opened as drafts, 2 reviewed along the way".
@@ -1563,7 +1855,14 @@ fn drafts_caption(ui: &mut Ui, theme: &Theme, d: &Delivery) {
     }
 }
 
-fn rounds_card(ui: &mut Ui, theme: &Theme, d: &Delivery, picked: &mut Option<String>) {
+fn rounds_card(
+    ui: &mut Ui,
+    theme: &Theme,
+    d: &Delivery,
+    before: Option<&Delivery>,
+    period: Period,
+    picked: &mut Option<String>,
+) {
     let r = &d.rounds;
     board::card(
         ui,
@@ -1612,6 +1911,16 @@ fn rounds_card(ui: &mut Ui, theme: &Theme, d: &Delivery, picked: &mut Option<Str
                 theme.palette.text_secondary,
                 line.width() - w - 10.0,
             );
+            if let Some(b) = before.map(|b| &b.rounds).filter(|b| b.reviewed > 0) {
+                let then = b.first_time as f64 / b.reviewed as f64;
+                let (text, color) = versus_note(
+                    theme,
+                    versus(share, then, (r.reviewed, b.reviewed), true, 0.005),
+                    &board::percent(then),
+                    period,
+                );
+                ui.label(RichText::new(text).size(theme.text_size - 1.5).color(color));
+            }
             ui.add_space(8.0);
             // One column per round count.
             let labels = [tl("0"), tl("1"), tl("2"), tl("3+")];
@@ -2487,6 +2796,56 @@ mod tests {
         assert_eq!(rounds_of(&mr), Some(1));
         mr.data.review.as_mut().unwrap().pushes_after_review = 3;
         assert_eq!(rounds_of(&mr), Some(3));
+    }
+
+    #[test]
+    fn a_change_says_which_way_and_whether_it_is_better() {
+        // A shorter lead time is better.
+        assert_eq!(
+            versus(7.2, 8.9, (18, 15), false, 0.05),
+            Versus::Moved {
+                up: false,
+                better: true
+            }
+        );
+        // More failures is worse.
+        assert_eq!(
+            versus(0.38, 0.25, (8, 9), false, 0.005),
+            Versus::Moved {
+                up: true,
+                better: false
+            }
+        );
+        // Two incidents against one: too few to tell.
+        assert_eq!(
+            versus(3.6, 2.1, (2, 1), false, 0.05),
+            Versus::TooFew { up: true }
+        );
+        assert_eq!(versus(1.0, 1.02, (9, 9), true, 0.05), Versus::Same);
+    }
+
+    #[tokio::test]
+    async fn the_period_before_counts_nothing_of_the_current_one() {
+        let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+        let overview = crate::demo::demo_project_overview(&app);
+        let now = Utc::now();
+        let current = analyze(&app, Some(&overview), now, 30);
+        let before = analyze(&app, Some(&overview), now - Duration::days(30), 30);
+        let start = now - Duration::days(30);
+        assert!(before
+            .merged
+            .iter()
+            .all(|p| p.merged.is_some_and(|m| m <= start)));
+        assert!(current
+            .merged
+            .iter()
+            .all(|p| p.merged.is_some_and(|m| m >= start)));
+        let ids = |d: &Delivery| d.merged.iter().map(|p| p.id.clone()).collect::<Vec<_>>();
+        assert!(ids(&before).iter().all(|id| !ids(&current).contains(id)));
+        assert!(
+            !before.merged.is_empty(),
+            "the demo has merges in the period before"
+        );
     }
 
     #[tokio::test]

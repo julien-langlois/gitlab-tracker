@@ -94,6 +94,8 @@ pub struct Memos {
     pub ci: Memo<i64, super::ci::Ci>,
     /// Delivery: (days, whether the project overview is known).
     pub delivery: Memo<(i64, bool), super::delivery::Delivery>,
+    /// Delivery over the period before, to compare with: the same key.
+    pub delivery_before: Memo<(i64, bool), super::delivery::Delivery>,
     /// Milestones.
     pub milestones: Memo<(), Vec<super::milestones::Milestone>>,
     /// Stacked MRs.

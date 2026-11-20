@@ -727,11 +727,23 @@ pub struct Figure {
 /// all the same height. Painted in exact rects: nothing in a figure can widen
 /// its card.
 pub fn figures(ui: &mut Ui, theme: &Theme, figures: &[Figure]) {
+    figures_with(ui, theme, figures, &[]);
+}
+
+/// [`figures`], each with a line under its caption when `notes` has one for
+/// it (text and colour): what it was before, say.
+pub fn figures_with(
+    ui: &mut Ui,
+    theme: &Theme,
+    figures: &[Figure],
+    notes: &[Option<(String, Color32)>],
+) {
     let per_row = fit(ui, 170.0, figures.len().max(1));
     let width = ui.available_width();
     let card_w = ((width - GAP * (per_row - 1) as f32) / per_row as f32).floor();
-    let height = 90.0;
-    for chunk in figures.chunks(per_row) {
+    let noted = notes.iter().any(Option::is_some);
+    let height = if noted { 110.0 } else { 90.0 };
+    for (row, chunk) in figures.chunks(per_row).enumerate() {
         let (line, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
         for (i, f) in chunk.iter().enumerate() {
             let rect = Rect::from_min_size(
@@ -778,6 +790,17 @@ pub fn figures(ui: &mut Ui, theme: &Theme, figures: &[Figure]) {
                 caption,
                 f.caption_color.unwrap_or(theme.palette.text_muted),
             );
+            if let Some(Some((note, color))) = notes.get(row * per_row + i) {
+                paint_text(
+                    ui,
+                    egui::pos2(inner.left(), rect.top() + 95.0),
+                    Align2::LEFT_CENTER,
+                    note,
+                    FontId::proportional(theme.text_size - 1.5),
+                    *color,
+                    inner.width(),
+                );
+            }
             // The whole caption on hover when it was cut.
             if cut {
                 ui.interact(

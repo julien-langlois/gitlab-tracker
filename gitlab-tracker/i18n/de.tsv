@@ -2220,3 +2220,19 @@ rail	Releases	Releases
 	{job} twice as fast	{job} doppelt so schnell
 	{ran} running on that path, {queued} waiting for a runner.	{ran} Laufzeit auf diesem Pfad, {queued} Warten auf einen Runner.
 @plural	The {n} other job ran meanwhile: making it faster gives nothing back.|The {n} other jobs ran meanwhile: making them faster gives nothing back.	{n} anderer Job lief parallel: ihn zu beschleunigen bringt nichts.|Die {n} anderen Jobs liefen parallel: sie zu beschleunigen bringt nichts.
+	= as {period}	= wie {period}
+	Compare with	Vergleichen mit
+	Off	Aus
+	better	besser
+	from {before}	statt {before}
+	green: better	grün: besser
+	grey: too few to tell (under {n} on either side)	grau: zu wenig für eine Aussage (unter {n} auf einer Seite)
+	orange: worse	orange: schlechter
+	the {period} before	die {period} davor
+	thin bar: {period}	dünner Balken: {period}
+	too few to tell	zu wenig für eine Aussage
+	worse	schlechter
+	{from} – {to} against {from_before} – {to_before}	{from} – {to} gegenüber {from_before} – {to_before}
+	▲ ▼ the way the figure went	▲ ▼ die Richtung, in die sich der Wert bewegt hat
+@plural	{n} MR merged then|{n} MRs merged then	{n} MR damals gemergt|{n} MRs damals gemergt
+	nothing to compare before	nichts zum Vergleichen davor

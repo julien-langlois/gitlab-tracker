@@ -267,6 +267,17 @@ labelled hotfix or whose branch matches the project's **Hotfix branches** settin
 production in the period are the change failure rate's failures. The MR page
 names the revert under **Related MRs**, both ways.
 
+**Against the period before.** *Compare with* (on by default) sets each
+figure against the period of the same length just before (the 30 days before
+the last 30, say): under each DORA measure, ▲ or ▼ the way it went and from
+what, in green when it is better, orange when worse, grey when either side has
+fewer than five cases (too few to tell); in *Where the time goes*, a thin bar
+under each step for the period before, with an arrow by the value; under the
+review rounds, the share approved at the first round then. The period before
+counts only what happened in it: an MR merged since is in the current one. It
+reads the same data as the page, so a project tracked for less than two
+periods has little to compare yet.
+
 **Copy the weekly report** puts it all, with the CI and the milestones'
 forecasts, in the clipboard as Markdown.
 

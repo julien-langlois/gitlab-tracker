@@ -2220,3 +2220,19 @@ rail	Releases	发布
 	{job} twice as fast	{job} 快一倍
 	{ran} running on that path, {queued} waiting for a runner.	该路径上运行 {ran}，等待 runner {queued}。
 @plural	The {n} other job ran meanwhile: making it faster gives nothing back.|The {n} other jobs ran meanwhile: making them faster gives nothing back.	其他 {n} 个作业同时运行：加速它们不会节省时间。
+	= as {period}	= 与{period}相同
+	Compare with	对比
+	Off	关闭
+	better	更好
+	from {before}	之前 {before}
+	green: better	绿色：更好
+	grey: too few to tell (under {n} on either side)	灰色：样本太少无法判断（任一侧少于 {n}）
+	orange: worse	橙色：更差
+	the {period} before	前 {period}
+	thin bar: {period}	细条：{period}
+	too few to tell	样本太少无法判断
+	worse	更差
+	{from} – {to} against {from_before} – {to_before}	{from} – {to} 对比 {from_before} – {to_before}
+	▲ ▼ the way the figure went	▲ ▼ 数值变化的方向
+@plural	{n} MR merged then|{n} MRs merged then	当时合并了 {n} 个 MR
+	nothing to compare before	之前没有可对比的数据
