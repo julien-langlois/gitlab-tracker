@@ -204,6 +204,9 @@ fn jump_entries(
             entry
         });
     }
+    if mr.state == GitlabMrState::Opened {
+        entries.push(Entry::new("reviewers", tl("Reviewers")));
+    }
     if !mr.description.trim().is_empty() {
         entries.push(Entry::new("description", tl("Description")));
     }
@@ -1481,7 +1484,7 @@ fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) ->
 
 /// A command to copy: monospace in a box, with the copy icon in its corner;
 /// copied on click (`true` then).
-fn command_box(ui: &mut Ui, theme: &Theme, command: &str) -> bool {
+pub(super) fn command_box(ui: &mut Ui, theme: &Theme, command: &str) -> bool {
     const ICON: f32 = 14.0;
     ui.add_space(2.0);
     let response = egui::Frame::new()
@@ -1762,6 +1765,9 @@ fn work(
         if picked.copied {
             g.app.flash(tl("Commands copied"), false);
         }
+        ui.add_space(16.0);
+    }
+    if jumps.section(ui, "reviewers", |ui| super::reviewers::card(g, ui, mr)) {
         ui.add_space(16.0);
     }
     if !mr.description.trim().is_empty() {

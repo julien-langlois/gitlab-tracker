@@ -313,6 +313,73 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
         .unwrap_or_default()
 }
 
+/// The merged MRs the reviewer suggestions read: the demo's own, as GitLab
+/// would give them.
+#[cfg(feature = "gui")]
+pub fn demo_owner_history(app: &App) -> crate::owners::History {
+    fn login(display: &str) -> String {
+        match display.split_once(" (@") {
+            Some((_, handle)) => handle.trim_end_matches(')').to_string(),
+            None => display.to_string(),
+        }
+    }
+    let mut history = crate::owners::History::default();
+    for mr in &app.mrs {
+        let (Some(merged_at), Some(stats)) = (&mr.merged_at, &mr.diff_stats) else {
+            continue;
+        };
+        let Ok(iid) = mr.id.parse::<u64>() else {
+            continue;
+        };
+        for display in std::iter::once(&mr.author).chain(&mr.reviewers) {
+            if let Some((name, _)) = display.split_once(" (@") {
+                history.people.insert(login(display), name.to_string());
+            }
+        }
+        history.merges.insert(
+            iid,
+            crate::owners::Merge {
+                merged_at: merged_at.clone(),
+                author: login(&mr.author),
+                reviewers: mr.reviewers.iter().map(|r| login(r)).collect(),
+                approvers: mr.approved_by.clone(),
+                paths: stats.files.iter().map(|f| f.path.clone()).collect(),
+            },
+        );
+    }
+    history.read_at = Some(chrono::Utc::now().to_rfc3339());
+    history
+}
+
+/// The back end keeps a `CODEOWNERS` (its billing owner never seen there, to
+/// show an owner out of date);
+/// the Android app has none: its owners are deduced.
+#[cfg(feature = "gui")]
+pub fn demo_codeowners(app: &App) -> crate::owners::Declared {
+    const ORBIT_API: &str = "\
+# Orbit API: who answers for what.
+
+[Backend]
+/src/api/ @marina_gql
+/src/labels/ @marina_gql
+/src/auth/ @alex_dev
+/src/pricing/ @sarah_code
+/src/db/ @nadia_ok
+/migrations/ @nadia_ok
+/src/notify/ @julien_m
+/src/billing/ @thomas_db
+
+[Docs] @thomas_db
+*.md
+";
+    match world(&app.project_id) {
+        Some(w) if std::ptr::eq(w, &worlds()[0]) => crate::owners::Declared::Found(
+            crate::owners::CodeOwners::parse(".gitlab/CODEOWNERS", ORBIT_API),
+        ),
+        _ => crate::owners::Declared::Absent,
+    }
+}
+
 /// The commits of a range of the Releases page (`v2.3.2..v2.3.3`), and
 /// whether there were more (never, in the demo).
 #[cfg(feature = "gui")]

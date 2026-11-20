@@ -104,6 +104,14 @@ pub struct Details {
     )>,
     /// A newer overview on its way, while the last one shows.
     project_next: Option<Receiver<Result<crate::gitlab_detail::ProjectOverview, String>>>,
+    /// The merged MRs the reviewer suggestions read, and when they were asked.
+    owners: Option<(std::time::Instant, Fetch<crate::owners::History>)>,
+    /// A newer read on its way, while the last one serves.
+    owners_next: Option<Receiver<Result<crate::owners::History, String>>>,
+    /// The `CODEOWNERS` of each target branch, and when it was asked.
+    declared: HashMap<String, (std::time::Instant, Fetch<crate::owners::Declared>)>,
+    /// A newer read of a branch's `CODEOWNERS` on its way.
+    declared_next: HashMap<String, Receiver<Result<crate::owners::Declared, String>>>,
 }
 
 impl Details {
@@ -232,6 +240,122 @@ impl Details {
         match self.project.as_ref()? {
             (_, Fetch::Ready(data)) => Some(data),
             _ => None,
+        }
+    }
+
+    /// The project's merged MRs of the period, for the reviewer suggestions:
+    /// read in the background, again once older than the refresh interval
+    /// (only what merged since), the last read serving meanwhile.
+    pub fn owner_history(
+        &mut self,
+        app: &App,
+        ctx: &egui::Context,
+    ) -> Option<&crate::owners::History> {
+        let max_age = std::time::Duration::from_secs(app.refresh_interval_secs.max(60));
+        let stale = match &self.owners {
+            None => true,
+            Some((at, Fetch::Ready(_) | Fetch::Failed(_))) => at.elapsed() >= max_age,
+            Some((_, Fetch::Loading(_))) => false,
+        };
+        if stale {
+            let fetch = if app.read_only {
+                Fetch::Ready(crate::demo::demo_owner_history(app))
+            } else {
+                let target = crate::gitlab_detail::ProjectTarget {
+                    base_url: app.base_url.clone(),
+                    token: app.token.clone(),
+                    project_id: app.project_id.clone(),
+                };
+                let known = match &self.owners {
+                    Some((_, Fetch::Ready(h))) => h.clone(),
+                    _ => crate::owners::History::default(),
+                };
+                let cache = crate::storage::owners_cache_path(&app.base_url, &app.project_id);
+                Self::fetch(ctx, async move {
+                    Ok(crate::owners::read_history(target, known, cache).await)
+                })
+            };
+            match (&mut self.owners, fetch) {
+                (Some((at, Fetch::Ready(_))), Fetch::Loading(rx)) => {
+                    *at = std::time::Instant::now();
+                    self.owners_next = Some(rx);
+                }
+                (slot, fetch) => *slot = Some((std::time::Instant::now(), fetch)),
+            }
+        }
+        if let Some(rx) = &self.owners_next {
+            if let Ok(result) = rx.try_recv() {
+                self.owners_next = None;
+                if let Ok(value) = result {
+                    self.owners = Some((std::time::Instant::now(), Fetch::Ready(value)));
+                }
+            }
+        }
+        let (_, fetch) = self.owners.as_mut()?;
+        fetch.poll();
+        match fetch {
+            Fetch::Ready(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// The `CODEOWNERS` GitLab uses for MRs into `branch`, read in the
+    /// background and again after an hour. `Err` when it could not be read.
+    pub fn declared(
+        &mut self,
+        app: &App,
+        branch: &str,
+        ctx: &egui::Context,
+    ) -> Option<Result<&crate::owners::Declared, &str>> {
+        const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(3600);
+        let stale = match self.declared.get(branch) {
+            None => true,
+            Some((at, Fetch::Ready(_) | Fetch::Failed(_))) => at.elapsed() >= MAX_AGE,
+            Some((_, Fetch::Loading(_))) => false,
+        };
+        if stale {
+            let fetch = if app.read_only {
+                Fetch::Ready(crate::demo::demo_codeowners(app))
+            } else {
+                let target = crate::gitlab_detail::ProjectTarget {
+                    base_url: app.base_url.clone(),
+                    token: app.token.clone(),
+                    project_id: app.project_id.clone(),
+                };
+                let branch = branch.to_string();
+                Self::fetch(ctx, async move {
+                    crate::owners::read_declared(&target, &branch).await
+                })
+            };
+            // A file read before keeps serving while it is read again.
+            match (self.declared.get_mut(branch), fetch) {
+                (Some((at, Fetch::Ready(_))), Fetch::Loading(rx)) => {
+                    *at = std::time::Instant::now();
+                    self.declared_next.insert(branch.to_string(), rx);
+                }
+                (_, fetch) => {
+                    self.declared
+                        .insert(branch.to_string(), (std::time::Instant::now(), fetch));
+                }
+            }
+        }
+        if let Some(rx) = self.declared_next.get(branch) {
+            if let Ok(result) = rx.try_recv() {
+                self.declared_next.remove(branch);
+                if let Ok(value) = result {
+                    self.declared.insert(
+                        branch.to_string(),
+                        (std::time::Instant::now(), Fetch::Ready(value)),
+                    );
+                }
+            }
+        }
+        let (_, fetch) = self.declared.get_mut(branch)?;
+        fetch.poll();
+        match fetch {
+            Fetch::Ready(data) => Some(Ok(data)),
+            Fetch::Failed(e) => Some(Err(e.as_str())),
+            Fetch::Loading(_) => None,
         }
     }
 

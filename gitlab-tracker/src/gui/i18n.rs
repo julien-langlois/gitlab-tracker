@@ -76,6 +76,32 @@ mod tests {
         assert_eq!(I18N.check_all(), Vec::<String>::new());
     }
 
+    /// Every catalog holds the same rows: a string added to one is added to
+    /// all.
+    #[test]
+    fn catalogs_have_the_same_keys() {
+        let keys = |text: &str| -> std::collections::BTreeSet<String> {
+            text.lines()
+                .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+                .filter_map(|l| {
+                    let mut parts = l.splitn(3, '\t');
+                    Some(format!("{}\t{}", parts.next()?, parts.next()?))
+                })
+                .collect()
+        };
+        let (first, _, text) = CATALOGS[0];
+        let reference = keys(text);
+        for (code, _, text) in &CATALOGS[1..] {
+            let other = keys(text);
+            let missing: Vec<_> = reference.difference(&other).collect();
+            let extra: Vec<_> = other.difference(&reference).collect();
+            assert!(
+                missing.is_empty() && extra.is_empty(),
+                "{code} against {first}: missing {missing:?}, extra {extra:?}"
+            );
+        }
+    }
+
     #[test]
     fn every_language_has_a_name() {
         for (code, name) in languages() {

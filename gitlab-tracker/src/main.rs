@@ -23,6 +23,8 @@ mod models;
 #[cfg(feature = "gui")]
 mod next_step;
 mod notify;
+#[cfg(feature = "gui")]
+mod owners;
 mod settings;
 mod settings_core;
 mod shortcuts_core;

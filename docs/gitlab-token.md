@@ -46,8 +46,8 @@ and pick **Read**. Leave every other resource empty.
 | Projects | **Project** | `/projects/:id` · GraphQL `Project` | The project itself (checked when it is added) |
 | Project Features | **Release** | `releases` | Releases page: the releases, their names and notes (without it, the version tags stand in) |
 | Repository | **Commit** | `repository/commits` (also a range, `ref_name=v1.2.0..v1.3.0`), `repository/commits/:sha`, `…/:sha/refs`, `…/:sha/diff`, `…/:sha/signature` | Branch scans, branches holding a commit, signed commits, what each release holds |
-| Repository | **Merge Request** | `merge_requests`, `merge_requests/:iid`, `…/changes`, `…/commits`, `…/versions`, `…/pipelines`, `…/discussions`, `…/approvals`, `…/approval_state` · GraphQL `MergeRequest` | MRs and everything shown about them |
-| Repository | **Repository** | `repository/compare`, `repository/merge_base`, `repository/files/:file_path/raw` | Branch comparisons, `CHANGELOG.md` |
+| Repository | **Merge Request** | `merge_requests`, `merge_requests/:iid`, `…/changes`, `…/commits`, `…/versions`, `…/pipelines`, `…/discussions`, `…/approvals`, `…/approval_state` · GraphQL `MergeRequest` | MRs and everything shown about them; the MRs merged in the last 90 days (files, author, reviewers, approvers) for the suggested reviewers |
+| Repository | **Repository** | `repository/compare`, `repository/merge_base`, `repository/files/:file_path/raw` | Branch comparisons, `CHANGELOG.md`, `CODEOWNERS` (suggested reviewers; without it, owners are deduced) |
 | Repository | **Repository Tag** | `repository/tags` | Changelog, and the releases when the project has no GitLab release |
 
 All paths are under `/api/v4/projects/:id/`. GraphQL needs nothing more: GitLab

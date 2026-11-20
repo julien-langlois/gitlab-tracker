@@ -40,6 +40,7 @@ mod prefs;
 mod promote;
 mod rail_badges;
 mod releases;
+mod reviewers;
 mod schedules;
 mod setup;
 mod shell;

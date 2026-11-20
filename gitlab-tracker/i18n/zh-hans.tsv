@@ -2153,3 +2153,50 @@ rail	Releases	发布
 	The latest pipeline failed	最新的流水线失败了
 	Previous / next section of a long page	长页面的上一节 / 下一节
 	Back to the top of a long page	回到长页面顶部
+	/assign_reviewer @{login}, to paste in a comment	/assign_reviewer @{login}，粘贴到评论中
+	By file	按文件
+	CODEOWNERS against the history:	CODEOWNERS 与历史对比：
+	Code owner	代码所有者
+	Code owner, not seen here	代码所有者，未在此出现
+	Copied: {text}	已复制：{text}
+	Copy /assign_reviewer	复制 /assign_reviewer
+	Copy for both	为两人复制
+	Deduced: did the most in {path} lately. Not declared anywhere.	推断：最近在 {path} 中贡献最多。未在任何地方声明。
+	In CODEOWNERS for {path}, and knows these files.	在 CODEOWNERS 中负责 {path}，并熟悉这些文件。
+	In CODEOWNERS for {path}, yet in none of the merged MRs that changed these files in the period: CODEOWNERS may be out of date.	在 CODEOWNERS 中负责 {path}，但在此期间修改这些文件的已合并 MR 中都没有出现：CODEOWNERS 可能已过时。
+	In each folder, the one or two people who did the most in the last {days} days (author twice, reviewer or approver once), with two merged MRs at least.	每个文件夹中，最近 {days} 天贡献最多的一到两人（作者计两次，评审人或批准人计一次），且至少有两个已合并的 MR。
+	Known by nobody else yet	暂无其他人熟悉
+	Knows these files, which CODEOWNERS gives to others.	熟悉这些文件，但 CODEOWNERS 将其分配给了他人。
+	Likely owner	可能的所有者
+	No CODEOWNERS in this project: owners deduced from the merged MRs.	此项目没有 CODEOWNERS：所有者由已合并的 MR 推断。
+	Nobody else changed or reviewed these files lately.	最近没有其他人修改或评审过这些文件。
+	Nobody else than the reviewers changed or reviewed these files lately.	除评审人外，最近没有其他人修改或评审过这些文件。
+	Not in CODEOWNERS	不在 CODEOWNERS 中
+	Owners deduced	推断的所有者
+	Reading CODEOWNERS and the merged MRs…	正在读取 CODEOWNERS 和已合并的 MR…
+	The MR's files are not read yet.	尚未读取此 MR 的文件。
+	The token may not read the repository's files: owners deduced from the merged MRs.	令牌无权读取仓库文件：所有者由已合并的 MR 推断。
+	To start a CODEOWNERS from these owners:	用这些所有者创建 CODEOWNERS：
+	Together, {a} and {b} know {n} of {total} files.	{a} 和 {b} 合计熟悉 {total} 个文件中的 {n} 个。
+	Who could review	谁可以评审
+	deduced	推断
+	last {when}	最近一次 {when}
+	no merged MR touched it lately	最近没有已合并的 MR 涉及它
+	no owner	无所有者
+	no review waiting	没有待处理的评审
+	none of these files lately	最近未涉及这些文件
+	only ever changed by the author	仅由作者修改过
+	who knows the files this MR changes	谁熟悉此 MR 修改的文件
+	{path}, compared with the {n} MRs merged in the last {days} days	{path}，与最近 {days} 天合并的 {n} 个 MR 对比
+@plural	in {n} MR|in {n} MRs	涉及 {n} 个 MR
+@plural	{n} file with an owner who knows it|{n} files with an owner who knows them	{n} 个文件的所有者熟悉它
+@plural	{n} more|{n} more	还有 {n} 个
+@plural	{n} review waiting|{n} reviews waiting	{n} 个待处理的评审
+@plural	{n} whose owners did not touch it lately|{n} whose owners did not touch them lately	{n} 个文件的所有者最近未涉及
+@plural	{n} without an owner|{n} without an owner	{n} 个无所有者
+@plural	{n} of {total} files|{n} of {total} files	{total} 个文件中的 {n} 个
+@plural	the folders of {n} of {total} files|the folders of {n} of {total} files	{total} 个文件中 {n} 个所在的文件夹
+@plural	the folders of {n} more|the folders of {n} more	另有 {n} 个所在的文件夹
+	Owners	所有者
+	changed, reviewed or approved it	修改、评审或批准过
+	worked in its folder	在其文件夹中工作过

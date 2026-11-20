@@ -75,12 +75,12 @@ fn learn(base_url: &str, support: Support) {
 
 /// How a project is named in a query: its path, or its numeric id as a global ID.
 #[derive(Debug, PartialEq, Eq)]
-enum ProjectRef {
+pub(crate) enum ProjectRef {
     Path(String),
     Id(String),
 }
 
-fn project_ref(project_id: &str) -> ProjectRef {
+pub(crate) fn project_ref(project_id: &str) -> ProjectRef {
     let id = project_id.trim();
     if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
         ProjectRef::Id(format!("gid://gitlab/Project/{id}"))

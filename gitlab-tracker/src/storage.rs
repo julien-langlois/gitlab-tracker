@@ -1245,6 +1245,14 @@ pub fn merges_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> 
     Some(get_save_dir()?.join(name))
 }
 
+/// Where the merged MRs read for the reviewer suggestions are kept between
+/// launches: `owners_<hash>.json`. `None` without a config directory.
+#[cfg(feature = "gui")]
+pub fn owners_cache_path(gitlab_url: &str, project_id: &str) -> Option<PathBuf> {
+    let name = tracker_state_file_name(gitlab_url, project_id).replacen("tracker_", "owners_", 1);
+    Some(get_save_dir()?.join(name))
+}
+
 fn tracker_state_file_name(gitlab_url: &str, project_id: &str) -> String {
     // FNV-1a 32-bit constants.
     const FNV_OFFSET: u32 = 2_166_136_261;

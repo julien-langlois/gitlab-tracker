@@ -2153,3 +2153,50 @@ rail	Releases	Releases
 	The latest pipeline failed	Die letzte Pipeline ist fehlgeschlagen
 	Previous / next section of a long page	Vorheriger / nächster Abschnitt einer langen Seite
 	Back to the top of a long page	Zurück zum Anfang einer langen Seite
+	/assign_reviewer @{login}, to paste in a comment	/assign_reviewer @{login}, zum Einfügen in einen Kommentar
+	By file	Nach Datei
+	CODEOWNERS against the history:	CODEOWNERS im Vergleich zum Verlauf:
+	Code owner	Code-Owner
+	Code owner, not seen here	Code-Owner, hier nicht gesehen
+	Copied: {text}	Kopiert: {text}
+	Copy /assign_reviewer	/assign_reviewer kopieren
+	Copy for both	Für beide kopieren
+	Deduced: did the most in {path} lately. Not declared anywhere.	Abgeleitet: hat zuletzt am meisten in {path} gearbeitet. Nirgends hinterlegt.
+	In CODEOWNERS for {path}, and knows these files.	In CODEOWNERS für {path} eingetragen und kennt diese Dateien.
+	In CODEOWNERS for {path}, yet in none of the merged MRs that changed these files in the period: CODEOWNERS may be out of date.	In CODEOWNERS für {path} eingetragen, aber in keinem der im Zeitraum gemergten MRs, die diese Dateien geändert haben: CODEOWNERS ist vielleicht veraltet.
+	In each folder, the one or two people who did the most in the last {days} days (author twice, reviewer or approver once), with two merged MRs at least.	In jedem Ordner die ein oder zwei Personen, die in den letzten {days} Tagen am meisten beigetragen haben (Autor doppelt, Reviewer oder Genehmiger einfach gezählt), bei mindestens zwei gemergten MRs.
+	Known by nobody else yet	Bisher niemandem sonst bekannt
+	Knows these files, which CODEOWNERS gives to others.	Kennt diese Dateien, die CODEOWNERS anderen zuweist.
+	Likely owner	Wahrscheinlicher Owner
+	No CODEOWNERS in this project: owners deduced from the merged MRs.	Kein CODEOWNERS in diesem Projekt: Owner aus den gemergten MRs abgeleitet.
+	Nobody else changed or reviewed these files lately.	Niemand sonst hat diese Dateien zuletzt geändert oder reviewt.
+	Nobody else than the reviewers changed or reviewed these files lately.	Außer den Reviewern hat niemand diese Dateien zuletzt geändert oder reviewt.
+	Not in CODEOWNERS	Nicht in CODEOWNERS
+	Owners deduced	Owner abgeleitet
+	Reading CODEOWNERS and the merged MRs…	CODEOWNERS und gemergte MRs werden gelesen …
+	The MR's files are not read yet.	Die Dateien des MR sind noch nicht gelesen.
+	The token may not read the repository's files: owners deduced from the merged MRs.	Das Token darf die Dateien des Repositorys nicht lesen: Owner aus den gemergten MRs abgeleitet.
+	To start a CODEOWNERS from these owners:	Um mit diesen Ownern ein CODEOWNERS anzulegen:
+	Together, {a} and {b} know {n} of {total} files.	Zusammen kennen {a} und {b} {n} von {total} Dateien.
+	Who could review	Wer reviewen könnte
+	deduced	abgeleitet
+	last {when}	zuletzt {when}
+	no merged MR touched it lately	zuletzt von keinem gemergten MR berührt
+	no owner	kein Owner
+	no review waiting	kein Review wartet
+	none of these files lately	zuletzt keine dieser Dateien
+	only ever changed by the author	nur je vom Autor geändert
+	who knows the files this MR changes	wer die Dateien kennt, die dieser MR ändert
+	{path}, compared with the {n} MRs merged in the last {days} days	{path}, verglichen mit den {n} in den letzten {days} Tagen gemergten MRs
+@plural	in {n} MR|in {n} MRs	in {n} MR|in {n} MRs
+@plural	{n} file with an owner who knows it|{n} files with an owner who knows them	{n} Datei mit einem Owner, der sie kennt|{n} Dateien mit einem Owner, der sie kennt
+@plural	{n} more|{n} more	{n} weitere|{n} weitere
+@plural	{n} review waiting|{n} reviews waiting	{n} Review wartet|{n} Reviews warten
+@plural	{n} whose owners did not touch it lately|{n} whose owners did not touch them lately	{n}, die ihre Owner zuletzt nicht berührt haben|{n}, die ihre Owner zuletzt nicht berührt haben
+@plural	{n} without an owner|{n} without an owner	{n} ohne Owner|{n} ohne Owner
+@plural	{n} of {total} files|{n} of {total} files	{n} von {total} Dateien|{n} von {total} Dateien
+@plural	the folders of {n} of {total} files|the folders of {n} of {total} files	den Ordner von {n} von {total} Dateien|die Ordner von {n} von {total} Dateien
+@plural	the folders of {n} more|the folders of {n} more	den Ordner von {n} weiteren|die Ordner von {n} weiteren
+	Owners	Owner
+	changed, reviewed or approved it	hat sie geändert, reviewt oder genehmigt
+	worked in its folder	hat in ihrem Ordner gearbeitet

@@ -95,6 +95,12 @@ on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR
 - **Why it can't merge:** conflicts, pipeline, threads, approval rules, commits
   behind (a click lists the merges and pushes on the target the MR lacks), draft,
   [unsigned commits](signed-commits.md).
+- **Who could review** (open MRs): the people who know the files the MR
+  changes — they changed, reviewed or approved them, or worked in their
+  folders, in the MRs merged over the last 90 days — with their reviews
+  waiting, and a button copying the `/assign_reviewer` quick action (the app
+  only reads). Two people who together know more files than one alone are
+  offered as a pair, and the files nobody but the author knows are listed.
 - **Tabs:** the discussions in full (with the code each thread is about), the
   changes, the commits (where each one is, branch by branch) and the pipelines.
 - **Right column:** a timeline, approval rules, related MRs (same ticket, same
@@ -102,6 +108,22 @@ on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR
 
 Merge checks, approval rules (GitLab Premium; left out otherwise), threads and
 deployments are read when the page opens, and again once the MR changes.
+
+**Owners: `CODEOWNERS`, or deduced.** The project's `CODEOWNERS` (the first of
+`CODEOWNERS`, `docs/CODEOWNERS`, `.gitlab/CODEOWNERS` on the MR's target
+branch, matched as GitLab does: sections, default owners, `!` exclusions) is
+applied whatever the GitLab tier — on Free GitLab enforces nothing, but the
+file still says who answers for what. Each suggested person then says how the
+file and the history agree: *Code owner* (declared, and knows the files),
+*Code owner, not seen here* (declared, yet in none of the period's MRs on these
+files: the file may be out of date), *Not in CODEOWNERS* (knows files the file
+gives to others); a line sums it up per file. Without a `CODEOWNERS` (or when
+the token may not read the repository's files), owners are **deduced** and
+labelled so: in each folder, the one or two people who did the most (author
+counted twice, reviewer or approver once, two merged MRs at least), looking up
+to two folders higher when a folder has too few; the card gives the matching
+`CODEOWNERS` lines to start one. The merged MRs are read once over GraphQL
+(REST without it), kept on disk, and then only what merged since.
 
 **Section bar.** When the page runs longer than the window, a bar under the
 figures lists its sections: what blocks the merge, the description, the four

@@ -2153,3 +2153,50 @@ rail	Releases	Releases
 	The latest pipeline failed	El último pipeline falló
 	Previous / next section of a long page	Sección anterior / siguiente de una página larga
 	Back to the top of a long page	Volver al inicio de una página larga
+	/assign_reviewer @{login}, to paste in a comment	/assign_reviewer @{login}, para pegar en un comentario
+	By file	Por archivo
+	CODEOWNERS against the history:	CODEOWNERS frente al historial:
+	Code owner	Propietario del código
+	Code owner, not seen here	Propietario, no visto aquí
+	Copied: {text}	Copiado: {text}
+	Copy /assign_reviewer	Copiar /assign_reviewer
+	Copy for both	Copiar para ambos
+	Deduced: did the most in {path} lately. Not declared anywhere.	Deducido: es quien más ha trabajado en {path} últimamente. No está declarado en ningún sitio.
+	In CODEOWNERS for {path}, and knows these files.	En CODEOWNERS para {path}, y conoce estos archivos.
+	In CODEOWNERS for {path}, yet in none of the merged MRs that changed these files in the period: CODEOWNERS may be out of date.	En CODEOWNERS para {path}, pero en ninguna de las MR fusionadas que cambiaron estos archivos en el periodo: puede que CODEOWNERS esté desactualizado.
+	In each folder, the one or two people who did the most in the last {days} days (author twice, reviewer or approver once), with two merged MRs at least.	En cada carpeta, la o las dos personas que más han trabajado en los últimos {days} días (autor cuenta doble, revisor o aprobador una vez), con al menos dos MR fusionadas.
+	Known by nobody else yet	Nadie más los conoce todavía
+	Knows these files, which CODEOWNERS gives to others.	Conoce estos archivos, que CODEOWNERS asigna a otras personas.
+	Likely owner	Propietario probable
+	No CODEOWNERS in this project: owners deduced from the merged MRs.	No hay CODEOWNERS en este proyecto: propietarios deducidos de las MR fusionadas.
+	Nobody else changed or reviewed these files lately.	Nadie más ha cambiado ni revisado estos archivos últimamente.
+	Nobody else than the reviewers changed or reviewed these files lately.	Aparte de los revisores, nadie ha cambiado ni revisado estos archivos últimamente.
+	Not in CODEOWNERS	No está en CODEOWNERS
+	Owners deduced	Propietarios deducidos
+	Reading CODEOWNERS and the merged MRs…	Leyendo CODEOWNERS y las MR fusionadas…
+	The MR's files are not read yet.	Los archivos de la MR aún no se han leído.
+	The token may not read the repository's files: owners deduced from the merged MRs.	El token no puede leer los archivos del repositorio: propietarios deducidos de las MR fusionadas.
+	To start a CODEOWNERS from these owners:	Para empezar un CODEOWNERS con estos propietarios:
+	Together, {a} and {b} know {n} of {total} files.	Juntos, {a} y {b} conocen {n} de {total} archivos.
+	Who could review	Quién podría revisar
+	deduced	deducido
+	last {when}	última vez {when}
+	no merged MR touched it lately	ninguna MR fusionada lo ha tocado últimamente
+	no owner	sin propietario
+	no review waiting	ninguna revisión pendiente
+	none of these files lately	ninguno de estos archivos últimamente
+	only ever changed by the author	solo lo ha cambiado el autor
+	who knows the files this MR changes	quién conoce los archivos que cambia esta MR
+	{path}, compared with the {n} MRs merged in the last {days} days	{path}, comparado con las {n} MR fusionadas en los últimos {days} días
+@plural	in {n} MR|in {n} MRs	en {n} MR|en {n} MR
+@plural	{n} file with an owner who knows it|{n} files with an owner who knows them	{n} archivo con un propietario que lo conoce|{n} archivos con un propietario que los conoce
+@plural	{n} more|{n} more	{n} más|{n} más
+@plural	{n} review waiting|{n} reviews waiting	{n} revisión pendiente|{n} revisiones pendientes
+@plural	{n} whose owners did not touch it lately|{n} whose owners did not touch them lately	{n} que sus propietarios no han tocado últimamente|{n} que sus propietarios no han tocado últimamente
+@plural	{n} without an owner|{n} without an owner	{n} sin propietario|{n} sin propietario
+@plural	{n} of {total} files|{n} of {total} files	{n} de {total} archivos|{n} de {total} archivos
+@plural	the folders of {n} of {total} files|the folders of {n} of {total} files	la carpeta de {n} de {total} archivos|las carpetas de {n} de {total} archivos
+@plural	the folders of {n} more|the folders of {n} more	la carpeta de {n} más|las carpetas de {n} más
+	Owners	Propietarios
+	changed, reviewed or approved it	lo cambió, revisó o aprobó
+	worked in its folder	trabajó en su carpeta
