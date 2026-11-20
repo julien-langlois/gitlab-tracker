@@ -13,9 +13,10 @@ use super::tip::{Tip, TipExt};
 use super::widgets::{button, field, muted, primary_button, section_title, FieldLook};
 use super::GuiApp;
 use crate::actions::Action;
+use crate::app::ActiveFilter;
 use crate::app::{SortColumn, SortOrder};
 use crate::i18n::{tc, tf, tl, tn};
-use crate::saved_views::{Filters, Keep, Order, SavedView, Snapshot};
+use crate::saved_views::{Filter, Filters, Keep, Order, SavedView, Snapshot};
 use crate::status::StatusKind;
 
 /// Views reachable by a key, 1 to 9.
@@ -100,6 +101,20 @@ pub fn snapshot(g: &GuiApp) -> Snapshot {
         filters: Filters {
             filter: filter.to_string(),
             value: app.active_filter.query.clone(),
+            and: {
+                let mut and: Vec<Filter> = app
+                    .filters
+                    .iter()
+                    .filter_map(|f| {
+                        Some(Filter {
+                            filter: app.filter_defs.get(f.index)?.id.to_string(),
+                            value: f.query.clone(),
+                        })
+                    })
+                    .collect();
+                and.sort();
+                and
+            },
             focus: app
                 .focus
                 .as_ref()
@@ -150,6 +165,18 @@ pub fn apply(g: &mut GuiApp, view: &SavedView) {
             index,
             query: f.value.clone(),
         });
+        // A filter this build does not know is left out.
+        let and = f
+            .and
+            .iter()
+            .filter_map(|a| {
+                Some(ActiveFilter {
+                    index: g.app.filter_defs.iter().position(|d| d.id == a.filter)?,
+                    query: a.value.clone(),
+                })
+            })
+            .collect();
+        g.pending.push(Action::SetFilters(and));
         match &f.focus {
             Some(key) => {
                 let label = focus_label(key).map_or_else(|| view.name.clone(), str::to_string);
@@ -462,16 +489,19 @@ fn row(
 
 fn filters_text(g: &GuiApp, f: &Filters) -> String {
     let mut parts = Vec::new();
-    if let Some(def) = g.app.filter_defs.iter().find(|d| d.id == f.filter) {
-        if def.id != "all" {
-            let label = def.active_label.unwrap_or(def.label);
-            parts.push(if f.value.is_empty() {
-                tl(label).to_string()
+    let one = |id: &str, value: &str| {
+        let def = g.app.filter_defs.iter().find(|d| d.id == id)?;
+        (def.id != "all").then(|| {
+            let label = tl(def.active_label.unwrap_or(def.label));
+            if value.is_empty() {
+                label.to_string()
             } else {
-                format!("{} {}", tl(label), f.value)
-            });
-        }
-    }
+                format!("{label} {value}")
+            }
+        })
+    };
+    parts.extend(one(&f.filter, &f.value));
+    parts.extend(f.and.iter().filter_map(|a| one(&a.filter, &a.value)));
     if let Some(label) = f.focus.as_deref().and_then(focus_label) {
         parts.push(label.to_string());
     }

@@ -217,7 +217,7 @@ fn content(g: &mut GuiApp, ui: &mut Ui) {
             let more = &groups.more_filters;
             if !more.is_empty() {
                 ui.add_space(2.0);
-                let active_inside = more.iter().any(|(i, _)| *i == g.app.active_filter.index);
+                let active_inside = more.iter().any(|(i, _)| filter_on(g, *i).is_some());
                 egui::CollapsingHeader::new(muted(&theme, tl("More filters")))
                     .id_salt("more_filters")
                     .default_open(active_inside)
@@ -424,8 +424,37 @@ fn focus_item(
         .clicked()
 }
 
+/// The sidebar filter at `index`, when it is on.
+fn filter_on(g: &GuiApp, index: usize) -> Option<&crate::app::ActiveFilter> {
+    g.app.filters.iter().find(|f| f.index == index)
+}
+
+/// The filters with `index` set to `query` (`None`: off), every other filter
+/// of `index` first taken off unless `several`, and those of `apart` too (the
+/// effort pills, one at a time).
+fn with_filter(
+    g: &GuiApp,
+    index: usize,
+    query: Option<String>,
+    several: bool,
+    apart: &[usize],
+) -> Vec<crate::app::ActiveFilter> {
+    let mut filters: Vec<_> = g
+        .app
+        .filters
+        .iter()
+        .filter(|f| !apart.contains(&f.index) && (several || f.index != index))
+        .cloned()
+        .collect();
+    if let Some(query) = query {
+        filters.push(crate::app::ActiveFilter { index, query });
+    }
+    filters
+}
+
 /// "Absent from branch" as a pill per tracked branch: the branches are known,
-/// nothing to type. A second click on the active one clears it.
+/// nothing to type. Several can be on (absent from each); a second click on
+/// one takes it off.
 fn branch_pills(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
     let theme = g.theme;
     ui.add_space(4.0);
@@ -433,14 +462,25 @@ fn branch_pills(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
         for branch in g.app.branches.clone() {
-            let on = g.app.active_filter.index == index && g.app.active_filter.query == branch;
+            let this = crate::app::ActiveFilter {
+                index,
+                query: branch.clone(),
+            };
+            let on = g.app.filters.contains(&this);
             let response = pill_toggle(ui, &theme, &branch, theme.tones.red, on)
                 .tip(tf("The MRs not on {branch} yet", &[("branch", &branch)]));
             if response.clicked() {
-                g.pending.push(Action::SetFilter {
-                    index: if on { 0 } else { index },
-                    query: if on { String::new() } else { branch },
-                });
+                let mut filters: Vec<_> = g
+                    .app
+                    .filters
+                    .iter()
+                    .filter(|f| **f != this)
+                    .cloned()
+                    .collect();
+                if !on {
+                    filters.push(this);
+                }
+                g.pending.push(Action::SetFilters(filters));
             }
         }
     });
@@ -457,14 +497,13 @@ fn effort_pills(g: &mut GuiApp, ui: &mut Ui, pills: &[(usize, Effort)]) {
     ui.label(muted(&theme, tl("Review effort")));
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
+        let all: Vec<usize> = pills.iter().map(|(i, _)| *i).collect();
         for &(index, effort) in pills {
             let (label, tone) = tones::effort(effort, &theme.tones);
-            let on = g.app.active_filter.index == index;
+            let on = filter_on(g, index).is_some();
             if pill_toggle(ui, &theme, label, tone, on).clicked() {
-                g.pending.push(Action::SetFilter {
-                    index: if on { 0 } else { index },
-                    query: String::new(),
-                });
+                let filters = with_filter(g, index, (!on).then(String::new), false, &all);
+                g.pending.push(Action::SetFilters(filters));
             }
         }
     });
@@ -480,18 +519,15 @@ fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
         return;
     }
     let theme = g.theme;
-    let active = g.app.active_filter.index == index;
+    let current = filter_on(g, index).map(|f| f.query.clone());
+    let active = current.is_some();
     ui.add_space(4.0);
     ui.label(muted(&theme, clean_label(def)));
 
     let id = ui.make_persistent_id(("text_filter", def.id));
-    let mut draft: String = ui.data_mut(|d| d.get_temp(id)).unwrap_or_else(|| {
-        if active {
-            g.app.active_filter.query.clone()
-        } else {
-            String::new()
-        }
-    });
+    let mut draft: String = ui
+        .data_mut(|d| d.get_temp(id))
+        .unwrap_or_else(|| current.unwrap_or_default());
     let mut submit = None;
     let mut clear = false;
 
@@ -594,13 +630,17 @@ fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
 
     if clear {
         draft.clear();
-        g.pending.push(Action::SetFilter {
-            index: 0,
-            query: String::new(),
-        });
+        g.pending
+            .push(Action::SetFilters(with_filter(g, index, None, false, &[])));
     } else if let Some(query) = submit.clone().filter(|q| !q.is_empty()) {
         draft = query.clone();
-        g.pending.push(Action::SetFilter { index, query });
+        g.pending.push(Action::SetFilters(with_filter(
+            g,
+            index,
+            Some(query),
+            false,
+            &[],
+        )));
     }
     if !active && !response.has_focus() && submit.is_none() && draft.is_empty() {
         ui.data_mut(|d| d.remove::<String>(id));

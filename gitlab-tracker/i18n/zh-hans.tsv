@@ -2273,3 +2273,4 @@ rail	Releases	发布
 @plural	{n} column shown|{n} columns shown	显示 {n} 列
 @plural	{n} view imported|{n} views imported	已导入 {n} 个视图
 saved view	Restore	恢复
+	Filter: {name}	筛选：{name}

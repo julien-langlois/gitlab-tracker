@@ -652,7 +652,10 @@ fn status_bar(g: &mut GuiApp, ui: &mut Ui) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
                     ui.label(muted(&theme, tl("? shortcuts")));
-                    let filter = g.app.active_filter.label(&g.app.filter_defs);
+                    let mut filter = g.app.active_filter.label(&g.app.filter_defs);
+                    if !g.app.filters.is_empty() {
+                        filter.push_str(&format!(" + {}", g.app.filters.len()));
+                    }
                     let tracked = tf(
                         "{n} tracked · View: {view}",
                         &[("n", &g.app.mrs.len().to_string()), ("view", &filter)],

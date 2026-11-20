@@ -39,6 +39,10 @@ pub struct Filters {
     /// Its value (a branch, a label…), empty for a filter without one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub value: String,
+    /// The filters on top of it, every one to pass (absent from staging and
+    /// from production, with a label…), in a stable order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub and: Vec<Filter>,
     /// The next-step focus's key ("Waiting on me"…).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focus: Option<String>,
@@ -47,6 +51,14 @@ pub struct Filters {
     pub status: Option<String>,
     #[serde(default)]
     pub hide_merged: bool,
+}
+
+/// One more filter: its id and its value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Filter {
+    pub filter: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub value: String,
 }
 
 /// How the table is ordered.
@@ -136,13 +148,16 @@ impl SavedView {
         Self::of(&self.name, now, self.keeps())
     }
 
-    /// The tracked branch its filter needs, when it filters on one ("absent
-    /// from branch").
-    pub fn branch(&self) -> Option<&str> {
-        self.filters
-            .as_ref()
-            .filter(|f| f.filter == "absent_from_branch" && !f.value.is_empty())
-            .map(|f| f.value.as_str())
+    /// The tracked branches its filters need ("absent from branch").
+    pub fn branches(&self) -> Vec<&str> {
+        let Some(f) = &self.filters else {
+            return Vec::new();
+        };
+        std::iter::once((f.filter.as_str(), f.value.as_str()))
+            .chain(f.and.iter().map(|a| (a.filter.as_str(), a.value.as_str())))
+            .filter(|(id, value)| *id == "absent_from_branch" && !value.is_empty())
+            .map(|(_, value)| value)
+            .collect()
     }
 }
 
@@ -169,8 +184,13 @@ pub fn import(
     for view in picked {
         let mut view = view.clone();
         view.name = free_name(views, &view.name);
-        if let Some(branch) = view.branch().filter(|b| !branches.iter().any(|t| t == b)) {
-            missing.push(format!("{} ({branch})", view.name));
+        let lacking: Vec<&str> = view
+            .branches()
+            .into_iter()
+            .filter(|b| !branches.iter().any(|t| t == b))
+            .collect();
+        if !lacking.is_empty() {
+            missing.push(format!("{} ({})", view.name, lacking.join(", ")));
         }
         views.push(view);
     }
@@ -186,6 +206,7 @@ mod tests {
             filters: Filters {
                 filter: "label".into(),
                 value: "payments".into(),
+                and: Vec::new(),
                 focus: None,
                 status: None,
                 hide_merged: true,
@@ -258,8 +279,36 @@ mod tests {
             "[[views]]\nname = \"Blocked\"\n[views.filters]\nfilter = \"absent_from_branch\"\nvalue = \"production\"\n",
         )
         .unwrap();
-        assert_eq!(hand.views[0].branch(), Some("production"));
+        assert_eq!(hand.views[0].branches(), ["production"]);
         assert!(!hand.views[0].filters.as_ref().unwrap().hide_merged);
+    }
+
+    #[test]
+    fn combined_filters_are_kept_and_compared() {
+        let mut now = snapshot();
+        now.filters.and = vec![
+            Filter {
+                filter: "absent_from_branch".into(),
+                value: "staging".into(),
+            },
+            Filter {
+                filter: "absent_from_branch".into(),
+                value: "production".into(),
+            },
+        ];
+        let view = SavedView::of("Not shipped", &now, Keep::default());
+        assert_eq!(view.branches(), ["staging", "production"]);
+        let text = toml::to_string(&view).unwrap();
+        assert!(text.contains("[[filters.and]]"), "{text}");
+        assert_eq!(toml::from_str::<SavedView>(&text).unwrap(), view);
+        // One taken off: it differs.
+        now.filters.and.pop();
+        assert!(view.differs(&now));
+        // A view saved before filters combined reads with none on top.
+        let old: SavedView =
+            toml::from_str("name = \"Old\"\n[filters]\nfilter = \"label\"\nvalue = \"x\"\n")
+                .unwrap();
+        assert!(old.filters.unwrap().and.is_empty());
     }
 
     #[test]

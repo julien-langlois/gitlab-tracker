@@ -124,14 +124,20 @@ commits_behind  = false  # "Behind" column — commits the source branch is behi
 # the window; written by hand too. Each part is optional: a view without it
 # leaves that part of the table as it is.
 [[project.views]]
-name = "Not in production"
+name = "Not shipped"
 search = ""                              # empty: clears the search
 [project.views.filters]
-filter = "absent_from_branch"            # a filter's id ("all" for none)
-value = "production"                     # its value, for a filter that takes one
+filter = "all"                           # the sidebar view's filter id ("all" for none)
+value = ""                               # its value, for a filter that takes one
 focus = "next:me"                        # optional next-step view ("next:me", "next:others", "next:deploy")
 status = "NotApproved"                   # optional status, as the status bar picks it
 hide_merged = true
+[[project.views.filters.and]]            # the sidebar's filters on top, all to pass
+filter = "absent_from_branch"
+value = "staging"
+[[project.views.filters.and]]
+filter = "absent_from_branch"
+value = "production"
 [project.views.order]
 sort = "updated"                         # "updated", "id", "milestone" or "title"
 descending = true

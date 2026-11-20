@@ -1234,7 +1234,7 @@ impl GuiApp {
     }
 
     /// Lists the MRs carrying `label` alone, on the merge requests page: the
-    /// label view on it (one label at a time), no cockpit focus, no search.
+    /// label filter on it and no other, no cockpit focus, no search.
     fn filter_by_label(&mut self, label: &str) {
         let Some(index) = self
             .app
@@ -1253,9 +1253,14 @@ impl GuiApp {
             self.pending.push(Action::SetStatusPick(None));
         }
         self.pending.push(Action::SetFilter {
-            index,
-            query: label.to_string(),
+            index: 0,
+            query: String::new(),
         });
+        self.pending
+            .push(Action::SetFilters(vec![crate::app::ActiveFilter {
+                index,
+                query: label.to_string(),
+            }]));
         self.open_page(Page::MergeRequests);
     }
 
@@ -1271,6 +1276,7 @@ impl GuiApp {
                 index: 0,
                 query: String::new(),
             });
+            self.pending.push(Action::SetFilters(Vec::new()));
             if self.app.status_pick.is_some() {
                 self.pending.push(Action::SetStatusPick(None));
             }

@@ -2273,3 +2273,4 @@ rail	Releases	Releases
 @plural	{n} column shown|{n} columns shown	{n} colonne affichée|{n} colonnes affichées
 @plural	{n} view imported|{n} views imported	{n} vue importée|{n} vues importées
 saved view	Restore	Rétablir
+	Filter: {name}	Filtre : {name}

@@ -788,6 +788,16 @@ fn active_filters(g: &mut GuiApp, ui: &mut Ui) {
             Undo::View,
         ));
     }
+    for (i, filter) in g.app.filters.iter().enumerate() {
+        chips.push((
+            tf(
+                "Filter: {name}",
+                &[("name", &filter.label(&g.app.filter_defs))],
+            ),
+            tones.amber,
+            Undo::Filter(i),
+        ));
+    }
     if let Some(kind) = g.app.status_pick {
         chips.push((
             tf("Status: {name}", &[("name", tl(kind.name()))]),
@@ -838,6 +848,25 @@ fn active_filters(g: &mut GuiApp, ui: &mut Ui) {
                 }
             });
         });
+    // The filters taken off, in one go: each chip's index is in the list as it is.
+    let gone: Vec<usize> = undo
+        .iter()
+        .filter_map(|u| match u {
+            Undo::Filter(i) => Some(*i),
+            _ => None,
+        })
+        .collect();
+    if !gone.is_empty() {
+        let filters = g
+            .app
+            .filters
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !gone.contains(i))
+            .map(|(_, f)| f.clone())
+            .collect();
+        g.pending.push(Action::SetFilters(filters));
+    }
     for what in undo {
         apply_undo(g, what);
     }
@@ -848,6 +877,8 @@ fn active_filters(g: &mut GuiApp, ui: &mut Ui) {
 enum Undo {
     Focus,
     View,
+    /// The sidebar filter at this index of `App::filters`.
+    Filter(usize),
     Status,
     Search,
     HideMerged,
@@ -856,6 +887,8 @@ enum Undo {
 fn apply_undo(g: &mut GuiApp, what: Undo) {
     match what {
         Undo::Focus => g.next_focus = Some(None),
+        // Taken off together by `active_filters`.
+        Undo::Filter(_) => {}
         Undo::View => g.pending.push(Action::SetFilter {
             index: 0,
             query: String::new(),
@@ -908,6 +941,7 @@ fn empty_state(g: &mut GuiApp, ui: &mut Ui) {
     let narrowed = g.app.focus.is_some()
         || g.app.status_pick.is_some()
         || g.app.active_filter.index != 0
+        || !g.app.filters.is_empty()
         || !g.app.input.trim().is_empty()
         || g.app.config.hide_merged;
     ui.add_space(72.0);

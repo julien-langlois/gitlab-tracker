@@ -75,8 +75,14 @@ the MR's changed files with their patches (**Changes**) and, for a failed job,
 the end of its log (**Log**, in Pipelines). A click on a desktop notification
 brings the window forward on that MR, in its tab.
 
-**My views.** The table as it is set — the filters (the filter and its value,
-the next-step view, the status picked, merged MRs hidden), the search, the sort
+**Filters add up.** A view of the sidebar (All, Flagged, CI failing…) shows one
+set of MRs at a time; the **Filters** under it add up on top of it, every one to
+pass: absent from staging *and* from production (several branch pills can be on),
+with a label, of an effort (one at a time). Each filter in use shows over the
+table as a chip with its ×, **Clear all** taking them all off.
+
+**My views.** The table as it is set — the filters (the view, the filters on top
+of it, the next-step view, the status picked, merged MRs hidden), the search, the sort
 and grouping, the columns — can be kept under a name with **+** at the top of
 the sidebar, choosing which of those parts the view keeps (a part it does not
 keep is left as it is when it applies). The views are the project's: they are

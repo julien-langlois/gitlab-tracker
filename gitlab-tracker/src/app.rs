@@ -216,7 +216,7 @@ impl TrackerView {
 ///
 /// Replaces the old `FilterMode` enum — the predicate now lives inside `FilterDef::apply`
 /// collected via `inventory`. The orchestrator only stores the index + query here.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ActiveFilter {
     /// Index into `App::filter_defs` of the currently active filter.
     /// Index 0 is always the "All" filter (priority 0, registered in `filters_core.rs`).
@@ -393,6 +393,10 @@ pub struct App {
     pub milestone_suggestion_cursor: usize,
     /// Active filter applied to the MR table — selected via the `[F]` picker popup.
     pub active_filter: ActiveFilter,
+    /// Filters on top of it, every one to pass (the window's sidebar filters:
+    /// absent from staging and from production, with a label…). Empty in the
+    /// terminal UI, which shows one filter at a time.
+    pub filters: Vec<ActiveFilter>,
     /// MRs picked from a cockpit counter, on top of the filter (window only).
     pub focus: Option<Focus>,
     /// Set while the cockpit counts the MRs: they ignore `focus`.
@@ -630,6 +634,7 @@ impl App {
             milestone_suggestions: Vec::new(),
             milestone_suggestion_cursor: 0,
             active_filter: ActiveFilter::default(),
+            filters: Vec::new(),
             focus: None,
             focus_suspended: false,
             status_pick: None,
@@ -826,6 +831,19 @@ impl App {
         self.layout.inspector.reset();
     }
 
+    /// Sets the filters on top of the active one (the window's sidebar), and
+    /// selects the first MR left.
+    pub fn set_filters(&mut self, filters: Vec<ActiveFilter>) {
+        self.filters = filters;
+        self.visible_cache = None;
+        if self.visible_mrs().next().is_some() {
+            self.table_state.select(Some(0));
+        } else {
+            self.table_state.select(None);
+        }
+        self.layout.inspector.reset();
+    }
+
     /// Shows only the MRs with the status `pick` (or all of them again with
     /// `None`), on top of the filter, the focus and the search; selects the first.
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
@@ -973,8 +991,12 @@ impl App {
 
     /// The configured username while the "To review: me" filter is active.
     fn review_queue_user(&self) -> Option<&str> {
-        let filter = self.filter_defs.get(self.active_filter.index)?;
-        (filter.id == "reviewer_me")
+        let reviewer_me = |f: &ActiveFilter| {
+            self.filter_defs
+                .get(f.index)
+                .is_some_and(|d| d.id == "reviewer_me")
+        };
+        (reviewer_me(&self.active_filter) || self.filters.iter().any(reviewer_me))
             .then_some(self.config.gitlab_username.as_deref())
             .flatten()
     }
@@ -986,6 +1008,10 @@ impl App {
     /// function — no match arm needed when a new filter is added.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
         self.passes(mr, self.active_filter.index, &self.active_filter.query)
+            && self
+                .filters
+                .iter()
+                .all(|f| self.passes(mr, f.index, &f.query))
     }
 
     /// How many tracked MRs the filter at `index` (in `filter_defs`) shows without a
@@ -3021,6 +3047,37 @@ pub(crate) mod tests {
         assert!(lines[2].starts_with("| [!1](https://g/mr/1) | fix \\| login |"));
         assert!(lines[2].ends_with(" ✅ | ❌ |"));
         assert!(lines[3].ends_with(" … | … |"));
+    }
+
+    #[tokio::test]
+    async fn filters_on_top_of_the_view_must_all_pass() {
+        let mut app =
+            app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None"), ("d", "None")]).await;
+        app.branches = vec!["main".into(), "staging".into(), "prod".into()];
+        let on = |branches: &[&str]| {
+            MrStatus::MergedIn(branches.iter().map(|b| b.to_string()).collect())
+        };
+        app.mrs[0].status = on(&["main"]); // absent from staging and prod
+        app.mrs[1].status = on(&["main", "staging"]); // absent from prod only
+        app.mrs[2].status = on(&["main", "staging", "prod"]);
+        app.mrs[3].status = on(&["main"]);
+        app.mrs[3].flagged = true;
+        let index = |id: &str| app.filter_defs.iter().position(|d| d.id == id).unwrap();
+        let absent = index("absent_from_branch");
+        let flagged = index("flagged");
+        let filter = |index, query: &str| ActiveFilter {
+            index,
+            query: query.into(),
+        };
+        app.set_filters(vec![filter(absent, "staging"), filter(absent, "prod")]);
+        let visible =
+            |app: &App| -> Vec<String> { app.visible_mrs().map(|m| m.id.clone()).collect() };
+        assert_eq!(visible(&app), ["1", "4"]);
+        // With a view: both again.
+        app.set_filter(flagged, String::new());
+        assert_eq!(visible(&app), ["4"]);
+        app.set_filters(Vec::new());
+        assert_eq!(visible(&app), ["4"]);
     }
 
     #[tokio::test]

@@ -317,7 +317,7 @@ pub fn demo_project_overview(app: &App) -> crate::gitlab_detail::ProjectOverview
 /// The back end's saved views, to show them (the Android app has none, to
 /// import them into).
 fn demo_views(back_end: bool) -> Vec<crate::saved_views::SavedView> {
-    use crate::saved_views::{Filters, Order, SavedView};
+    use crate::saved_views::{Filter, Filters, Order, SavedView};
     if !back_end {
         return Vec::new();
     }
@@ -328,10 +328,16 @@ fn demo_views(back_end: bool) -> Vec<crate::saved_views::SavedView> {
     };
     vec![
         SavedView {
-            name: "Not in production".into(),
+            name: "Not shipped".into(),
             filters: Some(Filters {
-                filter: "absent_from_branch".into(),
-                value: "production".into(),
+                filter: "all".into(),
+                // Absent from staging and from production: two filters at once.
+                and: ["production", "staging"]
+                    .map(|branch| Filter {
+                        filter: "absent_from_branch".into(),
+                        value: branch.into(),
+                    })
+                    .to_vec(),
                 hide_merged: false,
                 ..Filters::default()
             }),
