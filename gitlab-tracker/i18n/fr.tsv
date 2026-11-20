@@ -2200,3 +2200,23 @@ rail	Releases	Releases
 	Owners	Propriétaires
 	changed, reviewed or approved it	l'a modifié, relu ou approuvé
 	worked in its folder	a travaillé dans son dossier
+	No job ran in this pipeline.	Aucun job n'a tourné dans ce pipeline.
+	On the critical path	Sur le chemin critique
+	On the path	Sur le chemin
+	Ran {ran}, after {queued} waiting for a runner	A tourné {ran}, après {queued} d'attente d'un runner
+	The median of this job's passed runs in the tracked MRs' pipelines.	La médiane des exécutions réussies de ce job dans les pipelines des MR suivies.
+	The timeline shows once the pipeline is over.	La chronologie s'affiche une fois le pipeline terminé.
+	This run	Cette exécution
+	Usually	D'habitude
+	What set the {total}:	Ce qui a fixé les {total} :
+	Where minutes would come back	Où regagner des minutes
+	Worked out from the stage order: GitLab's `needs:` were not read (no GraphQL), so a job using them may have started earlier.	Calculé d'après l'ordre des stages : les `needs:` de GitLab n'ont pas été lus (pas de GraphQL), un job qui les utilise a donc pu démarrer plus tôt.
+	no gain	aucun gain
+	no wait for runners	sans attente de runner
+	on the critical path	sur le chemin critique
+	ran meanwhile	a tourné en parallèle
+	waiting for a runner	attente d'un runner
+	{job} took {pct} % longer than usual.	{job} a pris {pct} % de plus que d'habitude.
+	{job} twice as fast	{job} deux fois plus rapide
+	{ran} running on that path, {queued} waiting for a runner.	{ran} d'exécution sur ce chemin, {queued} d'attente d'un runner.
+@plural	The {n} other job ran meanwhile: making it faster gives nothing back.|The {n} other jobs ran meanwhile: making them faster gives nothing back.	{n} autre job a tourné en parallèle : l'accélérer ne fait rien gagner.|Les {n} autres jobs ont tourné en parallèle : les accélérer ne fait rien gagner.

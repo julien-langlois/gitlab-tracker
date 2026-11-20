@@ -28,6 +28,8 @@ const STAGE_GAP: f32 = 28.0;
 struct State {
     toggled: std::collections::HashSet<u64>,
     picked: Option<(u64, usize)>,
+    /// The jobs on a timeline, the critical path lit, rather than as stages.
+    timeline: bool,
 }
 
 pub fn tab(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
@@ -236,12 +238,8 @@ fn graph(
     project_url: Option<&str>,
 ) {
     let demo = g.app.read_only;
-    let mut stages: Vec<&str> = Vec::new();
-    for job in &pipeline.jobs {
-        if !stages.contains(&job.stage.as_str()) {
-            stages.push(&job.stage);
-        }
-    }
+    // In the order they run (GitLab lists the jobs newest first).
+    let stages = crate::critical_path::stage_order(&pipeline.jobs);
     // The job picked in this pipeline, else its first failed one.
     let picked = match state.picked {
         Some((pid, index)) if pid == pipeline.id => Some(index),
@@ -250,57 +248,82 @@ fn graph(
     .filter(|&i| pipeline.jobs.get(i).is_some_and(|j| has_log(j, demo)));
 
     let mut clicked = None;
-    egui::ScrollArea::horizontal()
-        .id_salt(("mr pipeline graph", &mr.id, pipeline.id))
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::new(STAGE_GAP, 0.0);
-                let mut previous: Option<f32> = None;
-                for stage in &stages {
-                    let column = ui.vertical(|ui| {
-                        ui.set_width(JOB_WIDTH);
-                        ui.spacing_mut().item_spacing.y = 8.0;
-                        let jobs: Vec<(usize, &PipelineJob)> = pipeline
-                            .jobs
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, j)| j.stage == *stage)
-                            .collect();
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 6.0;
-                            ui.label(
-                                RichText::new(stage.to_uppercase())
-                                    .font(fonts::medium(theme.text_size - 2.5))
-                                    .color(theme.palette.text_muted),
-                            );
-                            ui.label(
-                                muted(theme, jobs.len().to_string()).size(theme.text_size - 2.5),
-                            );
-                        });
-                        let mut first_center = None;
-                        for (index, job) in jobs {
-                            let response =
-                                job_box(ui, theme, job, JOB_WIDTH, picked == Some(index), demo);
-                            first_center.get_or_insert(response.rect.center().y);
-                            if response.clicked() && has_log(job, demo) {
-                                clicked = Some(index);
-                            }
-                        }
-                        first_center
-                    });
-                    // The connector from the previous stage's first job.
-                    let rect = column.response.rect;
-                    if let (Some(left), Some(y)) = (previous, column.inner) {
-                        ui.painter().line_segment(
-                            [egui::pos2(left + 4.0, y), egui::pos2(rect.left() - 4.0, y)],
-                            Stroke::new(1.5, theme.palette.border),
-                        );
-                    }
-                    previous = Some(rect.right());
-                }
-            });
+    ui.allocate_ui(Vec2::new(240.0, 28.0), |ui| {
+        let labels = [tl("Stages"), tl("Timeline")];
+        if let Some(i) = super::board::segmented(
+            ui,
+            theme,
+            &format!("pipeline-view-{}", pipeline.id),
+            &labels,
+            usize::from(state.timeline),
+        ) {
+            state.timeline = i == 1;
+        }
+    });
+    ui.add_space(12.0);
+    if state.timeline {
+        let usual = g.memo.usual_jobs.get(&g.app.project_id, (), || {
+            crate::critical_path::usual(g.app.mrs.iter().flat_map(|m| m.pipelines.iter()))
         });
+        if let Some(i) = super::pipeline_timeline::view(ui, theme, pipeline, &usual, picked) {
+            if pipeline.jobs.get(i).is_some_and(|j| has_log(j, demo)) {
+                clicked = Some(i);
+            }
+        }
+    } else {
+        egui::ScrollArea::horizontal()
+            .id_salt(("mr pipeline graph", &mr.id, pipeline.id))
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(STAGE_GAP, 0.0);
+                    let mut previous: Option<f32> = None;
+                    for stage in stages.iter().map(String::as_str) {
+                        let column = ui.vertical(|ui| {
+                            ui.set_width(JOB_WIDTH);
+                            ui.spacing_mut().item_spacing.y = 8.0;
+                            let jobs: Vec<(usize, &PipelineJob)> = pipeline
+                                .jobs
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, j)| j.stage == *stage)
+                                .collect();
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.0;
+                                ui.label(
+                                    RichText::new(stage.to_uppercase())
+                                        .font(fonts::medium(theme.text_size - 2.5))
+                                        .color(theme.palette.text_muted),
+                                );
+                                ui.label(
+                                    muted(theme, jobs.len().to_string())
+                                        .size(theme.text_size - 2.5),
+                                );
+                            });
+                            let mut first_center = None;
+                            for (index, job) in jobs {
+                                let response =
+                                    job_box(ui, theme, job, JOB_WIDTH, picked == Some(index), demo);
+                                first_center.get_or_insert(response.rect.center().y);
+                                if response.clicked() && has_log(job, demo) {
+                                    clicked = Some(index);
+                                }
+                            }
+                            first_center
+                        });
+                        // The connector from the previous stage's first job.
+                        let rect = column.response.rect;
+                        if let (Some(left), Some(y)) = (previous, column.inner) {
+                            ui.painter().line_segment(
+                                [egui::pos2(left + 4.0, y), egui::pos2(rect.left() - 4.0, y)],
+                                Stroke::new(1.5, theme.palette.border),
+                            );
+                        }
+                        previous = Some(rect.right());
+                    }
+                });
+            });
+    }
     if let Some(index) = clicked {
         // A second click on the job shown folds its log.
         state.picked = if picked == Some(index) {

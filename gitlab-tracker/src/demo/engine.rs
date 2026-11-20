@@ -837,8 +837,11 @@ impl World {
                     status: j.status.into(),
                     duration: j.duration,
                     queued_duration: j.queued,
+                    needs: None,
                 })
                 .collect(),
+            // The demo's jobs all wait for the stages before them.
+            needs_read: true,
         }
     }
 

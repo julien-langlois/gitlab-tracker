@@ -98,6 +98,8 @@ pub struct Memos {
     pub milestones: Memo<(), Vec<super::milestones::Milestone>>,
     /// Stacked MRs.
     pub stacks: Memo<(), Vec<super::stacks::Stack>>,
+    /// How long each job usually runs, over the tracked MRs' pipelines.
+    pub usual_jobs: Memo<(), std::collections::HashMap<String, f64>>,
     /// The cockpit's labels card: (rows, unlabelled).
     pub labels: Memo<(), (Vec<super::labels::LabelRow>, usize)>,
 }

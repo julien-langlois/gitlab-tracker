@@ -36,6 +36,7 @@ mod next;
 mod overlaps;
 mod palette;
 mod person;
+mod pipeline_timeline;
 mod prefs;
 mod promote;
 mod rail_badges;

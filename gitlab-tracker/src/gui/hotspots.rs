@@ -704,6 +704,7 @@ mod tests {
             updated_at: None,
             sha: None,
             jobs: vec![],
+            needs_read: false,
         }];
         let mut big_review = mr("4", &["src/a.rs"], MergeabilityStatus::NotApproved);
         big_review.data.diff_stats.as_mut().unwrap().additions = 500;

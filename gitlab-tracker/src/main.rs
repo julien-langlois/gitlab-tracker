@@ -6,6 +6,8 @@ mod changelog;
 mod cli;
 mod columns_core;
 mod config;
+#[cfg(feature = "gui")]
+mod critical_path;
 mod demo;
 mod events;
 mod filters_core;

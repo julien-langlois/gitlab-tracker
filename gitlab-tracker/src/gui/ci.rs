@@ -1698,6 +1698,7 @@ mod tests {
             status: status.into(),
             duration: Some(60.0),
             queued_duration: None,
+            needs: None,
         }
     }
 
@@ -1713,6 +1714,7 @@ mod tests {
             updated_at: Some(at.replace("00:00Z", "10:00Z")),
             sha: Some(sha.into()),
             jobs,
+            needs_read: false,
         };
         mr.data = MrData {
             title: "A".into(),

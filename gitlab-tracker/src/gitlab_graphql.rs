@@ -98,7 +98,8 @@ fn fragment() -> String {
         "fragment MrPipelines on MergeRequest {{ iid \
            pipelines(first: {PIPELINES_PER_MR}) {{ nodes {{ id status createdAt updatedAt sha \
              jobs(first: {JOBS_PER_PIPELINE}, retried: false) {{ nodes {{ \
-               id name status duration queuedDuration stage {{ name }} }} }} }} }} }}"
+               id name status duration queuedDuration schedulingType \
+               needs {{ nodes {{ name }} }} stage {{ name }} }} }} }} }} }}"
     )
 }
 
@@ -234,6 +235,7 @@ fn pipeline_from(node: &Value) -> Option<Pipeline> {
         updated_at: text(node, "updatedAt"),
         sha: text(node, "sha"),
         jobs,
+        needs_read: true,
     })
 }
 
@@ -249,6 +251,14 @@ fn job_from(node: &Value) -> Option<PipelineJob> {
         status: text(node, "status").unwrap_or_default().to_lowercase(),
         duration: node.get("duration").and_then(Value::as_f64),
         queued_duration: node.get("queuedDuration").and_then(Value::as_f64),
+        // Only a job scheduled by `needs:` waits for them: an empty list then
+        // starts it at once, where a stage job's empty list says nothing.
+        needs: (text(node, "schedulingType").as_deref() == Some("dag")).then(|| {
+            node.pointer("/needs/nodes")
+                .and_then(Value::as_array)
+                .map(|n| n.iter().filter_map(|n| text(n, "name")).collect())
+                .unwrap_or_default()
+        }),
     })
 }
 
@@ -384,9 +394,11 @@ mod tests {
                   "createdAt": "2026-11-10T08:00:00Z", "updatedAt": "2026-11-10T08:05:00Z",
                   "sha": "abc", "jobs": { "nodes": [
                       { "id": "gid://gitlab/Ci::Build/100", "name": "lint", "status": "SUCCESS",
-                        "duration": 12, "queuedDuration": 1.5, "stage": { "name": "test" } },
+                        "duration": 12, "queuedDuration": 1.5, "schedulingType": "stage",
+                        "needs": { "nodes": [] }, "stage": { "name": "test" } },
                       { "id": "gid://gitlab/Ci::Build/101", "name": "deploy", "status": "MANUAL",
-                        "duration": null, "queuedDuration": null, "stage": { "name": "deploy" } } ] } },
+                        "duration": null, "queuedDuration": null, "schedulingType": "dag",
+                        "needs": { "nodes": [ { "name": "lint" } ] }, "stage": { "name": "deploy" } } ] } },
                 { "id": "gid://gitlab/Ci::Pipeline/11", "status": "WAITING_FOR_RESOURCE",
                   "createdAt": null, "updatedAt": null, "sha": "def", "jobs": { "nodes": [] } } ] } },
             { "iid": "17", "pipelines": { "nodes": [] } } ] } } } }),
@@ -415,6 +427,10 @@ mod tests {
             (jobs[0].status.as_str(), jobs[0].duration),
             ("manual", None)
         );
+        // Only a job scheduled by `needs:` says what it waits for.
+        assert_eq!(jobs[1].needs, None);
+        assert_eq!(jobs[0].needs, Some(vec!["lint".to_string()]));
+        assert!(pipelines[1].needs_read);
     }
 
     #[test]

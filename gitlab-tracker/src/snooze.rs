@@ -250,6 +250,7 @@ mod tests {
             updated_at: None,
             sha: Some("aaa".into()),
             jobs: vec![],
+            needs_read: false,
         }];
         mr
     }

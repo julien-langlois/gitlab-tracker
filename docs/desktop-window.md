@@ -103,6 +103,15 @@ on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR
   offered as a pair, and the files nobody but the author knows are listed.
 - **Tabs:** the discussions in full (with the code each thread is about), the
   changes, the commits (where each one is, branch by branch) and the pipelines.
+- **Pipelines, as a timeline:** each pipeline shows its jobs as stages, as in
+  GitLab, or on a timeline (*Stages* / *Timeline*): each job where it ran, its
+  wait for a runner before it, and the **critical path** lit — the chain of
+  jobs that set the pipeline's duration. Under it, the path's jobs against
+  their usual time (the median of their passed runs in the tracked MRs'
+  pipelines), and what would give minutes back: each path job twice as fast,
+  no wait for runners, and the longest job off the path, which gives nothing.
+  The jobs' `needs:` are read over GraphQL; without it, the path follows the
+  stage order, and the timeline says so.
 - **Right column:** a timeline, approval rules, related MRs (same ticket, same
   branch, mentions) and how the MR compares with the other tracked ones.
 

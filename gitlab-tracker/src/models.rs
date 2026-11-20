@@ -863,6 +863,11 @@ pub struct PipelineJob {
     /// e.g. state files older than it).
     #[serde(default)]
     pub queued_duration: Option<f64>,
+    /// The jobs it waits for, by name, when it uses `needs:` (GitLab's DAG;
+    /// an empty list starts at once). `None`: it waits for the stages before
+    /// it, or it is not known (read over REST, which does not give them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub needs: Option<Vec<String>>,
 }
 
 /// A GitLab pipeline attached to a merge request.
@@ -883,6 +888,10 @@ pub struct Pipeline {
     /// Jobs are fetched alongside the pipeline and persisted across restarts.
     #[serde(default)]
     pub jobs: Vec<PipelineJob>,
+    /// Whether the jobs' `needs:` were read (over GraphQL): a job without
+    /// them then waits for the stages before it, for sure.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub needs_read: bool,
 }
 
 pub enum AppEvent {
