@@ -1,0 +1,62 @@
+{
+  "refresh_interval_secs": 900,
+  "default_branches": [
+    "main"
+  ],
+  "table_label_prefixes": [
+    "deploy::",
+    "review::"
+  ],
+  "label_colors": {
+    "fix": {
+      "bg": "red",
+      "fg": "white"
+    },
+    "review::*": {
+      "bg": "cyan",
+      "fg": "black"
+    },
+    "deploy::*": {
+      "bg": "green",
+      "fg": "black"
+    },
+    "size::*": {
+      "bg": "dark_gray",
+      "fg": "white"
+    },
+    "bug": {
+      "bg": "red",
+      "fg": "white"
+    },
+    "review::approved": {
+      "bg": "magenta",
+      "fg": "white"
+    }
+  },
+  "activity_stale_days": 7,
+  "activity_recent_days": 2,
+  "review_reminder_hours": 24,
+  "show_cockpit": true,
+  "hide_merged": false,
+  "cockpit_thresholds": {
+    "stale_days": 7,
+    "old_open_warning_days": 7,
+    "old_open_alert_days": 14,
+    "due_soon_days": 7,
+    "complex_score": 0.66,
+    "many_commits": 10,
+    "many_files": 20,
+    "hot_threads": 10,
+    "release_urgent_days": 3,
+    "release_urgent_remaining": 2,
+    "release_soon_days": 7,
+    "release_soon_remaining": 5,
+    "max_release_summaries": 3
+  },
+  "visible_columns": {},
+  "complexity_profile": {
+    "name": "Generic",
+    "easy_threshold": 200,
+    "hard_threshold": 1000
+  }
+}

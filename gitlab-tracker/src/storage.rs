@@ -2238,6 +2238,82 @@ mod tests {
         assert!(dir.path("tracker_state.json").exists());
     }
 
+    /// A configuration directory written by gitlab-tracker 0.6.0 itself
+    /// (`tests/fixtures/v0.6.0`): the first launch reads all of it, every field of
+    /// every MR survives the import into tracker.db, and stats.db is migrated
+    /// with its rows.
+    #[tokio::test]
+    async fn a_0_6_configuration_upgrades_without_losing_anything() {
+        const URL_06: &str = "https://gitlab.com";
+        const STATE: &str = "tracker_1baab28d.json";
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v0.6.0");
+        let dir = TempConfigDir::new("upgrade-0.6");
+        for file in ["config.json", "projects.toml", "stats.db", STATE] {
+            std::fs::copy(fixture.join(file), dir.path(file)).unwrap();
+        }
+        assert_eq!(tracker_state_file_name(URL_06, "123456"), STATE);
+        let before: SavedState =
+            serde_json::from_str(&std::fs::read_to_string(dir.path(STATE)).unwrap()).unwrap();
+
+        // projects.toml and config.json, as they are.
+        let projects = load_projects_toml().await.projects;
+        assert_eq!(projects.len(), 1);
+        assert_eq!(
+            projects[0].tracked_branches.as_deref(),
+            Some(&["main".to_string(), "staging".into(), "production".into()][..])
+        );
+        let config = load_or_create_config_async().await;
+        assert!(!config.default_branches.is_empty());
+
+        // The state: imported once, then read back from tracker.db, unchanged.
+        let first = load_state_async(URL_06, "123456").await;
+        assert!(!dir.path(STATE).exists());
+        assert!(dir.path(&format!("{STATE}.imported")).exists());
+        let (mrs, _, known, discovery, dismissed) = load_state_async(URL_06, "123456").await;
+        assert_eq!(mrs.len(), 7);
+        assert_eq!(mrs.len(), first.0.len());
+        // Field by field, through JSON (sets sorted: their order is not kept).
+        fn canonical(mut v: serde_json::Value) -> serde_json::Value {
+            match &mut v {
+                serde_json::Value::Array(items) => {
+                    let mut sorted: Vec<_> = items.drain(..).map(canonical).collect();
+                    sorted.sort_by_key(|i| i.to_string());
+                    *items = sorted;
+                }
+                serde_json::Value::Object(map) => {
+                    for item in map.values_mut() {
+                        *item = canonical(item.take());
+                    }
+                }
+                _ => {}
+            }
+            v
+        }
+        for old in &before.mrs {
+            let new = mrs.iter().find(|m| m.id == old.id).expect("MR kept");
+            assert_eq!(
+                canonical(serde_json::to_value(new).unwrap()),
+                canonical(serde_json::to_value(old).unwrap()),
+                "MR {}",
+                old.id
+            );
+        }
+        assert_eq!(known, before.last_known_branches);
+        assert_eq!(discovery, before.discovery_started_at);
+        assert_eq!(dismissed, before.dismissed_mr_ids);
+
+        // stats.db: migrated from 0.6's schema, its snapshots kept.
+        #[cfg(feature = "stats")]
+        {
+            use gitlab_tracker_stats::db::SnapshotQuery;
+            let db =
+                gitlab_tracker_stats::SqliteStatsDb::open(dir.path("stats.db").to_str().unwrap())
+                    .await
+                    .unwrap();
+            assert_eq!(db.query(&SnapshotQuery::default()).await.unwrap().len(), 20);
+        }
+    }
+
     #[tokio::test]
     async fn a_state_file_is_imported_once_and_reloaded_from_the_database() {
         let dir = TempConfigDir::new("state-import");

@@ -1,4 +1,4 @@
-use sqlx::{AssertSqlSafe, SqlitePool};
+use sqlx::{AssertSqlSafe, Connection as _, SqliteConnection, SqlitePool};
 
 use crate::promotion::{ArrivalKind, BranchArrival};
 use crate::snapshot::MrStatsSnapshot;
@@ -79,8 +79,15 @@ impl SqliteStatsDb {
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
             .foreign_keys(true);
 
+        // Migrations run on a connection of their own, before the pool opens: a
+        // pooled connection that read the schema before an `ALTER TABLE … ADD
+        // COLUMN` would then return one column more than sqlx expects, and panic.
+        // That connection stays open until the pool is, so an in-memory database
+        // (shared by sqlx between the connections) is not dropped in between.
+        let mut migrating = SqliteConnection::connect_with(&options).await?;
+        Self::run_migrations(&mut migrating).await?;
         let pool = SqlitePool::connect_with(options).await?;
-        Self::run_migrations(&pool).await?;
+        migrating.close().await?;
         Ok(Self { pool })
     }
 
@@ -88,9 +95,9 @@ impl SqliteStatsDb {
     ///
     /// `PRAGMA user_version` records how many of [`MIGRATIONS`] ran, so a new schema
     /// change is a new file appended to the list — never an edit of a published one.
-    async fn run_migrations(pool: &SqlitePool) -> Result<(), StatsError> {
+    async fn run_migrations(conn: &mut SqliteConnection) -> Result<(), StatsError> {
         let applied: i64 = sqlx::query_scalar("PRAGMA user_version")
-            .fetch_one(pool)
+            .fetch_one(&mut *conn)
             .await?;
         if applied > MIGRATIONS.len() as i64 {
             return Err(StatsError::NewerSchema {
@@ -99,7 +106,7 @@ impl SqliteStatsDb {
             });
         }
         for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
-            let mut tx = pool.begin().await?;
+            let mut tx = sqlx::Connection::begin(&mut *conn).await?;
             // A migration file of this crate (`include_str!`): a literal.
             sqlx::query(*sql).execute(&mut *tx).await?;
             // PRAGMA arguments cannot be bound: the value is our own integer.

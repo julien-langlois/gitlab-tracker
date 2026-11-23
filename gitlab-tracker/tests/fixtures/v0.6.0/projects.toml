@@ -1,0 +1,12 @@
+[[project]]
+name = "Demo"
+gitlab_url = "https://gitlab.com"
+project_id = "123456"
+active = true
+tracked_branches = [
+    "main",
+    "staging",
+    "production",
+]
+refresh_interval_secs = 900
+hide_merged = false

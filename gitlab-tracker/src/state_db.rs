@@ -163,13 +163,19 @@ pub async fn open_in(dir: &Path) -> anyhow::Result<Arc<StateDb>> {
 impl StateDb {
     pub async fn open(path: &Path) -> anyhow::Result<Self> {
         use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+        use sqlx::Connection as _;
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Wal)
             .foreign_keys(true);
+        // Migrations on a connection of their own, before the pool: see
+        // `SqliteStatsDb::open` (a pooled connection with the schema of before an
+        // `ALTER TABLE … ADD COLUMN` makes sqlx panic on its rows).
+        let mut migrating = sqlx::SqliteConnection::connect_with(&options).await?;
+        run_migrations(&mut migrating).await?;
         let pool = SqlitePool::connect_with(options).await?;
-        run_migrations(&pool).await?;
+        sqlx::Connection::close(migrating).await?;
         Ok(Self {
             pool,
             stored: Default::default(),
@@ -798,9 +804,9 @@ impl StateDb {
     }
 }
 
-async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
+async fn run_migrations(conn: &mut sqlx::SqliteConnection) -> anyhow::Result<()> {
     let applied: i64 = sqlx::query_scalar("PRAGMA user_version")
-        .fetch_one(pool)
+        .fetch_one(&mut *conn)
         .await?;
     // A newer version wrote it (the user went back to an older binary): its
     // schema is unknown here, and writing to it could lose data.
@@ -812,7 +818,7 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         );
     }
     for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
-        let mut tx = pool.begin().await?;
+        let mut tx = sqlx::Connection::begin(&mut *conn).await?;
         // A migration file of this crate (`include_str!`): a literal.
         sqlx::raw_sql(*sql).execute(&mut *tx).await?;
         // PRAGMA arguments cannot be bound: the value is our own integer.

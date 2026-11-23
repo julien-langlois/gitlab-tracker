@@ -1,0 +1,418 @@
+{
+  "mrs": [
+    {
+      "id": "104",
+      "found_branches": [
+        "production",
+        "staging",
+        "main"
+      ],
+      "flagged": true,
+      "linked_ticket": {
+        "schema_version": 2,
+        "id": "4271",
+        "subject": "Expose MR metadata via GraphQL — server-side implementation",
+        "status": "In Progress",
+        "url": "https://redmine.example.com/issues/4271",
+        "author": "Marina Graphetti",
+        "assignee": "Thomas Dubosc",
+        "time_estimate": 28800,
+        "time_spent": 18000,
+        "time_remaining": 10800,
+        "tracker_type": "Evolution",
+        "priority": "High",
+        "version": "v2.4.0",
+        "start_date": "2024-04-15",
+        "done_ratio": 65
+      },
+      "title": "feat(api): Introduce GraphQL endpoint for MR metadata",
+      "sha": "c9d0e1f2",
+      "description": "This MR introduces a fully typed GraphQL endpoint for Merge Request metadata,\nbuilt with **async-graphql** and exposed via **Axum**.\n\n## Motivation\n\nREST endpoints were becoming unwieldy for clients needing partial data.\nGraphQL allows consumers to request only the fields they need, reducing\npayload size and round-trips significantly.\n\nThe existing `/api/v1/mrs` endpoint returns the full MR object (~4 KB) even\nwhen the consumer only needs the `id` and `status` fields. At scale, this\nadds up to hundreds of megabytes of unnecessary data transfer per day.\n\n## Implementation\n\n- Defined `MergeRequestType` and `BranchType` as GraphQL objects via `#[Object]`.\n- Integrated `async-graphql-axum` for the HTTP transport layer.\n- Added a `/graphql` route behind the existing JWT middleware.\n- Exposed a `mergeRequests(ids: [ID!])` query for batch fetching.\n- Added `mrById(id: ID!)` for single-item lookups.\n- Wrote a custom scalar for ISO 8601 timestamps.\n- Documented all fields with `#[graphql(description = \"...\")]`.\n- Configured `introspection` disabled in production for security.\n- Added `depth_limit` and `complexity_limit` guards to prevent abuse.\n\n## Schema (excerpt)\n\n- `type MergeRequest { id, title, status, author, assignee, labels }`\n- `type Branch { name, protected, default }`\n- `type Query { mrById(id: ID!): MergeRequest }`\n- `type Query { mergeRequests(ids: [ID!]!): [MergeRequest!]! }`\n\n## Breaking Changes\n\nNone. The REST API remains fully intact and is not deprecated.\nBoth endpoints coexist and share the same service layer.\n\n## Testing\n\n- Unit tests: 47 added, all passing on CI.\n- Integration tests: 12 added against a live test Postgres instance.\n- Fuzz tests: 3 added for input validation on scalar deserialisation.\n- Manual QA: performed with GraphiQL playground against staging environment.\n- Load test: 500 rps sustained for 60 s with p99 < 40 ms on staging.\n\n## Follow-up\n\n- Subscription support (live updates over WebSocket) is out of scope here\n  and will be tracked in epic #88.\n- Federation with the Notifications service is planned for v2.6.0.\n- Persisted queries support will be evaluated once adoption grows.\n",
+      "author": "Marina Graphetti (@marina_gql)",
+      "assignee": "Thomas Dubosc (@thomas_db)",
+      "reviewers": [
+        "Thomas Dubosc (@thomas_db)",
+        "Alex Devries (@alex_dev)"
+      ],
+      "milestone": "v2.4.0",
+      "milestone_due_date": "2024-05-31",
+      "milestone_description": "Demo milestone for the v2.4.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/104",
+      "labels": [
+        "feature",
+        "deploy::production",
+        "review::approved",
+        "size::L"
+      ],
+      "updated_at": "2026-11-22T13:32:46.000Z",
+      "source_branch": "feat/graphql-mr-metadata",
+      "target_branch": "main",
+      "state": "merged",
+      "merged_by": "Thomas Dubosc (@thomas_db)",
+      "merged_at": "2024-05-06T09:00:00.000Z",
+      "created_at": "2024-04-20T08:00:00Z",
+      "pipelines": [
+        {
+          "id": 9981,
+          "status": "success",
+          "created_at": "2024-11-14T10:23:05Z",
+          "jobs": [
+            {
+              "name": "lint",
+              "stage": "test",
+              "status": "success",
+              "duration": 18.0
+            },
+            {
+              "name": "unit-tests",
+              "stage": "test",
+              "status": "success",
+              "duration": 74.0
+            },
+            {
+              "name": "build",
+              "stage": "build",
+              "status": "success",
+              "duration": 42.0
+            },
+            {
+              "name": "deploy-staging",
+              "stage": "deploy",
+              "status": "success",
+              "duration": 31.0
+            }
+          ]
+        },
+        {
+          "id": 9942,
+          "status": "failed",
+          "created_at": "2024-11-13T17:08:42Z",
+          "jobs": [
+            {
+              "name": "lint",
+              "stage": "test",
+              "status": "success",
+              "duration": 17.0
+            },
+            {
+              "name": "unit-tests",
+              "stage": "test",
+              "status": "failed",
+              "duration": 61.0
+            },
+            {
+              "name": "build",
+              "stage": "build",
+              "status": "skipped",
+              "duration": null
+            },
+            {
+              "name": "deploy-staging",
+              "stage": "deploy",
+              "status": "skipped",
+              "duration": null
+            }
+          ]
+        }
+      ],
+      "user_notes_count": 5,
+      "diff_stats": {
+        "files_changed": 12,
+        "additions": 487,
+        "deletions": 53,
+        "commits_count": 8,
+        "commits_behind": 3
+      },
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "101",
+      "found_branches": [
+        "main",
+        "staging"
+      ],
+      "flagged": true,
+      "linked_ticket": null,
+      "title": "feat(auth): Add OAuth2 PKCE flow for mobile clients",
+      "sha": "a1b2c3d4",
+      "description": "Implemented PKCE challenge and verification flow.",
+      "author": "Alex Devries (@alex_dev)",
+      "assignee": "Sarah Codewyn (@sarah_code)",
+      "reviewers": [],
+      "milestone": "v2.4.0",
+      "milestone_due_date": "2024-05-31",
+      "milestone_description": "Demo milestone for the v2.4.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/101",
+      "labels": [
+        "deploy::staging",
+        "review::approved",
+        "feature"
+      ],
+      "updated_at": "2026-11-19T13:32:46.000Z",
+      "source_branch": "feat/oauth2-pkce",
+      "target_branch": "main",
+      "state": "merged",
+      "merged_by": "Sarah Codewyn (@sarah_code)",
+      "merged_at": "2024-05-01T09:45:00.000Z",
+      "created_at": "2024-04-25T10:00:00Z",
+      "pipelines": [],
+      "user_notes_count": 0,
+      "diff_stats": {
+        "files_changed": 4,
+        "additions": 89,
+        "deletions": 12,
+        "commits_count": 3,
+        "commits_behind": null
+      },
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "102",
+      "found_branches": [
+        "main"
+      ],
+      "flagged": false,
+      "linked_ticket": {
+        "schema_version": 2,
+        "id": "3987",
+        "subject": "Connection pool deadlocks under sustained high load",
+        "status": "Assigned",
+        "url": "https://redmine.example.com/issues/3987",
+        "author": "Thomas Dubosc",
+        "assignee": "Alex Devries",
+        "time_estimate": 14400,
+        "time_spent": 5400,
+        "time_remaining": 9000,
+        "tracker_type": "Bug",
+        "priority": "Low",
+        "version": "v2.4.0",
+        "start_date": "2024-04-28",
+        "done_ratio": 30
+      },
+      "title": "fix(db): Resolve connection pool deadlocks under heavy load",
+      "sha": "e5f6g7h8",
+      "description": "Adjusted max pool size and statement timeout.",
+      "author": "Thomas Dubosc (@thomas_db)",
+      "assignee": "Alex Devries (@alex_dev)",
+      "reviewers": [
+        "Sarah Codewyn (@sarah_code)"
+      ],
+      "milestone": "v2.4.0",
+      "milestone_due_date": "2024-05-31",
+      "milestone_description": "Demo milestone for the v2.4.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/102",
+      "labels": [
+        "bug",
+        "deploy::prod_pending"
+      ],
+      "updated_at": "2026-11-09T13:32:46.000Z",
+      "source_branch": "fix/db-pool-deadlock",
+      "target_branch": "main",
+      "state": "opened",
+      "merged_by": null,
+      "merged_at": null,
+      "created_at": "2024-04-28T14:30:00Z",
+      "pipelines": [],
+      "user_notes_count": 3,
+      "diff_stats": {
+        "files_changed": 6,
+        "additions": 231,
+        "deletions": 18,
+        "commits_count": 5,
+        "commits_behind": 7
+      },
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "103",
+      "found_branches": [],
+      "flagged": false,
+      "linked_ticket": null,
+      "title": "refactor(ui): Optimize Ratatui render loop with double buffering",
+      "sha": null,
+      "description": "Reducing CPU usage during high-frequency ticks.",
+      "author": "Julien Morel (@julien_m)",
+      "assignee": "Julien Morel (@julien_m)",
+      "reviewers": [],
+      "milestone": "v2.5.0",
+      "milestone_due_date": null,
+      "milestone_description": "Demo milestone for the v2.5.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/103",
+      "labels": [
+        "performance",
+        "review::needs_work"
+      ],
+      "updated_at": "2026-11-22T13:32:46.000Z",
+      "source_branch": "refactor/ui-double-buffer",
+      "target_branch": "develop",
+      "state": "opened",
+      "merged_by": null,
+      "merged_at": null,
+      "created_at": null,
+      "pipelines": [],
+      "user_notes_count": 0,
+      "diff_stats": null,
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "105",
+      "found_branches": [
+        "main"
+      ],
+      "flagged": false,
+      "linked_ticket": null,
+      "title": "fix(ci): Repair flaky integration tests in pipeline stage 3",
+      "sha": "3a4b5c6d",
+      "description": "Isolated timing-dependent assertions and added retry logic.",
+      "author": "Sarah Codewyn (@sarah_code)",
+      "assignee": "Alex Devries (@alex_dev)",
+      "reviewers": [],
+      "milestone": "v2.4.0",
+      "milestone_due_date": "2024-05-31",
+      "milestone_description": "Demo milestone for the v2.4.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/105",
+      "labels": [
+        "bug",
+        "review::approved",
+        "size::S"
+      ],
+      "updated_at": "2026-10-24T13:32:46.000Z",
+      "source_branch": "fix/ci-flaky-tests",
+      "target_branch": "main",
+      "state": "closed",
+      "merged_by": null,
+      "merged_at": null,
+      "created_at": "2024-04-10T09:15:00Z",
+      "pipelines": [],
+      "user_notes_count": 6,
+      "diff_stats": {
+        "files_changed": 2,
+        "additions": 34,
+        "deletions": 8,
+        "commits_count": 1,
+        "commits_behind": 0
+      },
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "106",
+      "found_branches": [],
+      "flagged": false,
+      "linked_ticket": null,
+      "title": "chore(deps): Bump tokio to 1.37 and update async ecosystem",
+      "sha": "7e8f9a0b",
+      "description": "Routine dependency upgrade; resolves two CVEs in hyper transitive deps.",
+      "author": "Bot Renovate (@bot_renovate)",
+      "assignee": "Julien Morel (@julien_m)",
+      "reviewers": [],
+      "milestone": "v2.5.0",
+      "milestone_due_date": null,
+      "milestone_description": "Demo milestone for the v2.5.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/106",
+      "labels": [
+        "dependencies",
+        "review::needs_work"
+      ],
+      "updated_at": "2026-11-18T13:32:46.000Z",
+      "source_branch": "chore/bump-tokio-1.37",
+      "target_branch": "develop",
+      "state": "opened",
+      "merged_by": null,
+      "merged_at": null,
+      "created_at": "2024-04-22T11:00:00Z",
+      "pipelines": [],
+      "user_notes_count": 0,
+      "diff_stats": {
+        "files_changed": 1,
+        "additions": 12,
+        "deletions": 12,
+        "commits_count": 2,
+        "commits_behind": 2
+      },
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    },
+    {
+      "id": "107",
+      "found_branches": [],
+      "flagged": true,
+      "linked_ticket": null,
+      "title": "feat(notif): Add desktop notifications on branch status change",
+      "sha": null,
+      "description": "Uses notify-rust to surface MR merge events as OS notifications.",
+      "author": "Julien Morel (@julien_m)",
+      "assignee": "Marina Graphetti (@marina_gql)",
+      "reviewers": [
+        "Thomas Dubosc (@thomas_db)"
+      ],
+      "milestone": "v2.5.0",
+      "milestone_due_date": null,
+      "milestone_description": "Demo milestone for the v2.5.0 release train.",
+      "web_url": "https://gitlab.com/demo/project/-/merge_requests/107",
+      "labels": [
+        "feature",
+        "review::needs_work",
+        "size::M"
+      ],
+      "updated_at": "2026-11-05T13:32:46.000Z",
+      "source_branch": "feat/desktop-notifications",
+      "target_branch": "main",
+      "state": "opened",
+      "merged_by": null,
+      "merged_at": null,
+      "created_at": "2024-04-30T16:45:00Z",
+      "pipelines": [],
+      "user_notes_count": 1,
+      "diff_stats": null,
+      "commits": [],
+      "landed_fingerprint": null,
+      "threads": [],
+      "review": null,
+      "approved_by": []
+    }
+  ],
+  "last_known_branches": {
+    "105": [
+      "main"
+    ],
+    "101": [
+      "main",
+      "staging"
+    ],
+    "102": [
+      "main"
+    ],
+    "104": [
+      "production",
+      "staging",
+      "main"
+    ]
+  },
+  "discovery_started_at": "2024-04-01T08:00:00Z",
+  "dismissed_mr_ids": [
+    "77"
+  ]
+}
