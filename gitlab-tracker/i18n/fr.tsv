@@ -714,6 +714,7 @@ date	Merged	Fusionnée
 	Click to list these MRs	Cliquer pour afficher ces MR
 	due today	échéance aujourd'hui
 	Click to list them	Cliquer pour les afficher
+	List its MRs	Lister ses MRs
 	{delta} since {time}	{delta} depuis {time}
 	Needs attention	À traiter en priorité
 	Nothing urgent: no MR is blocked, late or waiting for you.	Rien d'urgent : aucune MR n'est bloquée, en retard ou en attente de vous.

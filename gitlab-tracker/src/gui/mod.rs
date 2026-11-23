@@ -1242,12 +1242,17 @@ impl GuiApp {
     /// Lists the MRs carrying `label` alone, on the merge requests page: the
     /// label filter on it and no other, no cockpit focus, no search.
     fn filter_by_label(&mut self, label: &str) {
-        let Some(index) = self
-            .app
-            .filter_defs
-            .iter()
-            .position(|def| def.id == "label")
-        else {
+        self.filter_by("label", label);
+    }
+
+    /// Lists the MRs of the release (milestone) `title`, as [`Self::filter_by_label`].
+    fn filter_by_milestone(&mut self, title: &str) {
+        self.filter_by("milestone", title);
+    }
+
+    /// The merge requests page with the filter `id` on `query` alone.
+    fn filter_by(&mut self, id: &str, query: &str) {
+        let Some(index) = self.app.filter_defs.iter().position(|def| def.id == id) else {
             return;
         };
         if self.app.focus.is_some() {
@@ -1265,7 +1270,7 @@ impl GuiApp {
         self.pending
             .push(Action::SetFilters(vec![crate::app::ActiveFilter {
                 index,
-                query: label.to_string(),
+                query: query.to_string(),
             }]));
         self.open_page(Page::MergeRequests);
     }

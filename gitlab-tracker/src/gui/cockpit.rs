@@ -26,8 +26,10 @@ const URGENT_COUNT: usize = 6;
 enum Pick {
     /// List the MRs behind this counter (key, label).
     Focus(String, String),
-    /// Select this MR on the merge requests page.
+    /// Open this MR's page.
     Mr(String),
+    /// List the MRs of this release (milestone) on the merge requests page.
+    Release(String),
     /// List the tracked MRs among a count of the stats' history (count, label).
     History(crate::ui::cockpit::History, usize, String),
 }
@@ -135,6 +137,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     match pick {
         Some(Pick::Focus(key, label)) => g.focus_on(&key, label),
         Some(Pick::Mr(id)) => g.open_mr(&id),
+        Some(Pick::Release(title)) => g.filter_by_milestone(&title),
         Some(Pick::History(history, counted, label)) => {
             super::merged_list::show_history(g, history, counted, label);
         }
@@ -602,7 +605,20 @@ fn release_block(ui: &mut Ui, theme: &Theme, r: &ReleaseView, counts: &Counts<'_
         } else {
             r.title.clone()
         };
-        ui.label(semibold(title, theme.text_size).color(color));
+        let response = ui
+            .add(egui::Label::new(semibold(title, theme.text_size).color(color)).sense(Sense::click()))
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .tip(tl("List its MRs"));
+        if response.hovered() {
+            ui.painter().hline(
+                response.rect.x_range(),
+                response.rect.bottom(),
+                Stroke::new(1.0, color),
+            );
+        }
+        if response.clicked() {
+            pick = Some(Pick::Release(r.title.clone()));
+        }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let (caption, tone) = due_caption(r, t);
             ui.add(Chip::new(&caption, tone.unwrap_or(t.gray)).pill());

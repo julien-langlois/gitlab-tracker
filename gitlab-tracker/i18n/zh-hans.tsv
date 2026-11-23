@@ -714,6 +714,7 @@ date	Merged	合并时间
 	Click to list these MRs	点击列出这些 MR
 	due today	今天到期
 	Click to list them	点击列出它们
+	List its MRs	列出其合并请求
 	{delta} since {time}	自 {time} 起 {delta}
 	Needs attention	需要关注
 	Nothing urgent: no MR is blocked, late or waiting for you.	没有紧急事项：没有受阻、逾期或等待你的 MR。
