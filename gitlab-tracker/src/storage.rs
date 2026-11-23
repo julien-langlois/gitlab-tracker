@@ -1117,20 +1117,7 @@ pub fn get_save_dir() -> Option<PathBuf> {
     Some(project_dirs.config_dir().to_path_buf())
 }
 
-/// Creates `dir` if needed and, on Unix, makes it private to its owner (`0700`):
-/// its logs, caches and `.env` describe the user's projects and may hold tokens
-/// (`.env`), so other local accounts must not read them. Best effort: a failure is
-/// logged later by the code that needs the directory.
-pub fn restrict_to_owner(dir: &Path) {
-    if std::fs::create_dir_all(dir).is_err() {
-        return;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-    }
-}
+pub use gitlab_tracker_store::restrict_to_owner;
 
 /// Under test the real config directory is never used: a test gets the directory
 /// it installed with `tests::TempConfigDir` (per thread), and none otherwise — so

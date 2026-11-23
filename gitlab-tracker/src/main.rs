@@ -1,5 +1,6 @@
 mod actions;
 mod app;
+mod app_event;
 mod branch_flow;
 #[cfg(feature = "gui")]
 mod changelog;
@@ -14,14 +15,10 @@ mod events;
 mod filters_core;
 #[cfg(feature = "gui")]
 mod freeze;
-mod gitlab;
 #[cfg(feature = "gui")]
 mod gitlab_detail;
-mod gitlab_graphql;
-mod gitlab_signatures;
 #[cfg(feature = "gui")]
 mod gui;
-mod i18n;
 mod merged_range;
 mod models;
 #[cfg(feature = "gui")]
@@ -30,19 +27,23 @@ mod notify;
 #[cfg(feature = "gui")]
 mod owners;
 mod saved_views;
-mod sentinel;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
-mod signatures;
-// Set and shown by the window; the terminal UI only keeps it in the state file.
-#[cfg_attr(not(feature = "gui"), allow(dead_code))]
-mod snooze;
-mod state_db;
 mod status;
 mod storage;
 mod ui;
 mod utils;
+
+// The MR model and the GitLab client live in `gitlab-tracker-gitlab`, the
+// local state in `gitlab-tracker-store`, the translation hook in
+// `gitlab-tracker-core`: named here so `crate::gitlab::…`,
+// `crate::i18n::…` and the like read the same everywhere.
+use gitlab_tracker_core::i18n;
+use gitlab_tracker_gitlab::{
+    gitlab, gitlab_graphql, gitlab_signatures, sentinel, signatures, snooze,
+};
+use gitlab_tracker_store::state_db;
 
 use anyhow::Context;
 use app::{App, AppInit};

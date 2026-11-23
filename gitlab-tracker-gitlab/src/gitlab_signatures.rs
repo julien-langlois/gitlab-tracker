@@ -15,8 +15,9 @@ use futures::future::join_all;
 use gitlab_tracker_core::pacing::SendPaced;
 use tokio::sync::{mpsc::UnboundedSender, Semaphore};
 
+use crate::events::GitlabEvent;
 use crate::gitlab::{get_all_pages, http_client, CommitJson, FetchContext};
-use crate::models::{AppEvent, MrCommit};
+use crate::models::MrCommit;
 use crate::signatures::{
     classify, patch_id, DiffFile, Policy, Report, Signature, SignatureData, Status, Verdict,
     Version, VersionCommit,
@@ -63,21 +64,24 @@ pub fn needs_check(
     !report.complete() || wants_versions(data, &report, policy)
 }
 
-/// Checks `request` in the background and emits [`AppEvent::SignaturesChecked`].
-pub fn spawn_signature_check(
+/// Checks `request` in the background and emits [`GitlabEvent::SignaturesChecked`].
+pub fn spawn_signature_check<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     request: CheckRequest,
     semaphore: Arc<Semaphore>,
-    tx: UnboundedSender<AppEvent>,
+    tx: UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let _permit = semaphore.acquire().await;
         let mr_id = request.mr_id.clone();
         let data = check(&ctx, request).await;
-        let _ = tx.send(AppEvent::SignaturesChecked {
-            mr_id,
-            data: Box::new(data),
-        });
+        crate::events::emit(
+            &tx,
+            GitlabEvent::SignaturesChecked {
+                mr_id,
+                data: Box::new(data),
+            },
+        );
     });
 }
 

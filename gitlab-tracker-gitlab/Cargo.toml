@@ -1,0 +1,39 @@
+[package]
+name = "gitlab-tracker-gitlab"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+# The `stats` feature brings sqlx 0.9, which needs 1.94.
+rust-version = "1.94"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "The merge-request model and GitLab client of gitlab-tracker (internal)"
+keywords = ["gitlab", "merge-request", "graphql", "client"]
+categories = ["api-bindings", "development-tools"]
+
+[features]
+# `TrackedMr::stats_snapshot`, the MR as the stats database records it.
+stats = ["dep:gitlab-tracker-stats"]
+
+[dependencies]
+gitlab-tracker-core = { workspace = true, features = ["pacing"] }
+gitlab-tracker-stats = { workspace = true, optional = true }
+chrono.workspace = true
+futures = "0.3"
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Patch-ids of commits, to recognise a signed commit GitLab rebased.
+sha2 = "0.10"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+tracing.workspace = true
+urlencoding = "2.1"
+zeroize.workspace = true
+
+[dev-dependencies]
+# Real time zones (daylight saving changes) for the snooze tests.
+chrono-tz = "0.9"
+# A stand-in GitLab server for the request-count tests.
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "io-util", "macros"] }

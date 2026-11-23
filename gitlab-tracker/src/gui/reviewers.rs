@@ -76,7 +76,7 @@ fn work_out(g: &mut GuiApp, mr: &TrackedMr, ctx: &egui::Context) -> State {
         declared: &declared,
         waiting: &waiting,
         names: &names,
-        is_bot: &crate::utils::is_bot,
+        is_bot: &gitlab_tracker_gitlab::is_bot,
     });
     State::Ready(Box::new(suggestions))
 }

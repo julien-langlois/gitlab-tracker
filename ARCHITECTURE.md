@@ -258,10 +258,16 @@ gitlab-tracker-stats/            # Library crate — optional analytics & veloci
 ## Crate boundaries
 
 ```text
-gitlab-tracker          (binary — TUI, desktop window (feature `gui`), event loop, notifications)
+gitlab-tracker          (binary — TUI, desktop window (feature `gui`), App state and its
+    │                    events, configuration files, notifications)
     │  uses
     ▼
-gitlab-tracker-core     (library — domain contracts, zero UI dependency)
+gitlab-tracker-store    (library — tracker.db: tracked MRs, their history, project caches)
+    │
+gitlab-tracker-gitlab   (library — the MR model, the GitLab REST/GraphQL client, branch
+    │                    scans, sentinel, signed commits, merge history)
+    ▼
+gitlab-tracker-core     (library — domain contracts, zero UI dependency, i18n hook)
     ├── provider: TrackerProvider / TicketTransitionProvider / TrackerError / LinkedTicket
     ├── domain:   GitlabMrState / MergeabilityStatus / PipelineState / Requirement
     ├── registries: FilterDef / ColumnDef / ShortcutBlock / ProjectSettingDef
@@ -275,8 +281,16 @@ The stats schema is versioned with `PRAGMA user_version`; migrations live in
 `gitlab-tracker-stats/migrations/` and are embedded with `include_str!`. Add a new
 numbered file and append it to `MIGRATIONS` in `db.rs` (the version is its index) — never edit a shipped migration.
 
-**Rule:** `gitlab-tracker-core` must never depend on `ratatui`, `crossterm`, or any
-TUI crate. It is the boundary that keeps domain logic testable in isolation.
+**Rule:** `gitlab-tracker-core`, `-gitlab` and `-store` never depend on `ratatui`,
+`crossterm`, `egui` or the app: they are the boundary that keeps the domain
+testable in isolation. The GitLab tasks (`spawn_*`) report a `GitlabEvent`, sent to
+any channel whose event type converts from it; the app's `AppEvent` does, variant
+by variant (`app_event.rs`). The binary names the moved modules at its root
+(`use gitlab_tracker_gitlab::{gitlab, …}`, `models.rs` re-exporting the model and
+`AppEvent`), so its code reads `crate::gitlab::…` and `crate::models::…` as before.
+
+All the library crates are internal: published so that `cargo install` builds,
+pinned with `=x.y.z` by the binary, no API stability (`docs/stability.md`).
 
 ---
 

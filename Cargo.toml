@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "gitlab-tracker",
     "gitlab-tracker-core",
+    "gitlab-tracker-gitlab",
+    "gitlab-tracker-store",
     "gitlab-tracker-redmine",
     "gitlab-tracker-stats",
 ]
@@ -20,6 +22,8 @@ repository = "https://github.com/julien-langlois/gitlab-tracker"
 # (docs/stability.md), so `cargo install gitlab-tracker@x.y.z` must build against
 # the x.y.z of each, never a newer one. cargo-release keeps the `=` on a bump.
 gitlab-tracker-core = { version = "=0.6.0", path = "gitlab-tracker-core" }
+gitlab-tracker-gitlab = { version = "=0.6.0", path = "gitlab-tracker-gitlab" }
+gitlab-tracker-store = { version = "=0.6.0", path = "gitlab-tracker-store" }
 gitlab-tracker-redmine = { version = "=0.6.0", path = "gitlab-tracker-redmine" }
 gitlab-tracker-stats = { version = "=0.6.0", path = "gitlab-tracker-stats" }
 # Third-party crates used by several members. Features listed here apply to every

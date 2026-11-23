@@ -121,10 +121,10 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo test -p gitlab-tracker-core --all-features --locked os_keyring -- --ignored
 
-  # Each group is checked with the `rust-version` its manifest declares: the
-  # libraries keep the workspace's, while the stats database (sqlx 0.9) and the
-  # binary that embeds it need a newer one. Bumping a version is done in the
-  # manifest only.
+  # Each group is checked with the `rust-version` its manifest declares: core and
+  # redmine keep the workspace's; what uses sqlx 0.9 (stats, store, and gitlab
+  # through its `stats` feature) needs 1.94; the binary (bevel) 1.95. Bumping a
+  # version is done in the manifest only.
   msrv:
     name: MSRV (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -135,9 +135,12 @@ jobs:
           - name: core, redmine
             manifest: Cargo.toml
             packages: -p gitlab-tracker-core -p gitlab-tracker-redmine
-          - name: stats, binary
+          - name: stats, gitlab, store
+            manifest: gitlab-tracker-store/Cargo.toml
+            packages: -p gitlab-tracker-stats -p gitlab-tracker-gitlab -p gitlab-tracker-store
+          - name: binary
             manifest: gitlab-tracker/Cargo.toml
-            packages: -p gitlab-tracker-stats -p gitlab-tracker
+            packages: -p gitlab-tracker
     steps:
       - uses: actions/checkout@v4
 

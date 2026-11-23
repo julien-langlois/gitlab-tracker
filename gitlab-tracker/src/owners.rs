@@ -28,8 +28,8 @@ use chrono::{DateTime, Utc};
 /// Where GitLab looks for the file, in its order: the first found is used.
 pub const LOCATIONS: [&str; 3] = ["CODEOWNERS", "docs/CODEOWNERS", ".gitlab/CODEOWNERS"];
 
-/// How far back the merged MRs are read.
-pub const HISTORY_DAYS: i64 = 90;
+// The merged MRs, as kept between launches (gitlab-tracker-gitlab).
+pub use gitlab_tracker_gitlab::history::{History, Merge, HISTORY_DAYS};
 
 // ── CODEOWNERS ───────────────────────────────────────────────────────────────
 
@@ -351,50 +351,6 @@ pub enum Declared {
 }
 
 // ── The merged MRs ───────────────────────────────────────────────────────────
-
-/// One merged MR, as far as ownership goes.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct Merge {
-    /// RFC 3339.
-    pub merged_at: String,
-    /// Logins.
-    pub author: String,
-    #[serde(default)]
-    pub reviewers: Vec<String>,
-    #[serde(default)]
-    pub approvers: Vec<String>,
-    /// The files it changed.
-    #[serde(default)]
-    pub paths: Vec<String>,
-}
-
-/// The project's merged MRs of the period, kept on disk between launches and
-/// read again from where they stopped.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct History {
-    /// By MR iid.
-    #[serde(default)]
-    pub merges: BTreeMap<u64, Merge>,
-    /// Names by login.
-    #[serde(default)]
-    pub people: BTreeMap<String, String>,
-    /// Up to when it is complete (RFC 3339): every MR merged before is in.
-    #[serde(default)]
-    pub read_at: Option<String>,
-}
-
-impl History {
-    pub fn read_at(&self) -> Option<DateTime<Utc>> {
-        time(self.read_at.as_deref()?)
-    }
-
-    /// Merges older than the period dropped.
-    pub fn trim(&mut self, now: DateTime<Utc>) {
-        let start = now - chrono::Duration::days(HISTORY_DAYS);
-        self.merges
-            .retain(|_, m| time(&m.merged_at).is_some_and(|t| t >= start));
-    }
-}
 
 fn time(text: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(text)

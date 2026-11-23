@@ -24,7 +24,7 @@ path = "src/main.rs"
 default = ["gui", "notifications"]
 notifications = ["dep:notify-rust"]
 redmine = ["dep:gitlab-tracker-redmine"]
-stats = ["dep:gitlab-tracker-stats"]
+stats = ["dep:gitlab-tracker-stats", "gitlab-tracker-gitlab/stats"]
 # Desktop window (`gitlab-tracker gui`) over the same app state as the TUI.
 # Needs Rust 1.95 (bevel).
 gui = [
@@ -44,6 +44,8 @@ gui = [
 
 [dependencies]
 gitlab-tracker-core = { workspace = true, features = ["secrets", "pacing"] }
+gitlab-tracker-gitlab.workspace = true
+gitlab-tracker-store.workspace = true
 # `TrackerProvider` implementations: the demo's tracker and the tests' doubles.
 async-trait.workspace = true
 gitlab-tracker-redmine = { workspace = true, optional = true }
@@ -122,6 +124,8 @@ bevel-window = { version = "0.1", optional = true, features = ["egui"] }
 windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
 
 [dev-dependencies]
+# A fresh tracker.db per test (one runtime each), and its events to check.
+gitlab-tracker-store = { workspace = true, features = ["test-support"] }
 # Real time zones (daylight saving changes) for the snooze tests.
 chrono-tz = "0.9"
 # A stand-in GitLab server for the request-count tests.

@@ -6,6 +6,7 @@ pub mod domain;
 pub mod filters;
 #[cfg(feature = "pacing")]
 pub mod http;
+pub mod i18n;
 #[cfg(feature = "pacing")]
 pub mod pacing;
 pub mod provider;

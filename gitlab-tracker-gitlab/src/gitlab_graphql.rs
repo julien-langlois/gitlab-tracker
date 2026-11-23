@@ -75,12 +75,12 @@ fn learn(base_url: &str, support: Support) {
 
 /// How a project is named in a query: its path, or its numeric id as a global ID.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum ProjectRef {
+pub enum ProjectRef {
     Path(String),
     Id(String),
 }
 
-pub(crate) fn project_ref(project_id: &str) -> ProjectRef {
+pub fn project_ref(project_id: &str) -> ProjectRef {
     let id = project_id.trim();
     if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
         ProjectRef::Id(format!("gid://gitlab/Project/{id}"))
@@ -104,7 +104,7 @@ fn fragment() -> String {
 }
 
 /// The query and its variables for the MRs `iids` of `project_id`.
-pub(crate) fn request_body(project_id: &str, iids: &[&str]) -> Value {
+pub fn request_body(project_id: &str, iids: &[&str]) -> Value {
     let mrs = "mergeRequests(iids: $iids, first: $first) { nodes { ...MrPipelines } }";
     let (query, variables) = match project_ref(project_id) {
         ProjectRef::Path(path) => (
@@ -128,7 +128,7 @@ pub(crate) fn request_body(project_id: &str, iids: &[&str]) -> Value {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct Response {
+pub struct Response {
     data: Option<Value>,
     #[serde(default)]
     errors: Vec<ResponseError>,
@@ -142,7 +142,7 @@ struct ResponseError {
 
 /// What one query brought back.
 #[derive(Debug)]
-pub(crate) enum Outcome {
+pub enum Outcome {
     /// Pipelines by MR iid (an MR left out reads them over REST).
     Read(HashMap<String, Vec<Pipeline>>),
     /// Over the instance's complexity / depth limits: split the batch.
@@ -154,7 +154,7 @@ pub(crate) enum Outcome {
 }
 
 /// Reads a GraphQL answer. Errors win over data: a partial answer is not trusted.
-pub(crate) fn outcome(response: Response) -> Outcome {
+pub fn outcome(response: Response) -> Outcome {
     if let Some(first) = response.errors.first() {
         let messages: Vec<String> = response
             .errors

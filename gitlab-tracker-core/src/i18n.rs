@@ -7,11 +7,6 @@
 //! return the English itself, so the TUI is unchanged and needs no translation
 //! crate.
 
-#![cfg_attr(
-    not(feature = "gui"),
-    allow(dead_code, reason = "only the GUI installs a translator")
-)]
-
 use std::sync::OnceLock;
 
 /// Where translations come from.

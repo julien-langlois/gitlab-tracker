@@ -1,0 +1,31 @@
+[package]
+name = "gitlab-tracker-store"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+# sqlx 0.9 needs 1.94.
+rust-version = "1.94"
+license.workspace = true
+repository.workspace = true
+description = "The local state of gitlab-tracker in SQLite (internal)"
+readme = "README.md"
+keywords = ["gitlab", "sqlite", "state"]
+categories = ["database", "development-tools"]
+
+[features]
+# For the app's tests: `state_db::open_in` opens a fresh database each time (one
+# runtime per test) and `StateDb::events_of` is there.
+test-support = []
+
+[dependencies]
+gitlab-tracker-core.workspace = true
+gitlab-tracker-gitlab.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

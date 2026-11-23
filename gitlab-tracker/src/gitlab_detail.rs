@@ -710,37 +710,8 @@ pub fn is_version_tag(tag: &str) -> bool {
             .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// When the project's MRs merged over the last [`MERGE_HISTORY_DAYS`] days,
-/// kept between reads and between launches (`merges_<hash>.json` beside the
-/// project's state file): the first read takes the whole period, the next ones
-/// only what was merged (or updated) since, and are merged into it.
-#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct MergeHistory {
-    /// Merge date by MR iid.
-    #[serde(default)]
-    pub merged: std::collections::BTreeMap<u64, String>,
-    /// Up to when it is complete (RFC 3339): every MR updated before is in.
-    #[serde(default)]
-    pub read_at: Option<String>,
-}
-
-impl MergeHistory {
-    fn read_at(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        let at = chrono::DateTime::parse_from_rfc3339(self.read_at.as_deref()?).ok()?;
-        Some(at.with_timezone(&chrono::Utc))
-    }
-
-    /// Complete up to the last day: fit to draw a pace from. A first read cut
-    /// short (more merges than its pages hold) has only the oldest weeks yet,
-    /// and is not.
-    pub fn is_current(&self, now: chrono::DateTime<chrono::Utc>) -> bool {
-        self.read_at()
-            .is_some_and(|at| now - at <= chrono::Duration::days(1))
-    }
-}
-
-/// How far back the project's merges are read.
-pub const MERGE_HISTORY_DAYS: i64 = 56;
+// The merges as kept between launches (gitlab-tracker-gitlab).
+pub use gitlab_tracker_gitlab::history::{MergeHistory, MERGE_HISTORY_DAYS};
 
 /// Pages of 100 merged MRs read at most in one go; a read cut short goes on
 /// from where it stopped at the next one.

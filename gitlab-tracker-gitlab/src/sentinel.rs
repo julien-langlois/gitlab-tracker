@@ -17,8 +17,9 @@
 //! overlap: a check reads a little of the previous one again, and what it already
 //! saw (same `updated_at`, same pipeline state, same event) is skipped.
 
+use crate::events::GitlabEvent;
 use crate::gitlab::{http_client, CachePolicy, FetchContext};
-use crate::models::{AppEvent, GitlabMrState, TrackedMr};
+use crate::models::{GitlabMrState, TrackedMr};
 use chrono::{DateTime, TimeDelta, Utc};
 use gitlab_tracker_core::pacing::SendPaced;
 use serde::Deserialize;
@@ -139,11 +140,11 @@ pub struct SentinelReport {
 
 /// Starts a check from `since`; sends `SentinelChecked` with its report, or
 /// `None` when a read failed (the watermark then stays where it was).
-pub fn spawn_check(
+pub fn spawn_check<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     since: DateTime<Utc>,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let report = {
@@ -155,7 +156,7 @@ pub fn spawn_check(
         if report.is_none() {
             tracing::warn!("Sentinel check failed — the next one reads from the same point");
         }
-        let _ = tx.send(AppEvent::SentinelChecked(report.map(Box::new)));
+        crate::events::emit(&tx, GitlabEvent::SentinelChecked(report.map(Box::new)));
     });
 }
 

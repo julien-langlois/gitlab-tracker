@@ -2313,8 +2313,10 @@ dependencies = [
  "futures",
  "git-cliff-core",
  "gitlab-tracker-core",
+ "gitlab-tracker-gitlab",
  "gitlab-tracker-redmine",
  "gitlab-tracker-stats",
+ "gitlab-tracker-store",
  "inventory",
  "keyring",
  "notify-rust",
@@ -2357,6 +2359,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "gitlab-tracker-gitlab"
+version = "0.6.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "futures",
+ "gitlab-tracker-core",
+ "gitlab-tracker-stats",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "zeroize",
+]
+
+[[package]]
 name = "gitlab-tracker-redmine"
 version = "0.6.0"
 dependencies = [
@@ -2388,6 +2410,20 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "toml 0.8.23",
+ "tracing",
+]
+
+[[package]]
+name = "gitlab-tracker-store"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "gitlab-tracker-core",
+ "gitlab-tracker-gitlab",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
  "tracing",
 ]
 

@@ -9,16 +9,6 @@ pub fn matches_gitlab_username(display: &str, username: &str) -> bool {
     display.contains(format!("@{}", username).as_str())
 }
 
-/// Whether a person's display string or login looks like a bot account
-/// (Renovate, Dependabot, a project or group access token, a `*-bot`): its
-/// notes are not a review.
-pub fn is_bot(display: &str) -> bool {
-    let lower = display.to_lowercase();
-    ["bot", "renovate", "dependabot", "gitlab-ci", "project_"]
-        .iter()
-        .any(|word| lower.contains(word))
-}
-
 /// Whether an MR waits for `username`'s review: open, not a draft, `username`
 /// among its reviewers (display strings) and not among its current approvers.
 pub fn awaiting_review_by(

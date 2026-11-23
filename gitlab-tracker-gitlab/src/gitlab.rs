@@ -1,7 +1,8 @@
+use crate::events::GitlabEvent;
 use crate::models::{
-    AppEvent, BranchCommits, CommitFingerprint, DiffStats, GitLabLabelDetail, GitLabMilestone,
-    GitLabMr, GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, MrThread,
-    Pipeline, PipelineJob, ReviewActivity,
+    BranchCommits, CommitFingerprint, DiffStats, GitLabLabelDetail, GitLabMilestone, GitLabMr,
+    GitLabRef, GitlabMrState, MergeabilityStatus, MrCommit, MrLoadedData, MrThread, Pipeline,
+    PipelineJob, ReviewActivity,
 };
 use gitlab_tracker_core::pacing::SendPaced;
 
@@ -35,7 +36,7 @@ const MERGEABILITY_RETRY_DELAY_SECS: u64 = 2;
 /// Process-wide HTTP client: one connection pool (keep-alive + TLS session reuse)
 /// shared by every GitLab call, with timeouts so a hung server cannot hold a
 /// semaphore permit forever.
-pub(crate) fn http_client() -> &'static reqwest::Client {
+pub fn http_client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -48,7 +49,6 @@ pub(crate) fn http_client() -> &'static reqwest::Client {
 }
 
 /// What GitLab says about a project, read when the window adds it.
-#[cfg(feature = "gui")]
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ProjectInfo {
     pub id: u64,
@@ -58,7 +58,6 @@ pub struct ProjectInfo {
 }
 
 /// Why a project could not be checked.
-#[cfg(feature = "gui")]
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectCheckError {
     #[error("GitLab refused the token (it may be expired, or lack the read_api scope)")]
@@ -73,7 +72,6 @@ pub enum ProjectCheckError {
 
 /// Reads `project` (numeric id or `group/project` path) with `token`: checks both
 /// the token and the project before the window saves them.
-#[cfg(feature = "gui")]
 pub async fn check_project(
     base_url: &str,
     token: &str,
@@ -105,7 +103,6 @@ pub async fn check_project(
 
 /// The username of the token's owner (`GET /user`), `None` on any failure: it
 /// only feeds the "me" views.
-#[cfg(feature = "gui")]
 pub async fn current_username(base_url: &str, token: &str) -> Option<String> {
     #[derive(serde::Deserialize)]
     struct User {
@@ -123,7 +120,6 @@ pub async fn current_username(base_url: &str, token: &str) -> Option<String> {
 }
 
 /// One file of an MR's diff, read on demand by the window's inspector.
-#[cfg(feature = "gui")]
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct FileDiff {
     pub old_path: String,
@@ -141,7 +137,6 @@ pub struct FileDiff {
 
 /// The files an MR changes, with their patches (`GET …/changes`). The error is
 /// the window's to show.
-#[cfg(feature = "gui")]
 pub async fn fetch_file_diffs(
     base_url: &str,
     token: &str,
@@ -174,7 +169,6 @@ pub async fn fetch_file_diffs(
 
 /// The end of a job's log (`GET /jobs/:id/trace`): its last `lines` lines, the
 /// terminal colours and GitLab's section markers removed.
-#[cfg(feature = "gui")]
 pub async fn fetch_job_log(
     base_url: &str,
     token: &str,
@@ -204,7 +198,6 @@ pub async fn fetch_job_log(
 /// The last `lines` lines of a job log, cleaned for reading: ANSI escapes and
 /// `section_start` / `section_end` markers dropped, carriage-return progress
 /// lines reduced to their last state.
-#[cfg(any(feature = "gui", test))]
 pub fn log_tail(text: &str, lines: usize) -> String {
     let cleaned: Vec<String> = text
         .lines()
@@ -230,7 +223,6 @@ pub fn log_tail(text: &str, lines: usize) -> String {
 }
 
 /// `line` without its ANSI escape sequences (`ESC [ … letter`).
-#[cfg(any(feature = "gui", test))]
 fn strip_ansi(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut chars = line.chars().peekable();
@@ -315,7 +307,7 @@ pub trait CountApiCalls {
 /// `+++` / `---` are file headers only before the first `@@` hunk (GitLab's `diff`
 /// field usually has none); inside hunks they are real changes such as `++i` or a
 /// SQL `-- comment`, which a plain prefix filter would drop.
-pub(crate) fn count_diff_lines(diff: &str) -> (u32, u32) {
+pub fn count_diff_lines(diff: &str) -> (u32, u32) {
     let (mut added, mut deleted, mut in_hunk) = (0, 0, false);
     for line in diff.lines() {
         if line.starts_with("@@") {
@@ -876,7 +868,7 @@ fn review_activity(discussions: &[Discussion], author: &str, draft_now: bool) ->
             activity
                 .last_activity_by
                 .insert(user.to_string(), at.clone());
-            if user != author && !crate::utils::is_bot(user) {
+            if user != author && !is_bot(user) {
                 if draft {
                     activity.draft_comments += 1;
                 } else if activity.first_review_at.is_none() {
@@ -1088,7 +1080,7 @@ fn changed_files(body: &MrChanges) -> Vec<crate::models::ChangedFile> {
 /// The lines of the old file (first, last) each `@@ -a,b +c,d @@` hunk of a
 /// unified patch replaces. A pure insertion (`b == 0`) covers line `a`, the
 /// one it comes after.
-pub(crate) fn hunk_ranges(diff: &str) -> Vec<(u32, u32)> {
+pub fn hunk_ranges(diff: &str) -> Vec<(u32, u32)> {
     diff.lines()
         .filter_map(|line| {
             let rest = line.strip_prefix("@@ -")?;
@@ -1202,7 +1194,7 @@ fn next_page(page: u32, len: usize) -> Option<u32> {
 ///
 /// Returns `None` when any page fails: a partial list must not be mistaken for a
 /// complete one (the discovery poll relies on it).
-pub(crate) async fn get_all_pages<T: serde::de::DeserializeOwned>(
+pub async fn get_all_pages<T: serde::de::DeserializeOwned>(
     ctx: &FetchContext,
     url: &str,
 ) -> Option<Vec<T>> {
@@ -1245,8 +1237,8 @@ pub fn cherry_pick_sources(message: &str) -> impl Iterator<Item = &str> {
 
 /// A commit as returned by GitLab's commit list / detail endpoints.
 #[derive(serde::Deserialize)]
-pub(crate) struct CommitJson {
-    pub(crate) id: String,
+pub struct CommitJson {
+    pub id: String,
     #[serde(default)]
     title: String,
     #[serde(default)]
@@ -1254,7 +1246,7 @@ pub(crate) struct CommitJson {
     #[serde(default)]
     author_email: String,
     #[serde(default)]
-    pub(crate) author_name: String,
+    pub author_name: String,
     authored_date: Option<String>,
     /// When the commit was made on the branch (a copy's arrival date).
     committed_date: Option<String>,
@@ -1262,7 +1254,7 @@ pub(crate) struct CommitJson {
 
 impl CommitJson {
     /// `None` when GitLab did not return a parsable author date.
-    pub(crate) fn fingerprint(&self) -> Option<CommitFingerprint> {
+    pub fn fingerprint(&self) -> Option<CommitFingerprint> {
         let authored = chrono::DateTime::parse_from_rfc3339(self.authored_date.as_deref()?).ok()?;
         Some(CommitFingerprint {
             author_email: self.author_email.trim().to_lowercase(),
@@ -1371,15 +1363,15 @@ fn branch_scan_url(ctx: &FetchContext, branch: &str, scan: &BranchScan) -> Strin
     )
 }
 
-/// Spawns `scan` of `branch` and emits `AppEvent::BranchCommitsLoaded` with the
+/// Spawns `scan` of `branch` and emits `GitlabEvent::BranchCommitsLoaded` with the
 /// commits read (`None` when a page failed) and the branch head.
-pub fn spawn_branch_commits_fetch(
+pub fn spawn_branch_commits_fetch<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     branch: String,
     scan: BranchScan,
     previous_head: Option<String>,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let _permit = semaphore.acquire().await;
@@ -1394,12 +1386,15 @@ pub fn spawn_branch_commits_fetch(
             None => previous_head,
         };
         let commits = commits.map(|list| index_branch_commits(&list));
-        let _ = tx.send(AppEvent::BranchCommitsLoaded {
-            branch,
-            commits,
-            scan,
-            head,
-        });
+        crate::events::emit(
+            &tx,
+            GitlabEvent::BranchCommitsLoaded {
+                branch,
+                commits,
+                scan,
+                head,
+            },
+        );
     });
 }
 
@@ -1474,21 +1469,24 @@ pub async fn fetch_gitlab_labels(ctx: &FetchContext) -> Vec<GitLabLabelDetail> {
 }
 
 /// Spawns an async task that fetches all project labels (with colours) and sends them via `tx`.
-pub fn spawn_gitlab_labels_fetch(
+pub fn spawn_gitlab_labels_fetch<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let labels = fetch_gitlab_labels(&ctx).await;
-        let _ = tx.send(AppEvent::GitlabLabelsLoaded(labels));
+        crate::events::emit(&tx, GitlabEvent::GitlabLabelsLoaded(labels));
     });
 }
 
 /// Spawns an async task that fetches all open milestones and sends them via `tx`.
-pub fn spawn_milestones_fetch(ctx: FetchContext, tx: tokio::sync::mpsc::UnboundedSender<AppEvent>) {
+pub fn spawn_milestones_fetch<E: From<GitlabEvent> + Send + 'static>(
+    ctx: FetchContext,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
+) {
     tokio::spawn(async move {
         let milestones = fetch_milestones(&ctx).await;
-        let _ = tx.send(AppEvent::MilestonesLoaded(milestones));
+        crate::events::emit(&tx, GitlabEvent::MilestonesLoaded(milestones));
     });
 }
 
@@ -1562,13 +1560,13 @@ fn next_discovery_anchor(anchor: &str, polled_at: chrono::DateTime<chrono::Utc>)
 }
 
 /// Spawns an async discovery task that fetches the MR IIDs created after `anchor`
-/// and emits `AppEvent::NewMrsDiscovered` with the ones not in `known_ids`, plus
+/// and emits `GitlabEvent::NewMrsDiscovered` with the ones not in `known_ids`, plus
 /// the advanced anchor. Nothing is emitted when the poll fails.
-pub fn spawn_mrs_discovery(
+pub fn spawn_mrs_discovery<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     known_ids: HashSet<String>,
     anchor: String,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let polled_at = chrono::Utc::now();
@@ -1579,35 +1577,41 @@ pub fn spawn_mrs_discovery(
             .into_iter()
             .filter(|id| !known_ids.contains(id))
             .collect();
-        let _ = tx.send(AppEvent::NewMrsDiscovered {
-            mr_ids,
-            next_anchor: next_discovery_anchor(&anchor, polled_at),
-        });
+        crate::events::emit(
+            &tx,
+            GitlabEvent::NewMrsDiscovered {
+                mr_ids,
+                next_anchor: next_discovery_anchor(&anchor, polled_at),
+            },
+        );
     });
 }
 
 /// Spawns an async task that fetches all open MR IIDs for the given milestone
 /// and sends them via `tx` as a `MilestoneMrsLoaded` event.
-pub fn spawn_milestone_mrs_fetch(
+pub fn spawn_milestone_mrs_fetch<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     milestone_title: String,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(async move {
         let mr_ids = fetch_milestone_mr_ids(&ctx, &milestone_title).await;
-        let _ = tx.send(AppEvent::MilestoneMrsLoaded {
-            milestone_title,
-            mr_ids,
-        });
+        crate::events::emit(
+            &tx,
+            GitlabEvent::MilestoneMrsLoaded {
+                milestone_title,
+                mr_ids,
+            },
+        );
     });
 }
 
-pub fn spawn_mr_fetch(
+pub fn spawn_mr_fetch<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     mr_id: String,
     cached: CachedMrData,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     tokio::spawn(fetch_and_report(
         ctx,
@@ -1628,20 +1632,20 @@ pub struct Prefetched {
     pub pipelines: Option<Vec<Pipeline>>,
 }
 
-async fn fetch_and_report(
+async fn fetch_and_report<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     mr_id: String,
     cached: CachedMrData,
     prefetched: Prefetched,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     match fetch_gitlab_data(&ctx, &mr_id, cached, prefetched, &semaphore, tx.clone()).await {
         Ok(data) => {
-            let _ = tx.send(AppEvent::MrLoaded(Box::new(data)));
+            crate::events::emit(&tx, GitlabEvent::MrLoaded(Box::new(data)));
         }
         Err(error) => {
-            let _ = tx.send(AppEvent::MrFailed { id: mr_id, error });
+            crate::events::emit(&tx, GitlabEvent::MrFailed { id: mr_id, error });
         }
     }
 }
@@ -1699,11 +1703,11 @@ fn pipelines_due(cached: &CachedMrData, listed: &GitLabMr) -> bool {
 /// [`MRS_PER_LIST`] MRs instead of one each), the pipelines due from GraphQL
 /// queries (`gitlab_graphql`, one per batch instead of up to 6 requests per MR),
 /// then each MR reads only what its cache cannot vouch for (`fetch_gitlab_data`).
-pub fn spawn_mr_fetches(
+pub fn spawn_mr_fetches<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     mrs: Vec<(String, CachedMrData)>,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     if mrs.is_empty() {
         return;
@@ -1773,11 +1777,11 @@ fn settled_changed(settled: &SettledMr, listed: Option<&GitLabMr>) -> bool {
 
 /// Checks the settled MRs with list reads (one request per [`MRS_PER_LIST`]),
 /// and emits `SettledMrsChanged` with those to refresh.
-pub fn spawn_settled_check(
+pub fn spawn_settled_check<E: From<GitlabEvent> + Send + 'static>(
     ctx: FetchContext,
     settled: Vec<SettledMr>,
     semaphore: Arc<Semaphore>,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) {
     if settled.is_empty() {
         return;
@@ -1795,7 +1799,7 @@ pub fn spawn_settled_check(
             .map(|s| s.id.clone())
             .collect();
         if !changed.is_empty() {
-            let _ = tx.send(AppEvent::SettledMrsChanged(changed));
+            crate::events::emit(&tx, GitlabEvent::SettledMrsChanged(changed));
         }
     });
 }
@@ -1957,13 +1961,13 @@ fn is_transient_mergeability_status(status: Option<&str>) -> bool {
 /// A `semaphore` permit is held for the whole fetch (bounding concurrent API
 /// traffic), except while sleeping between mergeability retries: an idle wait
 /// must not block other MRs from being fetched.
-pub async fn fetch_gitlab_data(
+pub async fn fetch_gitlab_data<E: From<GitlabEvent> + Send + 'static>(
     ctx: &FetchContext,
     mr_id: &str,
     cached: CachedMrData,
     prefetched: Prefetched,
     semaphore: &Semaphore,
-    tx: tokio::sync::mpsc::UnboundedSender<AppEvent>,
+    tx: tokio::sync::mpsc::UnboundedSender<E>,
 ) -> Result<MrLoadedData, GitlabError> {
     let acquire = || async {
         semaphore
@@ -1993,9 +1997,12 @@ pub async fn fetch_gitlab_data(
             break;
         }
 
-        let _ = tx.send(AppEvent::MrMergeabilityRetrying {
-            id: mr_id.to_string(),
-        });
+        crate::events::emit(
+            &tx,
+            GitlabEvent::MrMergeabilityRetrying {
+                id: mr_id.to_string(),
+            },
+        );
 
         tracing::debug!(
             mr_id = %mr_id,
@@ -2488,8 +2495,18 @@ pub async fn fetch_gitlab_data(
     })
 }
 
+/// Whether a person's display string or login looks like a bot account
+/// (Renovate, Dependabot, a project or group access token, a `*-bot`): its
+/// notes are not a review.
+pub fn is_bot(display: &str) -> bool {
+    let lower = display.to_lowercase();
+    ["bot", "renovate", "dependabot", "gitlab-ci", "project_"]
+        .iter()
+        .any(|word| lower.contains(word))
+}
+
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
     use std::collections::HashMap;
 
@@ -3171,11 +3188,11 @@ pub(crate) mod tests {
     }
 
     /// What a route returns for a 404.
-    pub(crate) const NOT_FOUND: &str = "<404>";
+    pub const NOT_FOUND: &str = "<404>";
 
     /// A stand-in GitLab answering every request through `route(path, body)`, and
     /// recording the paths it was asked for. A [`NOT_FOUND`] body answers 404.
-    pub(crate) async fn fake_gitlab(
+    pub async fn fake_gitlab(
         route: fn(&str, &str) -> String,
     ) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -3291,7 +3308,7 @@ pub(crate) mod tests {
                 .await
                 .expect("every MR is loaded")
                 .unwrap();
-            if let AppEvent::MrLoaded(data) = event {
+            if let GitlabEvent::MrLoaded(data) = event {
                 loaded.insert(data.id.clone(), data);
             }
         }
@@ -3375,7 +3392,7 @@ pub(crate) mod tests {
                 .await
                 .expect("every MR is loaded")
                 .unwrap();
-            if let AppEvent::MrLoaded(data) = event {
+            if let GitlabEvent::MrLoaded(data) = event {
                 loaded.insert(data.id.clone(), data);
             }
         }
@@ -3432,7 +3449,7 @@ pub(crate) mod tests {
             .await
             .expect("a change is reported")
             .unwrap();
-        let AppEvent::SettledMrsChanged(ids) = event else {
+        let GitlabEvent::SettledMrsChanged(ids) = event else {
             panic!("unexpected event");
         };
         assert_eq!(ids, ["2", "3", "4"]);
@@ -3467,7 +3484,7 @@ pub(crate) mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(matches!(event, AppEvent::MrLoaded(data) if data.data.title == "alone"));
+        assert!(matches!(event, GitlabEvent::MrLoaded(data) if data.data.title == "alone"));
         let seen = seen.lock().unwrap();
         assert!(
             seen.iter().any(|p| p.contains("/merge_requests/9?")),
@@ -3539,7 +3556,7 @@ pub(crate) mod tests {
                 .await
                 .expect("every MR is loaded")
                 .unwrap();
-            if let AppEvent::MrLoaded(data) = event {
+            if let GitlabEvent::MrLoaded(data) = event {
                 loaded.push(*data);
             }
         }

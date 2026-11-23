@@ -1282,7 +1282,7 @@ pub fn first_name(display: &str) -> &str {
     crate::next_step::first_name(display)
 }
 
-pub use crate::utils::is_bot;
+pub use gitlab_tracker_gitlab::is_bot;
 
 /// A muted caption under a figure or a list, small.
 pub fn caption(ui: &mut Ui, theme: &Theme, text: &str) {

@@ -12,10 +12,12 @@
 //! `tracker_<hash>.json`, which held the state before, is imported once, the first
 //! time a project is opened (see `storage::load_state_async`).
 
-use crate::models::{GitlabMrState, MergeabilityStatus, MrData, SavedMr, SavedState};
+use gitlab_tracker_gitlab::models::{
+    GitlabMrState, MergeabilityStatus, MrData, SavedMr, SavedState,
+};
 use sqlx::{Row, SqlitePool};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 /// The database file, in the config directory.
@@ -33,7 +35,7 @@ const MIGRATIONS: &[&str] = &[
 pub struct MrRow {
     pub id: String,
     pub flagged: bool,
-    pub snooze: Option<crate::snooze::Snooze>,
+    pub snooze: Option<gitlab_tracker_gitlab::snooze::Snooze>,
     pub linked_ticket: Option<gitlab_tracker_core::LinkedTicket>,
     /// The tracked branches it reached; `None` while its status tells nothing
     /// (loading, failed): the stored ones are kept.
@@ -131,16 +133,17 @@ pub struct StateDb {
     stored: tokio::sync::Mutex<HashMap<i64, HashMap<String, Stored>>>,
 }
 
-#[cfg(not(test))]
-static OPEN: std::sync::LazyLock<std::sync::Mutex<HashMap<PathBuf, Arc<StateDb>>>> =
+#[cfg(not(any(test, feature = "test-support")))]
+static OPEN: std::sync::LazyLock<std::sync::Mutex<HashMap<std::path::PathBuf, Arc<StateDb>>>> =
     std::sync::LazyLock::new(Default::default);
 
 /// The database of the config directory `dir`, opened (and created) on first use
-/// and shared afterwards. Under test, a fresh one each time: every test has its
-/// own runtime, which a shared pool would outlive.
+/// and shared afterwards. Under test (or the `test-support` feature, for the
+/// app's tests), a fresh one each time: every test has its own runtime, which a
+/// shared pool would outlive.
 pub async fn open_in(dir: &Path) -> anyhow::Result<Arc<StateDb>> {
     let path = dir.join(DB_FILE);
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     if let Some(db) = OPEN
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -148,9 +151,9 @@ pub async fn open_in(dir: &Path) -> anyhow::Result<Arc<StateDb>> {
     {
         return Ok(db.clone());
     }
-    crate::storage::restrict_to_owner(dir);
+    crate::restrict_to_owner(dir);
     let db = Arc::new(StateDb::open(&path).await?);
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "test-support")))]
     let db = OPEN
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -182,7 +185,6 @@ impl StateDb {
         })
     }
 
-    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     /// The project's key, `None` when it was never saved here.
     async fn project_key(&self, gitlab_url: &str, project_id: &str) -> anyhow::Result<Option<i64>> {
         Ok(
@@ -469,7 +471,7 @@ impl StateDb {
     }
 
     /// The events of an MR, oldest seen first: for tests and the import report.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn events_of(
         &self,
         gitlab_url: &str,
@@ -505,7 +507,6 @@ impl StateDb {
 
 /// The project caches (the merges, the merged MRs' owners) and the settings:
 /// the window's.
-#[cfg(feature = "gui")]
 impl StateDb {
     /// The project's key, its row created when absent.
     async fn project_key_or_insert(
@@ -584,7 +585,7 @@ impl StateDb {
         &self,
         gitlab_url: &str,
         project_id: &str,
-    ) -> anyhow::Result<Option<crate::gitlab_detail::MergeHistory>> {
+    ) -> anyhow::Result<Option<gitlab_tracker_gitlab::history::MergeHistory>> {
         let Some(key) = self.project_key(gitlab_url, project_id).await? else {
             return Ok(None);
         };
@@ -600,7 +601,10 @@ impl StateDb {
             let iid: i64 = row.try_get("mr_iid")?;
             merged.insert(iid as u64, row.try_get("merged_at")?);
         }
-        Ok(Some(crate::gitlab_detail::MergeHistory { merged, read_at }))
+        Ok(Some(gitlab_tracker_gitlab::history::MergeHistory {
+            merged,
+            read_at,
+        }))
     }
 
     /// Saves the merges of `history` not in `known` (as they were before the
@@ -609,8 +613,8 @@ impl StateDb {
         &self,
         gitlab_url: &str,
         project_id: &str,
-        history: &crate::gitlab_detail::MergeHistory,
-        known: &crate::gitlab_detail::MergeHistory,
+        history: &gitlab_tracker_gitlab::history::MergeHistory,
+        known: &gitlab_tracker_gitlab::history::MergeHistory,
     ) -> anyhow::Result<()> {
         let key = self.project_key_or_insert(gitlab_url, project_id).await?;
         let mut tx = self.pool.begin().await?;
@@ -639,8 +643,8 @@ impl StateDb {
         &self,
         gitlab_url: &str,
         project_id: &str,
-    ) -> anyhow::Result<Option<crate::owners::History>> {
-        use crate::owners::{History, Merge};
+    ) -> anyhow::Result<Option<gitlab_tracker_gitlab::history::History>> {
+        use gitlab_tracker_gitlab::history::{History, Merge};
         let Some(key) = self.project_key(gitlab_url, project_id).await? else {
             return Ok(None);
         };
@@ -717,8 +721,8 @@ impl StateDb {
         &self,
         gitlab_url: &str,
         project_id: &str,
-        history: &crate::owners::History,
-        known: &crate::owners::History,
+        history: &gitlab_tracker_gitlab::history::History,
+        known: &gitlab_tracker_gitlab::history::History,
     ) -> anyhow::Result<()> {
         let key = self.project_key_or_insert(gitlab_url, project_id).await?;
         let mut tx = self.pool.begin().await?;
@@ -1123,7 +1127,7 @@ pub fn data_events(old: &MrData, new: &MrData) -> Vec<Event> {
         list.push(Event::new("pushed").at(rb.last_push_at.as_deref()));
     }
 
-    let pipelines: BTreeMap<u64, &crate::models::Pipeline> =
+    let pipelines: BTreeMap<u64, &gitlab_tracker_gitlab::models::Pipeline> =
         old.pipelines.iter().map(|p| (p.id, p)).collect();
     for p in &new.pipelines {
         let status = name_of(&p.status);
@@ -1144,7 +1148,7 @@ pub fn data_events(old: &MrData, new: &MrData) -> Vec<Event> {
         }
     }
 
-    let threads: BTreeMap<u64, &crate::models::MrThread> =
+    let threads: BTreeMap<u64, &gitlab_tracker_gitlab::models::MrThread> =
         old.threads.iter().map(|t| (t.note_id, t)).collect();
     for t in &new.threads {
         match threads.get(&t.note_id) {
@@ -1386,7 +1390,8 @@ async fn write_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{MrThread, Pipeline, PipelineState, ReviewActivity};
+    use gitlab_tracker_gitlab::models::{MrThread, Pipeline, PipelineState, ReviewActivity};
+    use std::path::PathBuf;
 
     const URL: &str = "https://gitlab.example";
 
@@ -1548,7 +1553,12 @@ mod tests {
         // Restarting: read again, shown as a placeholder, its status loading.
         let placeholder = MrRow {
             found_branches: None,
-            data: crate::models::TrackedMr::placeholder("1".into(), "MR 1".into(), None).data,
+            data: gitlab_tracker_gitlab::models::TrackedMr::placeholder(
+                "1".into(),
+                "MR 1".into(),
+                None,
+            )
+            .data,
             ..a.clone()
         };
         assert_eq!(
