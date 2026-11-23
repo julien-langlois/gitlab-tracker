@@ -163,7 +163,7 @@ fn since_last_session(ui: &mut Ui, theme: &Theme, digest: &str) -> bool {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
                 // The digest names itself ("Since last session: …").
-                ui.label(RichText::new("ⓘ").color(theme.tones.blue.fg));
+                ui.label(RichText::new("ℹ").color(theme.tones.blue.fg));
                 ui.add(egui::Label::new(RichText::new(digest).color(theme.palette.text)).wrap());
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     closed = ui

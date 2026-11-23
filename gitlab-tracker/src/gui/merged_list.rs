@@ -141,7 +141,7 @@ pub fn banner(g: &mut GuiApp, ui: &mut Ui) {
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                ui.label(RichText::new("ⓘ").color(tone.fg));
+                ui.label(RichText::new("ℹ").color(tone.fg));
                 ui.label(
                     RichText::new(tf(
                         "{label}: {shown} of the {counted} MRs are tracked here",

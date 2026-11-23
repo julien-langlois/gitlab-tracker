@@ -101,7 +101,10 @@ eframe = { version = "0.37", optional = true, default-features = false, features
   "wayland",
   "x11",
 ] }
-egui = { version = "0.37", optional = true }
+# The symbols the window draws (▸ ▾ ✕ ✎ ≡ ⓘ ◉…) and emoji in MR text, bundled:
+# egui 0.37 otherwise leaves them to the system's fonts, and a machine without
+# them shows boxes (the GUI tests check none is missing).
+egui = { version = "0.37", optional = true, features = ["monochrome_emoji_fonts"] }
 # The export's "Save as…": the system's file dialog (the XDG portal on Linux:
 # no GTK to build against).
 rfd = { version = "0.17.2", optional = true }
@@ -124,6 +127,8 @@ bevel-window = { version = "0.1", optional = true, features = ["egui"] }
 windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
 
 [dev-dependencies]
+# Renders the window headless (no display, no GPU) in the GUI tests.
+egui_kittest = { version = "0.37", features = ["eframe"] }
 # A fresh tracker.db per test (one runtime each), and its events to check.
 gitlab-tracker-store = { workspace = true, features = ["test-support"] }
 # Real time zones (daylight saving changes) for the snooze tests.

@@ -43,6 +43,8 @@ mod prefs;
 mod promote;
 mod rail_badges;
 mod releases;
+#[cfg(test)]
+mod render_tests;
 mod reviewers;
 mod schedules;
 mod setup;
@@ -289,6 +291,30 @@ fn open_window(launch: Launch) -> anyhow::Result<()> {
     .context("The GUI window failed")
 }
 
+/// The symbols the window draws that Inter lacks (▸ ▾ ✕ ✎ ≡ ◉ ◌ ℹ…), from
+/// DejaVu Sans (`assets/fonts/`, Bitstream Vera licence), after every other font
+/// of each family: whatever the machine's fonts, none is drawn as a box. The
+/// GUI tests list any character no bundled font has.
+fn install_symbol_font(ctx: &egui::Context) {
+    let families = [
+        egui::FontFamily::Proportional,
+        egui::FontFamily::Monospace,
+        bevel_theme::fonts::medium(1.0).family,
+        bevel_theme::fonts::semibold(1.0).family,
+    ];
+    ctx.add_font(egui::FontInsert::new(
+        "DejaVuSans",
+        egui::FontData::from_static(include_bytes!("../../assets/fonts/DejaVuSans.ttf")),
+        families
+            .into_iter()
+            .map(|family| egui::InsertFontFamily {
+                family,
+                priority: egui::FontPriority::Lowest,
+            })
+            .collect(),
+    ));
+}
+
 /// The window and taskbar icon on X11, Windows and macOS. GNOME on Wayland takes
 /// it from the desktop entry named like the app id (`assets/linux/`) instead.
 fn window_icon() -> Arc<egui::IconData> {
@@ -518,6 +544,7 @@ impl GuiApp {
             demo,
         } = launch;
         bevel_theme::fonts::install(&cc.egui_ctx);
+        install_symbol_font(&cc.egui_ctx);
         // egui's 0.3 s for the second click of a double click is shorter than
         // the desktops' own: double clicks made at an ordinary pace counted as
         // two single clicks (the rows use `widgets::double_clicked`).
