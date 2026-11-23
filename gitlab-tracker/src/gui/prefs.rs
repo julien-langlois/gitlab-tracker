@@ -75,6 +75,7 @@ fn group_name(group: GroupBy) -> &'static str {
         GroupBy::Milestone => "milestone",
         GroupBy::Author => "author",
         GroupBy::NextStep => "next_step",
+        GroupBy::MergedDay => "merged_day",
     }
 }
 
@@ -109,6 +110,7 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
         Some("milestone") => GroupBy::Milestone,
         Some("author") => GroupBy::Author,
         Some("next_step") => GroupBy::NextStep,
+        Some("merged_day") => GroupBy::MergedDay,
         _ => GroupBy::None,
     };
     g.compact = prefs.compact;

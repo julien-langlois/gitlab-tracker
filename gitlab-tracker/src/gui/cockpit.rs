@@ -28,11 +28,15 @@ enum Pick {
     Focus(String, String),
     /// Select this MR on the merge requests page.
     Mr(String),
+    /// List the tracked MRs among a count of the stats' history (count, label).
+    History(crate::ui::cockpit::History, usize, String),
 }
 
 /// What the cards need besides their rows: the MRs behind each counter, and
 /// how each counter moved since the list was first complete.
 struct Counts<'a> {
+    /// The tracked MRs, for what the counts of the history leave out.
+    app: Option<&'a crate::app::App>,
     members: &'a HashMap<String, Vec<String>>,
     baseline: Option<&'a HashMap<String, usize>>,
     since: Option<&'a str>,
@@ -86,6 +90,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
 
     let mut close_digest = false;
     let counts = Counts {
+        app: Some(&g.app),
         members: &g.members,
         baseline: g.baseline.as_ref().map(|b| &b.counts),
         since: g.baseline.as_ref().map(|b| b.at.as_str()),
@@ -130,6 +135,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     match pick {
         Some(Pick::Focus(key, label)) => g.focus_on(&key, label),
         Some(Pick::Mr(id)) => g.show_mr(&id),
+        Some(Pick::History(history, counted, label)) => {
+            super::merged_list::show_history(g, history, counted, label);
+        }
         None => {}
     }
     match by_label {
@@ -450,6 +458,7 @@ fn cockpit_row(
             color,
             nested,
             key,
+            history: of_history,
         } => {
             let zero = value == "0";
             if zero && counts.hide_zeros && key.is_some() {
@@ -465,7 +474,10 @@ fn cockpit_row(
             } else {
                 theme.palette.text_secondary
             };
-            let clickable = key.as_ref().is_some_and(|k| counts.members.contains_key(k));
+            // A count of the history lists the tracked MRs among those it counts.
+            let of_history = of_history.filter(|_| counts.app.is_some());
+            let clickable = key.as_ref().is_some_and(|k| counts.members.contains_key(k))
+                || of_history.is_some();
             let (rect, response) = ui.allocate_exact_size(
                 Vec2::new(ui.available_width(), ROW_HEIGHT),
                 if clickable {
@@ -486,6 +498,8 @@ fn cockpit_row(
                     .max_rect(rect)
                     .layout(Layout::left_to_right(Align::Center)),
             );
+            // The row takes the click, its label too.
+            inner.style_mut().interaction.selectable_labels = false;
             if *nested {
                 inner.add_space(12.0);
             }
@@ -510,6 +524,19 @@ fn cockpit_row(
                     trend(ui, theme, counts, key);
                 }
             });
+            let counted: usize = value.parse().unwrap_or(0);
+            if let (Some(history), Some(app)) = (of_history, counts.app) {
+                let response = response
+                    .rich(
+                        Tip::new()
+                            .text(super::merged_list::tip(app, history, counted))
+                            .hint(tl("Click to list them")),
+                    )
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                return response
+                    .clicked()
+                    .then(|| Pick::History(history, counted, label.clone()));
+            }
             let hint = key.as_deref().and_then(explain);
             let response = match (hint, clickable) {
                 (Some(hint), true) => response
@@ -923,6 +950,7 @@ mod tests {
             color: Color::Reset,
             nested: false,
             key: None,
+            history: None,
         }
     }
 
@@ -949,6 +977,7 @@ mod tests {
         };
         let members = HashMap::new();
         let counts = Counts {
+            app: None,
             members: &members,
             baseline: None,
             since: None,

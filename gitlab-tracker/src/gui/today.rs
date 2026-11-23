@@ -1,7 +1,8 @@
 //! The Today page: what waits for me across every open tab — the reviews asked of
 //! me, my MRs that need a fix, those ready to merge, those still waiting, and
-//! what I merged today. "Me" is the project's `gitlab_username`, read from GitLab
-//! when the tab opens. A click shows the MR in its project's tab.
+//! what I merged today, whoever wrote it. "Me" is the
+//! project's `gitlab_username`, read from GitLab when the tab opens. A click
+//! shows the MR in its project's tab.
 
 use bevel_theme::{fonts, Chip, Theme, Tone};
 use egui::{Align, CornerRadius, Layout, RichText, Sense, Ui, Vec2};
@@ -29,7 +30,7 @@ pub enum Kind {
     Assigned,
     /// Mine, waiting on the others.
     Waiting,
-    /// Mine, merged today.
+    /// Merged by me today, whoever wrote it.
     Merged,
 }
 
@@ -61,7 +62,7 @@ impl Kind {
             Kind::Ready => tl("None of your MRs is approved and mergeable yet."),
             Kind::Assigned => tl("Nothing else is assigned to you."),
             Kind::Waiting => tl("None of your MRs waits on a reviewer."),
-            Kind::Merged => tl("Nothing of yours merged today yet."),
+            Kind::Merged => tl("You have not merged anything today yet."),
         }
     }
 
@@ -185,8 +186,12 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
             }
         } else if assigned && open {
             Some(Kind::Assigned)
-        } else if mine
-            && mr.state == GitlabMrState::Merged
+        } else if mr.state == GitlabMrState::Merged
+            // Merged by me, whoever wrote it: what I merged is the day's count.
+            && mr
+                .merged_by
+                .as_deref()
+                .is_some_and(|by| matches_gitlab_username(by, username) || by == username)
             && mr
                 .merged_at
                 .as_deref()
@@ -384,6 +389,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     }
 
     // The counts, one tile per kind that matters for the day.
+    let mut show_merged = None;
+    let shown = g.active();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
         for kind in [Kind::Review, Kind::Fix, Kind::Ready, Kind::Merged] {
@@ -391,7 +398,14 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 .iter()
                 .filter(|i| i.kind == kind && i.snoozed.is_none())
                 .count();
-            tile(ui, &theme, kind, n);
+            if tile(ui, &theme, kind, n) {
+                // The project of the first MR merged today, else the one shown.
+                let tab = items
+                    .iter()
+                    .find(|i| i.kind == kind)
+                    .map_or(shown, |i| i.tab);
+                show_merged = Some(tab);
+            }
         }
     });
     ui.add_space(12.0);
@@ -552,6 +566,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 tab.app.last_changes.clear();
             }
         }
+    }
+    if let Some(tab) = show_merged {
+        merged_by_me(g, tab);
     }
     match pick {
         Some((tab, id, None)) => {
@@ -897,9 +914,20 @@ fn feed_card(ui: &mut Ui, theme: &Theme, changes: &[Change], several: bool) -> O
 }
 
 /// A count of one kind, in its tone.
-fn tile(ui: &mut Ui, theme: &Theme, kind: Kind, n: usize) {
+/// Lists the MRs I merged today on the merge requests page of the tab `tab`:
+/// "Merged by me" with today's days, the latest merge first.
+pub(super) fn merged_by_me(g: &mut GuiApp, tab: usize) {
+    g.activate(tab);
+    let today = crate::merged_range::Period::Today
+        .range(chrono::Local::now().date_naive())
+        .query();
+    super::merged_list::show(g, "merged_by_me", &[("merged_between", today)], true);
+}
+
+/// A count of the day; `true` when clicked ("Merged today" alone is a link).
+fn tile(ui: &mut Ui, theme: &Theme, kind: Kind, n: usize) -> bool {
     let tone = kind.tone(theme);
-    egui::Frame::new()
+    let response = egui::Frame::new()
         .fill(theme.palette.raised)
         .stroke(egui::Stroke::new(1.0, theme.palette.border))
         .corner_radius(CornerRadius::same(theme.radii.large))
@@ -918,7 +946,18 @@ fn tile(ui: &mut Ui, theme: &Theme, kind: Kind, n: usize) {
                 );
                 ui.label(muted(theme, kind.title()));
             });
-        });
+        })
+        .response;
+    if kind != Kind::Merged {
+        return false;
+    }
+    response
+        .interact(Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .tip(tl(
+            "Everything I merged, by merge day, in the merge requests",
+        ))
+        .clicked()
 }
 
 /// The project and id columns of a row.
@@ -1464,11 +1503,55 @@ mod tests {
                     .assignee
                     .as_deref()
                     .is_some_and(|a| a.contains("@thomas_db"))
-                || mr.reviewers.iter().any(|r| r.contains("@thomas_db"));
+                || mr.reviewers.iter().any(|r| r.contains("@thomas_db"))
+                || mr
+                    .merged_by
+                    .as_deref()
+                    .is_some_and(|b| b.contains("@thomas_db"));
             assert!(concerns_me, "!{} is not about thomas_db", item.id);
         }
         // Someone with nothing to do gets nothing.
         assert!(classify(&app, "nobody_here", 0, today).is_empty());
+    }
+
+    #[tokio::test]
+    async fn merged_today_counts_what_i_merged_whoever_wrote_it() {
+        let mut app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+        let today = chrono::Local::now().date_naive();
+        let now = chrono::Local::now().to_rfc3339();
+        let mut merge = |others: bool, by: &str| {
+            let mr = app
+                .mrs
+                .iter_mut()
+                .find(|m| {
+                    !m.title.is_empty()
+                        && m.state == GitlabMrState::Opened
+                        && m.author.contains("@thomas_db") != others
+                })
+                .unwrap();
+            mr.data.state = GitlabMrState::Merged;
+            mr.data.merged_at = Some(now.clone());
+            mr.data.merged_by = Some(by.into());
+            mr.id.clone()
+        };
+        // Someone else's, merged by me; mine, merged by someone else.
+        let theirs = merge(true, "Thomas (@thomas_db)");
+        let mine = merge(false, "Sam (@sam_c)");
+        let merged: Vec<String> = classify(&app, "thomas_db", 0, today)
+            .into_iter()
+            .filter(|i| i.kind == Kind::Merged)
+            .map(|i| i.id)
+            .collect();
+        assert!(merged.contains(&theirs));
+        assert!(!merged.contains(&mine));
+        // Every one of them was merged by me, today.
+        for id in &merged {
+            let mr = app.mrs.iter().find(|m| &m.id == id).unwrap();
+            assert!(mr
+                .merged_by
+                .as_deref()
+                .is_some_and(|b| b.contains("@thomas_db")));
+        }
     }
 
     #[test]

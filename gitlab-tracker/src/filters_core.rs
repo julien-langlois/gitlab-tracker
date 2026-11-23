@@ -203,6 +203,25 @@ inventory::submit!(FilterDef {
     },
 });
 
+inventory::submit!(FilterDef {
+    id: "merged_by_me",
+    label: "Merged by me ✓",
+    active_label: Some("Merged by me"),
+    priority: 19,
+    needs_text_input: false,
+    requires: Some(Requirement::GitlabUsername),
+    // Whoever wrote it: what I merged (the Today page's "Merged today").
+    apply: |mr: MrSnapshot<'_>, _| {
+        let Some(username) = mr.gitlab_username else {
+            return false;
+        };
+        mr.state == GitlabMrState::Merged
+            && mr
+                .merged_by
+                .is_some_and(|by| matches_gitlab_username(by, username) || by == username)
+    },
+});
+
 // ── Effort filters (priority 16–18) ──────────────────────────────────────────
 //
 // Match on the pre-computed `diff_difficulty` score in [0.0, 1.0].
@@ -266,6 +285,23 @@ inventory::submit!(FilterDef {
         }
         mr.milestone
             .is_some_and(|m| m.to_lowercase().contains(&query.to_lowercase()))
+    },
+});
+
+inventory::submit!(FilterDef {
+    id: "merged_between",
+    label: "Merged between… (YYYY-MM-DD..YYYY-MM-DD)",
+    active_label: Some("Merged:"),
+    priority: 55,
+    needs_text_input: true,
+    requires: None,
+    // The merged MRs of those days (local time); everything while the value is
+    // empty or still being typed.
+    apply: |mr: MrSnapshot<'_>, query: &str| {
+        match crate::merged_range::MergedRange::parse(query) {
+            Some(range) => mr.state == GitlabMrState::Merged && range.contains_at(mr.merged_at),
+            None => true,
+        }
     },
 });
 
@@ -407,6 +443,7 @@ mod tests {
             "target_branch",
             "absent_from_branch",
             "label",
+            "merged_between",
         ] {
             let def = filter(id);
             assert!(def.needs_text_input && def.active_label.is_some(), "{id}");
@@ -517,6 +554,60 @@ mod tests {
             mr.gitlab_username = Some("alice");
             assert!(!(to_review.apply)(mr, ""), "{state:?} / {mergeability:?}");
         }
+    }
+
+    #[test]
+    fn merged_between_takes_the_merged_mrs_of_those_days() {
+        let between = filter("merged_between");
+        let mr = |state, at: Option<&'static str>| {
+            let mut mr = snapshot(state, MergeabilityStatus::Mergeable);
+            mr.merged_at = at;
+            mr
+        };
+        let merged = GitlabMrState::Merged;
+        // Midday: the same day in any time zone the tests run in.
+        let on_20th = || mr(merged, Some("2026-11-20T12:00:00Z"));
+        assert!((between.apply)(on_20th(), "2026-11-16..2026-11-22"));
+        assert!((between.apply)(on_20th(), "2026-11-20"));
+        assert!(!(between.apply)(on_20th(), "2026-11-21.."));
+        assert!(!(between.apply)(mr(merged, None), "2026-11-16..2026-11-22"));
+        let opened = GitlabMrState::Opened;
+        assert!(!(between.apply)(mr(opened, None), "2026-11-16..2026-11-22"));
+        // Empty or still being typed: everything.
+        assert!((between.apply)(mr(opened, None), ""));
+        assert!((between.apply)(mr(opened, None), "2026-11"));
+    }
+
+    #[test]
+    fn merged_by_me_is_who_merged_it_not_who_wrote_it() {
+        let merged_by_me = filter("merged_by_me");
+        let mr = |state, by: Option<&'static str>, me: Option<&'static str>| {
+            let mut mr = snapshot(state, MergeabilityStatus::Mergeable);
+            mr.merged_by = by;
+            mr.gitlab_username = me;
+            mr
+        };
+        let merged = GitlabMrState::Merged;
+        assert!((merged_by_me.apply)(
+            mr(merged, Some("Jane Doe (@jane)"), Some("jane")),
+            ""
+        ));
+        assert!(!(merged_by_me.apply)(
+            mr(merged, Some("Bob (@bob)"), Some("jane")),
+            ""
+        ));
+        assert!(!(merged_by_me.apply)(mr(merged, None, Some("jane")), ""));
+        // No username configured: nothing.
+        assert!(!(merged_by_me.apply)(
+            mr(merged, Some("Jane Doe (@jane)"), None),
+            ""
+        ));
+        // Only merged MRs.
+        let opened = GitlabMrState::Opened;
+        assert!(!(merged_by_me.apply)(
+            mr(opened, Some("Jane Doe (@jane)"), Some("jane")),
+            ""
+        ));
     }
 
     #[test]

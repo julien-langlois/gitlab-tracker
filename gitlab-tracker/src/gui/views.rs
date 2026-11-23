@@ -49,6 +49,7 @@ fn sort_id(column: SortColumn) -> &'static str {
         SortColumn::Id => "id",
         SortColumn::Milestone => "milestone",
         SortColumn::Title => "title",
+        SortColumn::MergedAt => "merged",
     }
 }
 
@@ -58,6 +59,7 @@ fn sort_of(id: &str) -> Option<SortColumn> {
         "id" => SortColumn::Id,
         "milestone" => SortColumn::Milestone,
         "title" => SortColumn::Title,
+        "merged" => SortColumn::MergedAt,
         _ => return None,
     })
 }
@@ -69,6 +71,7 @@ fn group_id(group: GroupBy) -> &'static str {
         GroupBy::Milestone => "milestone",
         GroupBy::Author => "author",
         GroupBy::NextStep => "next_step",
+        GroupBy::MergedDay => "merged_day",
     }
 }
 
@@ -78,6 +81,7 @@ fn group_of(id: &str) -> GroupBy {
         "milestone" => GroupBy::Milestone,
         "author" => GroupBy::Author,
         "next_step" => GroupBy::NextStep,
+        "merged_day" => GroupBy::MergedDay,
         _ => GroupBy::None,
     }
 }

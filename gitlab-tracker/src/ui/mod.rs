@@ -277,6 +277,8 @@ fn render_frame(f: &mut Frame, app: &mut App) {
         (SortColumn::Milestone, SortOrder::Descending) => "Sort: Milestone ▼",
         (SortColumn::Title, SortOrder::Ascending) => "Sort: Title ▲",
         (SortColumn::Title, SortOrder::Descending) => "Sort: Title ▼",
+        (SortColumn::MergedAt, SortOrder::Ascending) => "Sort: Merged ▲",
+        (SortColumn::MergedAt, SortOrder::Descending) => "Sort: Merged ▼",
     };
 
     // --- Bottom Input Bar ---

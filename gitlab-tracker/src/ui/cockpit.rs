@@ -1,5 +1,7 @@
 use crate::app::App;
 use crate::i18n::{tf, tl};
+#[cfg(feature = "stats")]
+use crate::merged_range::Period;
 use chrono::Utc;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -96,7 +98,20 @@ pub enum CockpitRow {
         nested: bool,
         #[cfg_attr(not(feature = "gui"), allow(dead_code))]
         key: Option<String>,
+        /// A count of the stats' history: the MRs it lists in the window.
+        #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+        history: Option<History>,
     },
+}
+
+/// What a count of the stats' history counts: the window lists the tracked
+/// MRs among them (the others are not tracked: the count can be higher).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(all(feature = "gui", feature = "stats")), allow(dead_code))]
+pub enum History {
+    /// Merged, over the days of a period (`None`: ever).
+    Merged(Option<crate::merged_range::Period>),
+    Closed,
 }
 
 impl CockpitRow {
@@ -257,28 +272,47 @@ fn flow_lines(summary: DashboardSummary, app: &App) -> Vec<CockpitRow> {
         cockpit_metric("Mergeable", summary.mergeable, app.theme.accent_green),
         cockpit_metric("Draft", summary.draft, app.theme.muted_dim),
         // From the stats' history, not the listed MRs: nothing to list.
-        history_metric("Merged", summary.merged, app.theme.accent_cyan),
-        history_metric("Closed", summary.closed, app.theme.muted_dim),
-        history_metric("Merged today", summary.merged_today, app.theme.accent_green),
+        history_metric(
+            "Merged",
+            summary.merged,
+            app.theme.accent_cyan,
+            History::Merged(None),
+        ),
+        history_metric(
+            "Closed",
+            summary.closed,
+            app.theme.muted_dim,
+            History::Closed,
+        ),
+        history_metric(
+            "Merged today",
+            summary.merged_today,
+            app.theme.accent_green,
+            History::Merged(Some(Period::Today)),
+        ),
         history_metric(
             "Merged this week",
             summary.merged_this_week,
             app.theme.accent_green,
+            History::Merged(Some(Period::ThisWeek)),
         ),
         history_metric(
             "Merged this month",
             summary.merged_this_month,
             app.theme.accent_green,
+            History::Merged(Some(Period::ThisMonth)),
         ),
         history_metric(
             "Merged last 7d",
             summary.merged_last_7_days,
             app.theme.accent_green,
+            History::Merged(Some(Period::Last7Days)),
         ),
         history_metric(
             "Merged last 30d",
             summary.merged_last_30_days,
             app.theme.accent_green,
+            History::Merged(Some(Period::Last30Days)),
         ),
     ]
 }
@@ -487,8 +521,12 @@ fn cockpit_metric(label: &'static str, value: usize, color: Color) -> CockpitRow
 }
 
 #[cfg(feature = "stats")]
-fn history_metric(label: &'static str, value: usize, color: Color) -> CockpitRow {
-    cockpit_metric_optional(label, Some(value.to_string()), color)
+fn history_metric(label: &'static str, value: usize, color: Color, history: History) -> CockpitRow {
+    let mut row = cockpit_metric_optional(label, Some(value.to_string()), color);
+    if let CockpitRow::Metric { history: h, .. } = &mut row {
+        *h = Some(history);
+    }
+    row
 }
 
 fn cockpit_metric_dynamic(
@@ -512,6 +550,7 @@ fn release_metric_line(
         color,
         nested: true,
         key: Some(release_key(release, bucket)),
+        history: None,
     }
 }
 
@@ -523,6 +562,7 @@ fn cockpit_metric_optional(label: &'static str, value: Option<String>, color: Co
         color,
         nested: false,
         key: None,
+        history: None,
     }
 }
 
@@ -538,6 +578,7 @@ fn cockpit_metric_optional_dynamic(
         color,
         nested: false,
         key: Some(key.to_string()),
+        history: None,
     }
 }
 

@@ -681,6 +681,27 @@ pub fn spinner(ui: &mut Ui, size: f32, color: Color32) -> egui::Response {
     response
 }
 
+/// The name of the month `month0` (0: January), in the window's language.
+pub fn month_name(month0: usize) -> &'static str {
+    crate::i18n::tc(
+        "date",
+        [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ][month0 % 12],
+    )
+}
+
 /// A day in words, in the window's language: "Wednesday 18 November", with
 /// the year after it when `year` ("Wednesday 18 November 2026").
 pub fn long_date(day: chrono::NaiveDate, year: bool) -> String {
@@ -697,23 +718,7 @@ pub fn long_date(day: chrono::NaiveDate, year: bool) -> String {
             chrono::Weekday::Sun => "Sunday",
         },
     );
-    let month = crate::i18n::tc(
-        "date",
-        [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
-        ][day.month0() as usize],
-    );
+    let month = month_name(day.month0() as usize);
     let vars = [
         ("weekday", weekday),
         ("day", &day.day().to_string()),

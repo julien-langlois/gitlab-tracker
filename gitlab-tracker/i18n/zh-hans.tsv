@@ -61,6 +61,7 @@
 	No tracked merge request yet: type its number in the search field and press Enter.	尚未跟踪任何合并请求：在搜索框中输入编号并按回车。
 	No merge request matches this view.	没有符合此视图的合并请求。
 	Updated	更新时间
+	Merge date	合并日期
 	MR	MR
 	Title	标题
 	Hide the views panel (F)	隐藏视图面板 (F)
@@ -522,6 +523,8 @@ clipboard	Copied	已复制
 	CI failing ❌	CI 失败 ❌
 	Assigned to me 👤	分配给我 👤
 	To review: me 👁️	待我评审 👁️
+	Merged by me ✓	由我合并 ✓
+	Merged by me	由我合并
 	Effort: Easy 🟢	工作量：简单 🟢
 	Effort: Medium 🟡	工作量：中等 🟡
 	Effort: Complex 🔴	工作量：复杂 🔴
@@ -664,6 +667,7 @@ clipboard	Copied	已复制
 	To merge	待合并
 	Not known yet	尚不清楚
 	By next step	按下一步
+	By merge day	按合并日期
 	Waiting on: {name}	等待：{name}
 	CI	CI
 
@@ -946,7 +950,23 @@ date	Merged	合并时间
 	None of your MRs is approved and mergeable yet.	你的 MR 都尚未获批且可合并。
 	Nothing else is assigned to you.	没有其他分配给你的内容。
 	None of your MRs waits on a reviewer.	你的 MR 都没有在等待审查者。
-	Nothing of yours merged today yet.	今天你还没有合并任何内容。
+	You have not merged anything today yet.	你今天还没有合并任何内容。
+	{label}: {shown} of the {counted} MRs are tracked here	{label}：{counted} 个 MR 中有 {shown} 个在此跟踪
+	the stats count {n} more, not in your tracked MRs	统计中另有 {n} 个，不在你跟踪的 MR 中
+	All of them are tracked: the list shows them	全部都在跟踪中：列表会显示它们
+	{shown} of them are tracked: the list shows those	其中 {shown} 个在跟踪中：列表显示这些
+	What I merged today, in the merge requests	我今天合并的内容，在合并请求中查看
+	Previous month	上个月
+	Next month	下个月
+	Merged between	合并日期范围
+	This week	本周
+	This month	本月
+	Last 7 days	最近 7 天
+	From	从
+	To	到
+	Every merge day	所有合并日期
+	since {day}	自 {day} 起
+	until {day}	截至 {day}
 	Your GitLab username is not known yet: it is read from GitLab when a project opens.	尚不知道你的 GitLab 用户名：打开项目时会从 GitLab 读取。
 	Across {n} open projects · as {user}	跨 {n} 个已打开的项目 · 身份 {user}
 	Show it in its project's tab	在其项目的标签页中显示

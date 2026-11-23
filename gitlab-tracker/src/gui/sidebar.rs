@@ -26,12 +26,13 @@ const MAIN_VIEWS: &[(&str, &str)] = &[
     ("flagged", "★"),
     ("reviewer_me", "◉"),
     ("assigned_to_me", "@"),
+    ("merged_by_me", "✓"),
     ("has_notes", "✎"),
     ("ci_failing", "✕"),
 ];
 
 /// Filters with a value shown directly; the others are under "More filters".
-const MAIN_FILTERS: &[&str] = &["label", "absent_from_branch"];
+const MAIN_FILTERS: &[&str] = &["label", "absent_from_branch", "merged_between"];
 
 /// The effort filters, shown as pills rather than views.
 const EFFORT_FILTERS: [(&str, Effort); 3] = [
@@ -452,6 +453,67 @@ fn with_filter(
     filters
 }
 
+/// "Merged between" as the cockpit's periods (a pill each, a second click
+/// takes it off) and two days picked on a calendar: from, to.
+fn merged_between(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
+    use crate::merged_range::{MergedRange, Period};
+    let theme = g.theme;
+    let today = chrono::Local::now().date_naive();
+    let current = filter_on(g, index)
+        .and_then(|f| MergedRange::parse(&f.query))
+        .unwrap_or_default();
+    let on = current != MergedRange::default();
+    let mut set: Option<Option<MergedRange>> = None;
+    ui.add_space(4.0);
+    ui.label(muted(&theme, clean_label(def)));
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
+        for period in Period::ALL {
+            let range = period.range(today);
+            let picked = current == range;
+            if pill_toggle(ui, &theme, tl(period.label()), theme.tones.purple, picked).clicked() {
+                set = Some((!picked).then_some(range));
+            }
+        }
+    });
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let range = (current.from, current.to);
+        if let Some(day) =
+            super::calendar::date_button(ui, &theme, "merged_from", current.from, tl("From"), range)
+        {
+            let to = current.to.filter(|to| *to >= day);
+            set = Some(Some(MergedRange {
+                from: Some(day),
+                to,
+            }));
+        }
+        ui.label(muted(&theme, "→"));
+        if let Some(day) =
+            super::calendar::date_button(ui, &theme, "merged_to", current.to, tl("To"), range)
+        {
+            let from = current.from.filter(|from| *from <= day);
+            set = Some(Some(MergedRange {
+                from,
+                to: Some(day),
+            }));
+        }
+        if on
+            && ui
+                .add(egui::Button::new(muted(&theme, "✕")).frame(false))
+                .tip(tl("Every merge day"))
+                .clicked()
+        {
+            set = Some(None);
+        }
+    });
+    if let Some(range) = set {
+        let filters = with_filter(g, index, range.map(|r| r.query()), false, &[]);
+        g.pending.push(Action::SetFilters(filters));
+    }
+}
+
 /// "Absent from branch" as a pill per tracked branch: the branches are known,
 /// nothing to type. Several can be on (absent from each); a second click on
 /// one takes it off.
@@ -516,6 +578,10 @@ fn effort_pills(g: &mut GuiApp, ui: &mut Ui, pills: &[(usize, Effort)]) {
 fn text_filter(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef) {
     if def.id == "absent_from_branch" && !g.app.branches.is_empty() {
         branch_pills(g, ui, index, def);
+        return;
+    }
+    if def.id == "merged_between" {
+        merged_between(g, ui, index, def);
         return;
     }
     let theme = g.theme;
@@ -1317,6 +1383,7 @@ mod tests {
             "ci_failing",
             "assigned_to_me",
             "reviewer_me",
+            "merged_by_me",
             "effort_easy",
             "effort_medium",
             "effort_complex",

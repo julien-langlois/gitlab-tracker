@@ -117,6 +117,11 @@ state](how-it-works.md#local-state)).
   ("requested review from @you"), else its creation. The Inspector shows
   `Review : ⏳ waiting for you · requested 2 days ago`, and
   `Approved : ✔ @alice, @bob` on approved MRs.
+- **Merged by me ✓** — the MRs you merged, whoever wrote them (GitLab's
+  `merged_by`). Needs `gitlab_username`. Shown even with merged MRs hidden.
+- **Merged between** — the MRs merged on those days, local time:
+  `2026-11-16..2026-11-22`, `2026-11-16..` (since), `..2026-11-22` (until) or a
+  single day `2026-11-20`. Shown even with merged MRs hidden.
 - **Effort: Easy 🟢 / Medium 🟡 / Complex 🔴** — see [Effort score](#effort-score)
 - **Milestone** — text search on the milestone title (case-insensitive)
 - **Assignee** — text search on the GitLab assignee and, with a linked tracker
@@ -133,7 +138,8 @@ state](how-it-works.md#local-state)).
   tracked MRs and their scopes: `Tab` / `Shift+Tab` highlight one, `Enter`
   applies it (or the typed text when none is highlighted).
 
-`m` hides merged MRs on top of any filter. They stay tracked and refreshed; the
+`m` hides merged MRs on top of any filter but *State: Merged*, *Merged by me* and
+*Merged between*. They stay tracked and refreshed; the
 status bar shows `merged hidden`. The active filter is shown in the table header.
 
 ### "Assigned to me" and "To review: me"
@@ -234,7 +240,7 @@ set in `[project.cockpit_thresholds]`.
 
 | Column | Signals |
 | :--- | :--- |
-| **Flow** *(stats)* | Open / mergeable / draft MRs; merged and closed MRs over the retained history; merges today, this week, this month, last 7 and 30 days. Hidden without the `stats` feature or database. |
+| **Flow** *(stats)* | Open / mergeable / draft MRs; merged and closed MRs over the retained history; merges today, this week (from Monday), this month, the last 7 and 30 days (whole days, today included). Hidden without the `stats` feature or database. |
 | **Attention** | Blocked MRs, conflicts, rebases, failing CI, unresolved discussions, requested changes, missing approvals, reviews waiting for you (with the oldest request's age, e.g. `4 (2d)`), MRs without reviewer or assignee, flagged MRs |
 | **Delivery Health** | Stale MRs, oldest open MR, missing / due / overdue milestones, MRs behind their target, hot threads, tracker coverage and over-estimates |
 | **Quality / Scope** | Complex MRs, average and large diffs, many-commit and many-file MRs, missing diff stats, unknown pipeline status, recently updated rows |
@@ -390,7 +396,7 @@ Shortcut keys are active. The input field is passive. Letter shortcuts are case-
 | `o`                    | Open selected MR in your default web browser                                                                               |
 | `y`                    | **Copy** `git clone -b <source branch> <ssh url>` for the selected MR to the clipboard                                     |
 | `r`                    | Force immediate network refresh for all MRs                                                                                |
-| `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → …`)                                                                 |
+| `s`                    | Cycle sort column (`Updated → ID → Milestone → Title → Merged → …`)                                                        |
 | `S`                    | Toggle sort direction (ascending / descending)                                                                             |
 | `w`                    | **Switch project** — pick another `projects.toml` entry; the current state is saved and the chosen project loads in place |
 | `e`                    | **Copy a Markdown release checklist** of the visible rows (MR link, title, state, ✅ / 🍒 / ≈ / ◐ / ❌ per branch)                  |

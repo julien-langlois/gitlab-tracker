@@ -155,10 +155,12 @@ impl DashboardSummary {
                         if merged_at.year() == current_year && merged_at.month() == current_month {
                             summary.merged_this_month += 1;
                         }
-                        if merged_at >= now - Duration::days(MERGED_LAST_7_DAYS_WINDOW) {
+                        // Whole days, today included, as "Merged between" lists them.
+                        let days_ago = (today - merged_at.date_naive()).num_days();
+                        if (0..MERGED_LAST_7_DAYS_WINDOW).contains(&days_ago) {
                             summary.merged_last_7_days += 1;
                         }
-                        if merged_at >= now - Duration::days(MERGED_LAST_30_DAYS_WINDOW) {
+                        if (0..MERGED_LAST_30_DAYS_WINDOW).contains(&days_ago) {
                             summary.merged_last_30_days += 1;
                         }
                     }

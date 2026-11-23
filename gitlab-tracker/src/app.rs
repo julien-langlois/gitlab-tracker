@@ -52,6 +52,8 @@ pub enum SortColumn {
     Id,
     Milestone,
     Title,
+    /// When it was merged; the MRs not merged go after the merged ones.
+    MergedAt,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -233,6 +235,12 @@ impl ActiveFilter {
             return tl("All").to_string();
         };
         let label = tl(def.active_label());
+        if def.id == "merged_between" {
+            if let Some(range) = crate::merged_range::MergedRange::parse(&self.query) {
+                let today = chrono::Local::now().date_naive();
+                return format!("{label} {}", range.describe(today));
+            }
+        }
         if def.needs_text_input && !self.query.is_empty() {
             format!("{label} {}", self.query)
         } else {
@@ -1007,11 +1015,27 @@ impl App {
     /// Builds a [`MrSnapshot`] and delegates to the registered `FilterDef::apply`
     /// function — no match arm needed when a new filter is added.
     fn filter_passes(&self, mr: &TrackedMr) -> bool {
-        self.passes(mr, self.active_filter.index, &self.active_filter.query)
+        // A filter of merged MRs, as the view or on top of it, shows them even
+        // with "hide merged" on: it was picked to see them.
+        let asks_merged = std::iter::once(&self.active_filter)
+            .chain(&self.filters)
+            .any(|f| self.lists_merged(f.index));
+        if self.config.hide_merged && mr.state == GitlabMrState::Merged && !asks_merged {
+            return false;
+        }
+        self.applies(mr, self.active_filter.index, &self.active_filter.query)
             && self
                 .filters
                 .iter()
-                .all(|f| self.passes(mr, f.index, &f.query))
+                .all(|f| self.applies(mr, f.index, &f.query))
+    }
+
+    /// Whether the filter at `index` lists merged MRs only ("State: Merged",
+    /// "Merged by me", "Merged between"): "hide merged" does not apply to it.
+    fn lists_merged(&self, index: usize) -> bool {
+        self.filter_defs
+            .get(index)
+            .is_some_and(|d| matches!(d.id, "state_merged" | "merged_by_me" | "merged_between"))
     }
 
     /// How many tracked MRs the filter at `index` (in `filter_defs`) shows without a
@@ -1027,9 +1051,15 @@ impl App {
     /// Whether `mr` passes the filter at `index` with `query`, and is not hidden
     /// by the "hide merged" toggle.
     fn passes(&self, mr: &TrackedMr, index: usize, query: &str) -> bool {
-        if self.config.hide_merged && mr.state == GitlabMrState::Merged {
+        if self.config.hide_merged && mr.state == GitlabMrState::Merged && !self.lists_merged(index)
+        {
             return false;
         }
+        self.applies(mr, index, query)
+    }
+
+    /// Whether `mr` passes the filter at `index` with `query`, "hide merged" aside.
+    fn applies(&self, mr: &TrackedMr, index: usize, query: &str) -> bool {
         let Some(def) = self.filter_defs.get(index) else {
             return true; // Unknown index → show all.
         };
@@ -1060,6 +1090,8 @@ impl App {
         snapshot.diff_difficulty = diff_difficulty;
         snapshot.absent_branches = &absent_branches;
         snapshot.approved_by = &mr.approved_by;
+        snapshot.merged_by = mr.merged_by.as_deref();
+        snapshot.merged_at = mr.merged_at.as_deref();
         snapshot.labels = &mr.labels;
         (def.apply)(snapshot, query)
     }
@@ -1302,7 +1334,7 @@ impl App {
         }
         self.sort_column = column;
         self.sort_order = match column {
-            SortColumn::UpdatedAt => SortOrder::Descending,
+            SortColumn::UpdatedAt | SortColumn::MergedAt => SortOrder::Descending,
             _ => SortOrder::Ascending,
         };
         self.sort_mrs();
@@ -1313,11 +1345,12 @@ impl App {
             SortColumn::UpdatedAt => SortColumn::Id,
             SortColumn::Id => SortColumn::Milestone,
             SortColumn::Milestone => SortColumn::Title,
-            SortColumn::Title => SortColumn::UpdatedAt,
+            SortColumn::Title => SortColumn::MergedAt,
+            SortColumn::MergedAt => SortColumn::UpdatedAt,
         };
         // Reset to a sensible default order when switching columns.
         self.sort_order = match self.sort_column {
-            SortColumn::UpdatedAt => SortOrder::Descending,
+            SortColumn::UpdatedAt | SortColumn::MergedAt => SortOrder::Descending,
             _ => SortOrder::Ascending,
         };
         self.sort_mrs();
@@ -1458,6 +1491,21 @@ impl App {
             }),
             SortColumn::Title => {
                 sort_by_key_dir(&mut self.mrs, descending, |mr| mr.title.to_lowercase())
+            }
+            // By the instant, not the text: GitLab writes the offset of its server.
+            // The MRs not merged go last, whatever the order.
+            SortColumn::MergedAt => {
+                let at = |mr: &TrackedMr| {
+                    mr.merged_at
+                        .as_deref()
+                        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                        .map(|at| at.timestamp_millis())
+                };
+                self.mrs.sort_by_cached_key(|mr| match at(mr) {
+                    Some(t) if descending => (false, -t),
+                    Some(t) => (false, t),
+                    None => (true, 0),
+                });
             }
         }
 
@@ -3205,6 +3253,52 @@ pub(crate) mod tests {
 
         let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
         assert_eq!(visible, ["2", "4", "1"]);
+    }
+
+    #[tokio::test]
+    async fn merged_by_me_shows_through_hide_merged_latest_merge_first() {
+        let mut app =
+            app_with_mrs(&[("a", "None"), ("b", "None"), ("c", "None"), ("d", "None")]).await;
+        app.config.gitlab_username = Some("jane".into());
+        app.config.hide_merged = true;
+        let merge = |mr: &mut TrackedMr, at: &str, by: &str| {
+            mr.data.state = GitlabMrState::Merged;
+            mr.data.merged_at = Some(at.into());
+            mr.data.merged_by = Some(by.into());
+        };
+        // An earlier instant written with another offset: sorted by instant.
+        merge(&mut app.mrs[0], "2026-11-20T09:00:00+01:00", "Jane (@jane)");
+        merge(&mut app.mrs[1], "2026-11-20T09:30:00+00:00", "Jane (@jane)");
+        merge(&mut app.mrs[2], "2026-11-20T12:00:00+01:00", "Bob (@bob)");
+        let index = app
+            .filter_defs
+            .iter()
+            .position(|d| d.id == "merged_by_me")
+            .unwrap();
+        app.set_filter(index, String::new());
+        app.sort_column = SortColumn::MergedAt;
+        app.sort_order = SortOrder::Descending;
+        app.sort_mrs();
+        // The latest merge first, whoever merged it; the open MR last.
+        assert_eq!(ids(&app), ["3", "2", "1", "4"]);
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["2", "1"]);
+        assert_eq!(app.filter_count(index), 2);
+
+        // On top of "All", too; "All" alone keeps them hidden.
+        let all = app.filter_defs.iter().position(|d| d.id == "all").unwrap();
+        app.set_filter(all, String::new());
+        assert_eq!(app.visible_mrs().count(), 1);
+        app.set_filters(vec![ActiveFilter {
+            index,
+            query: String::new(),
+        }]);
+        assert_eq!(app.visible_mrs().count(), 2);
+
+        // Ascending: the open MR still last.
+        app.sort_order = SortOrder::Ascending;
+        app.sort_mrs();
+        assert_eq!(ids(&app), ["1", "2", "3", "4"]);
     }
 
     #[tokio::test]

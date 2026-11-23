@@ -177,6 +177,7 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
         SortColumn::Id => "ID",
         SortColumn::Milestone => "Milestone",
         SortColumn::Title => "Title",
+        SortColumn::MergedAt => "Merged",
     };
     let sort_arrow = match app.sort_order {
         SortOrder::Ascending => "↑",

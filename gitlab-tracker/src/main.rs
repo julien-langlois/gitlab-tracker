@@ -21,6 +21,7 @@ mod gitlab_signatures;
 #[cfg(feature = "gui")]
 mod gui;
 mod i18n;
+mod merged_range;
 mod models;
 #[cfg(feature = "gui")]
 mod next_step;

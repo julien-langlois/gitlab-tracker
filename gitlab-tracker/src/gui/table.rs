@@ -28,6 +28,7 @@ pub fn view(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let shown = g.app.visible_mrs().count();
     toolbar(g, ui, shown, sizes);
     super::shell::fetch_errors(g, ui);
+    super::merged_list::banner(g, ui);
     status_bar(g, ui);
     next_chips(g, ui);
     active_filters(g, ui);
@@ -220,15 +221,18 @@ pub enum GroupBy {
     Author,
     /// Who each MR waits on (see `crate::next_step`).
     NextStep,
+    /// The day it was merged, in local time: the day's count on the heading.
+    MergedDay,
 }
 
 impl GroupBy {
-    const ALL: [GroupBy; 5] = [
+    const ALL: [GroupBy; 6] = [
         GroupBy::None,
         GroupBy::Status,
         GroupBy::Milestone,
         GroupBy::Author,
         GroupBy::NextStep,
+        GroupBy::MergedDay,
     ];
 
     pub(super) fn label(self) -> &'static str {
@@ -238,6 +242,7 @@ impl GroupBy {
             GroupBy::Milestone => "By milestone",
             GroupBy::Author => "By author",
             GroupBy::NextStep => "By next step",
+            GroupBy::MergedDay => "By merge day",
         })
     }
 }
@@ -248,6 +253,7 @@ fn sort_label(column: SortColumn) -> &'static str {
         SortColumn::Id => "MR",
         SortColumn::Milestone => "Milestone",
         SortColumn::Title => "Title",
+        SortColumn::MergedAt => "Merge date",
     })
 }
 
@@ -357,6 +363,7 @@ fn display_button(g: &mut GuiApp, ui: &mut Ui) {
             SortColumn::Id,
             SortColumn::Milestone,
             SortColumn::Title,
+            SortColumn::MergedAt,
         ] {
             let selected = g.app.sort_column == column;
             if ui.selectable_label(selected, sort_label(column)).clicked() && !selected {
@@ -1824,6 +1831,7 @@ fn lines(g: &GuiApp) -> Vec<Line> {
     }
     let tones = &g.theme.tones;
     let me = app.config.gitlab_username.as_deref();
+    let today = chrono::Local::now().date_naive();
     // (key, label, tone, members), groups in the order they first show up.
     let mut groups: Vec<(String, String, Option<Tone>, Vec<usize>)> = Vec::new();
     for (index, mr) in app.visible_mrs().enumerate() {
@@ -1843,6 +1851,7 @@ fn lines(g: &GuiApp) -> Vec<Line> {
                 None,
             ),
             GroupBy::Author => (split_person(&mr.author).0.to_string(), None),
+            GroupBy::MergedDay => (merge_day(mr.merged_at.as_deref(), today), None),
             GroupBy::None => unreachable!(),
         };
         match groups.iter_mut().find(|grp| grp.1 == label) {
@@ -1879,6 +1888,26 @@ fn lines(g: &GuiApp) -> Vec<Line> {
         }
     }
     lines
+}
+
+/// The heading of the MRs merged on the day of `merged_at`: "Today",
+/// "Yesterday", then "Fri 20/11"; "Not merged" without one.
+fn merge_day(merged_at: Option<&str>, today: chrono::NaiveDate) -> String {
+    let Some(day) = crate::merged_range::merge_day(merged_at) else {
+        return tl("Not merged").to_string();
+    };
+    match (today - day).num_days() {
+        0 => tl("Today").to_string(),
+        1 => tl("Yesterday").to_string(),
+        _ => {
+            use chrono::Datelike;
+            format!(
+                "{} {}",
+                crate::snooze::weekday_short(day.weekday()),
+                day.format("%d/%m")
+            )
+        }
+    }
 }
 
 /// What a click in the table asked for, applied once the table is drawn.

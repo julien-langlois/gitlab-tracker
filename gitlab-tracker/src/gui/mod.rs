@@ -6,6 +6,7 @@
 //! as in the TUI. Only the drawing lives here.
 
 mod board;
+mod calendar;
 mod changelog;
 mod ci;
 mod cockpit;
@@ -29,6 +30,7 @@ mod labels;
 mod markdown;
 mod memo;
 mod merge_queue;
+mod merged_list;
 mod milestones;
 mod mr_page;
 mod mr_pipelines;
@@ -414,6 +416,8 @@ struct GuiApp {
     /// How the table groups its rows, and the groups folded away.
     group_by: table::GroupBy,
     folded: HashSet<String>,
+    /// The Flow count the merge requests page was opened on (its banner).
+    merged_gap: Option<merged_list::Gap>,
     /// The MR page's tab, and whether it lists the resolved threads.
     mr_tab: mr_page::Tab,
     /// The shortcuts to the MR page's sections.
@@ -585,6 +589,7 @@ impl GuiApp {
             baseline,
             hide_zeros: false,
             group_by: table::GroupBy::None,
+            merged_gap: None,
             folded,
             tracker_board: false,
             promote: None,
@@ -1023,6 +1028,7 @@ impl GuiApp {
         self.bulk = None;
         self.bulk_mode = false;
         self.next_focus = None;
+        self.merged_gap = None;
         self.select_id = None;
         self.scroll_to = None;
         if !self.demo {
@@ -1779,6 +1785,8 @@ impl eframe::App for GuiApp {
                 Ok("cockpit") => self.open_page(Page::Cockpit),
                 Ok("tracker") => self.open_page(Page::Tracker),
                 Ok("today") => self.open_page(Page::Today),
+                // What a click on Today's "Merged today" opens.
+                Ok("merged") => today::merged_by_me(self, self.active()),
                 Ok("promote") => self.open_page(Page::Promote),
                 Ok("team") => self.open_page(Page::Team),
                 // A person's page: `GITLAB_TRACKER_GUI_PERSON=<login>`, else

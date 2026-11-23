@@ -484,10 +484,12 @@ where
         if merged_at.year() == current_year && merged_at.month() == current_month {
             counts.this_month += 1;
         }
-        if merged_at >= now.clone() - Duration::days(7) {
+        // Whole days, today included, as the "Merged between" filter lists them.
+        let days_ago = (today - merged_at.date_naive()).num_days();
+        if (0..7).contains(&days_ago) {
             counts.last_7_days += 1;
         }
-        if merged_at >= now.clone() - Duration::days(30) {
+        if (0..30).contains(&days_ago) {
             counts.last_30_days += 1;
         }
     }
@@ -715,6 +717,25 @@ mod tests {
 
         let utc = compute_merged_period_counts(snapshots.iter(), utc_now);
         assert_eq!((utc.today, utc.this_week, utc.this_month), (2, 2, 3));
+    }
+
+    #[test]
+    fn the_last_days_are_whole_days_today_included() {
+        let merged_at = |id: i64, at: &str| {
+            let mut snap = stored(id, &id.to_string(), SnapshotTrigger::OnMerge, "merged", 10);
+            snap.snapshot.merged_at = Some(at.into());
+            snap
+        };
+        // Monday 23 November 2026, 09:00 UTC: the last 7 days are 17 to 23.
+        let snapshots = [
+            merged_at(1, "2026-11-17T00:05:00Z"), // first of the 7 days, early
+            merged_at(2, "2026-11-16T23:55:00Z"), // the day before: out
+            merged_at(3, "2026-10-25T00:05:00Z"), // first of the 30 days
+            merged_at(4, "2026-10-24T23:55:00Z"), // out of the 30
+        ];
+        let now: DateTime<Utc> = "2026-11-23T09:00:00Z".parse().unwrap();
+        let counts = compute_merged_period_counts(snapshots.iter(), now);
+        assert_eq!((counts.last_7_days, counts.last_30_days), (1, 3));
     }
 
     #[test]

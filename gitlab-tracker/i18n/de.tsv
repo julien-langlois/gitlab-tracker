@@ -61,6 +61,7 @@
 	No tracked merge request yet: type its number in the search field and press Enter.	Noch keine verfolgten Merge Requests: Nummer ins Suchfeld eingeben und Enter drücken.
 	No merge request matches this view.	Keine Merge Request passt zu dieser Ansicht.
 	Updated	Aktualisiert
+	Merge date	Merge-Datum
 	MR	MR
 	Title	Titel
 	Hide the views panel (F)	Ansichtsleiste ausblenden (F)
@@ -522,6 +523,8 @@ clipboard	Copied	Kopiert
 	CI failing ❌	CI schlägt fehl ❌
 	Assigned to me 👤	Mir zugewiesen 👤
 	To review: me 👁️	Review durch mich 👁️
+	Merged by me ✓	Von mir gemergt ✓
+	Merged by me	Von mir gemergt
 	Effort: Easy 🟢	Aufwand: leicht 🟢
 	Effort: Medium 🟡	Aufwand: mittel 🟡
 	Effort: Complex 🔴	Aufwand: komplex 🔴
@@ -664,6 +667,7 @@ clipboard	Copied	Kopiert
 	To merge	Zu mergen
 	Not known yet	Noch unbekannt
 	By next step	Nach nächstem Schritt
+	By merge day	Nach Merge-Tag
 	Waiting on: {name}	Wartet auf: {name}
 	CI	CI
 
@@ -946,7 +950,23 @@ date	Merged	Gemergt
 	None of your MRs is approved and mergeable yet.	Noch keiner Ihrer MRs ist genehmigt und mergebar.
 	Nothing else is assigned to you.	Ihnen ist sonst nichts zugewiesen.
 	None of your MRs waits on a reviewer.	Keiner Ihrer MRs wartet auf einen Reviewer.
-	Nothing of yours merged today yet.	Heute wurde noch nichts von Ihnen gemergt.
+	You have not merged anything today yet.	Sie haben heute noch nichts gemergt.
+	{label}: {shown} of the {counted} MRs are tracked here	{label}: {shown} der {counted} MRs werden hier verfolgt
+	the stats count {n} more, not in your tracked MRs	die Statistik zählt {n} weitere, die Sie nicht verfolgen
+	All of them are tracked: the list shows them	Alle werden verfolgt: die Liste zeigt sie
+	{shown} of them are tracked: the list shows those	{shown} davon werden verfolgt: die Liste zeigt diese
+	What I merged today, in the merge requests	Was ich heute gemergt habe, in den Merge Requests
+	Previous month	Vorheriger Monat
+	Next month	Nächster Monat
+	Merged between	Gemergt zwischen
+	This week	Diese Woche
+	This month	Diesen Monat
+	Last 7 days	Letzte 7 Tage
+	From	Von
+	To	Bis
+	Every merge day	Alle Merge-Tage
+	since {day}	seit {day}
+	until {day}	bis {day}
 	Your GitLab username is not known yet: it is read from GitLab when a project opens.	Ihr GitLab-Benutzername ist noch nicht bekannt: Er wird beim Öffnen eines Projekts aus GitLab gelesen.
 	Across {n} open projects · as {user}	Über {n} offene Projekte · als {user}
 	Show it in its project's tab	Im Tab seines Projekts anzeigen

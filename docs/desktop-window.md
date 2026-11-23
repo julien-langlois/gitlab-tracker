@@ -78,8 +78,17 @@ brings the window forward on that MR, in its tab.
 **Filters add up.** A view of the sidebar (All, Flagged, CI failing…) shows one
 set of MRs at a time; the **Filters** under it add up on top of it, every one to
 pass: absent from staging *and* from production (several branch pills can be on),
-with a label, of an effort (one at a time). Each filter in use shows over the
-table as a chip with its ×, **Clear all** taking them all off.
+with a label, of an effort (one at a time), merged between two days. Each filter
+in use shows over the table as a chip with its ×, **Clear all** taking them all
+off.
+
+**Merged between** takes the merged MRs of some days, in your local time: a pill
+per period the cockpit counts (today, this week from Monday, this month, the
+last 7 or 30 days, today included), or two days picked on a calendar, either one
+left open. **Sort → Merge date** and **Group → By merge day** list them the
+latest first, each day under a heading with its count; *Merged by me* (a view)
+keeps the ones you merged, whoever wrote them. *State: Merged*, *Merged by me*
+and *Merged between* show merged MRs even when they are hidden.
 
 **My views.** The table as it is set — the filters (the view, the filters on top
 of it, the next-step view, the status picked, merged MRs hidden), the search, the sort
@@ -186,8 +195,10 @@ back to its author if it gets stuck.
 
 Across every open tab: the reviews waiting for you, your MRs that need you (CI
 failed, conflicts, threads to answer, changes requested), those ready to merge,
-those waiting on others, and what you merged today. A click shows the MR in its
-tab. **Copy my stand-up** puts what you did since the last working day (merged,
+those waiting on others, and the MRs you merged today, whoever wrote them. A
+click shows the MR in its tab; a click on the **Merged today** count lists them
+on the merge requests page (*Merged by me*, merged today). **Copy my stand-up**
+puts what you did since the last working day (merged,
 reviewed, pushed, opened), what is on today and what waits on others in the
 clipboard.
 
@@ -213,6 +224,12 @@ success); then the MRs that need attention, most urgent first.
 they wait (the next step, as the table's chips), their median age and the oldest;
 sorted by count or by age. A click on a label lists its MRs in the table, a click
 on the oldest opens it.
+
+The **Flow** card's merged and closed counts (the clock) come from the stats'
+history: every merge of the project since recording started, tracked or not. A
+click on one lists the tracked MRs among them (the merged MRs of those days, by
+merge day); its tooltip says how many, and when the stats count more, a banner
+over the table says so: "Merged this week: 12 of the 18 MRs are tracked here".
 
 ![Cockpit: where MRs wait, the counters, the attention and delivery cards](assets/desktop/cockpit.png)
 

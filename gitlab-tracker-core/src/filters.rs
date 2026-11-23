@@ -101,6 +101,10 @@ pub struct MrSnapshot<'a> {
     pub absent_branches: &'a [&'a str],
     /// Usernames of the MR's current approvers.
     pub approved_by: &'a [String],
+    /// Who merged it (e.g. "Alice (@alice)"); `None` while it is not merged.
+    pub merged_by: Option<&'a str>,
+    /// When it was merged (GitLab's RFC 3339); `None` while it is not merged.
+    pub merged_at: Option<&'a str>,
     /// GitLab labels on the MR, as returned by the API (free-form like
     /// `"Redesign - Sprint 4"` or scoped like `"review::ongoing"`).
     pub labels: &'a [String],
@@ -129,6 +133,8 @@ impl<'a> MrSnapshot<'a> {
             target_branch,
             absent_branches: &[],
             approved_by: &[],
+            merged_by: None,
+            merged_at: None,
             labels: &[],
         }
     }

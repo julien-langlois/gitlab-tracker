@@ -61,6 +61,7 @@
 	No tracked merge request yet: type its number in the search field and press Enter.	Aucune merge request suivie : saisissez son numéro dans la recherche puis Entrée.
 	No merge request matches this view.	Aucune merge request ne correspond à cette vue.
 	Updated	Mise à jour
+	Merge date	Date de fusion
 	MR	MR
 	Title	Titre
 	Hide the views panel (F)	Masquer le panneau des vues (F)
@@ -522,6 +523,8 @@ clipboard	Copied	Copié
 	CI failing ❌	CI en échec ❌
 	Assigned to me 👤	Assignées à moi 👤
 	To review: me 👁️	À relire : moi 👁️
+	Merged by me ✓	Fusionnées par moi ✓
+	Merged by me	Fusionnées par moi
 	Effort: Easy 🟢	Effort : facile 🟢
 	Effort: Medium 🟡	Effort : moyen 🟡
 	Effort: Complex 🔴	Effort : complexe 🔴
@@ -664,6 +667,7 @@ clipboard	Copied	Copié
 	To merge	À fusionner
 	Not known yet	Pas encore connu
 	By next step	Par prochaine étape
+	By merge day	Par jour de fusion
 	Waiting on: {name}	En attente : {name}
 	CI	CI
 
@@ -946,7 +950,23 @@ date	Merged	Fusionnée
 	None of your MRs is approved and mergeable yet.	Aucune de vos MR n'est encore approuvée et fusionnable.
 	Nothing else is assigned to you.	Rien d'autre ne vous est assigné.
 	None of your MRs waits on a reviewer.	Aucune de vos MR n'attend de relecteur.
-	Nothing of yours merged today yet.	Rien de vous n'a encore été fusionné aujourd'hui.
+	You have not merged anything today yet.	Vous n'avez encore rien fusionné aujourd'hui.
+	{label}: {shown} of the {counted} MRs are tracked here	{label} : {shown} des {counted} MR sont suivies ici
+	the stats count {n} more, not in your tracked MRs	les stats en comptent {n} de plus, absentes de vos MR suivies
+	All of them are tracked: the list shows them	Toutes sont suivies : la liste les montre
+	{shown} of them are tracked: the list shows those	{shown} d'entre elles sont suivies : la liste montre celles-là
+	What I merged today, in the merge requests	Ce que j'ai fusionné aujourd'hui, dans les merge requests
+	Previous month	Mois précédent
+	Next month	Mois suivant
+	Merged between	Fusionnées entre
+	This week	Cette semaine
+	This month	Ce mois-ci
+	Last 7 days	7 derniers jours
+	From	Du
+	To	Au
+	Every merge day	Tous les jours de fusion
+	since {day}	depuis le {day}
+	until {day}	jusqu'au {day}
 	Your GitLab username is not known yet: it is read from GitLab when a project opens.	Votre nom d'utilisateur GitLab n'est pas encore connu : il est lu depuis GitLab à l'ouverture d'un projet.
 	Across {n} open projects · as {user}	Sur {n} projets ouverts · en tant que {user}
 	Show it in its project's tab	L'afficher dans l'onglet de son projet
