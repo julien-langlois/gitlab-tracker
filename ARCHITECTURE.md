@@ -171,6 +171,15 @@ listed with its fine-grained permission in [`docs/gitlab-token.md`](docs/gitlab-
 A change that adds a GitLab call updates that table (and the short list in the
 README) in the same commit.
 
+**Contract tests.** `gitlab-tracker-gitlab/tests/contract.rs` replays what real
+instances answered to a refresh (`tests/fixtures/<instance>/`: the requests and
+answers, anonymized, and what the client made of them) and fails on a request
+the recording never saw or on a reading that changed. A change that adds or
+alters a request records the instances again: `gitlab.com` with the recorder
+(top of `contract.rs`), the GitLab CE versions with
+`scripts/record-gitlab-ce.sh <version>` or the **Record GitLab CE** workflow
+(Docker, ~6 GB of memory).
+
 ---
 
 ## Code layout

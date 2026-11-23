@@ -1,0 +1,3067 @@
+{
+  "branches": {
+    "main": {
+      "cherry_picked_from": 0,
+      "commits": 13,
+      "fingerprints": 13
+    }
+  },
+  "discovered": 16,
+  "labels": [],
+  "milestones": [],
+  "mrs": {
+    "4347": {
+      "branches": [
+        "main"
+      ],
+      "data": {
+        "approved_by": [
+          "user-17",
+          "user-4"
+        ],
+        "approvers": [
+          "User 17 (@user-17)",
+          "User 4 (@user-4)"
+        ],
+        "assignee": "User 18 (@user-18)",
+        "author": "User 18 (@user-18)",
+        "auto_merge": true,
+        "commits": [
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794037633,
+              "title": "fix(config): skip local config when git rev-parse fails"
+            },
+            "sha": "2619169398bbc886415300e82307a6825574dfa2"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794390274,
+              "title": "fix(config): guard config edit -l and update godoc"
+            },
+            "sha": "948a25630177f580f3c992509fc4758c0343305d"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794390330,
+              "title": "fix(config): use slices.Concat and check GitDir success in Write"
+            },
+            "sha": "8a93db7d3ae031e8dd77bfc7cacc9c9afb3ae896"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794390808,
+              "title": "fix(config): add missing errors import"
+            },
+            "sha": "0ab19ae08a8cb85142e1ba6e52e613a8908faf71"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794391871,
+              "title": "fix(config): correct import order for gci linter"
+            },
+            "sha": "1f39ab1bbca25efb1a082c2e349e648f2d84afe2"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794392515,
+              "title": "fix(config): remove trailing whitespace"
+            },
+            "sha": "e98214baf6d97ad6900db46967a37737c803e34b"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794506679,
+              "title": "fix(config): add test for config edit --local error path"
+            },
+            "sha": "258d35efb726cbb0c00535d47b1693c5eeda3acb"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794507086,
+              "title": "fix(config): use cmdtest in config edit --local test"
+            },
+            "sha": "dfc2cf9be15f3527f1e81ef4889715876b5c8425"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794507787,
+              "title": "fix(config): remove t.Parallel from test"
+            },
+            "sha": "df0d32b1bd15324f7d5e3549bdcb19a8baf0e076"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794551120,
+              "title": "fix(config): document nil and empty returns in LocalConfigDir/File godoc"
+            },
+            "sha": "0b5d79250910124cc125392afb5194bec09f12e3"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794554676,
+              "title": "fix(config): restore comment separator in LocalConfigDir"
+            },
+            "sha": "44120a6da54fa03b67d33301b892af69f53bcd21"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794572029,
+              "title": "fix(config): log the swallowed git rev-parse errors"
+            },
+            "sha": "75380a7da1e38e1593f96aa56bfafc217131763f"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794572856,
+              "title": "fix(config): correct import order for gci linter"
+            },
+            "sha": "95f3d50ace831613d0bb3db6e0a469f76787faf0"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1794836726,
+              "title": "fix(config): move debug log to rev-parse failure path"
+            },
+            "sha": "2ff6b838d7814d2211966ee13adceea59e57f7d4"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1795081433,
+              "title": "fix(config): make rev-parse log neutral and test config loading"
+            },
+            "sha": "49697ce36e106fd8b5e34a6effc2210d4a78a4c9"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1795082670,
+              "title": "fix(config): add an empty config dir so ParseDefaultConfig doesn't fail on missing global config"
+            },
+            "sha": "83e81f57ed7a580e4bd7462798cab17e5c6712a7"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1795083724,
+              "title": "fix(config): check for a specific bug error in test"
+            },
+            "sha": "05a4920867c42f2fde53032dfcc62438846fa018"
+          },
+          {
+            "author_name": "User 19",
+            "fingerprint": {
+              "author_email": "user-19@example.com",
+              "authored_at": 1795084711,
+              "title": "fix(config): create config file in test to verify loading succeeds"
+            },
+            "sha": "43785a42fe044770c84eb665420575c8db3a1ad7"
+          }
+        ],
+        "created_at": "2026-11-09T07:37:16.392Z",
+        "description": "Text written by a person, replaced by the recorder.",
+        "diff_stats": {
+          "additions": 92,
+          "commits_behind": null,
+          "commits_count": 18,
+          "deletions": 33,
+          "files": [
+            {
+              "added": 14,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  102,
+                  104
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/config/edit/config_edit_test.go"
+            },
+            {
+              "added": 28,
+              "deleted": 6,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  108,
+                  114
+                ],
+                [
+                  137,
+                  143
+                ],
+                [
+                  149,
+                  151
+                ],
+                [
+                  31,
+                  41
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/config/local_config_test.go"
+            },
+            {
+              "added": 4,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1,
+                  6
+                ],
+                [
+                  67,
+                  72
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/config/edit/config_edit.go"
+            },
+            {
+              "added": 40,
+              "deleted": 23,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  108,
+                  91
+                ],
+                [
+                  14,
+                  6
+                ],
+                [
+                  143,
+                  149
+                ],
+                [
+                  18,
+                  41
+                ],
+                [
+                  44,
+                  51
+                ],
+                [
+                  56,
+                  66
+                ],
+                [
+                  71,
+                  86
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/config/local_config.go"
+            },
+            {
+              "added": 6,
+              "deleted": 4,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  124,
+                  131
+                ],
+                [
+                  351,
+                  358
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/project/create/project_create.go"
+            }
+          ],
+          "files_changed": 5,
+          "files_listed": true
+        },
+        "labels": [
+          "1st contribution",
+          "Community contribution",
+          "automation:ml",
+          "backend",
+          "bug::functional",
+          "category:gitlab cli",
+          "devops::ai clients",
+          "group::developer clients",
+          "linked-issue",
+          "section::ai",
+          "type::bug",
+          "workflow::ready for review"
+        ],
+        "landed_fingerprint": {
+          "author_email": "user-21@example.com",
+          "authored_at": 1795411086,
+          "title": "Merge branch '8690-local-config-skip-on-rev-parse-failure' into 'main"
+        },
+        "merged_at": "2026-11-23T05:18:07.549Z",
+        "merged_by": "User 17 (@user-17)",
+        "milestone": "19.7",
+        "milestone_description": "",
+        "milestone_due_date": "2026-12-11",
+        "milestone_events": null,
+        "notes_seen": null,
+        "pipelines": [
+          {
+            "created_at": "2026-11-11T09:53:33Z",
+            "id": 3053689608,
+            "jobs": [
+              {
+                "duration": 1102.0,
+                "id": 17929046462,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.415042,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": 18.0,
+                "id": 17929046458,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.401308,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 17929046459,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.400826,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 25.0,
+                "id": 17929046454,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.290624,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 258.0,
+                "id": 17929046457,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.357231,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 286.0,
+                "id": 17929046463,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.378907,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 288.0,
+                "id": 17929046461,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.487213,
+                "stage": "test",
+                "status": "failed"
+              },
+              {
+                "duration": 29.0,
+                "id": 17929046460,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.511252,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 67.0,
+                "id": 17929046453,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.316333,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 17929046455,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.282193,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 17929046456,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.403226,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 17929046452,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "canceled"
+              },
+              {
+                "duration": null,
+                "id": 17929046464,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": null,
+                "stage": "test",
+                "status": "canceled"
+              }
+            ],
+            "needs_read": true,
+            "sha": "0ab19ae08a8cb85142e1ba6e52e613a8908faf71",
+            "status": "failed",
+            "updated_at": "2026-11-11T10:11:58Z"
+          },
+          {
+            "created_at": "2026-11-11T10:11:17Z",
+            "id": 3053761670,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 17929583851,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.149498,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 11.0,
+                "id": 17929583850,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.154839,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 22.0,
+                "id": 17929583853,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.091438,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 221.0,
+                "id": 17929583858,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.180904,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 223.0,
+                "id": 17929583852,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.148163,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 17929583849,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.10923,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 24.0,
+                "id": 17929583854,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.189146,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 275.0,
+                "id": 17929583856,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.17432,
+                "stage": "test",
+                "status": "failed"
+              },
+              {
+                "duration": 31.0,
+                "id": 17929583855,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.180834,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 671.0,
+                "id": 17929583857,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.180055,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": 74.0,
+                "id": 17929583848,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.253697,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 17929583847,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "canceled"
+              },
+              {
+                "duration": null,
+                "id": 17929583859,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": null,
+                "stage": "test",
+                "status": "canceled"
+              }
+            ],
+            "needs_read": true,
+            "sha": "1f39ab1bbca25efb1a082c2e349e648f2d84afe2",
+            "status": "failed",
+            "updated_at": "2026-11-11T10:22:32Z"
+          },
+          {
+            "created_at": "2026-11-12T18:04:45Z",
+            "id": 3061033104,
+            "jobs": [
+              {
+                "duration": 18.0,
+                "id": 17980315658,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.238237,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 220.0,
+                "id": 17980315657,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.252345,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 264.0,
+                "id": 17980315661,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.19523,
+                "stage": "test",
+                "status": "failed"
+              },
+              {
+                "duration": 27.0,
+                "id": 17980315659,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.285058,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 275.0,
+                "id": 17980315663,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.300145,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 17980315654,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.121069,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 30.0,
+                "id": 17980315660,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.236396,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 432.0,
+                "id": 17980315662,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.320659,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": 79.0,
+                "id": 17980315653,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.731835,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 17980315655,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.311649,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 17980315656,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.265358,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 17980315652,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "canceled"
+              },
+              {
+                "duration": null,
+                "id": 17980315664,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": null,
+                "stage": "test",
+                "status": "canceled"
+              }
+            ],
+            "needs_read": true,
+            "sha": "258d35efb726cbb0c00535d47b1693c5eeda3acb",
+            "status": "failed",
+            "updated_at": "2026-11-12T18:12:00Z"
+          },
+          {
+            "created_at": "2026-11-13T06:25:27Z",
+            "id": 3063259784,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 17995183750,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.373977,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 17995183753,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.185805,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 25.0,
+                "id": 17995183754,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.221639,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 26.0,
+                "id": 17995183749,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.319369,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 276.0,
+                "id": 17995183758,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.297766,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 29.0,
+                "id": 17995183755,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.186524,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 290.0,
+                "id": 17995183752,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.279499,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 316.0,
+                "id": 17996060002,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.114854,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": 66.0,
+                "id": 17995183759,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.408519,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 670.0,
+                "id": 17995183756,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.140178,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 76.0,
+                "id": 17995183748,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.381618,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 17995183751,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.327978,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 17995183747,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "canceled"
+              }
+            ],
+            "needs_read": true,
+            "sha": "0b5d79250910124cc125392afb5194bec09f12e3",
+            "status": "canceled",
+            "updated_at": "2026-11-13T07:25:14Z"
+          },
+          {
+            "created_at": "2026-11-19T10:22:09Z",
+            "id": 3088520934,
+            "jobs": [
+              {
+                "duration": 16.0,
+                "id": 18177958268,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.272796,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 200.0,
+                "id": 18177958267,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.276086,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 203.0,
+                "id": 18177958273,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.247209,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 18177958269,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.254101,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 25.0,
+                "id": 18177958264,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.220708,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 18177958270,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.361045,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 45.0,
+                "id": 18177958274,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.15291,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 468.0,
+                "id": 18177958271,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.30304,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 59.0,
+                "id": 18177958263,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.183282,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 793.0,
+                "id": 18177958272,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.305745,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 8.0,
+                "id": 18177958265,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.285348,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 8.0,
+                "id": 18177958266,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.353814,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18177958262,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "05a4920867c42f2fde53032dfcc62438846fa018",
+            "status": "success",
+            "updated_at": "2026-11-19T10:36:12Z"
+          }
+        ],
+        "review": null,
+        "review_read_at": null,
+        "reviewers": [
+          "User 17 (@user-17)",
+          "User 4 (@user-4)"
+        ],
+        "sha": "a0ee4239c9319c78fd2c41d0aaf617a379017565",
+        "source_branch": "8690-local-config-skip-on-rev-parse-failure",
+        "state": "merged",
+        "target_branch": "main",
+        "threads": [],
+        "title": "fix(config): skip local config when git rev-parse fails",
+        "updated_at": "2026-11-23T05:18:07.138Z",
+        "user_notes_count": 0,
+        "web_url": "https://gitlab.com/gitlab-org/cli/-/merge_requests/4347"
+      },
+      "mergeability": "NotOpen"
+    },
+    "4488": {
+      "branches": [],
+      "data": {
+        "approved_by": [],
+        "approvers": [],
+        "assignee": "User 8 (@user-8)",
+        "author": "User 8 (@user-8)",
+        "commits": [
+          {
+            "author_name": "User 20",
+            "fingerprint": {
+              "author_email": "user-20@example.com",
+              "authored_at": 1795015811,
+              "title": "fix(df): trust the user's JVM truststore in the job-level proxy"
+            },
+            "sha": "5d6f8634138fced7b52c572015d661540235b841"
+          },
+          {
+            "author_name": "User 20",
+            "fingerprint": {
+              "author_email": "user-20@example.com",
+              "authored_at": 1795440827,
+              "title": "refactor(df): remove the comments this change added"
+            },
+            "sha": "65ae86c93174c4bef56f575ddb5e295f1fa269e3"
+          }
+        ],
+        "created_at": "2026-11-18T15:40:12.675Z",
+        "description": "Text written by a person, replaced by the recorder.",
+        "diff_stats": {
+          "additions": 273,
+          "commits_behind": 2,
+          "commits_count": 2,
+          "deletions": 36,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  22,
+                  28
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/dependency-firewall/job-proxy/_index.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  28,
+                  34
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/df/jobproxy/jobproxy.go"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  79,
+                  85
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/session/serve.go"
+            },
+            {
+              "added": 13,
+              "deleted": 9,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  122,
+                  127
+                ],
+                [
+                  376,
+                  390
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/pm/pm.go"
+            },
+            {
+              "added": 198,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1,
+                  1
+                ]
+              ],
+              "new_file": true,
+              "path": "internal/dependencyfirewall/session/serve_test.go"
+            },
+            {
+              "added": 22,
+              "deleted": 4,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  28,
+                  40
+                ],
+                [
+                  3,
+                  9
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/pm/upstreamtrust.go"
+            },
+            {
+              "added": 23,
+              "deleted": 14,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  12,
+                  6
+                ],
+                [
+                  32,
+                  49
+                ],
+                [
+                  321,
+                  327
+                ],
+                [
+                  57,
+                  63
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/pm/jvmupstreamtrust.go"
+            },
+            {
+              "added": 7,
+              "deleted": 3,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  109,
+                  96
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/pm/gradle.go"
+            },
+            {
+              "added": 7,
+              "deleted": 3,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  114,
+                  127
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/dependencyfirewall/pm/maven.go"
+            }
+          ],
+          "files_changed": 9,
+          "files_listed": true
+        },
+        "labels": [
+          "Category:Dependency Firewall",
+          "bug::functional",
+          "category:gitlab cli",
+          "devops::security platform",
+          "group::dependency firewall",
+          "section::sec",
+          "type::bug"
+        ],
+        "landed_fingerprint": null,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": null,
+        "milestone_description": null,
+        "milestone_due_date": null,
+        "milestone_events": null,
+        "notes_seen": null,
+        "pipelines": [
+          {
+            "created_at": "2026-11-18T15:40:16Z",
+            "id": 3084930200,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 18150775895,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.231725,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 12.0,
+                "id": 18150775894,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.176724,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 14.0,
+                "id": 18150775889,
+                "name": "secret_detection",
+                "needs": [],
+                "queued_duration": 0.259202,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 18150775897,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.215401,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 207.0,
+                "id": 18150775888,
+                "name": "gitlab-advanced-sast",
+                "needs": [],
+                "queued_duration": 0.26116,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 22.0,
+                "id": 18150775891,
+                "name": "dependency-scanning-profile-0",
+                "queued_duration": 0.152409,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 26.0,
+                "id": 18150775893,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.224714,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 277.0,
+                "id": 18150775901,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.204072,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 18150775898,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.123067,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 29.0,
+                "id": 18150775899,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.217435,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 47.0,
+                "id": 18150775903,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.245015,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 59.0,
+                "id": 18150775892,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.198783,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 76.0,
+                "id": 18150775896,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.132783,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 87.0,
+                "id": 18150775900,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.175523,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 92.0,
+                "id": 18150775902,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.221487,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18150775890,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18150775904,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18150775905,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "932ee6237997608996da55464775c61869ca9c9c",
+            "status": "success",
+            "updated_at": "2026-11-18T15:45:46Z"
+          },
+          {
+            "created_at": "2026-11-23T13:28:03Z",
+            "id": 3103279136,
+            "jobs": [
+              {
+                "duration": 11.0,
+                "id": 18282201652,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.15856,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 12.0,
+                "id": 18282201646,
+                "name": "secret_detection",
+                "needs": [],
+                "queued_duration": 0.349443,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 149.0,
+                "id": 18282201659,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.13498,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 150.0,
+                "id": 18282201653,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.194555,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 16.0,
+                "id": 18282201648,
+                "name": "dependency-scanning-profile-0",
+                "queued_duration": 0.253272,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 18282201654,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.149279,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 202.0,
+                "id": 18282201645,
+                "name": "gitlab-advanced-sast",
+                "needs": [],
+                "queued_duration": 0.411875,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 229.0,
+                "id": 18282201657,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.125054,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 24.0,
+                "id": 18282201655,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.230075,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 18282201656,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.174848,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 31.0,
+                "id": 18282201650,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.184283,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 57.0,
+                "id": 18282201649,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.116801,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 816.0,
+                "id": 18282201658,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.12327,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": 9.0,
+                "id": 18282201651,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.139757,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18282201647,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "canceled"
+              },
+              {
+                "duration": null,
+                "id": 18282201660,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": null,
+                "stage": "test",
+                "status": "canceled"
+              },
+              {
+                "duration": null,
+                "id": 18282201661,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18282201662,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "9334b654eabec214fba6684fe3d8c736c2cf7a26",
+            "status": "canceled",
+            "updated_at": "2026-11-23T13:41:42Z"
+          },
+          {
+            "created_at": "2026-11-23T13:38:42Z",
+            "id": 3103328011,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 18282587821,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.34998,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 12.0,
+                "id": 18282587815,
+                "name": "secret_detection",
+                "needs": [],
+                "queued_duration": 0.203898,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 131.0,
+                "id": 18282587822,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.365885,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 153.0,
+                "id": 18282587828,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.188495,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 18282587817,
+                "name": "dependency-scanning-profile-0",
+                "queued_duration": 0.196028,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 18.0,
+                "id": 18282587823,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.30826,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 209.0,
+                "id": 18282587826,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.186336,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 22.0,
+                "id": 18282587824,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.258649,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 24.0,
+                "id": 18282587819,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.314911,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 268.0,
+                "id": 18282587814,
+                "name": "gitlab-advanced-sast",
+                "needs": [],
+                "queued_duration": 0.28112,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 18282587825,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.251865,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 42.0,
+                "id": 18282587829,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.500384,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 555.0,
+                "id": 18282587827,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.137247,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 57.0,
+                "id": 18282587818,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.161588,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 18282587820,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.236899,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18282587816,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18282587830,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18282587831,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "61013ce6281219be7b96ad96cd64a442677e0791",
+            "status": "success",
+            "updated_at": "2026-11-23T13:48:45Z"
+          }
+        ],
+        "review": null,
+        "review_read_at": null,
+        "reviewers": [
+          "User 4 (@user-4)"
+        ],
+        "sha": null,
+        "source_branch": "df-job-proxy-jvm-trust",
+        "state": "opened",
+        "target_branch": "main",
+        "threads": [],
+        "title": "Draft: fix(df): trust the user's JVM truststore in the job-level proxy",
+        "updated_at": "2026-11-23T13:47:41.559Z",
+        "user_notes_count": 0,
+        "web_url": "https://gitlab.com/gitlab-org/cli/-/merge_requests/4488"
+      },
+      "mergeability": "Draft"
+    },
+    "4493": {
+      "branches": [
+        "main"
+      ],
+      "data": {
+        "approved_by": [
+          "user-4",
+          "user-9"
+        ],
+        "approvers": [
+          "User 4 (@user-4)",
+          "User 9 (@user-9)"
+        ],
+        "assignee": "User 17 (@user-17)",
+        "author": "User 17 (@user-17)",
+        "auto_merge": true,
+        "commits": [
+          {
+            "author_name": "User 21",
+            "fingerprint": {
+              "author_email": "user-21@example.com",
+              "authored_at": 1795051592,
+              "title": "fix(mr note): keep positional argument order in help usage"
+            },
+            "sha": "d0be20ad8c7046bd45b98d1afb6a51e5347edddf"
+          },
+          {
+            "author_name": "User 21",
+            "fingerprint": {
+              "author_email": "user-21@example.com",
+              "authored_at": 1795401710,
+              "title": "test(mr note): assert help keeps merge request before ID"
+            },
+            "sha": "173d4157d4c599571477c4302b8ad6e56bb95c5e"
+          }
+        ],
+        "created_at": "2026-11-19T01:28:59.988Z",
+        "description": "Text written by a person, replaced by the recorder.",
+        "diff_stats": {
+          "additions": 56,
+          "commits_behind": null,
+          "commits_count": 2,
+          "deletions": 11,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  24,
+                  30
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/draft/delete.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  26,
+                  32
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/draft/update.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  31,
+                  37
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/delete.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  31,
+                  37
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/reopen.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  31,
+                  37
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/resolve.md"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  32,
+                  38
+                ]
+              ],
+              "new_file": false,
+              "path": "docs/source/mr/note/update.md"
+            },
+            {
+              "added": 2,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  43,
+                  49
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/draft/delete/delete.go"
+            },
+            {
+              "added": 2,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  45,
+                  51
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/mr_note_delete.go"
+            },
+            {
+              "added": 2,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  46,
+                  52
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/draft/update/update.go"
+            },
+            {
+              "added": 2,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  47,
+                  53
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/mr_note_update.go"
+            },
+            {
+              "added": 2,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  66,
+                  72
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/mr_note_resolve.go"
+            },
+            {
+              "added": 40,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  12,
+                  7
+                ],
+                [
+                  190,
+                  192
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/root_test.go"
+            }
+          ],
+          "files_changed": 12,
+          "files_listed": true
+        },
+        "labels": [
+          "automation:ml",
+          "backend",
+          "bug::functional",
+          "category:gitlab cli",
+          "devops::ai clients",
+          "group::developer clients",
+          "section::ai",
+          "test-code-risk::high",
+          "test-docs-risk::low",
+          "test-gitlab-bot::category::project-rules",
+          "test-gitlab-bot::manual-approve",
+          "test-gitlab-bot::risk::high",
+          "test-specs-risk::low",
+          "type::bug"
+        ],
+        "landed_fingerprint": {
+          "author_email": "user-50@example.com",
+          "authored_at": 1795441087,
+          "title": "Merge branch 'jmc-fang-usage-arg-order' into 'main"
+        },
+        "merged_at": "2026-11-23T13:38:09.251Z",
+        "merged_by": "User 9 (@user-9)",
+        "milestone": null,
+        "milestone_description": null,
+        "milestone_due_date": null,
+        "milestone_events": null,
+        "notes_seen": null,
+        "pipelines": [
+          {
+            "created_at": "2026-11-19T01:29:03Z",
+            "id": 3086985866,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 18166994612,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.217558,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 11.0,
+                "id": 18166994606,
+                "name": "secret_detection",
+                "needs": [],
+                "queued_duration": 0.339353,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 18166994614,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.427908,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 187.0,
+                "id": 18166994605,
+                "name": "gitlab-advanced-sast",
+                "needs": [],
+                "queued_duration": 0.40726,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 21.0,
+                "id": 18166994608,
+                "name": "dependency-scanning-profile-0",
+                "queued_duration": 0.271788,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 22.0,
+                "id": 18166994615,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.419356,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 24.0,
+                "id": 18166994610,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.220981,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 248.0,
+                "id": 18166994618,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.327836,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 29.0,
+                "id": 18166994616,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.389755,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 47.0,
+                "id": 18166994620,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.30149,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 53.0,
+                "id": 18166994609,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.257625,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 74.0,
+                "id": 18166994613,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.365632,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 88.0,
+                "id": 18166994617,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.388188,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 89.0,
+                "id": 18166994619,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.292024,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 18166994611,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.271433,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18166994607,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18166994621,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18166994622,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "0c90870744f54aa3154e1c317d80f62086f81bc5",
+            "status": "success",
+            "updated_at": "2026-11-19T01:34:03Z"
+          },
+          {
+            "created_at": "2026-11-23T02:43:46Z",
+            "id": 3100977414,
+            "jobs": [
+              {
+                "duration": 11.0,
+                "id": 18266123145,
+                "name": "secret_detection",
+                "needs": [],
+                "queued_duration": 0.191504,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 17.0,
+                "id": 18266123153,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.264908,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 20.0,
+                "id": 18266123147,
+                "name": "dependency-scanning-profile-0",
+                "queued_duration": 0.323781,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 21.0,
+                "id": 18266123154,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.31507,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 217.0,
+                "id": 18266123144,
+                "name": "gitlab-advanced-sast",
+                "needs": [],
+                "queued_duration": 0.228169,
+                "stage": "application-security-testing",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 18266123149,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.202146,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 245.0,
+                "id": 18266123157,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.260513,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 27.0,
+                "id": 18266123155,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.26304,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 44.0,
+                "id": 18266123159,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.296043,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 51.0,
+                "id": 18266123148,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.248123,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 70.0,
+                "id": 18266123152,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.128156,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 87.0,
+                "id": 18266123156,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.275771,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 88.0,
+                "id": 18266123158,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.209144,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 18266123150,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.197588,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 18266123151,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.180921,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18266123146,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18266123160,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18266123161,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "c3f80dee9638c2ae7bbce6d7d04564f3de693ddd",
+            "status": "success",
+            "updated_at": "2026-11-23T02:48:40Z"
+          },
+          {
+            "created_at": "2026-11-23T13:23:59Z",
+            "id": 3103260601,
+            "jobs": [
+              {
+                "duration": 10.0,
+                "id": 18282055166,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.443362,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 128.0,
+                "id": 18282055167,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.334318,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 136.0,
+                "id": 18282055173,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.309901,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 155.0,
+                "id": 18282055180,
+                "name": "snapcraft_build_edge",
+                "needs": [
+                  "tests:unit"
+                ],
+                "queued_duration": 0.221764,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": 18.0,
+                "id": 18282055168,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.388494,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 224.0,
+                "id": 18282055171,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.308381,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 18282055169,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.356904,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 28.0,
+                "id": 18282055164,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.340577,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 29.0,
+                "id": 18282055170,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.403289,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 316.0,
+                "id": 18282055175,
+                "name": "build_test",
+                "needs": [
+                  "sign_windows_installer: [arm64]",
+                  "sign_windows_installer: [x86_64]",
+                  "tests:unit",
+                  "windows_installer: [amd64, x86_64]",
+                  "windows_installer: [arm64, arm64]"
+                ],
+                "queued_duration": 0.330514,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": 35.0,
+                "id": 18282055177,
+                "name": "windows_installer: [arm64, arm64]",
+                "needs": [
+                  "build_windows: [amd64]",
+                  "build_windows: [arm64]",
+                  "sign_windows_glab: [amd64]",
+                  "sign_windows_glab: [arm64]"
+                ],
+                "queued_duration": 0.338083,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": 39.0,
+                "id": 18282055176,
+                "name": "windows_installer: [amd64, x86_64]",
+                "needs": [
+                  "build_windows: [amd64]",
+                  "build_windows: [arm64]",
+                  "sign_windows_glab: [amd64]",
+                  "sign_windows_glab: [arm64]"
+                ],
+                "queued_duration": 0.383722,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": 45.0,
+                "id": 18282055174,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.137052,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 523.0,
+                "id": 18282055172,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.334907,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 55.0,
+                "id": 18282055163,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.392132,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 9.0,
+                "id": 18282055165,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.341016,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 90.0,
+                "id": 18282055179,
+                "name": "build_windows: [arm64]",
+                "needs": [],
+                "queued_duration": 0.183843,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": 91.0,
+                "id": 18282055178,
+                "name": "build_windows: [amd64]",
+                "needs": [],
+                "queued_duration": 0.233089,
+                "stage": "build",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18282055162,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18282055181,
+                "name": "review-docs-deploy",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              },
+              {
+                "duration": null,
+                "id": 18282055182,
+                "name": "review-docs-cleanup",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "review",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "7545f059c43e3a701c7de7eaf0ec85bf734b08ad",
+            "status": "success",
+            "updated_at": "2026-11-23T13:38:05Z"
+          }
+        ],
+        "review": null,
+        "review_read_at": null,
+        "reviewers": [
+          "User 4 (@user-4)",
+          "User 9 (@user-9)"
+        ],
+        "sha": "13dd661da0a5d40364b42bad39af78686deaa073",
+        "source_branch": "jmc-fang-usage-arg-order",
+        "state": "merged",
+        "target_branch": "main",
+        "threads": [],
+        "title": "fix(mr note): keep positional argument order in help usage",
+        "updated_at": "2026-11-23T13:38:08.625Z",
+        "user_notes_count": 0,
+        "web_url": "https://gitlab.com/gitlab-org/cli/-/merge_requests/4493"
+      },
+      "mergeability": "NotOpen"
+    },
+    "4533": {
+      "branches": [],
+      "data": {
+        "approved_by": [
+          "user-4"
+        ],
+        "approvers": [
+          "User 4 (@user-4)"
+        ],
+        "assignee": "User 6 (@user-6)",
+        "author": "User 6 (@user-6)",
+        "commits": [
+          {
+            "author_name": "User 22",
+            "fingerprint": {
+              "author_email": "user-22@example.com",
+              "authored_at": 1795440449,
+              "title": "fix(mr): find merge request by upstream branch name"
+            },
+            "sha": "bc09dc5af7520497a6bc31c87853785b82957d9c"
+          }
+        ],
+        "created_at": "2026-11-23T13:31:38.133Z",
+        "description": "Text written by a person, replaced by the recorder.",
+        "diff_stats": {
+          "additions": 315,
+          "commits_behind": 2,
+          "commits_count": 1,
+          "deletions": 16,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  100,
+                  94
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/mr_note_list.go"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  105,
+                  111
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/diff/diff.go"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  41,
+                  47
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/issues/mr_issues.go"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  51,
+                  57
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/approvers/mr_approvers.go"
+            },
+            {
+              "added": 1,
+              "deleted": 1,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  85,
+                  91
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/note/draft/list/list.go"
+            },
+            {
+              "added": 183,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1406,
+                  1408
+                ],
+                [
+                  24,
+                  29
+                ],
+                [
+                  551,
+                  556
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/mrutils/mrutils_test.go"
+            },
+            {
+              "added": 2,
+              "deleted": 2,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  104,
+                  110
+                ],
+                [
+                  174,
+                  180
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/view/mr_view.go"
+            },
+            {
+              "added": 44,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1015,
+                  1017
+                ],
+                [
+                  14,
+                  9
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/view/mr_view_test.go"
+            },
+            {
+              "added": 81,
+              "deleted": 9,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  146,
+                  154
+                ],
+                [
+                  160,
+                  170
+                ],
+                [
+                  178,
+                  183
+                ],
+                [
+                  208,
+                  216
+                ],
+                [
+                  220,
+                  227
+                ],
+                [
+                  245,
+                  252
+                ],
+                [
+                  266,
+                  273
+                ],
+                [
+                  324,
+                  329
+                ],
+                [
+                  342,
+                  348
+                ]
+              ],
+              "new_file": false,
+              "path": "internal/commands/mr/mrutils/mrutils.go"
+            }
+          ],
+          "files_changed": 9,
+          "files_listed": true
+        },
+        "labels": [
+          "1st contribution",
+          "Community contribution",
+          "linked-issue",
+          "workflow::ready for review"
+        ],
+        "landed_fingerprint": null,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": null,
+        "milestone_description": null,
+        "milestone_due_date": null,
+        "milestone_events": null,
+        "notes_seen": null,
+        "pipelines": [
+          {
+            "created_at": "2026-11-23T13:31:40Z",
+            "id": 3103294877,
+            "jobs": [
+              {
+                "duration": 128.0,
+                "id": 18282331554,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.406183,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 16.0,
+                "id": 18282331555,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.350847,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 21.0,
+                "id": 18282331556,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.413604,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 212.0,
+                "id": 18282331560,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.372386,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 23.0,
+                "id": 18282331551,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.255121,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 255.0,
+                "id": 18282331558,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.35485,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 32.0,
+                "id": 18282331557,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.392365,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 42.0,
+                "id": 18282331561,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.148828,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 70.0,
+                "id": 18282331550,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.298893,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 762.0,
+                "id": 18282331559,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.309348,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 8.0,
+                "id": 18282331552,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.190323,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 8.0,
+                "id": 18282331553,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.233855,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18282331549,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "f15b908fb407f22b116426247ceb68476b8adbfe",
+            "status": "success",
+            "updated_at": "2026-11-23T13:45:11Z"
+          },
+          {
+            "created_at": "2026-11-23T13:58:17Z",
+            "id": 3103415445,
+            "jobs": [
+              {
+                "duration": 114.0,
+                "id": 18283289772,
+                "name": "tests:integration",
+                "needs": [],
+                "queued_duration": 0.205606,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 16.0,
+                "id": 18283289767,
+                "name": "check_docs_markdown",
+                "needs": [],
+                "queued_duration": 0.112842,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 20.0,
+                "id": 18283289768,
+                "name": "docs hugo_build",
+                "needs": [],
+                "queued_duration": 0.156694,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 22.0,
+                "id": 18283289763,
+                "name": "lint_commit",
+                "needs": [],
+                "queued_duration": 0.166088,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 27.0,
+                "id": 18283289769,
+                "name": "lint:comments",
+                "needs": [],
+                "queued_duration": 0.236276,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 287.0,
+                "id": 18283289771,
+                "name": "tests:unit",
+                "needs": [],
+                "queued_duration": 0.220479,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 41.0,
+                "id": 18283289773,
+                "name": "tests:coverage",
+                "needs": [
+                  "tests:integration",
+                  "tests:unit"
+                ],
+                "queued_duration": 0.193547,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 52.0,
+                "id": 18283289762,
+                "name": "check_go_generated_code",
+                "needs": [],
+                "queued_duration": 0.328916,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 7.0,
+                "id": 18283289764,
+                "name": "check_embed",
+                "needs": [],
+                "queued_duration": 0.150204,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 73.0,
+                "id": 18283289766,
+                "name": "check_docs_update",
+                "needs": [],
+                "queued_duration": 0.151369,
+                "stage": "documentation",
+                "status": "success"
+              },
+              {
+                "duration": 8.0,
+                "id": 18283289765,
+                "name": "check_args",
+                "needs": [],
+                "queued_duration": 0.173556,
+                "stage": "checks",
+                "status": "success"
+              },
+              {
+                "duration": 91.0,
+                "id": 18283289770,
+                "name": "lint",
+                "needs": [],
+                "queued_duration": 0.163349,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": null,
+                "id": 18283289761,
+                "name": "govulncheck",
+                "needs": [],
+                "queued_duration": null,
+                "stage": "application-security-testing",
+                "status": "manual"
+              }
+            ],
+            "needs_read": true,
+            "sha": "bc09dc5af7520497a6bc31c87853785b82957d9c",
+            "status": "success",
+            "updated_at": "2026-11-23T14:03:52Z"
+          }
+        ],
+        "review": null,
+        "review_read_at": null,
+        "reviewers": [
+          "User 4 (@user-4)"
+        ],
+        "sha": null,
+        "source_branch": "8794-fallback-to-origin-when-branch-has-been-renamed",
+        "state": "opened",
+        "target_branch": "main",
+        "threads": [],
+        "title": "fix(mr): find merge request by upstream branch name",
+        "updated_at": "2026-11-23T14:06:46.011Z",
+        "user_notes_count": 0,
+        "web_url": "https://gitlab.com/gitlab-org/cli/-/merge_requests/4533"
+      },
+      "mergeability": "DiscussionsNotResolved"
+    }
+  },
+  "sentinel": {
+    "events": 92,
+    "mrs": 66,
+    "pipelines": 108,
+    "truncated": false
+  }
+}

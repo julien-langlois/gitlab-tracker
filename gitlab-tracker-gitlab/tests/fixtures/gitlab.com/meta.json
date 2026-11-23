@@ -1,0 +1,15 @@
+{
+  "instance": "gitlab.com (EE, latest), project gitlab-org/cli, anonymous: labels, milestones and discussions answer 401",
+  "recorded_on": "2026-11-23",
+  "project_id": "34675721",
+  "mrs": [
+    "4493",
+    "4347",
+    "4533",
+    "4488"
+  ],
+  "branches": [
+    "main"
+  ],
+  "since": "2026-11-21T00:00:00Z"
+}

@@ -1,0 +1,38 @@
+name: Record GitLab CE
+
+# Records a GitLab CE version for the contract tests (scripts/record-gitlab-ce.sh)
+# on a GitHub runner, which has the memory GitLab needs. The fixture is a
+# downloadable artifact of the run: unzip it into
+# gitlab-tracker-gitlab/tests/fixtures/ and commit it.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "gitlab/gitlab-ce image tag (e.g. 18.0.0-ce.0, latest)"
+        required: true
+        default: latest
+
+jobs:
+  record:
+    name: Record GitLab CE ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libssl-dev pkg-config jq
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record
+        run: bash scripts/record-gitlab-ce.sh "${{ inputs.version }}"
+
+      - name: Upload the fixture
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-fixture-${{ inputs.version }}
+          path: gitlab-tracker-gitlab/tests/fixtures/gitlab-ce-*
+          retention-days: 14

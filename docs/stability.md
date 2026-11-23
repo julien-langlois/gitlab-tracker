@@ -14,7 +14,7 @@ under **breaking** in the [changelog](https://github.com/julien-langlois/gitlab-
 | **Environment variables** | `GITLAB_URL`, `GITLAB_PROJECT_ID`, `GITLAB_TOKEN` and the `GITLAB_TRACKER_*` variables of [Configuration](configuration.md) keep their names and meaning. |
 | **Local data** | `tracker.db` and `stats.db` are migrated forward on first launch, automatically, with their history. A schema change is always a new migration: an older database is never left behind. |
 | **Token storage** | Tokens stay where they were saved (OS keyring entry, environment): an upgrade never asks for them again. |
-| **GitLab** | The [token permissions](gitlab-token.md) needed do not grow within a major version, except for a new optional feature, which works without them. |
+| **GitLab** | The [token permissions](gitlab-token.md) needed do not grow within a major version, except for a new optional feature, which works without them. Every build is tested against answers recorded from real instances (gitlab.com and GitLab CE versions, [`tests/fixtures`](https://github.com/julien-langlois/gitlab-tracker/tree/main/gitlab-tracker-gitlab/tests/fixtures)). |
 
 ## What is not
 

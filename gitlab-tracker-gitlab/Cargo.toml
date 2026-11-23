@@ -11,6 +11,8 @@ readme = "README.md"
 description = "The merge-request model and GitLab client of gitlab-tracker (internal)"
 keywords = ["gitlab", "merge-request", "graphql", "client"]
 categories = ["api-bindings", "development-tools"]
+# The contract tests' recordings (several MB) stay in the repository.
+exclude = ["tests/"]
 
 [features]
 # `TrackedMr::stats_snapshot`, the MR as the stats database records it.
