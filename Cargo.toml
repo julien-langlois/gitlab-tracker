@@ -46,11 +46,6 @@ toml = { version = "0.8", features = ["parse"] }
 tracing = "0.1"
 zeroize = { version = "1", features = ["derive"] }
 
-# The profile that 'dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
-
 [profile.release]
 opt-level = 3
 lto = true

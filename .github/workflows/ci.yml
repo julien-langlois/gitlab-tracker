@@ -5,6 +5,8 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  # "Run workflow" on any branch, e.g. before opening the pull request.
+  workflow_dispatch:
 
 jobs:
   check:
@@ -75,6 +77,49 @@ jobs:
         run: cargo doc --workspace --all-features --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+
+  # The other release platforms (Linux x86_64 is the `check` job): the whole
+  # build and test suite on each, then the OS keyring test, which proves the token
+  # lands in the real store (Keychain, Credential Manager) and not in keyring's
+  # in-memory fallback. Linux ARM skips it: a CI runner has no Secret Service.
+  platforms:
+    name: Tests (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux ARM64
+            os: ubuntu-24.04-arm
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libssl-dev pkg-config
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy Analysis
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --all-features --locked
+
+      - name: OS keyring
+        if: runner.os != 'Linux'
+        run: cargo test -p gitlab-tracker-core --all-features --locked os_keyring -- --ignored
 
   # Each group is checked with the `rust-version` its manifest declares: the
   # libraries keep the workspace's, while the stats database (sqlx 0.9) and the

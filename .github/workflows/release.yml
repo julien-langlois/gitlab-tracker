@@ -41,14 +41,103 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The binaries, one per target, attached to the GitHub release. The usual Rust
+  # release targets: Linux x86_64 and ARM64, macOS Apple Silicon and Intel,
+  # Windows x86_64. Each one is built natively on its own runner (no
+  # cross-compiler: the OS keyring needs the target's D-Bus and OpenSSL), with
+  # every feature, and archived with the README, the licence and a SHA-256.
+  build-release:
+    # The release (and its notes) must exist before the binaries are attached.
+    needs: github-release
+    permissions:
+      contents: write
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04: glibc 2.35, so the binary also runs on older distributions.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          # Built on the same Apple Silicon runner: Apple's toolchain targets both.
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    env:
+      # Oldest macOS the binaries run on.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libssl-dev pkg-config
+
+      - name: Build Release Binary
+        run: cargo build --release --locked --all-features --target ${{ matrix.target }}
+
+      - name: Package
+        id: package
+        run: |
+          name="gitlab-tracker-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir "$name"
+          cp README.md LICENSE CHANGELOG.md "$name/"
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp "target/${{ matrix.target }}/release/gitlab-tracker.exe" "$name/"
+            archive="$name.zip"
+            7z a -tzip "$archive" "$name" > /dev/null
+          else
+            cp "target/${{ matrix.target }}/release/gitlab-tracker" "$name/"
+            archive="$name.tar.gz"
+            tar -czf "$archive" "$name"
+          fi
+          if command -v sha256sum > /dev/null; then
+            sha256sum "$archive" > "$archive.sha256"
+          else
+            shasum -a 256 "$archive" > "$archive.sha256"
+          fi
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Show archive (act only)
+        if: ${{ env.ACT }}
+        run: ls -l ${{ steps.package.outputs.archive }}*
+
+      - name: Upload Release Asset
+        if: ${{ !env.ACT }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Last: a version on crates.io can never be replaced, so it is published only
+  # once every target has built.
   publish-crates:
     name: Publish to Crates.io
+    needs: build-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libssl-dev pkg-config
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -60,74 +149,3 @@ jobs:
         run: cargo publish --workspace ${{ env.ACT && '--dry-run' || '' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-  build-release:
-    # The release (and its notes) must exist before the binaries are attached.
-    needs: github-release
-    permissions:
-      contents: write
-    name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive_name: gitlab-tracker-linux-amd64.tar.gz
-          # - target: aarch64-unknown-linux-gnu
-          #   os: ubuntu-latest
-          #   archive_name: gitlab-tracker-linux-arm64.tar.gz
-          # - target: x86_64-apple-darwin
-          #   os: macos-latest
-          #   archive_name: gitlab-tracker-macos-amd64.tar.gz
-          # - target: aarch64-apple-darwin
-          #   os: macos-latest
-          #   archive_name: gitlab-tracker-macos-arm64.tar.gz
-          # - target: x86_64-pc-windows-msvc
-          #   os: windows-latest
-          #   archive_name: gitlab-tracker-windows-amd64.zip
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install system dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
-
-      - name: Install Cross-Linker (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-
-      - name: Build Release Binary
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package Binary (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar -czf ../../../${{ matrix.archive_name }} gitlab-tracker
-
-      - name: Package Binary (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          Compress-Archive -Path gitlab-tracker.exe -DestinationPath ../../../${{ matrix.archive_name }}
-
-      - name: Show archive (act only)
-        if: ${{ env.ACT }}
-        run: ls -l ${{ matrix.archive_name }}
-
-      - name: Upload Release Asset
-        if: ${{ !env.ACT }}
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.archive_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
