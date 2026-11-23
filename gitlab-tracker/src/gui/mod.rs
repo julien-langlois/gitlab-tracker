@@ -1566,11 +1566,14 @@ fn drain_events(
     last_known_branches: &mut HashMap<String, HashSet<String>>,
 ) -> bool {
     let mut needs_save = false;
+    app.release_kept();
+    let selected = app.selected_id();
     while let Ok(event) = events.try_recv() {
         needs_save |= app.apply_event(event, api_semaphore.clone(), tx, last_known_branches);
         memo::changed();
     }
     app.flush_pending_sort();
+    app.keep_selection(selected);
     app.ensure_time_entries(tx);
     needs_save
 }

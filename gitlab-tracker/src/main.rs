@@ -711,12 +711,15 @@ async fn main() -> anyhow::Result<()> {
         // the MR list re-sorted once per drain rather than once per event: at
         // startup N `MrLoaded` events would otherwise mean N full JSON rewrites.
         let mut needs_save = false;
+        app.release_kept();
+        let selected = app.selected_id();
         while let Some(event) = pending_event.take().or_else(|| rx.try_recv().ok()) {
             dirty = true;
             needs_save |=
                 app.apply_event(event, api_semaphore.clone(), &tx, &mut last_known_branches);
         }
         app.flush_pending_sort();
+        app.keep_selection(selected);
         app.ensure_time_entries(&tx);
         if needs_save {
             save_state_async(

@@ -502,6 +502,14 @@ pub struct App {
     pub needs_sort: bool,
     /// Per-render snapshot of `visible_mrs()` indices — see [`App::begin_render_cache`].
     visible_cache: Option<Vec<usize>>,
+    /// The selected MR kept in the list after a refresh made it fail the filters
+    /// (merged under "Hide merged MRs"…), until the selection moves to another
+    /// MR — see [`App::keep_selection`]. Without it the selection, an index into
+    /// the visible list, would land on the next MR.
+    kept_visible: Option<String>,
+    /// An event moved the selection on purpose (an MR added, a milestone's MRs
+    /// imported): [`App::keep_selection`] leaves it there.
+    selection_moved: bool,
     /// Shortcut blocks collected at startup via `inventory` from every linked crate.
     ///
     /// Populated once by `gitlab_tracker_core::collect_all_blocks()` — no explicit
@@ -680,6 +688,8 @@ impl App {
             theme,
             needs_sort: false,
             visible_cache: None,
+            kept_visible: None,
+            selection_moved: false,
             // Populated at startup by main.rs — at least CoreShortcutProvider is always pushed.
             shortcut_providers: gitlab_tracker_core::collect_all_blocks(),
             #[cfg(feature = "stats")]
@@ -966,16 +976,21 @@ impl App {
         // Only rank by relevance when the user has typed a plain search query
         // (not a `@milestone` autocomplete prefix).
         let query = (!self.input.is_empty() && !self.input.starts_with('@')).then_some(());
+        let kept = |mr: &TrackedMr| self.kept_visible.as_deref() == Some(mr.id.as_str());
         let mut scored: Vec<(f64, usize)> = self
             .mrs
             .iter()
             .enumerate()
-            .filter(|(_, mr)| {
-                self.status_pick.is_none_or(|pick| {
+            .filter_map(|(i, mr)| {
+                let picked = self.status_pick.is_none_or(|pick| {
                     crate::status::StatusKind::of(mr.state, &mr.mergeability) == pick
-                })
+                });
+                let score = picked.then(|| self.list_score(mr)).flatten();
+                // The kept MR stays where it was, last when ranked by a search.
+                score
+                    .or_else(|| kept(mr).then_some(f64::MIN))
+                    .map(|score| (score, i))
             })
-            .filter_map(|(i, mr)| self.list_score(mr).map(|score| (score, i)))
             .collect();
 
         // Sort by descending relevance only when a query is active.
@@ -1273,6 +1288,51 @@ impl App {
             self.flash(format!("✘ {}: {e}", tl("Copy failed")), true);
         }
         result.is_ok()
+    }
+
+    /// The id of the selected MR, to find it again with [`App::keep_selection`]
+    /// once the list changed.
+    pub fn selected_id(&self) -> Option<String> {
+        self.selected_mr().map(|mr| mr.id.clone())
+    }
+
+    /// Puts the selection back on `id`, the MR selected before a batch of events
+    /// changed the list: an MR merged, closed or reordered must not hand the
+    /// selection — and the MR page — to its neighbour. When `id` no longer passes
+    /// the filters it stays listed until the selection moves (see
+    /// [`App::release_kept`]); when it is no longer tracked, the selection is
+    /// only clamped.
+    pub fn keep_selection(&mut self, id: Option<String>) {
+        let moved = std::mem::take(&mut self.selection_moved);
+        let Some(id) = id.filter(|_| !moved) else {
+            return;
+        };
+        if !self.mrs.iter().any(|mr| mr.id == id) {
+            self.clamp_selection();
+            return;
+        }
+        if !self.visible_mrs().any(|mr| mr.id == id) {
+            self.kept_visible = Some(id.clone());
+            self.visible_cache = None;
+        }
+        let pos = self.visible_mrs().position(|mr| mr.id == id);
+        self.table_state.select(pos);
+    }
+
+    /// Drops the MR kept by [`App::keep_selection`] once another MR is selected,
+    /// keeping the selection on that other MR as the list shrinks.
+    pub fn release_kept(&mut self) {
+        let Some(kept) = &self.kept_visible else { return };
+        let selected = self.selected_id();
+        if selected.as_ref() == Some(kept) {
+            return;
+        }
+        self.kept_visible = None;
+        self.visible_cache = None;
+        match selected {
+            Some(id) => self.keep_selection(Some(id)),
+            None => self.clamp_selection(),
+        }
     }
 
     /// Keeps the selection inside the visible list after it shrinks.
@@ -2508,6 +2568,7 @@ impl App {
                 let pos = self.visible_mrs().position(|m| m.id == id);
                 if pos.is_some() {
                     self.table_state.select(pos);
+                    self.selection_moved = true;
                 }
                 spawn_mr_fetch(
                     self.fetch_context(),
@@ -2745,6 +2806,7 @@ impl App {
                     // Recompute the estimate now that new MRs have been added to the list.
                     self.recompute_api_call_estimate();
                     self.table_state.select(Some(0));
+                    self.selection_moved = true;
                     true
                 } else {
                     false
@@ -2935,6 +2997,8 @@ pub(crate) mod tests {
                 &mut HashMap::new(),
             );
         }
+        // Built outside an event drain: no selection move left pending.
+        app.selection_moved = false;
         for (mr, (title, milestone)) in app.mrs.iter_mut().zip(mrs) {
             mr.title = (*title).into();
             // Test shorthand: "None" means no milestone.
@@ -3373,6 +3437,43 @@ pub(crate) mod tests {
         let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
         assert_eq!(visible, ["2"]);
         assert_eq!(app.mrs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn an_mr_merged_under_hide_merged_stays_selected_until_another_is() {
+        let mut app =
+            app_with_mrs(&[("fix login", "None"), ("add stats", "None"), ("ci", "None")]).await;
+        app.config.hide_merged = true;
+        app.table_state.select(Some(1));
+        let selected = app.selected_id();
+        assert_eq!(selected.as_deref(), Some("2"));
+
+        // A refresh sees it merged: it stays listed and selected (the MR page with it).
+        app.mrs[1].state = GitlabMrState::Merged;
+        app.keep_selection(selected);
+        assert_eq!(app.selected_id().as_deref(), Some("2"));
+        assert_eq!(app.visible_mrs().count(), 3);
+
+        // Selecting the next MR lets it go, the selection staying on the one picked.
+        app.next_row();
+        app.release_kept();
+        assert_eq!(app.selected_id().as_deref(), Some("3"));
+        let visible: Vec<&str> = app.visible_mrs().map(|mr| mr.id.as_str()).collect();
+        assert_eq!(visible, ["1", "3"]);
+    }
+
+    #[tokio::test]
+    async fn an_mr_hidden_above_the_selection_does_not_move_it() {
+        let mut app =
+            app_with_mrs(&[("fix login", "None"), ("add stats", "None"), ("ci", "None")]).await;
+        app.config.hide_merged = true;
+        app.table_state.select(Some(2));
+        let selected = app.selected_id();
+
+        app.mrs[0].state = GitlabMrState::Merged;
+        app.keep_selection(selected);
+        assert_eq!(app.selected_id().as_deref(), Some("3"));
+        assert_eq!(app.visible_mrs().count(), 2);
     }
 
     #[tokio::test]
