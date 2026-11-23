@@ -344,9 +344,12 @@ const WIDTH: f32 = 500.0;
 const PREVIEW_LINES: usize = 6;
 
 /// The toolbar's Export button and its panel, drawn like the notifications'.
-pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui) {
+/// The "Export" button (`icon_only`: without its text, for a narrow toolbar)
+/// and the panel it opens.
+pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
     let theme = g.theme;
-    let response = button(ui, &theme, Some(Icon::Download), tl("Export"), false)
+    let label = if icon_only { "" } else { tl("Export") };
+    let response = button(ui, &theme, Some(Icon::Download), label, false)
         .tip(tl("Copy or save the MRs as CSV, Markdown or a chat list"));
     if response.clicked() {
         // Each opening starts from the picked MRs when there are some.

@@ -149,12 +149,12 @@ pub fn button(
     let galley = ui
         .painter()
         .layout_no_wrap(text.to_owned(), font.clone(), color);
-    let icon_room = if icon.is_some() { 20.0 } else { 0.0 };
-    let padding = if primary { 12.0 } else { 10.0 };
     let size = Vec2::new(
-        galley.size().x + icon_room + padding * 2.0,
+        button_width(galley.size().x, icon.is_some(), text.is_empty(), primary),
         theme.spacing.control_height + 2.0,
     );
+    let icon_room = if icon.is_some() { 20.0 } else { 0.0 };
+    let padding = if primary { 12.0 } else { 10.0 };
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     if ui.is_rect_visible(rect) {
         let hovered = response.hovered();
@@ -184,6 +184,36 @@ pub fn button(
     }
     focus_ring(ui, theme, &response, theme.radii.medium);
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// The width of a [`button`] whose text is `text_width` wide. Without text, the
+/// icon alone, centered.
+fn button_width(text_width: f32, icon: bool, no_text: bool, primary: bool) -> f32 {
+    let padding = if primary { 12.0 } else { 10.0 };
+    let icon_room = match (icon, no_text) {
+        (false, _) => 0.0,
+        (true, true) => 14.0,
+        (true, false) => 20.0,
+    };
+    text_width + icon_room + padding * 2.0
+}
+
+/// The width [`button`] takes for `text` (empty: the icon alone), to plan a
+/// row before drawing it.
+pub fn button_width_for(ui: &Ui, theme: &Theme, icon: bool, text: &str, primary: bool) -> f32 {
+    let text_width = if text.is_empty() {
+        0.0
+    } else {
+        ui.painter()
+            .layout_no_wrap(
+                text.to_owned(),
+                fonts::medium(theme.text_size - 0.5),
+                Color32::WHITE,
+            )
+            .size()
+            .x
+    };
+    button_width(text_width, icon, text.is_empty(), primary)
 }
 
 pub fn primary_button(ui: &mut Ui, theme: &Theme, text: &str) -> egui::Response {

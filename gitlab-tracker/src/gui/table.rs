@@ -15,8 +15,8 @@ use super::icons::{self, Icon};
 use super::shell::Sizes;
 use super::tip::{Tip, TipExt};
 use super::widgets::{
-    activity, avatar, badge, button, field, icon_button, icon_toggle, label_tone, mono, muted,
-    semibold, split_person, toned_label_chip, FieldLook,
+    activity, avatar, badge, button, button_width_for, field, icon_button, icon_toggle, label_tone,
+    mono, muted, semibold, split_person, toned_label_chip, FieldLook,
 };
 use super::{tones, GuiApp, Page};
 use crate::actions::Action;
@@ -290,7 +290,7 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         g.show_views = Some(!views_shown);
     }
     ui.label(semibold(tl("Merge requests"), theme.text_size + 2.0));
-    ui.label(muted(
+    let count = muted(
         &theme,
         tf(
             "{n} of {total}",
@@ -299,15 +299,23 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
                 ("total", &g.app.mrs.len().to_string()),
             ],
         ),
-    ));
+    );
+    // What the right side needs, its buttons with their text or their icon
+    // alone, and the search at its narrowest: the buttons lose their text
+    // before anything overlaps, then the count goes.
+    let fit = ToolbarFit::plan(g, ui, &count);
+    if fit.count {
+        ui.label(count);
+    }
     ui.add_space(6.0);
+    let icon_only = fit.icon_only;
 
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         if button(
             ui,
             &theme,
             Some(Icon::Clipboard),
-            tl("Copy checklist"),
+            if icon_only { "" } else { tl("Copy checklist") },
             true,
         )
         .tip(tl(
@@ -317,8 +325,9 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         {
             g.pending.push(Action::CopyChecklist);
         }
-        super::export::button_and_panel(g, ui);
-        if button(ui, &theme, Some(Icon::List), tl("Select"), g.bulk_mode)
+        super::export::button_and_panel(g, ui, icon_only);
+        let select = if icon_only { "" } else { tl("Select") };
+        if button(ui, &theme, Some(Icon::List), select, g.bulk_mode)
             .tip(tl(
                 "Bulk mode: tick several MRs to flag them, copy them or stop tracking them",
             ))
@@ -334,23 +343,98 @@ fn toolbar(g: &mut GuiApp, ui: &mut Ui, shown: usize, sizes: &Sizes) {
         if icon_button(ui, tl("Refresh now (R)"), Icon::Refresh, &outlined, height).clicked() {
             g.pending.push(Action::Refresh);
         }
-        display_button(g, ui);
+        display_button(g, ui, icon_only);
         search(g, ui);
     });
     milestone_suggestions(g, ui, bar);
 }
 
+/// The narrowest the search gets before the toolbar's buttons give up their text.
+const SEARCH_MIN_WIDTH: f32 = 200.0;
+
+/// How the toolbar fits the width it has.
+struct ToolbarFit {
+    /// The buttons show their icon alone (their tooltip still says what they do).
+    icon_only: bool,
+    /// The "n of total" count is shown.
+    count: bool,
+}
+
+impl ToolbarFit {
+    /// Plans the toolbar from the room left after the title (`ui` is placed
+    /// right after it) for the count, the buttons and the search.
+    fn plan(g: &GuiApp, ui: &Ui, count: &RichText) -> Self {
+        let theme = &g.theme;
+        let spacing = ui.spacing().item_spacing.x;
+        let buttons = |icon_only: bool| {
+            let text = |s: &str| {
+                if icon_only {
+                    String::new()
+                } else {
+                    s.to_string()
+                }
+            };
+            let refresh = theme.spacing.control_height + 2.0;
+            [
+                (text(tl("Copy checklist")), true),
+                (text(tl("Export")), false),
+                (text(tl("Select")), false),
+                (text(&display_text(g)), false),
+            ]
+            .iter()
+            .map(|(t, primary)| button_width_for(ui, theme, true, t, *primary) + spacing)
+            .sum::<f32>()
+                + refresh
+                + spacing
+                + SEARCH_MIN_WIDTH
+        };
+        let count_width = egui::WidgetText::from(count.clone())
+            .into_galley(
+                ui,
+                Some(egui::TextWrapMode::Extend),
+                f32::INFINITY,
+                egui::TextStyle::Body,
+            )
+            .size()
+            .x
+            + spacing;
+        // The 6 px set aside before the right side.
+        let room = ui.available_width() - 6.0;
+        if room >= count_width + buttons(false) {
+            Self {
+                icon_only: false,
+                count: true,
+            }
+        } else {
+            Self {
+                icon_only: true,
+                count: room >= count_width + buttons(true),
+            }
+        }
+    }
+}
+
+/// The display button's text: the sort, and the grouping when there is one.
+fn display_text(g: &GuiApp) -> String {
+    match g.group_by {
+        GroupBy::None => sort_label(g.app.sort_column).to_string(),
+        group => format!("{} · {}", sort_label(g.app.sort_column), group.label()),
+    }
+}
+
 /// "↓ Updated": the sort; a click opens the display menu: sort, grouping,
-/// density and columns, in one place to leave the search its room.
-fn display_button(g: &mut GuiApp, ui: &mut Ui) {
+/// density and columns, in one place to leave the search its room. `icon_only`:
+/// the arrow alone, for a narrow toolbar.
+fn display_button(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
     let theme = g.theme;
     let icon = match g.app.sort_order {
         SortOrder::Ascending => Icon::ArrowUp,
         SortOrder::Descending => Icon::ArrowDown,
     };
-    let text = match g.group_by {
-        GroupBy::None => sort_label(g.app.sort_column).to_string(),
-        group => format!("{} · {}", sort_label(g.app.sort_column), group.label()),
+    let text = if icon_only {
+        String::new()
+    } else {
+        display_text(g)
     };
     let response = button(ui, &theme, Some(icon), &text, false).tip(tl(
         "Sort, grouping, density and columns (S: next sort column, Shift+S: reverse, C: columns)",
