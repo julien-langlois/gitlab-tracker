@@ -659,6 +659,9 @@ clipboard	Copied	Kopiert
 	A dot per branch, joined, instead of a column each: room for the title	Ein Punkt pro Branch, verbunden, statt je einer Spalte: Platz für den Titel
 	{n} tracked merge requests · trends against the {weeks} previous weeks	{n} verfolgte Merge Requests · Trends gegenüber den {weeks} Wochen davor
 	Who it waits on, and since when	Auf wen er wartet und seit wann
+	Why	Warum
+	Waiting on	Wartet auf
+	Since	Seit
 	Waiting on me	Wartet auf mich
 	Waiting on others	Wartet auf andere
 	To promote	Zu befördern

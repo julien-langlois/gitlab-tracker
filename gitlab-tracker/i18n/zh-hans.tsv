@@ -659,6 +659,9 @@ clipboard	Copied	已复制
 	A dot per branch, joined, instead of a column each: room for the title	每个分支一个点并相连，代替各占一列：为标题留出空间
 	{n} tracked merge requests · trends against the {weeks} previous weeks	已跟踪 {n} 个合并请求 · 与前 {weeks} 周对比的趋势
 	Who it waits on, and since when	在等谁，以及从何时起
+	Why	原因
+	Waiting on	等待
+	Since	已等待
 	Waiting on me	等待我
 	Waiting on others	等待他人
 	To promote	待推进

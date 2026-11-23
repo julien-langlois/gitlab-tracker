@@ -659,6 +659,9 @@ clipboard	Copied	Copiado
 	A dot per branch, joined, instead of a column each: room for the title	Un punto por rama, unidos, en lugar de una columna cada una: espacio para el título
 	{n} tracked merge requests · trends against the {weeks} previous weeks	{n} merge requests seguidas · tendencias frente a las {weeks} semanas anteriores
 	Who it waits on, and since when	A quién espera, y desde cuándo
+	Why	Por qué
+	Waiting on	Espera a
+	Since	Desde
 	Waiting on me	Esperándome
 	Waiting on others	Esperando a otros
 	To promote	Por promover
