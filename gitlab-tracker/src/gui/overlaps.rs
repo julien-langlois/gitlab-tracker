@@ -625,7 +625,7 @@ fn main(
         g.overlaps.pair = Some(p);
     }
     if let Some(id) = open {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -1263,7 +1263,7 @@ fn pair_mr(ui: &mut Ui, theme: &Theme, m: &Mr, color: Color32) -> egui::Response
     );
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .tip(tl("Show it in the list"))
+        .tip(tl("Open its page"))
 }
 
 /// A step of the suggestion: its number in a round, then `text`.
@@ -1455,7 +1455,7 @@ fn pair_band(g: &mut GuiApp, ui: &mut Ui, overlaps: &Overlaps, pair: Option<&(St
         return;
     }
     if let Some(id) = open {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 

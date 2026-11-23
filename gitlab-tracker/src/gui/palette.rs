@@ -419,16 +419,9 @@ fn execute(g: &mut GuiApp, command: Command) {
             g.open_page(Page::MergeRequests);
         }
         Command::Mr(id) => {
-            // Shown whatever the view: back to every MR when this one is hidden.
-            let hidden = !g.app.visible_mrs().any(|mr| mr.id == id);
-            if hidden {
-                g.pending.push(Action::SetFilter {
-                    index: 0,
-                    query: String::new(),
-                });
-                g.app.input.clear();
-            }
-            g.show_mr(&id);
+            // Its page, whatever the view: `open_mr` shows every MR again
+            // when this one is hidden.
+            g.open_mr(&id);
         }
         Command::Refresh => g.pending.push(Action::Refresh),
         Command::CopyChecklist => g.pending.push(Action::CopyChecklist),

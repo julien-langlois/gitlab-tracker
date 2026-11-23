@@ -358,7 +358,7 @@ fn main(
         ));
     }
     if let Some(id) = open {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -1570,7 +1570,7 @@ fn inspector(
         g.open_page(super::Page::MergeRequests);
     }
     if let Some(id) = open {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 

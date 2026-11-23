@@ -645,7 +645,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         None => {}
     }
     if let Some(id) = show {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -738,7 +738,7 @@ fn side_row(
         .rich(
             Tip::new()
                 .mr(&r.id, &r.title)
-                .hint(tl("Open it on the merge requests page")),
+                .hint(tl("Open its page")),
         )
         .clicked()
 }
@@ -1029,7 +1029,7 @@ fn ready_row(
         .rich(
             Tip::new()
                 .mr(&r.id, &r.title)
-                .hint(tl("Open it on the merge requests page")),
+                .hint(tl("Open its page")),
         )
         .clicked()
         .then_some(ReadyClick::Open)

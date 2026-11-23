@@ -923,7 +923,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
         },
     );
     if let Some(id) = open {
-        g.show_mr(&id);
+        g.open_mr(&id);
     }
 }
 
@@ -1315,7 +1315,7 @@ fn item_row(ui: &mut Ui, theme: &Theme, item: &Item, ordered: &[String]) -> bool
         .rich(
             Tip::new()
                 .mr(&item.id, &item.title)
-                .hint(tl("Show it on the merge requests page")),
+                .hint(tl("Open its page")),
         )
         .clicked()
 }

@@ -1306,15 +1306,6 @@ impl GuiApp {
         self.open_mr(id);
     }
 
-    /// Selects the MR `id` on the merge requests page, every MR shown again.
-    fn show_mr(&mut self, id: &str) {
-        if self.app.focus.is_some() {
-            self.next_focus = Some(None);
-        }
-        self.select_id = Some(id.to_string());
-        self.open_page(Page::MergeRequests);
-    }
-
     /// Counts the MRs behind each counter, before the frame's snapshot: the
     /// focus aside, and on the cockpit without it. Keeps the focus up to date.
     fn count_members(&mut self) {

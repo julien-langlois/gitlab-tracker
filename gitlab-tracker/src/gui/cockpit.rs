@@ -134,7 +134,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     }
     match pick {
         Some(Pick::Focus(key, label)) => g.focus_on(&key, label),
-        Some(Pick::Mr(id)) => g.show_mr(&id),
+        Some(Pick::Mr(id)) => g.open_mr(&id),
         Some(Pick::History(history, counted, label)) => {
             super::merged_list::show_history(g, history, counted, label);
         }
@@ -142,7 +142,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     }
     match by_label {
         Some(super::labels::Click::Label(label)) => g.filter_by_label(&label),
-        Some(super::labels::Click::Mr(id)) => g.show_mr(&id),
+        Some(super::labels::Click::Mr(id)) => g.open_mr(&id),
         None => {}
     }
 }
@@ -946,7 +946,7 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
                 .rich(
                     Tip::new()
                         .mr(&u.id, &u.title)
-                        .hint(tl("Open it on the merge requests page")),
+                        .hint(tl("Open its page")),
                 )
                 .clicked()
             {

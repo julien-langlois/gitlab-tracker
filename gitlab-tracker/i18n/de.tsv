@@ -718,7 +718,6 @@ date	Merged	Gemergt
 	Needs attention	Braucht Aufmerksamkeit
 	Nothing urgent: no MR is blocked, late or waiting for you.	Nichts Dringendes: keine MR ist blockiert, verspätet oder wartet auf dich.
 	The MRs that are blocked, late or waiting for you, the most urgent first.	Die MRs, die blockiert, verspätet sind oder auf dich warten, die dringendsten zuerst.
-	Open it on the merge requests page	Auf der Seite der Merge Requests öffnen
 	Open merge requests in the list	Offene Merge Requests in der Liste
 	Open MRs GitLab could merge now	Offene MRs, die GitLab jetzt mergen könnte
 	Open MRs still marked as draft	Offene MRs, noch als Entwurf markiert
@@ -1329,7 +1328,6 @@ date	Merged	Gemergt
 	See the changes	Änderungen ansehen
 	Selected	Auswahl
 	Shared files	Gemeinsame Dateien
-	Show it on the merge requests page	Auf der Merge-Request-Seite zeigen
 	Show the MR	MR zeigen
 	Show the blocked MRs	Blockierte MRs zeigen
 	Show their MRs	Ihre MRs zeigen
@@ -2293,7 +2291,6 @@ saved view	Restore	Wiederherstellen
 	Filter: {name}	Filter: {name}
 	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ gegenüber dem vorherigen Zeitraum gleicher Länge · grün: besser · orange: schlechter · grau: zu wenig für eine Aussage
 	Merge !{id} first	!{id} zuerst mergen
-	Show it in the list	In der Liste zeigen
 	Then rebase !{id}	Dann !{id} rebasen
 	where the files meet	wo sich die Dateien treffen
 @plural	{n} file in common|{n} files in common	{n} gemeinsame Datei|{n} gemeinsame Dateien

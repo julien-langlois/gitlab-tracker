@@ -718,7 +718,6 @@ date	Merged	合并时间
 	Needs attention	需要关注
 	Nothing urgent: no MR is blocked, late or waiting for you.	没有紧急事项：没有受阻、逾期或等待你的 MR。
 	The MRs that are blocked, late or waiting for you, the most urgent first.	受阻、逾期或等待你的 MR，最紧急的排在前面。
-	Open it on the merge requests page	在合并请求页面中打开
 	Open merge requests in the list	列表中打开的合并请求
 	Open MRs GitLab could merge now	GitLab 现在即可合并的打开 MR
 	Open MRs still marked as draft	仍标记为草稿的打开 MR
@@ -1329,7 +1328,6 @@ date	Merged	合并时间
 	See the changes	查看改动
 	Selected	已选
 	Shared files	共享文件
-	Show it on the merge requests page	在合并请求页面中显示
 	Show the MR	显示该 MR
 	Show the blocked MRs	显示被阻塞的 MR
 	Show their MRs	显示其 MR
@@ -2293,7 +2291,6 @@ saved view	Restore	恢复
 	Filter: {name}	筛选：{name}
 	▲ ▼ against the previous period of the same length · green: better · orange: worse · grey: too few to tell	▲ ▼ 与上一个同长度周期对比 · 绿色：更好 · 橙色：更差 · 灰色：样本太少无法判断
 	Merge !{id} first	先合并 !{id}
-	Show it in the list	在列表中显示
 	Then rebase !{id}	然后变基 !{id}
 	where the files meet	即文件交汇处
 @plural	{n} file in common|{n} files in common	{n} 个共同文件

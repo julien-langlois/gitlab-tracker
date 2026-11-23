@@ -679,8 +679,7 @@ fn main(
         g.journal.selected = Some(key);
     }
     if let Some((tab, id)) = open {
-        g.activate(tab);
-        g.show_mr(&id);
+        g.open_link(tab, &id);
     }
 }
 
@@ -1150,8 +1149,7 @@ fn inspector(
             }
         }
         if let Some((tab, id)) = open {
-            g.activate(tab);
-            g.show_mr(&id);
+            g.open_link(tab, &id);
         }
     });
     let Some(event) = selected else {
@@ -1217,8 +1215,7 @@ fn inspector(
         board::open_url(ui, &event.url);
     }
     if open {
-        g.activate(event.tab);
-        g.show_mr(&event.id);
+        g.open_link(event.tab, &event.id);
     }
 }
 
