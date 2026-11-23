@@ -47,6 +47,34 @@ pub enum Command {
     Gui,
 }
 
+/// A launch from the desktop (Finder, a file manager, an AppImage, a launcher)
+/// has no terminal: the terminal UI could not show, so the window opens instead.
+/// A terminal on either side (`gitlab-tracker | less`, `< file`) keeps the TUI.
+#[cfg(feature = "gui")]
+pub fn window_without_terminal(mut args: Args) -> Args {
+    use std::io::IsTerminal;
+    let no_terminal = !std::io::stdin().is_terminal() && !std::io::stdout().is_terminal();
+    if args.command.is_none() && no_terminal {
+        args.command = Some(Command::Gui);
+    }
+    args
+}
+
+/// Windows starts the binary (a console program, for the TUI) with a console of
+/// its own when launched from the Start menu: the window does not need it, so it
+/// is released — unless it is the console of a shell the user typed in.
+#[cfg(all(feature = "gui", windows))]
+pub fn release_own_console() {
+    use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};
+    let mut ids = [0u32; 2];
+    // SAFETY: the buffer and its length match; both calls have no other input.
+    unsafe {
+        if GetConsoleProcessList(ids.as_mut_ptr(), ids.len() as u32) == 1 {
+            FreeConsole();
+        }
+    }
+}
+
 /// Resolves the project requested by CLI flags or falls back to the active project.
 pub async fn resolve_project(args: &Args) -> ProjectEntry {
     if let Some(selector) = args.project.as_deref() {

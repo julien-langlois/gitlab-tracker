@@ -117,11 +117,45 @@ bevel-theme = { version = "0.1", optional = true, features = ["fonts"] }
 bevel-widgets = { version = "0.1", optional = true }
 bevel-window = { version = "0.1", optional = true, features = ["egui"] }
 
+# Releasing the console a Start-menu launch of the window opens (cli.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
+
 [dev-dependencies]
 # Real time zones (daylight saving changes) for the snooze tests.
 chrono-tz = "0.9"
 # A stand-in GitLab server for the request-count tests.
 tokio = { workspace = true, features = ["net", "io-util"] }
+
+# The .deb of the releases (cargo-deb, release.yml): the binary, its desktop
+# entry and icons, so the window appears in the applications menu and the dock.
+# `$auto` depends on what the binary links (libc, D-Bus, OpenSSL).
+[package.metadata.deb]
+name = "gitlab-tracker"
+maintainer = "Julien Langlois <julien@julienlanglois.fr>"
+section = "devel"
+priority = "optional"
+depends = "$auto"
+extended-description = """\
+Follows your team's GitLab merge requests across your environment branches \
+(main, staging, production…): whether each MR reached each branch, what holds \
+the others back, and who has the next move. A desktop window \
+(`gitlab-tracker gui`, or the applications menu) and a terminal UI \
+(`gitlab-tracker`)."""
+assets = [
+  ["target/release/gitlab-tracker", "usr/bin/", "755"],
+  ["../assets/linux/gitlab-tracker.desktop", "usr/share/applications/", "644"],
+  ["../assets/icon/gitlab-tracker.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+  ["../assets/icon/png/gitlab-tracker-16.png", "usr/share/icons/hicolor/16x16/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-24.png", "usr/share/icons/hicolor/24x24/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-32.png", "usr/share/icons/hicolor/32x32/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-48.png", "usr/share/icons/hicolor/48x48/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-64.png", "usr/share/icons/hicolor/64x64/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-128.png", "usr/share/icons/hicolor/128x128/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-256.png", "usr/share/icons/hicolor/256x256/apps/gitlab-tracker.png", "644"],
+  ["../assets/icon/png/gitlab-tracker-512.png", "usr/share/icons/hicolor/512x512/apps/gitlab-tracker.png", "644"],
+  ["../README.md", "usr/share/doc/gitlab-tracker/", "644"],
+]
 
 # cargo-release (declared on this package only, so it runs once per release):
 # prepends this release's section to CHANGELOG.md, with the same cliff.toml as the

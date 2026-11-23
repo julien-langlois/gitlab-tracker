@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Windows installer (WiX 5, built by release.yml):
+
+    wix build packaging/windows/gitlab-tracker.wxs -arch x64 -d Version=1.2.3 \
+      -d Binary=path\to\gitlab-tracker.exe -d Root=. -o gitlab-tracker.msi
+
+  Installs gitlab-tracker.exe in Program Files, adds it to PATH (the terminal UI
+  and the subcommands from any shell) and a Start menu entry opening the window.
+  A newer version replaces an older one in place; the configuration and the
+  keyring entries, which live outside the install folder, are kept.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- UpgradeCode: never change it, or a new version installs beside the old one. -->
+  <Package
+      Name="GitLab Tracker"
+      Manufacturer="Julien Langlois"
+      Version="$(var.Version)"
+      UpgradeCode="80d1cd34-a46f-4669-bbe3-91a412046200"
+      Scope="perMachine"
+      Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of GitLab Tracker is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="$(var.Root)\assets\icon\gitlab-tracker.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/julien-langlois/gitlab-tracker" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="GitLab Tracker">
+        <Component Id="Binary">
+          <File Id="Exe" Source="$(var.Binary)" KeyPath="yes" />
+          <!-- The window, from the Start menu: `gui`, and the console it would
+               open is released (cli::release_own_console). -->
+          <Shortcut
+              Id="StartMenu"
+              Directory="ProgramMenuFolder"
+              Name="GitLab Tracker"
+              Description="Follow your GitLab merge requests across branches"
+              Arguments="gui"
+              WorkingDirectory="INSTALLFOLDER"
+              Icon="AppIcon"
+              Advertise="no" />
+          <Environment
+              Id="Path"
+              Name="PATH"
+              Value="[INSTALLFOLDER]"
+              Part="last"
+              Action="set"
+              System="yes"
+              Permanent="no" />
+        </Component>
+        <Component Id="Docs">
+          <File Id="Readme" Source="$(var.Root)\README.md" KeyPath="yes" />
+          <File Id="License" Source="$(var.Root)\LICENSE" Name="LICENSE.txt" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <ComponentRef Id="Binary" />
+      <ComponentRef Id="Docs" />
+    </Feature>
+  </Package>
+</Wix>

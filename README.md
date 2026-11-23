@@ -42,7 +42,16 @@
 
 ### Desktop window
 
-Download a binary for Linux (x86_64, ARM64), macOS (Apple Silicon, Intel) or Windows from the [Releases](https://github.com/julien-langlois/gitlab-tracker/releases) page — every feature included — or build it (Rust **1.95+**):
+From the [Releases](https://github.com/julien-langlois/gitlab-tracker/releases) page, every feature included:
+
+| System | Install |
+| :--- | :--- |
+| Debian, Ubuntu | `.deb` (x86_64, ARM64) — `sudo apt install ./gitlab-tracker_*.deb` |
+| Any Linux | `.AppImage` (x86_64, ARM64) — `chmod +x`, then double-click or run it |
+| macOS | `.dmg` (Apple Silicon, Intel) — drag the app to Applications; first launch: right click → Open (not notarized yet) |
+| Windows | `.msi` — Start menu entry, `gitlab-tracker` on `PATH` |
+
+Or build it (Rust **1.95+**):
 
 ```bash
 cargo install gitlab-tracker      # add --features stats,redmine as needed

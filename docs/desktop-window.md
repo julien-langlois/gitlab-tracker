@@ -28,7 +28,19 @@ projects.
 
 ## Install and run
 
-The window is in the default build (feature `gui`). Building it needs:
+The [releases](https://github.com/julien-langlois/gitlab-tracker/releases)
+install it the way each system does: a `.deb` or an AppImage on Linux, a `.dmg`
+on macOS, an `.msi` on Windows. Each one adds the window to the applications
+menu, with its icon. Opened from there — or by a double-click — it shows the
+window; typed in a terminal, `gitlab-tracker` is the terminal UI and
+`gitlab-tracker gui` the window.
+
+The macOS app is not notarized yet: the first time, open it with a right click →
+**Open** (or `xattr -d com.apple.quarantine "/Applications/GitLab Tracker.app"`).
+Windows SmartScreen may warn about an unknown publisher: **More info → Run
+anyway**.
+
+The window is in the default build of the crate (feature `gui`). Building it needs:
 
 - Rust **1.95+** (required by the [`bevel`](https://crates.io/crates/bevel-widgets)
   UI crates);
@@ -489,8 +501,9 @@ changes apply at once and are kept for the project.
 
 ## Dock icon and launcher (Linux)
 
-GNOME (Ubuntu) and KDE take the icon of a running window from a desktop entry
-named after its app id (`gitlab-tracker`). Install it once for the current user:
+The `.deb` and the AppImage install this already. GNOME (Ubuntu) and KDE take the
+icon of a running window from a desktop entry named after its app id
+(`gitlab-tracker`). With `cargo install`, install it once for the current user:
 
 ```bash
 sh assets/linux/install-desktop-entry.sh

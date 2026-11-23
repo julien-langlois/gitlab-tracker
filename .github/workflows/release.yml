@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  # "Run workflow" on a branch: a rehearsal. Every target is built and packaged,
+  # the installers are downloadable from the run's page; nothing is published
+  # (no GitHub release, no crates.io).
+  workflow_dispatch:
 
 jobs:
   # Creates the GitHub release with this tag's section of the changelog, generated
@@ -11,6 +15,7 @@ jobs:
   # the release notes are exactly the commits since the previous tag.
   github-release:
     name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,10 +50,13 @@ jobs:
   # release targets: Linux x86_64 and ARM64, macOS Apple Silicon and Intel,
   # Windows x86_64. Each one is built natively on its own runner (no
   # cross-compiler: the OS keyring needs the target's D-Bus and OpenSSL), with
-  # every feature, and archived with the README, the licence and a SHA-256.
+  # every feature; archived with the README and the licence, and packaged as the
+  # platform installs software: .deb and AppImage, .dmg, .msi.
   build-release:
-    # The release (and its notes) must exist before the binaries are attached.
+    # The release (and its notes) must exist before the binaries are attached;
+    # a rehearsal has none (skipped) and builds all the same.
     needs: github-release
+    if: ${{ !cancelled() && needs.github-release.result != 'failure' }}
     permissions:
       contents: write
     name: Build (${{ matrix.target }})
@@ -91,47 +99,94 @@ jobs:
       - name: Build Release Binary
         run: cargo build --release --locked --all-features --target ${{ matrix.target }}
 
-      - name: Package
-        id: package
+      # The tag (v1.2.3); for a rehearsal, the crate's version marked as such.
+      - name: Version
         run: |
-          name="gitlab-tracker-${GITHUB_REF_NAME}-${{ matrix.target }}"
-          mkdir "$name"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "VERSION=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            v=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)
+            echo "VERSION=v$v-rehearsal" >> "$GITHUB_ENV"
+          fi
+
+      # Everything attached to the release goes to dist/: the archive, then the
+      # platform's installers, then a .sha256 for each.
+      - name: Archive
+        run: |
+          name="gitlab-tracker-${VERSION}-${{ matrix.target }}"
+          mkdir "$name" dist
           cp README.md LICENSE CHANGELOG.md "$name/"
           if [ "${{ runner.os }}" = Windows ]; then
             cp "target/${{ matrix.target }}/release/gitlab-tracker.exe" "$name/"
-            archive="$name.zip"
-            7z a -tzip "$archive" "$name" > /dev/null
+            7z a -tzip "dist/$name.zip" "$name" > /dev/null
           else
             cp "target/${{ matrix.target }}/release/gitlab-tracker" "$name/"
-            archive="$name.tar.gz"
-            tar -czf "$archive" "$name"
+            tar -czf "dist/$name.tar.gz" "$name"
           fi
-          if command -v sha256sum > /dev/null; then
-            sha256sum "$archive" > "$archive.sha256"
-          else
-            shasum -a 256 "$archive" > "$archive.sha256"
-          fi
-          echo "archive=$archive" >> "$GITHUB_OUTPUT"
 
-      - name: Show archive (act only)
-        if: ${{ env.ACT }}
-        run: ls -l ${{ steps.package.outputs.archive }}*
+      # .deb (applications menu entry, icons, dependencies on D-Bus and OpenSSL)
+      # and an AppImage (runs on any distribution, double-click opens the window).
+      - name: Installers (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo install cargo-deb --locked --version 3.8.0
+          cargo deb -p gitlab-tracker --no-build --target ${{ matrix.target }} --output dist/
+          sh packaging/linux/appimage.sh "target/${{ matrix.target }}/release/gitlab-tracker" \
+            "$VERSION" dist
 
-      - name: Upload Release Asset
-        if: ${{ !env.ACT }}
+      - name: Installer (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sh packaging/macos/dmg.sh "target/${{ matrix.target }}/release/gitlab-tracker" \
+            "$VERSION" ${{ matrix.target }} dist
+
+      # WiX 5 (pinned: WiX 6 asks every build to accept a maintenance-fee EULA).
+      # An MSI version is numbers only: v1.2.3-rc.1 → 1.2.3.
+      - name: Installer (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          version="${VERSION#v}"
+          wix build packaging/windows/gitlab-tracker.wxs -arch x64 \
+            -d Version="${version%%-*}" \
+            -d Binary="target/${{ matrix.target }}/release/gitlab-tracker.exe" \
+            -d Root=. \
+            -o "dist/gitlab-tracker-${VERSION}-${{ matrix.target }}.msi"
+
+      - name: Checksums
+        run: |
+          cd dist
+          for f in *; do
+            if command -v sha256sum > /dev/null; then
+              sha256sum "$f" > "$f.sha256"
+            else
+              shasum -a 256 "$f" > "$f.sha256"
+            fi
+          done
+          ls -l
+
+      - name: Upload Release Assets
+        if: ${{ !env.ACT && github.ref_type == 'tag' }}
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.archive }}.sha256
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload rehearsal artifacts
+        if: ${{ !env.ACT && github.ref_type != 'tag' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-tracker-${{ matrix.target }}
+          path: dist/*
+          retention-days: 7
 
   # Last: a version on crates.io can never be replaced, so it is published only
   # once every target has built.
   publish-crates:
     name: Publish to Crates.io
     needs: build-release
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

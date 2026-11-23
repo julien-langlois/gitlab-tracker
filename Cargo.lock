@@ -2335,6 +2335,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "urlencoding",
+ "windows-sys 0.59.0",
  "zeroize",
 ]
 

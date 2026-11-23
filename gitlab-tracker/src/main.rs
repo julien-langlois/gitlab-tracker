@@ -621,6 +621,12 @@ async fn open_stats_db() -> Option<Arc<gitlab_tracker_stats::SqliteStatsDb>> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
+    #[cfg(feature = "gui")]
+    let args = cli::window_without_terminal(args);
+    #[cfg(all(feature = "gui", windows))]
+    if matches!(args.command, Some(cli::Command::Gui)) {
+        cli::release_own_console();
+    }
 
     crash::install();
 
