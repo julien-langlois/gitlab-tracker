@@ -26,17 +26,19 @@ async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 directories = "5.0"
 inventory = "0.3"
-keyring = { version = "3", features = ["sync-secret-service", "crypto-openssl"] }
+# One store per OS, each feature only compiled on its own platform: Secret Service
+# (GNOME Keyring / KWallet) on Linux, Keychain on macOS, Credential Manager on
+# Windows. Without its feature, keyring falls back to an in-memory mock store
+# and the token is lost on exit.
+keyring = { version = "3", features = ["sync-secret-service", "crypto-openssl", "apple-native", "windows-native"] }
 open = "5"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rpassword = "7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# The tracker's state (tracker.db) and the stats (stats.db).
-# TODO(sqlx 0.9.1): back to `version = "0.9.1"` once published on crates.io
-# (a git dependency cannot be published). 0.9.1 accepts libsqlite3-sys 0.39,
-# which fixes RUSTSEC-2026-0459 (see .cargo/audit.toml).
-sqlx = { git = "https://github.com/launchbadge/sqlx", branch = "release/0.9.1", default-features = false, features = ["sqlite-bundled", "runtime-tokio"] }
+# The tracker's state (tracker.db) and the stats (stats.db). 0.9.1 accepts
+# libsqlite3-sys 0.39, which fixes RUSTSEC-2026-0459.
+sqlx = { version = "0.9.1", default-features = false, features = ["sqlite-bundled", "runtime-tokio"] }
 thiserror = "2"
 anyhow = "1"
 tokio = "1"

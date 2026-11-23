@@ -268,4 +268,19 @@ mod tests {
         std::env::remove_var(URL_VAR);
         assert_eq!(token.as_deref().map(String::as_str), Some("glpat-123"));
     }
+
+    /// The real OS store, not keyring's in-memory mock (what a build without the
+    /// platform's feature silently gets): a token stored through one entry is read
+    /// back through another. Ignored by default — it writes to the keyring of the
+    /// machine; CI runs it on macOS and Windows (`cargo test -- --ignored`).
+    #[test]
+    #[ignore = "writes to the OS keyring"]
+    fn os_keyring_keeps_a_stored_token() {
+        let service = "gitlab-tracker-ci-test";
+        let account = format!("roundtrip-{}", std::process::id());
+        store_secret(service, &account, "  glpat-roundtrip  ").expect("store");
+        let read = keyring::Entry::new(service, &account).and_then(|e| e.get_password());
+        let _ = keyring::Entry::new(service, &account).and_then(|e| e.delete_credential());
+        assert_eq!(read.expect("read back from a new entry"), "glpat-roundtrip");
+    }
 }
