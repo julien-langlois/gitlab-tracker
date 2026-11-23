@@ -845,7 +845,6 @@ date	Merged	Fusionada
 	https://gitlab.com or your own instance	https://gitlab.com o tu propia instancia
 	Project	Proyecto
 	Its numeric id (Settings › General) or its path, group/project	Su id numérico (Ajustes › General) o su ruta, grupo/proyecto
-	Name (optional)	Nombre (opcional)
 	Shown in the title bar instead of the project id	Se muestra en la barra de título en lugar del id del proyecto
 	Comma-separated, in the table's order: main, staging, production	Separadas por comas, en el orden de la tabla: main, staging, production
 	Personal access token	Token de acceso personal
@@ -876,13 +875,8 @@ date	Merged	Fusionada
 	Promote	Promoción
 	Add a project	Añadir un proyecto
 	Tokens needed	Tokens necesarios
-	Check and add	Comprobar y añadir
 	Checking with GitLab…	Comprobando con GitLab…
-	Shown in the tab; GitLab's name when empty	Se muestra en la pestaña; vacío: el nombre de GitLab
-	Tracked branches (optional)	Ramas seguidas (opcional)
-	Comma-separated, in the table's order: main, staging, production. The default branch when empty.	Separadas por comas, en el orden de la tabla: main, staging, production. Vacío: la rama por defecto.
 	Scope read_api; saved in the OS keyring, never in a file.	Ámbito read_api; se guarda en el llavero del sistema, nunca en un archivo.
-	Redmine (optional)	Redmine (opcional)
 	Redmine URL	URL de Redmine
 	Links the MRs to their tickets; empty: no tracker	Vincula las MR con sus tickets; vacío: sin tracker
 	Redmine API key	Clave de API de Redmine
@@ -2300,3 +2294,26 @@ saved view	Restore	Restablecer
 	Then rebase !{id}	Luego rebasar !{id}
 	where the files meet	donde coinciden los archivos
 @plural	{n} file in common|{n} files in common	{n} archivo en común|{n} archivos en común
+	Add	Añadir
+	Check	Comprobar
+	GitLab	GitLab
+	optional	opcional
+	Ticket tracker	Gestor de tickets
+	Link a ticket tracker	Vincular un gestor de tickets
+	Optional · Redmine	Opcional · Redmine
+	Check failed	La comprobación falló
+	Connection works	La conexión funciona
+	Signed in as @{user}	Conectado como @{user}
+	default branch {branch}	rama por defecto {branch}
+	with the saved token	con el token guardado
+	Redmine accepted the API key · {url}	Redmine aceptó la clave API · {url}
+	Nothing is saved until GitLab has accepted the project and the token.	No se guarda nada hasta que GitLab acepte el proyecto y el token.
+	Saved in the OS keyring, never in a file.	Guardado en el llavero del sistema, nunca en un archivo.
+	Checking and saving…	Comprobando y guardando…
+	group/project or 4217	grupo/proyecto o 4217
+	GitLab's name	El nombre en GitLab
+	The default branch	La rama por defecto
+	Shown in the tab	Se muestra en la pestaña
+	Comma-separated, in the table's order	Separadas por comas, en el orden de la tabla
+	Remove the ticket tracker	Quitar el gestor de tickets
+	Remove the ticket tracker: the project is added without one.	Quitar el gestor de tickets: el proyecto se añade sin él.

@@ -845,7 +845,6 @@ date	Merged	合并时间
 	https://gitlab.com or your own instance	https://gitlab.com 或你自己的实例
 	Project	项目
 	Its numeric id (Settings › General) or its path, group/project	其数字 ID（设置 › 常规）或路径：组/项目
-	Name (optional)	名称（可选）
 	Shown in the title bar instead of the project id	显示在标题栏中，代替项目 ID
 	Comma-separated, in the table's order: main, staging, production	以逗号分隔，按表格顺序：main, staging, production
 	Personal access token	个人访问令牌
@@ -876,13 +875,8 @@ date	Merged	合并时间
 	Promote	晋级
 	Add a project	添加项目
 	Tokens needed	需要令牌
-	Check and add	检查并添加
 	Checking with GitLab…	正在向 GitLab 验证…
-	Shown in the tab; GitLab's name when empty	显示在标签页中；留空则使用 GitLab 中的名称
-	Tracked branches (optional)	跟踪的分支（可选）
-	Comma-separated, in the table's order: main, staging, production. The default branch when empty.	以逗号分隔，按表格顺序：main, staging, production。留空则使用默认分支。
 	Scope read_api; saved in the OS keyring, never in a file.	权限 read_api；保存在系统密钥环中，绝不写入文件。
-	Redmine (optional)	Redmine（可选）
 	Redmine URL	Redmine 地址
 	Links the MRs to their tickets; empty: no tracker	将 MR 关联到其工单；留空则不使用跟踪器
 	Redmine API key	Redmine API 密钥
@@ -2300,3 +2294,26 @@ saved view	Restore	恢复
 	Then rebase !{id}	然后变基 !{id}
 	where the files meet	即文件交汇处
 @plural	{n} file in common|{n} files in common	{n} 个共同文件
+	Add	添加
+	Check	检查
+	GitLab	GitLab
+	optional	可选
+	Ticket tracker	工单系统
+	Link a ticket tracker	关联工单系统
+	Optional · Redmine	可选 · Redmine
+	Check failed	检查失败
+	Connection works	连接正常
+	Signed in as @{user}	已登录为 @{user}
+	default branch {branch}	默认分支 {branch}
+	with the saved token	使用已保存的令牌
+	Redmine accepted the API key · {url}	Redmine 已接受 API 密钥 · {url}
+	Nothing is saved until GitLab has accepted the project and the token.	在 GitLab 接受项目和令牌之前，不会保存任何内容。
+	Saved in the OS keyring, never in a file.	保存在系统密钥环中，绝不写入文件。
+	Checking and saving…	正在检查并保存…
+	group/project or 4217	群组/项目 或 4217
+	GitLab's name	GitLab 中的名称
+	The default branch	默认分支
+	Shown in the tab	显示在标签页中
+	Comma-separated, in the table's order	以逗号分隔，按表格顺序
+	Remove the ticket tracker	移除工单系统
+	Remove the ticket tracker: the project is added without one.	移除工单系统：添加项目时不关联工单系统。

@@ -114,7 +114,13 @@ fn close(g: &mut GuiApp) {
 
 /// The dialog's header: its icon on an accent tile, the title over `subtitle`,
 /// and the close button. Whether the close button was clicked.
-fn header(ui: &mut Ui, theme: &Theme, icon: Icon, title: &str, subtitle: Option<&str>) -> bool {
+pub(super) fn header(
+    ui: &mut Ui,
+    theme: &Theme,
+    icon: Icon,
+    title: &str,
+    subtitle: Option<&str>,
+) -> bool {
     let mut close = false;
     egui::Frame::new()
         .inner_margin(Margin {
@@ -171,7 +177,7 @@ fn header(ui: &mut Ui, theme: &Theme, icon: Icon, title: &str, subtitle: Option<
 }
 
 /// The dialog's body, with its margins.
-fn body<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+pub(super) fn body<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Frame::new()
         .inner_margin(Margin::symmetric(20, 18))
         .show(ui, |ui| {
@@ -183,7 +189,7 @@ fn body<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// The dialog's footer, on the panel's color under a rule: `add` lays out its
 /// line from the left; the buttons go in a right-to-left layout at its end.
-fn footer(ui: &mut Ui, theme: &Theme, add: impl FnOnce(&mut Ui)) {
+pub(super) fn footer(ui: &mut Ui, theme: &Theme, add: impl FnOnce(&mut Ui)) {
     rule(ui, theme);
     let radius = theme.radii.large.saturating_sub(1);
     egui::Frame::new()
@@ -1292,7 +1298,8 @@ fn projects(g: &mut GuiApp, ui: &mut Ui) {
     });
 }
 
-/// The project form, as a dialog: a new project, or the tokens of one.
+/// The project form, as a dialog in the shell of the others: a new project,
+/// or the tokens of one.
 fn wizard(g: &mut GuiApp, ctx: &egui::Context) {
     let theme = g.theme;
     let Some(form) = g.wizard.as_mut() else {
@@ -1302,32 +1309,47 @@ fn wizard(g: &mut GuiApp, ctx: &egui::Context) {
         .fill(theme.palette.raised)
         .stroke(Stroke::new(1.0, theme.palette.border))
         .corner_radius(CornerRadius::same(theme.radii.large))
-        .inner_margin(Margin::same(20));
-    let mut outcome = super::setup::Outcome::Open;
+        .inner_margin(Margin::same(1));
+    let mut outcome = form.poll();
+    let mut closed = false;
+    let width = (ctx.content_rect().width() - 96.0).clamp(480.0, 620.0);
     let response = egui::Modal::new(egui::Id::unique("project_form"))
         .frame(frame)
         .show(ctx, |ui| {
-            ui.set_width(520.0);
-            ui.label(
-                RichText::new(form.title())
-                    .strong()
-                    .size(theme.text_size + 3.0),
-            );
-            ui.add_space(12.0);
-            // The new project's form is long: it scrolls in a low window. The
-            // tokens' fits as it is.
-            if form.is_tokens() {
-                outcome = form.show(ui, &theme);
-            } else {
-                let height = (ctx.content_rect().height() - 160.0).clamp(240.0, 640.0);
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing.y = 0.0;
+            closed = header(ui, &theme, form.icon(), form.title(), Some(form.subtitle()));
+            rule(ui, &theme);
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = theme.spacing.item.y;
+                // The new project's form is long: it scrolls in a low window.
+                let height = (ctx.content_rect().height() - 220.0).clamp(220.0, 640.0);
                 egui::ScrollArea::vertical()
                     .max_height(height)
-                    .min_scrolled_height(height)
-                    .show(ui, |ui| outcome = form.show(ui, &theme));
+                    .show(ui, |ui| body(ui, |ui| form.body(ui, &theme)));
+            });
+            // The check's verdict stays in view, whatever the scroll.
+            if form.has_verdict() {
+                egui::Frame::new()
+                    .inner_margin(Margin {
+                        left: 20,
+                        right: 20,
+                        top: 0,
+                        bottom: 14,
+                    })
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        form.verdict(ui, &theme);
+                    });
             }
+            footer(ui, &theme, |ui| {
+                if let super::setup::Outcome::Cancelled = form.footer(ui, &theme, true) {
+                    outcome = super::setup::Outcome::Cancelled;
+                }
+            });
         });
     let tokens = form.is_tokens();
-    if response.should_close() && !form.is_busy() {
+    if (closed || response.should_close()) && !form.is_busy() {
         outcome = super::setup::Outcome::Cancelled;
     }
     match outcome {
