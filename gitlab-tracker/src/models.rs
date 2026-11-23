@@ -992,6 +992,8 @@ pub enum AppEvent {
     /// Settled MRs (merged on every tracked branch, left out of refresh cycles)
     /// that changed on GitLab since their last read: to refresh.
     SettledMrsChanged(Vec<String>),
+    /// A sentinel check came back (`None`: a read failed), see `crate::sentinel`.
+    SentinelChecked(Option<Box<crate::sentinel::SentinelReport>>),
     /// Recent commits of `branch`, scanned to recognise MRs copied there under
     /// other SHAs (`None`: the scan failed, the previous result is kept).
     /// What was read to check an MR's commit signatures

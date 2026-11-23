@@ -153,6 +153,11 @@ What keeps the request count low (details, figures and the GraphQL roadmap in
   (`gitlab::review_stale`).
 * **Incremental branch scans.** `gitlab::plan_branch_scan` reads `<old head>..<branch>`
   and `BranchCommits::absorb` merges it; a full scan rebuilds the index daily.
+* **Sentinel.** Between two cycles, `sentinel::spawn_check` reads what changed
+  since a watermark (server clock, 30 s overlap) in 3 requests; `sentinel::plan`
+  picks the MRs to read again (with `CachePolicy::Signals` for a comment, an
+  approval or a pipeline), the branch scans and the discovery poll. See
+  [`docs/how-it-works.md`](docs/how-it-works.md#sentinel).
 * **Tracker bulk reads.** A cycle hands every linked ticket to
   `TrackerProvider::fetch_tickets` at once (`app::spawn_tickets_fetch`).
 * **Pacing per instance.** Every request goes through
@@ -184,6 +189,7 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus, Effort
     ├── notify.rs        # Desktop notifications: non-blocking notify-rust worker (no-ops without `notifications`)
     ├── gitlab.rs        # Async GitLab client: pagination, caching guards, rate-limit semaphore
+    ├── sentinel.rs      # Sentinel: light updated_after / events checks between refreshes → targeted re-reads
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
     ├── storage.rs       # projects.toml, config.json layer, state files, token lookup
     ├── config.rs        # AppConfig, label colours & wildcard matching, VisibleColumns, activity badge

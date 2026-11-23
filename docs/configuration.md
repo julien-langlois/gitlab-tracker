@@ -43,6 +43,11 @@ table_label_prefixes = ["deploy::", "review::"]
 # Editable from the in-app settings dashboard with [,].
 refresh_interval_secs = 900
 
+# Sentinel: between two refreshes, a light check of what changed on GitLab every
+# N seconds; only the MRs that changed are read again. 0 turns it off.
+# Editable from the in-app settings dashboard with [,]. See docs/how-it-works.md#sentinel.
+sentinel_interval_secs = 120
+
 # Activity badge thresholds (in days) shown in the Context Inspector.
 activity_recent_days = 2   # 🟢 Active if updated within N days
 activity_stale_days  = 7   # 🔴 Stale if not updated for N days
@@ -316,11 +321,11 @@ Settings edited in the app (columns, branches, settings dashboard) are always sa
 
 **Display settings** (refresh interval, branches, label prefixes, activity thresholds, …) are then resolved in this order (highest to lowest priority):
 
-1. **`GITLAB_REFRESH_INTERVAL_SECS`** — for the refresh interval only, wins over everything below
+1. **`GITLAB_REFRESH_INTERVAL_SECS`** / **`GITLAB_SENTINEL_INTERVAL_SECS`** — for the refresh / sentinel interval only, win over everything below
 2. **`GITLAB_TRACKER_*` environment variables** — see the table below
 3. **The loaded `[[project]]` entry in `projects.toml`** — every field it sets
 4. **`config.json`** (`~/.config/gitlab-tracker/config.json`) — legacy global file, a default template is written on first run
-5. **Built-in defaults** (`https://gitlab.com`, `["main"]` for default branches, 900 s refresh)
+5. **Built-in defaults** (`https://gitlab.com`, `["main"]` for default branches, 900 s refresh, 120 s sentinel)
 
 `.env` is read from `~/.config/gitlab-tracker/.env` only (made private to your account, `0700`, at startup). Layers 2, 4 and 5 are merged with [Figment](https://crates.io/crates/figment); each higher-priority source only overrides the keys it explicitly sets.
 
@@ -329,6 +334,7 @@ Settings edited in the app (columns, branches, settings dashboard) are always sa
 | Environment variable                   | `AppConfig` field overridden | Example             |
 | :------------------------------------- | :--------------------------- | :------------------ |
 | `GITLAB_TRACKER_REFRESH_INTERVAL_SECS` | `refresh_interval_secs`      | `300`               |
+| `GITLAB_TRACKER_SENTINEL_INTERVAL_SECS` | `sentinel_interval_secs`    | `60` (`0`: off)     |
 | `GITLAB_TRACKER_DEFAULT_BRANCHES`      | `default_branches`           | `[main,staging]`    |
 | `GITLAB_TRACKER_TABLE_LABEL_PREFIXES`  | `table_label_prefixes`       | `[deploy::,review::]` |
 | `GITLAB_TRACKER_ACTIVITY_RECENT_DAYS`  | `activity_recent_days`       | `3`                 |
@@ -342,7 +348,7 @@ Settings edited in the app (columns, branches, settings dashboard) are always sa
 
 ## Load on your GitLab / Redmine
 
-A refresh reads the tracked MRs in lists (100 per request), their pipelines and jobs with one GraphQL query per batch, and a branch's new commits only; linked Redmine tickets are read 100 per request. Projects on the same instance share one limit of 3 simultaneous requests, and every request to it pauses when the server answers `429` (or `503` with `Retry-After`). The status bar shows the requests the next refresh should send and the share saved (`−X%`). Set `GITLAB_TRACKER_GRAPHQL=off` to keep every read on REST (an older GitLab whose schema lacks a field falls back to REST by itself). Details and figures: [`GRAPHQL.md`](https://github.com/julien-langlois/gitlab-tracker/blob/main/GRAPHQL.md).
+A refresh reads the tracked MRs in lists (100 per request), their pipelines and jobs with one GraphQL query per batch, and a branch's new commits only; linked Redmine tickets are read 100 per request. Projects on the same instance share one limit of 3 simultaneous requests, and every request to it pauses when the server answers `429` (or `503` with `Retry-After`). The status bar shows the requests the next refresh should send and the share saved (`−X%`). Between two refreshes, the [sentinel](how-it-works.md#sentinel) sends 3 small requests every 2 minutes and reads again only the MRs that changed. Set `GITLAB_TRACKER_GRAPHQL=off` to keep every read on REST (an older GitLab whose schema lacks a field falls back to REST by itself). Details and figures: [`GRAPHQL.md`](https://github.com/julien-langlois/gitlab-tracker/blob/main/GRAPHQL.md).
 
 ## Logs and build options
 

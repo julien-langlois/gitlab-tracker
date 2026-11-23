@@ -2318,3 +2318,11 @@ saved view	Restore	Rétablir
 	Comma-separated, in the table's order	Séparées par des virgules, dans l'ordre du tableau
 	Remove the ticket tracker	Retirer le suivi des tickets
 	Remove the ticket tracker: the project is added without one.	Retirer le suivi des tickets : le projet est ajouté sans.
+	Sentinel	Sentinelle
+@plural	Every {n} min|Every {n} min	Toutes les {n} min|Toutes les {n} min
+@plural	Every {n} s|Every {n} s	Toutes les {n} s|Toutes les {n} s
+	Interval	Intervalle
+	A light check of what changed on GitLab: MRs, pipelines, comments, approvals and pushes. Only what changed is read again; the full refresh still reads everything.	Une vérification légère de ce qui a changé sur GitLab : MR, pipelines, commentaires, approbations et pushes. Seul ce qui a changé est relu ; le rafraîchissement complet relit toujours tout.
+	Settings › General › Sentinel interval (0 = off)	Réglages › Général › Intervalle de la sentinelle (0 = désactivée)
+	Sentinel interval	Intervalle de la sentinelle
+	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	Secondes entre deux vérifications légères de ce qui a changé sur GitLab (MR, pipelines, commentaires, approbations, pushes) ; seul ce qui a changé est relu. 0 = désactivée.

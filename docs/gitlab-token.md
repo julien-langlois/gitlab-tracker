@@ -40,9 +40,10 @@ and pick **Read**. Leave every other resource empty.
 | CI/CD | **Job** | `jobs/:job_id/trace` · GraphQL `CiJob` | Job logs, jobs of the MR pipelines |
 | CI/CD | **Merge Train** | `merge_trains` | The merge train an MR is on (GitLab Premium; without it, the queue is simulated from the MRs set to auto-merge) |
 | CI/CD | **Pipeline Schedule** | `pipeline_schedules`, `pipeline_schedules/:pipeline_schedule_id/pipelines` | CI page: the scheduled pipelines and their latest runs (needs **Pipeline** too) |
-| CI/CD | **Pipeline** | `pipelines`, `pipelines/:pipeline_id/jobs` · GraphQL `Pipeline`, `CiStage` | Pipelines and their jobs |
+| CI/CD | **Pipeline** | `pipelines`, `pipelines/:pipeline_id/jobs` · GraphQL `Pipeline`, `CiStage` | Pipelines and their jobs; the pipelines that moved since the sentinel's last check |
 | Project Planning | **Label** | `labels` | Label chips and filters |
 | Project Planning | **Work Item** | `milestones`, `merge_requests/:iid/resource_milestone_events` | Milestones, milestone changes in the MR timeline |
+| Projects | **Event** | `events` | The [sentinel](how-it-works.md#sentinel): comments, approvals and pushes since its last check (without it, the sentinel still reads the MRs and pipelines that changed) |
 | Projects | **Project** | `/projects/:id` · GraphQL `Project` | The project itself (checked when it is added) |
 | Project Features | **Release** | `releases` | Releases page: the releases, their names and notes (without it, the version tags stand in) |
 | Repository | **Commit** | `repository/commits` (also a range, `ref_name=v1.2.0..v1.3.0`), `repository/commits/:sha`, `…/:sha/refs`, `…/:sha/diff`, `…/:sha/signature` | Branch scans, branches holding a commit, signed commits, what each release holds |
@@ -86,7 +87,7 @@ read -rsp "Token: " T; echo
 G=https://gitlab.example.com/api/v4; P=<project id>
 for path in "/projects/$P" "/projects/$P/merge_requests" "/projects/$P/pipelines" \
   "/projects/$P/repository/commits" "/projects/$P/repository/tags" "/projects/$P/labels" \
-  "/projects/$P/milestones" "/projects/$P/deployments" "/projects/$P/releases" "/projects/$P/freeze_periods" "/projects/$P/pipeline_schedules" "/projects/$P/merge_trains" "/user" "/projects/<another project id>"; do
+  "/projects/$P/milestones" "/projects/$P/deployments" "/projects/$P/releases" "/projects/$P/freeze_periods" "/projects/$P/pipeline_schedules" "/projects/$P/merge_trains" "/projects/$P/events" "/user" "/projects/<another project id>"; do
   printf '%-45s %s\n' "$path" "$(curl -s -o /dev/null -w '%{http_code}' \
     -H @<(printf 'PRIVATE-TOKEN: %s\n' "$T") "$G$path")"
 done

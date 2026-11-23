@@ -350,6 +350,11 @@ pub struct App {
     pub project_name: Option<String>,
     pub time_left: u64,
     pub refresh_interval_secs: u64,
+    /// Seconds until the next sentinel check, and between two (`0`: off).
+    pub sentinel_left: u64,
+    pub sentinel_interval_secs: u64,
+    /// Watermark and in-flight flag of the sentinel (see `crate::sentinel`).
+    pub sentinel: crate::sentinel::SentinelState,
     pub table_state: TableState,
     pub config: AppConfig,
     pub sort_column: SortColumn,
@@ -590,6 +595,7 @@ pub struct AppInit {
     pub base_url: String,
     pub project_name: Option<String>,
     pub refresh_interval_secs: u64,
+    pub sentinel_interval_secs: u64,
     pub config: AppConfig,
     pub theme: crate::ui::theme::Palette,
     pub project_settings: ProjectEntry,
@@ -603,6 +609,7 @@ impl App {
             base_url,
             project_name,
             refresh_interval_secs,
+            sentinel_interval_secs,
             mut config,
             theme,
             project_settings,
@@ -627,6 +634,9 @@ impl App {
             project_name,
             refresh_interval_secs,
             time_left: refresh_interval_secs,
+            sentinel_left: sentinel_interval_secs,
+            sentinel_interval_secs,
+            sentinel: crate::sentinel::SentinelState::new(chrono::Utc::now()),
             table_state,
             config,
             sort_column: SortColumn::UpdatedAt,
@@ -2358,6 +2368,8 @@ impl App {
             }
         }
 
+        self.tick_sentinel(semaphore, tx);
+
         if self.time_left > 0 {
             self.time_left -= 1;
             return false;
@@ -2365,6 +2377,8 @@ impl App {
 
         // Timer elapsed — trigger a full refresh of all MRs.
         self.time_left = self.refresh_interval_secs;
+        // The cycle reads everything: no check needed right after it.
+        self.sentinel_left = self.sentinel_interval_secs;
         if self.refresh_in_flight() {
             // A slow server must not get a second cycle stacked on the first one.
             tracing::warn!("Previous refresh still running — skipping this cycle");
@@ -2423,6 +2437,119 @@ impl App {
         self.start_refresh_cycle("auto");
 
         false
+    }
+
+    /// Counts down to the next sentinel check and starts it. Skipped while a
+    /// refresh runs (it reads everything anyway) or is about to; after a long
+    /// gap (sleep, network down), a full cycle runs instead.
+    fn tick_sentinel(&mut self, semaphore: &Arc<Semaphore>, tx: &UnboundedSender<AppEvent>) {
+        if self.sentinel_interval_secs == 0 || self.read_only {
+            return;
+        }
+        if self.sentinel_left > 0 {
+            self.sentinel_left -= 1;
+            return;
+        }
+        self.sentinel_left = self.sentinel_interval_secs;
+        if self.sentinel.in_flight
+            || self.time_left <= 1
+            || self.refresh_in_flight()
+            || !self.pending_initial_fetches.is_empty()
+        {
+            return;
+        }
+        let server_now = self.sentinel.server_now(chrono::Utc::now());
+        let max_gap = crate::sentinel::MAX_GAP.max(chrono::TimeDelta::seconds(
+            3 * self.sentinel_interval_secs as i64,
+        ));
+        if server_now - self.sentinel.since > max_gap {
+            tracing::info!("Sentinel watermark too old — running a full refresh instead");
+            self.sentinel.since = server_now - crate::sentinel::OVERLAP;
+            self.time_left = 0;
+            return;
+        }
+        self.sentinel.in_flight = true;
+        crate::sentinel::spawn_check(
+            self.fetch_context(),
+            self.sentinel.since,
+            semaphore.clone(),
+            tx.clone(),
+        );
+    }
+
+    /// Reads again what a sentinel check found changed: the MRs (with their
+    /// linked tickets), the branch scans, the discovery poll.
+    fn on_sentinel_checked(
+        &mut self,
+        report: Option<Box<crate::sentinel::SentinelReport>>,
+        semaphore: &Arc<Semaphore>,
+        tx: &UnboundedSender<AppEvent>,
+    ) {
+        self.sentinel.in_flight = false;
+        let Some(report) = report else {
+            return;
+        };
+        let plan = crate::sentinel::plan(
+            &report,
+            &self.mrs,
+            &self.dismissed_mr_ids,
+            &self.branches,
+            &self.sentinel.seen_events,
+        );
+        self.sentinel.advance(&report);
+        if report.truncated {
+            // Too much changed for a light check: read everything now.
+            self.time_left = 0;
+        }
+
+        let ctx = self.fetch_context();
+        let mut batch = Vec::new();
+        let mut ticket_links = Vec::new();
+        for mr in &mut self.mrs {
+            let Some(force) = plan.refresh.get(&mr.id) else {
+                continue;
+            };
+            // Already being read (a refresh started since the check): skip.
+            if self.pending_refresh_fetches.contains(&mr.id)
+                || self.pending_initial_fetches.contains(&mr.id)
+            {
+                continue;
+            }
+            mr.status = MrStatus::Loading;
+            let mut cached = CachedMrData::from(&*mr);
+            cached.cache_policy = force.policy();
+            batch.push((mr.id.clone(), cached));
+            self.pending_refresh_fetches.insert(mr.id.clone());
+            if let Some(ticket) = &mr.linked_ticket {
+                ticket_links.push((ticket.id.clone(), mr.id.clone()));
+            }
+        }
+        tracing::info!(
+            mrs = batch.len(),
+            scan_branches = plan.scan_branches,
+            untracked = plan.untracked,
+            events = report.events.len(),
+            "Sentinel check"
+        );
+        let scan_now = plan.scan_branches && batch.is_empty() && self.pending_branch_scans == 0;
+        if !batch.is_empty() {
+            crate::gitlab::spawn_mr_fetches(ctx.clone(), batch, semaphore.clone(), tx.clone());
+            if self.refresh_cycle.is_none() {
+                self.start_refresh_cycle("sentinel");
+            }
+        }
+        if let Some(provider) = self.tracker.as_ref().map(Arc::clone) {
+            if !ticket_links.is_empty() {
+                spawn_tickets_fetch(provider, ticket_links, tx);
+            }
+        }
+        // With MRs in flight, the scans run once they are back (`on_fetches_settled`).
+        if scan_now {
+            self.spawn_branch_scans(semaphore, tx);
+        }
+        if plan.untracked && self.discovery_enabled {
+            self.spawn_discovery(ctx, tx);
+        }
     }
 
     /// Applies a single `AppEvent` to the application state.
@@ -2908,6 +3035,11 @@ impl App {
                 false
             }
 
+            AppEvent::SentinelChecked(report) => {
+                self.on_sentinel_checked(report, &semaphore, tx);
+                false
+            }
+
             AppEvent::Tick => self.on_tick(&semaphore, tx),
         }
     }
@@ -2927,6 +3059,7 @@ pub(crate) mod tests {
             base_url: "https://gitlab.example".into(),
             project_name: None,
             refresh_interval_secs: 900,
+            sentinel_interval_secs: 120,
             config: AppConfig::default(),
             theme: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
             project_settings: ProjectEntry {
@@ -2940,6 +3073,7 @@ pub(crate) mod tests {
                 tracked_branches: None,
                 branch_flow: None,
                 refresh_interval_secs: None,
+                sentinel_interval_secs: None,
                 activity_stale_days: None,
                 activity_recent_days: None,
                 review_reminder_hours: None,
@@ -4004,6 +4138,109 @@ pub(crate) mod tests {
         assert_eq!(app.time_left, app.refresh_interval_secs, "re-armed");
         app.pending_branch_scans = 0;
         assert!(!app.refresh_in_flight());
+    }
+
+    #[tokio::test]
+    async fn the_sentinel_checks_on_its_countdown_but_not_during_a_refresh() {
+        let mut app = test_app();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        // No permit: a check started here never reaches the network.
+        let blocked = Arc::new(Semaphore::new(0));
+        app.time_left = 100;
+        app.sentinel_left = 1;
+        app.on_tick(&blocked, &tx);
+        assert!(!app.sentinel.in_flight);
+        assert_eq!(app.sentinel_left, 0);
+
+        app.pending_branch_scans = 1;
+        app.on_tick(&blocked, &tx);
+        assert!(!app.sentinel.in_flight, "a refresh is running");
+        assert_eq!(app.sentinel_left, app.sentinel_interval_secs, "re-armed");
+
+        app.pending_branch_scans = 0;
+        app.sentinel_left = 0;
+        app.on_tick(&blocked, &tx);
+        assert!(app.sentinel.in_flight);
+
+        // Off: the countdown stays still.
+        let mut app = test_app();
+        app.sentinel_interval_secs = 0;
+        app.sentinel_left = 0;
+        app.on_tick(&blocked, &tx);
+        assert!(!app.sentinel.in_flight);
+    }
+
+    #[tokio::test]
+    async fn an_old_sentinel_watermark_runs_a_full_refresh_instead() {
+        let mut app = test_app();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let now = chrono::Utc::now();
+        app.sentinel.since = now - chrono::TimeDelta::hours(1);
+        app.sentinel_left = 0;
+        app.time_left = 100;
+        app.on_tick(&Arc::new(Semaphore::new(0)), &tx);
+        assert!(!app.sentinel.in_flight);
+        assert_eq!(
+            app.time_left, app.refresh_interval_secs,
+            "the full cycle ran"
+        );
+        assert!(app.sentinel.since > now - chrono::TimeDelta::minutes(1));
+    }
+
+    #[tokio::test]
+    async fn a_sentinel_report_rereads_only_the_changed_mrs() {
+        use crate::sentinel::{ListedMr, SentinelReport, OVERLAP};
+        let mut app = app_with_mrs(&[("a", "None"), ("b", "None")]).await;
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        app.pending_initial_fetches.clear();
+        app.pending_refresh_fetches.clear();
+        for mr in &mut app.mrs {
+            mr.updated_at = Some("2026-11-23T09:00:00Z".into());
+            mr.status = MrStatus::MergedIn(Default::default());
+        }
+        app.sentinel.in_flight = true;
+        let now = chrono::Utc::now();
+        let report = SentinelReport {
+            local_now: now,
+            server_now: Some(now),
+            truncated: false,
+            mrs: vec![
+                ListedMr {
+                    iid: 1,
+                    updated_at: Some("2026-11-23T09:00:00Z".into()),
+                },
+                ListedMr {
+                    iid: 2,
+                    updated_at: Some("2026-11-23T10:00:00Z".into()),
+                },
+            ],
+            pipelines: Vec::new(),
+            events: Vec::new(),
+        };
+        app.apply_event(
+            AppEvent::SentinelChecked(Some(Box::new(report))),
+            Arc::new(Semaphore::new(0)),
+            &tx,
+            &mut HashMap::new(),
+        );
+        assert!(!app.sentinel.in_flight);
+        assert_eq!(
+            app.pending_refresh_fetches,
+            HashSet::from(["2".to_string()])
+        );
+        assert!(matches!(app.mrs[0].status, MrStatus::MergedIn(_)));
+        assert_eq!(app.sentinel.since, now - OVERLAP);
+
+        // A failed check keeps the watermark.
+        app.sentinel.in_flight = true;
+        app.apply_event(
+            AppEvent::SentinelChecked(None),
+            Arc::new(Semaphore::new(0)),
+            &tx,
+            &mut HashMap::new(),
+        );
+        assert!(!app.sentinel.in_flight);
+        assert_eq!(app.sentinel.since, now - OVERLAP);
     }
 
     #[test]

@@ -59,6 +59,9 @@ pub struct ProjectEntry {
     /// How often the MR list is refreshed from GitLab, in seconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_interval_secs: Option<u64>,
+    /// Seconds between two sentinel checks (`0`: off), see `crate::sentinel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sentinel_interval_secs: Option<u64>,
     /// Number of days of inactivity above which an MR badge turns red (stale).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_stale_days: Option<u64>,

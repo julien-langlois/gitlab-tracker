@@ -29,6 +29,7 @@ mod notify;
 #[cfg(feature = "gui")]
 mod owners;
 mod saved_views;
+mod sentinel;
 mod settings;
 mod settings_core;
 mod shortcuts_core;
@@ -144,6 +145,25 @@ fn refresh_interval_from(env_value: Option<&str>, config: &config::AppConfig) ->
         .unwrap_or(900)
 }
 
+/// Resolves `sentinel_interval_secs` from env var, config file, or default.
+fn resolve_sentinel_interval(config: &config::AppConfig) -> u64 {
+    sentinel_interval_from(
+        std::env::var("GITLAB_SENTINEL_INTERVAL_SECS")
+            .ok()
+            .as_deref(),
+        config,
+    )
+}
+
+/// `env_value` (`GITLAB_SENTINEL_INTERVAL_SECS`, ignored when not a number) wins
+/// over the config; 2 minutes when neither is set. `0` turns the sentinel off.
+fn sentinel_interval_from(env_value: Option<&str>, config: &config::AppConfig) -> u64 {
+    env_value
+        .and_then(|v| v.parse::<u64>().ok())
+        .or(config.sentinel_interval_secs)
+        .unwrap_or(config::DEFAULT_SENTINEL_INTERVAL_SECS)
+}
+
 /// Applies project-scoped overrides from `projects.toml` onto the global `AppConfig`.
 ///
 /// Priority: `projects.toml` entry > `config.json` value > compiled-in default
@@ -162,6 +182,9 @@ fn apply_project_overrides(config: &mut config::AppConfig, project: &ProjectEntr
     }
     if let Some(secs) = project.refresh_interval_secs {
         config.refresh_interval_secs = Some(secs);
+    }
+    if let Some(secs) = project.sentinel_interval_secs {
+        config.sentinel_interval_secs = Some(secs);
     }
     if let Some(days) = project.activity_stale_days {
         config.activity_stale_days = days;
@@ -261,6 +284,7 @@ async fn build_session(
     let project_name = project.name.clone();
     let project_id = project.project_id;
     let refresh_interval_secs = resolve_refresh_interval(&config);
+    let sentinel_interval_secs = resolve_sentinel_interval(&config);
 
     // Keyring (D-Bus) and prompt (stdin) calls block: run them off the async runtime.
     // 1. One-time silent migration: move any token stored under legacy keyring keys
@@ -348,6 +372,7 @@ async fn build_session(
         base_url: base_url.clone(),
         project_name,
         refresh_interval_secs,
+        sentinel_interval_secs,
         config,
         theme: shared.palette,
         project_settings,
@@ -884,6 +909,22 @@ mod tests {
     }
 
     #[test]
+    fn sentinel_interval_env_beats_config_beats_default() {
+        let unset = AppConfig {
+            sentinel_interval_secs: None,
+            ..AppConfig::default()
+        };
+        let off = AppConfig {
+            sentinel_interval_secs: Some(0),
+            ..AppConfig::default()
+        };
+        assert_eq!(sentinel_interval_from(None, &unset), 120);
+        assert_eq!(sentinel_interval_from(None, &off), 0);
+        assert_eq!(sentinel_interval_from(Some("60"), &off), 60);
+        assert_eq!(sentinel_interval_from(Some("2m"), &off), 0);
+    }
+
+    #[test]
     fn project_overrides_replace_only_the_fields_the_entry_sets() {
         let base = AppConfig {
             default_branches: vec!["main".into()],
@@ -910,6 +951,7 @@ mod tests {
             default_branches: Some(vec!["develop".into(), "prod".into()]),
             table_label_prefixes: Some(vec!["deploy::".into()]),
             refresh_interval_secs: Some(120),
+            sentinel_interval_secs: Some(60),
             activity_stale_days: Some(21),
             review_reminder_hours: Some(0),
             show_cockpit: Some(false),
@@ -922,6 +964,7 @@ mod tests {
         assert_eq!(config.default_branches, ["develop", "prod"]);
         assert_eq!(config.table_label_prefixes, ["deploy::"]);
         assert_eq!(config.refresh_interval_secs, Some(120));
+        assert_eq!(config.sentinel_interval_secs, Some(60));
         assert_eq!(config.activity_stale_days, 21);
         assert_eq!(config.activity_recent_days, 2, "not set by the entry");
         assert_eq!(config.review_reminder_hours, 0);

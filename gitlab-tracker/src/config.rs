@@ -154,9 +154,16 @@ pub struct LabelColorConfig {
     pub fg: String,
 }
 
+/// Default seconds between two sentinel checks (`sentinel_interval_secs`).
+pub const DEFAULT_SENTINEL_INTERVAL_SECS: u64 = 120;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub refresh_interval_secs: Option<u64>,
+    /// Seconds between two sentinel checks (light `updated_after` reads that
+    /// refresh only what changed); `0` turns the sentinel off.
+    #[serde(default)]
+    pub sentinel_interval_secs: Option<u64>,
     #[serde(default = "default_branches_val")]
     pub default_branches: Vec<String>,
     #[serde(default)]
@@ -291,6 +298,7 @@ impl Default for AppConfig {
 
         Self {
             refresh_interval_secs: Some(900),
+            sentinel_interval_secs: Some(DEFAULT_SENTINEL_INTERVAL_SECS),
             default_branches: default_branches_val(),
             table_label_prefixes: vec!["deploy::".to_string(), "review::".to_string()],
             label_colors,

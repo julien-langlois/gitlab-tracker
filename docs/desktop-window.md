@@ -66,6 +66,15 @@ back at the next launch.
 Keys: `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+1…9`, `Ctrl+W` (or a middle click)
 closes a tab.
 
+At the right of the title bar, two countdowns: the **Sentinel** (a ring: the
+light check of what changed, every 2 minutes, see [sentinel](how-it-works.md#sentinel))
+and the **next refresh** (a dot: the full read, green, amber under a minute, red
+under 30 s). The ring turns into a spinner while a check runs. Each countdown
+keeps a fixed width, so the line does not move as the seconds tick. Both
+intervals are in **Settings › General**; a sentinel at `0` hides its countdown.
+
+![Title bar countdowns](assets/desktop/sentinel-countdowns.png)
+
 ## Merge requests
 
 The tracked MRs, with their state, review, pipeline and presence on every

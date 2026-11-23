@@ -2318,3 +2318,11 @@ saved view	Restore	恢复
 	Comma-separated, in the table's order	以逗号分隔，按表格顺序
 	Remove the ticket tracker	移除工单系统
 	Remove the ticket tracker: the project is added without one.	移除工单系统：添加项目时不关联工单系统。
+	Sentinel	哨兵
+@plural	Every {n} min|Every {n} min	每 {n} 分钟
+@plural	Every {n} s|Every {n} s	每 {n} 秒
+	Interval	间隔
+	A light check of what changed on GitLab: MRs, pipelines, comments, approvals and pushes. Only what changed is read again; the full refresh still reads everything.	轻量检查 GitLab 上的变化：MR、流水线、评论、批准和推送。只重新读取有变化的内容；完整刷新仍会读取全部。
+	Settings › General › Sentinel interval (0 = off)	设置 › 常规 › 哨兵间隔（0 = 关闭）
+	Sentinel interval	哨兵间隔
+	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	两次轻量检查 GitLab 变化之间的秒数（MR、流水线、评论、批准、推送）；只重新读取有变化的内容。0 = 关闭。

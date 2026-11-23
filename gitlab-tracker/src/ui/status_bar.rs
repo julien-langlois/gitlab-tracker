@@ -75,6 +75,19 @@ pub fn render_status_bar(app: &App) -> Paragraph<'static> {
             .fg(timer_color)
             .add_modifier(Modifier::BOLD),
     ));
+    // The sentinel's light check (`0`: off).
+    if app.sentinel_interval_secs > 0 {
+        let left = app.sentinel_left;
+        spans.push(Span::styled("  👁 ", Style::default().fg(muted)));
+        spans.push(Span::styled(
+            if app.sentinel.in_flight {
+                "…".to_string()
+            } else {
+                format!("{:02}:{:02}", left / 60, left % 60)
+            },
+            Style::default().fg(accent_cyan),
+        ));
+    }
 
     // ── 3. API call estimates ─────────────────────────────────────────────────
     let gl = app.estimated_gitlab_calls;

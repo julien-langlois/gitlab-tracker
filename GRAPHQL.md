@@ -22,6 +22,13 @@ A refresh cycle (every `refresh_interval_secs`, 15 min by default) reads:
 | New MRs (`discover_new_mrs`) | `GET merge_requests?created_after=…` | 1 |
 | Redmine tickets | `GET issues.json?issue_id=…&status_id=*` | 1 per 100 tickets |
 
+Between two cycles, the sentinel (`sentinel.rs`, every `sentinel_interval_secs`,
+2 min by default) sends `merge_requests?updated_after=`, `pipelines?updated_after=`
+and `events`, usually one page each: **3 requests per check**, ≈ 22 between two
+15-minute cycles. The MRs it finds changed go through `spawn_mr_fetches` like a
+cycle's, with `CachePolicy::Signals` forcing their review or pipelines when an
+event or a pipeline says so.
+
 Every request goes through `gitlab_tracker_core::pacing`: projects on the same
 instance share one concurrency limit (3) and one pause when the server answers
 `429` / `503` or reports a spent budget (`Retry-After`, `RateLimit-Reset`).

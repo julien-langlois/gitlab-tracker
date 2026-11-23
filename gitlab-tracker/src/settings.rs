@@ -153,6 +153,11 @@ impl SettingsEditorState {
                     app.refresh_interval_secs = *value;
                     app.time_left = app.time_left.min(*value);
                 }
+                ("core.sentinel_interval_secs", ProjectSettingValue::U64(value)) => {
+                    app.config.sentinel_interval_secs = Some(*value);
+                    app.sentinel_interval_secs = *value;
+                    app.sentinel_left = app.sentinel_left.min(*value);
+                }
                 ("core.activity_recent_days", ProjectSettingValue::U64(value)) => {
                     app.config.activity_recent_days = *value;
                 }

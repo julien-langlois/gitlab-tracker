@@ -366,6 +366,10 @@ The same projects in a native window, with many more pages: see
 - **Persistence.** Tracked MRs, UI settings and last-known branch statuses are
   saved in the platform's standard config and data folders.
 - **Refresh interval** — `refresh_interval_secs` (default 900 s).
+- **Sentinel** — `sentinel_interval_secs` (default 120 s, `0` = off): a light
+  check of what changed between two refreshes, only those MRs are read again
+  ([how it works](how-it-works.md#sentinel)). Its countdown follows the refresh
+  countdown in the status bar (`👁 01:23`).
 - **Light / dark theme** detected from the terminal's background (OSC 11).
 - **Responsive layout** from laptop screens to ultra-wide monitors.
 - **Settings dashboard (`,`)** — edit the active project's settings in the app:

@@ -55,6 +55,23 @@ sqlite3 ~/.config/gitlab-tracker/tracker.db \
 
 **From the JSON files:** the versions before `tracker.db` kept all this in JSON files: `tracker_<hash>.json`, `merges_<hash>.json`, `owners_<hash>.json` and `gui.json`. The first launch imports each one on its own, the first time it is needed, then renames it `….imported` (kept as a backup, no longer read). `gitlab-tracker import-state` does the same by hand for every project of `projects.toml` (or `--project <name>`), and prints what it imported.
 
+## Sentinel
+
+A full refresh reads every tracked MR, every `refresh_interval_secs` (15 min by default). In between, the **sentinel** asks GitLab what changed since its last check, every `sentinel_interval_secs` (2 min by default, `0` turns it off), and reads again only those MRs, through the same path as a refresh:
+
+| Request | What it catches |
+| :--- | :--- |
+| `merge_requests?updated_after=…` | New MRs, pushes on an MR's branch, title, description, labels, assignee, reviewers, milestone, draft, merged / closed / reopened |
+| `pipelines?updated_after=…` | A pipeline that starts, ends or is retried (it does not touch its MR's `updated_at`) |
+| `events` | Comments and approvals (their discussions and approvers are read again), pushes on a tracked branch (branch scan) or on the target of open MRs (mergeability, commits behind) |
+
+* **Linked tickets** (Redmine…) are read again only for the MRs the sentinel reads again; a ticket that changes on its own waits for the next full refresh.
+* **Not seen by the sentinel**, left to the full refresh and to the hourly review read: a thread resolved or reopened, a mergeability GitLab recomputes on its own, a milestone's dates, a deleted MR, freeze periods, releases.
+* **Clock:** the sentinel follows the GitLab server's clock (its `Date` header), with a 30-second overlap; what it already saw is skipped.
+* **Gaps:** after a sleep or a network outage longer than 15 minutes, or when more changed than a check reads (500 per list), a full refresh runs instead of catching up.
+* **Restart:** the sentinel starts from the launch, its watermark is not saved: the startup load reads every tracked MR again, and the review of every open MR last read over an hour ago.
+* It never runs on top of a refresh, nor during the startup load. Settings: [configuration](configuration.md).
+
 ## Desktop notifications
 
 Notifications fire for GitLab MR events (new branch, MR updated, mergeability changed, milestone changed, complexity changed, review reminders) and tracker-ticket events when a provider such as Redmine is active. Tracker notifications include ticket field changes detected during refreshes and successful automatic status transitions triggered by configured workflow mappings.

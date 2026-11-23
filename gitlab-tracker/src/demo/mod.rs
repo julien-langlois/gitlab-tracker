@@ -134,6 +134,7 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
         base_url: GITLAB_URL.into(),
         project_name: Some(spec.name.into()),
         refresh_interval_secs: 900,
+        sentinel_interval_secs: crate::config::DEFAULT_SENTINEL_INTERVAL_SECS,
         config,
         // The demo always uses the dark palette: no terminal query needed.
         theme: crate::ui::theme::Palette::for_mode(crate::ui::theme::ThemeMode::Dark),
@@ -208,6 +209,11 @@ pub fn apply_demo_event(app: &mut App, event: AppEvent) {
                 app.time_left -= 1;
             } else {
                 app.time_left = app.refresh_interval_secs;
+            }
+            if app.sentinel_left > 0 {
+                app.sentinel_left -= 1;
+            } else {
+                app.sentinel_left = app.sentinel_interval_secs;
             }
         }
         // Route stats results into app state so the overlay re-renders.

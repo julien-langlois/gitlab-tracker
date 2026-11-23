@@ -328,6 +328,7 @@ pub async fn dispatch(action: Action, app: &mut App, ctx: &mut ActionContext<'_>
 
 fn refresh(app: &mut App, api_semaphore: &Arc<Semaphore>, tx: &UnboundedSender<AppEvent>) {
     app.time_left = app.refresh_interval_secs;
+    app.sentinel_left = app.sentinel_interval_secs;
     if app.read_only {
         return; // demo: only the countdown restarts
     }

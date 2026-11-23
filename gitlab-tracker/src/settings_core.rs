@@ -152,6 +152,27 @@ fn refresh_interval_setting() -> ProjectSettingDef {
     }
 }
 
+fn sentinel_interval_setting() -> ProjectSettingDef {
+    ProjectSettingDef {
+        id: "core.sentinel_interval_secs",
+        section: "Core",
+        label: "Sentinel interval",
+        help: "Seconds between two light checks of what changed on GitLab (MRs, pipelines, \
+               comments, approvals, pushes); only what changed is read again. 0 = off.",
+        priority: 31,
+        kind: ProjectSettingKind::U64 { min: 0, step: 30 },
+        default_value: ProjectSettingValue::U64(crate::config::DEFAULT_SENTINEL_INTERVAL_SECS),
+        read: |project| {
+            read_u64(
+                project,
+                "sentinel_interval_secs",
+                crate::config::DEFAULT_SENTINEL_INTERVAL_SECS,
+            )
+        },
+        write: |project, value| write_u64(project, "sentinel_interval_secs", value),
+    }
+}
+
 fn activity_recent_setting() -> ProjectSettingDef {
     ProjectSettingDef {
         id: "core.activity_recent_days",
@@ -468,6 +489,7 @@ inventory::submit!(ProjectSettingFactory(show_cockpit_setting));
 inventory::submit!(ProjectSettingFactory(hide_merged_setting));
 inventory::submit!(ProjectSettingFactory(discover_new_mrs_setting));
 inventory::submit!(ProjectSettingFactory(refresh_interval_setting));
+inventory::submit!(ProjectSettingFactory(sentinel_interval_setting));
 inventory::submit!(ProjectSettingFactory(activity_recent_setting));
 inventory::submit!(ProjectSettingFactory(activity_stale_setting));
 inventory::submit!(ProjectSettingFactory(review_reminder_setting));

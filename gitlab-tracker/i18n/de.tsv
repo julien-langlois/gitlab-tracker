@@ -2318,3 +2318,11 @@ saved view	Restore	Wiederherstellen
 	Comma-separated, in the table's order	Durch Kommas getrennt, in der Reihenfolge der Tabelle
 	Remove the ticket tracker	Ticket-Tracker entfernen
 	Remove the ticket tracker: the project is added without one.	Ticket-Tracker entfernen: das Projekt wird ohne hinzugefügt.
+	Sentinel	Wächter
+@plural	Every {n} min|Every {n} min	Alle {n} Min.|Alle {n} Min.
+@plural	Every {n} s|Every {n} s	Alle {n} s|Alle {n} s
+	Interval	Intervall
+	A light check of what changed on GitLab: MRs, pipelines, comments, approvals and pushes. Only what changed is read again; the full refresh still reads everything.	Eine leichte Prüfung, was sich auf GitLab geändert hat: MRs, Pipelines, Kommentare, Freigaben und Pushes. Nur Geändertes wird neu gelesen; die vollständige Aktualisierung liest weiterhin alles.
+	Settings › General › Sentinel interval (0 = off)	Einstellungen › Allgemein › Wächter-Intervall (0 = aus)
+	Sentinel interval	Wächter-Intervall
+	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	Sekunden zwischen zwei leichten Prüfungen, was sich auf GitLab geändert hat (MRs, Pipelines, Kommentare, Freigaben, Pushes); nur Geändertes wird neu gelesen. 0 = aus.

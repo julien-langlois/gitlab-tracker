@@ -613,12 +613,29 @@ pub enum CachePolicy {
     /// Used by the manual `[R]` refresh so the user always gets a fully
     /// up-to-date snapshot, even for already-merged MRs.
     ForceAll,
+    /// The sentinel saw a sign GitLab does not show in the MR's list entry: a
+    /// comment or an approval (`review`), a pipeline that moved (`pipelines`).
+    Signals { review: bool, pipelines: bool },
 }
 
 impl CachePolicy {
     /// Returns `true` when the notes cache must be bypassed.
     pub fn notes_stale(&self) -> bool {
-        matches!(self, CachePolicy::ForceAll)
+        matches!(
+            self,
+            CachePolicy::ForceAll | CachePolicy::Signals { review: true, .. }
+        )
+    }
+
+    /// Returns `true` when the cached pipelines must be read again.
+    pub fn pipelines_stale(&self) -> bool {
+        matches!(
+            self,
+            CachePolicy::Signals {
+                pipelines: true,
+                ..
+            }
+        )
     }
 }
 
@@ -1672,9 +1689,10 @@ async fn list_mrs(
 /// [`pipelines_cache_reusable`]) or the MR changed since. Same rule as the per-MR
 /// fetch, decided ahead so they can be read together.
 fn pipelines_due(cached: &CachedMrData, listed: &GitLabMr) -> bool {
-    !(listed.updated_at.is_some()
-        && listed.updated_at == cached.updated_at
-        && pipelines_cache_reusable(&cached.pipelines))
+    cached.cache_policy.pipelines_stale()
+        || !(listed.updated_at.is_some()
+            && listed.updated_at == cached.updated_at
+            && pipelines_cache_reusable(&cached.pipelines))
 }
 
 /// Refreshes many MRs: their base data comes from list reads (one request per
@@ -2414,7 +2432,8 @@ pub async fn fetch_gitlab_data(
     // (running, pending, created, waiting). A pipeline can transition to success/failed
     // without the MR's `updated_at` changing, so the equality check alone is not
     // sufficient to detect stale pipeline data.
-    let pipelines = if updated_at.is_some()
+    let pipelines = if !cached.cache_policy.pipelines_stale()
+        && updated_at.is_some()
         && updated_at == cached.updated_at
         && pipelines_cache_reusable(&cached.pipelines)
     {
