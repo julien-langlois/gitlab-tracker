@@ -581,6 +581,7 @@ clipboard	Copied	已复制
 	Waiting on the author	等待作者
 	Approved, not merged	已批准，未合并
 	Merged, not on {to}	已合并，未进入 {to}
+	Merged into {from}, not on {to}	已合并到 {from}，未进入 {to}
 	On {from}, not on {to}	在 {from}，未进入 {to}
 	Delivery flow · where MRs wait	交付流程 · MR 在哪里等待
 	Count now · median time spent in the stage	当前数量 · 在该阶段停留的中位时间

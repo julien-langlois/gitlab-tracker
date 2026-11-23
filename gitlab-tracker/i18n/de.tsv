@@ -581,6 +581,7 @@ clipboard	Copied	Kopiert
 	Waiting on the author	Wartet auf den Autor
 	Approved, not merged	Freigegeben, nicht gemergt
 	Merged, not on {to}	Gemergt, nicht auf {to}
+	Merged into {from}, not on {to}	In {from} gemergt, nicht auf {to}
 	On {from}, not on {to}	Auf {from}, nicht auf {to}
 	Delivery flow · where MRs wait	Lieferfluss · wo MRs warten
 	Count now · median time spent in the stage	Anzahl jetzt · Median der Zeit in der Phase

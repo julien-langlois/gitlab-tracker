@@ -28,11 +28,17 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub fn name(&self, target_first: bool) -> String {
+    /// `target_first`: its MRs were merged into `from`; `shared`: another
+    /// stage goes to the same `to`, so `from` must show.
+    pub fn name(&self, target_first: bool, shared: bool) -> String {
         match self {
             Stage::Reviewers => tl("Waiting for a review").into(),
             Stage::Author => tl("Waiting on the author").into(),
             Stage::Merger => tl("Approved, not merged").into(),
+            Stage::Deploy { from, to } if target_first && shared => tf(
+                "Merged into {from}, not on {to}",
+                &[("from", from), ("to", to)],
+            ),
             Stage::Deploy { to, .. } if target_first => tf("Merged, not on {to}", &[("to", to)]),
             Stage::Deploy { from, to } => {
                 tf("On {from}, not on {to}", &[("from", from), ("to", to)])
@@ -123,14 +129,26 @@ pub fn stages_now(app: &App) -> Vec<StageNow> {
             stages.push(s.clone());
         }
     }
+    let goes_to = |to: &str| {
+        stages
+            .iter()
+            .filter(|s| matches!(s, Stage::Deploy { to: t, .. } if t == to))
+            .count()
+    };
+    let shared: Vec<bool> = stages
+        .iter()
+        .map(|s| matches!(s, Stage::Deploy { to, .. } if goes_to(to) > 1))
+        .collect();
     stages
         .into_iter()
-        .map(|stage| {
+        .zip(shared)
+        .map(|(stage, shared)| {
             let at: Vec<&(Stage, bool, next_step::NextStep)> =
                 found.iter().filter(|(s, _, _)| *s == stage).collect();
-            let first = at.first().is_some_and(|(_, f, _)| *f);
+            // "Merged" only when all of them were merged there.
+            let first = !at.is_empty() && at.iter().all(|(_, f, _)| *f);
             StageNow {
-                name: stage.name(first),
+                name: stage.name(first, shared),
                 count: at.len(),
                 mine: at.iter().filter(|(_, _, s)| s.mine).count(),
                 median_days: median(
@@ -256,7 +274,8 @@ pub fn flow_card(ui: &mut Ui, theme: &Theme, app: &App) -> Option<(String, Strin
                     );
                     if response
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .tip(tl("Show these MRs in the list"))
+                        // The name in full: a long branch truncates it.
+                        .tip(format!("{}\n{}", s.name, tl("Show these MRs in the list")))
                         .clicked()
                     {
                         picked = Some((s.stage.key(), s.name.clone()));
@@ -645,6 +664,26 @@ mod tests {
         );
         assert_eq!(weeks[WEEKS - 1], Some(2.0));
         assert_eq!(weeks[WEEKS - 2], Some(1.0));
+    }
+
+    #[test]
+    fn deployments_to_one_branch_name_where_they_were_merged() {
+        let stage = |from: &str| Stage::Deploy {
+            from: from.into(),
+            to: "develop".into(),
+        };
+        assert_eq!(
+            stage("feature-a").name(true, false),
+            "Merged, not on develop"
+        );
+        assert_eq!(
+            stage("feature-a").name(true, true),
+            "Merged into feature-a, not on develop"
+        );
+        assert_eq!(
+            stage("feature-a").name(false, true),
+            "On feature-a, not on develop"
+        );
     }
 
     #[tokio::test]

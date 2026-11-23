@@ -581,6 +581,7 @@ clipboard	Copied	Copiado
 	Waiting on the author	Esperando al autor
 	Approved, not merged	Aprobada, no fusionada
 	Merged, not on {to}	Fusionada, no en {to}
+	Merged into {from}, not on {to}	Fusionada en {from}, no en {to}
 	On {from}, not on {to}	En {from}, no en {to}
 	Delivery flow · where MRs wait	Flujo de entrega · dónde esperan las MR
 	Count now · median time spent in the stage	Cantidad actual · tiempo mediano en la etapa

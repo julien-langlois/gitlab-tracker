@@ -581,6 +581,7 @@ clipboard	Copied	Copié
 	Waiting on the author	En attente de l'auteur
 	Approved, not merged	Approuvée, non fusionnée
 	Merged, not on {to}	Fusionnée, pas sur {to}
+	Merged into {from}, not on {to}	Fusionnée dans {from}, pas sur {to}
 	On {from}, not on {to}	Sur {from}, pas sur {to}
 	Delivery flow · where MRs wait	Flux de livraison · où attendent les MR
 	Count now · median time spent in the stage	Nombre actuel · temps médian passé dans l'étape
