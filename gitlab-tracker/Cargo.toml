@@ -129,6 +129,19 @@ windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
 [dev-dependencies]
 # Renders the window headless (no display, no GPU) in the GUI tests.
 egui_kittest = { version = "0.37", features = ["eframe"] }
+# The same eframe as the window's (dev-dependencies are built even without
+# `gui`): otherwise winit's Wayland backend links libwayland through pkg-config
+# instead of loading it at run time, and the build needs its headers.
+eframe = { version = "0.37", default-features = false, features = [
+  "accesskit",
+  "clipboard",
+  "default_fonts",
+  "glow",
+  "links",
+  "system_fonts",
+  "wayland",
+  "x11",
+] }
 # A fresh tracker.db per test (one runtime each), and its events to check.
 gitlab-tracker-store = { workspace = true, features = ["test-support"] }
 # Real time zones (daylight saving changes) for the snooze tests.
