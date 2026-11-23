@@ -28,7 +28,7 @@ projects.
 
 ## Install and run
 
-The window is behind the `gui` feature. It needs:
+The window is in the default build (feature `gui`). Building it needs:
 
 - Rust **1.95+** (required by the [`bevel`](https://crates.io/crates/bevel-widgets)
   UI crates);
@@ -36,7 +36,7 @@ The window is behind the `gui` feature. It needs:
   on any desktop install.
 
 ```bash
-cargo install gitlab-tracker --features gui      # add stats,redmine as needed
+cargo install gitlab-tracker      # add --features stats,redmine as needed
 
 gitlab-tracker gui            # the active project
 gitlab-tracker --demo gui     # demo data, read-only

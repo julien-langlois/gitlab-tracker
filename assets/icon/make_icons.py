@@ -9,6 +9,9 @@ Writes, next to this script:
   gitlab-tracker.ico          Windows (16 … 256 px)
   gitlab-tracker.icns         macOS (16 … 1024 px)
 
+and the window icon inside the binary's crate (gitlab-tracker/assets/window-icon.png,
+256 px): the crate published on crates.io holds only its own directory.
+
 The motif is a generic merge graph (a trunk, a branch merging into it) inside a
 tracking ring, in the window's blue accent: no tanuki, no GitLab orange.
 """
@@ -145,6 +148,9 @@ def main():
         img.save(HERE / "png" / f"gitlab-tracker-{n}.png")
     master.save(HERE / "gitlab-tracker.ico", sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
     master.save(HERE / "gitlab-tracker.icns")
+    master.resize((256, 256), Image.LANCZOS).save(
+        HERE.parent.parent / "gitlab-tracker" / "assets" / "window-icon.png"
+    )
     (HERE / "gitlab-tracker.svg").write_text(svg())
 
 

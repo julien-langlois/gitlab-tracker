@@ -356,6 +356,9 @@ A refresh reads the tracked MRs in lists (100 per request), their pipelines and 
 # Verbose log (daily-rotated file in ~/.config/gitlab-tracker/, default level: warn)
 RUST_LOG=info gitlab-tracker gui
 
-# Build without desktop notifications (headless / CI environments)
-cargo install --path gitlab-tracker --no-default-features
+# Terminal UI only, without the window's dependencies
+cargo install gitlab-tracker --no-default-features --features notifications
+
+# Terminal UI only, without desktop notifications either (headless / CI environments)
+cargo install gitlab-tracker --no-default-features
 ```

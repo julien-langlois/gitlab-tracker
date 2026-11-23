@@ -41,10 +41,10 @@
 
 ### Desktop window
 
-The window is behind the `gui` feature (Rust **1.95+**):
+Download a binary for Linux (x86_64, ARM64), macOS (Apple Silicon, Intel) or Windows from the [Releases](https://github.com/julien-langlois/gitlab-tracker/releases) page — every feature included — or build it (Rust **1.95+**):
 
 ```bash
-cargo install gitlab-tracker --features gui      # add stats,redmine as needed
+cargo install gitlab-tracker      # add --features stats,redmine as needed
 
 gitlab-tracker --demo gui     # try it on demo data, no GitLab needed
 gitlab-tracker gui            # your projects
@@ -54,24 +54,24 @@ On first launch the window asks for the GitLab URL, the project and the token, c
 
 ### Terminal UI (optional)
 
-```bash
-cargo install gitlab-tracker      # Rust 1.95+ — or a binary from the Releases page
+The same binary runs in the terminal — for SSH sessions and keyboard-only use:
 
+```bash
 gitlab-tracker --demo             # demo data
 gitlab-tracker                    # prompts for the project and token on first launch
 ```
 
-Pre-built binaries: [Releases](https://github.com/julien-langlois/gitlab-tracker/releases). Keys and views: [docs/terminal.md](docs/terminal.md).
+A terminal-only build, without the window's dependencies: `cargo install gitlab-tracker --no-default-features --features notifications`. Keys and views: [docs/terminal.md](docs/terminal.md).
 
 ### Linux prerequisites
 
-The OS keyring and desktop notifications need D-Bus headers (macOS and Windows need nothing):
+Building from source on Linux needs the D-Bus and OpenSSL headers, for the OS keyring and desktop notifications (macOS and Windows need nothing; the pre-built binaries need nothing to build):
 
 | Distribution | Command |
 | :--- | :--- |
-| Debian / Ubuntu | `sudo apt install libdbus-1-dev pkg-config` |
-| Fedora / RHEL | `sudo dnf install dbus-devel pkgconf` |
-| Arch | `sudo pacman -S dbus pkgconf` |
+| Debian / Ubuntu | `sudo apt install libdbus-1-dev libssl-dev pkg-config` |
+| Fedora / RHEL | `sudo dnf install dbus-devel openssl-devel pkgconf` |
+| Arch | `sudo pacman -S dbus openssl pkgconf` |
 
 ## 🔑 Which token to create
 

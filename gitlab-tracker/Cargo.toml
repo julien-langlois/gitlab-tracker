@@ -9,8 +9,8 @@ rust-version = "1.95"
 license.workspace = true
 repository.workspace = true
 readme = "../README.md"
-description = "A fast terminal TUI dashboard for tracking GitLab Merge Requests across branches"
-keywords = ["gitlab", "tui", "ratatui", "cli", "dashboard"]
+description = "Follow your GitLab merge requests across environment branches, in a desktop window or the terminal"
+keywords = ["gitlab", "merge-request", "dashboard", "gui", "tui"]
 categories = ["command-line-utilities", "development-tools"]
 exclude = ["../assets/"]
 
@@ -19,7 +19,9 @@ name = "gitlab-tracker"
 path = "src/main.rs"
 
 [features]
-default = ["notifications"]
+# The desktop window is the main frontend; `--no-default-features` builds the
+# terminal UI alone (no windowing dependencies).
+default = ["gui", "notifications"]
 notifications = ["dep:notify-rust"]
 redmine = ["dep:gitlab-tracker-redmine"]
 stats = ["dep:gitlab-tracker-stats"]

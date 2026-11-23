@@ -3,7 +3,7 @@
 Besides the window (`gitlab-tracker gui`) and the terminal UI (`gitlab-tracker`), the binary has a few subcommands for setup and scripts. They can be called from any directory: the configuration comes from `projects.toml`.
 
 ```bash
-gitlab-tracker gui            # desktop window (feature `gui`)
+gitlab-tracker gui            # desktop window
 gitlab-tracker                # terminal UI
 gitlab-tracker --demo [gui]   # demo data, no GitLab access, read-only
 ```

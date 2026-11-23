@@ -292,7 +292,7 @@ fn open_window(launch: Launch) -> anyhow::Result<()> {
 /// The window and taskbar icon on X11, Windows and macOS. GNOME on Wayland takes
 /// it from the desktop entry named like the app id (`assets/linux/`) instead.
 fn window_icon() -> Arc<egui::IconData> {
-    let png = include_bytes!("../../../assets/icon/png/gitlab-tracker-256.png");
+    let png = include_bytes!("../../assets/window-icon.png");
     Arc::new(eframe::icon_data::from_png_bytes(png).expect("the bundled icon is a valid PNG"))
 }
 

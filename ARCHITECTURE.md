@@ -99,7 +99,7 @@ session are ignored until every MR has been re-fetched (`just_added_branches`).
 
 ---
 
-## Desktop window (`gui` feature)
+## Desktop window (`gui` feature, on by default)
 
 The window (`gitlab-tracker/src/gui/`) is a second frontend over the same `App`:
 no state of its own beyond what the views need (page, panels, text being edited).

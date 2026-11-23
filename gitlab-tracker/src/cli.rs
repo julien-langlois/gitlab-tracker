@@ -2,7 +2,8 @@ use clap::{Parser, Subcommand};
 
 use crate::storage::{load_projects_toml, resolve_active_project, ProjectEntry};
 
-/// A fast terminal TUI dashboard for tracking GitLab Merge Requests across branches
+/// Follow your GitLab merge requests across environment branches: `gitlab-tracker gui`
+/// opens the desktop window, `gitlab-tracker` alone the terminal UI.
 #[derive(Parser, Debug)]
 #[command(
     name = "gitlab-tracker",
