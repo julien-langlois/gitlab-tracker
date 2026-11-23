@@ -11,3 +11,4 @@ The [main README](https://github.com/julien-langlois/gitlab-tracker/blob/main/RE
 | [How it works](how-it-works.md) | Branch presence and its limits, tracked branches, the local state and its history, desktop notifications, the review timeline and drafts. |
 | [Command line](cli.md) | `--project`, `checklist`, `tracker-statuses`. |
 | [Signed commits](signed-commits.md) | Checking that every commit of the open MRs is signed, rebases from GitLab included. |
+| [Stability and upgrades](stability.md) | What 1.x guarantees (command line, configuration, local data), upgrading from 0.x, going back. |

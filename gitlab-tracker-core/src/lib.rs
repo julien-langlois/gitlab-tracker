@@ -1,3 +1,6 @@
+//! *Internal crate of [gitlab-tracker](https://crates.io/crates/gitlab-tracker),
+//! released with it under the same version: its API may change in any release.*
+
 pub mod columns;
 pub mod domain;
 pub mod filters;

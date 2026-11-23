@@ -44,3 +44,5 @@ defaults:
     values: { title: "Command line", nav_order: 7 }
   - scope: { path: "signed-commits.md" }
     values: { title: "Signed commits", nav_order: 8 }
+  - scope: { path: "stability.md" }
+    values: { title: "Stability and upgrades", nav_order: 9 }

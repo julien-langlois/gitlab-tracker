@@ -802,6 +802,15 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     let applied: i64 = sqlx::query_scalar("PRAGMA user_version")
         .fetch_one(pool)
         .await?;
+    // A newer version wrote it (the user went back to an older binary): its
+    // schema is unknown here, and writing to it could lose data.
+    if applied > MIGRATIONS.len() as i64 {
+        anyhow::bail!(
+            "tracker.db was written by a newer version of gitlab-tracker (schema {applied}, \
+             this version knows {}): update gitlab-tracker",
+            MIGRATIONS.len()
+        );
+    }
     for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
         let mut tx = pool.begin().await?;
         // A migration file of this crate (`include_str!`): a literal.
@@ -1404,6 +1413,25 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         (StateDb::open(&dir.join(DB_FILE)).await.unwrap(), dir)
+    }
+
+    #[tokio::test]
+    async fn a_database_from_a_newer_version_is_left_untouched() {
+        let (db, dir) = db().await;
+        let newer = MIGRATIONS.len() + 1;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "PRAGMA user_version = {newer}"
+        )))
+        .execute(&db.pool)
+        .await
+        .unwrap();
+        drop(db);
+        let err = StateDb::open(&dir.join(DB_FILE))
+            .await
+            .err()
+            .expect("refused");
+        assert!(err.to_string().contains("newer version"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     async fn kinds(db: &StateDb, id: &str) -> Vec<(&'static str, Option<String>)> {

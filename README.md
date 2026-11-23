@@ -36,6 +36,7 @@
 | [How it works](docs/how-it-works.md) | Branch presence and its limits, tracked branches, the local state and its history, notifications, drafts in the review metrics. |
 | [Command line](docs/cli.md) | `--project`, `checklist`, `tracker-statuses`. |
 | [Signed commits](docs/signed-commits.md) | Checking that every commit of the open MRs is signed. |
+| [Stability and upgrades](docs/stability.md) | What 1.x guarantees, upgrading from 0.x. |
 
 ## 🚀 Quick start
 

@@ -1,3 +1,6 @@
+//! *Internal crate of [gitlab-tracker](https://crates.io/crates/gitlab-tracker),
+//! released with it under the same version: its API may change in any release.*
+//!
 //! Analytics and correlation engine for gitlab-tracker MR data.
 //!
 //! # Crate layout

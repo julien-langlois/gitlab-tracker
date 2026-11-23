@@ -6,6 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Built with Rust](https://img.shields.io/badge/Built_with-Rust_1.94+-orange.svg)](https://www.rust-lang.org/)
 
+> **Internal crate.** Published on crates.io so that `cargo install gitlab-tracker`
+> can build; it is part of the application, released with it under the same
+> version, and its API may change in any release — see
+> [Stability](https://github.com/julien-langlois/gitlab-tracker/blob/main/docs/stability.md#what-is-not).
+
 Optional analytics and velocity-tracking plugin for [gitlab-tracker](../README.md).
 
 Automatically records MR snapshots into a local SQLite database and computes velocity metrics, aggregated statistics, and Spearman rank correlations — all without leaving your terminal.

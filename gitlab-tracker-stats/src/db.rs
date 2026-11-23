@@ -11,6 +11,14 @@ pub enum StatsError {
 
     #[error("Invalid data: {0}")]
     InvalidData(String),
+
+    /// The database was written by a newer gitlab-tracker: its schema is unknown
+    /// to this one, which leaves it untouched.
+    #[error(
+        "stats.db was written by a newer version of gitlab-tracker (schema {found}, \
+         this version knows {known}): update gitlab-tracker"
+    )]
+    NewerSchema { found: i64, known: usize },
 }
 
 /// Schema migrations, in order (see `SqliteStatsDb::run_migrations`).
@@ -84,6 +92,12 @@ impl SqliteStatsDb {
         let applied: i64 = sqlx::query_scalar("PRAGMA user_version")
             .fetch_one(pool)
             .await?;
+        if applied > MIGRATIONS.len() as i64 {
+            return Err(StatsError::NewerSchema {
+                found: applied,
+                known: MIGRATIONS.len(),
+            });
+        }
         for (version, sql) in MIGRATIONS.iter().enumerate().skip(applied.max(0) as usize) {
             let mut tx = pool.begin().await?;
             // A migration file of this crate (`include_str!`): a literal.
@@ -704,6 +718,24 @@ mod tests {
         let db = SqliteStatsDb::open(path).await.unwrap();
         assert_eq!(version(&db).await, MIGRATIONS.len() as i64);
         assert_eq!(db.query(&SnapshotQuery::default()).await.unwrap().len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_database_from_a_newer_version_is_left_untouched() {
+        let dir = std::env::temp_dir().join(format!("gt-newer-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("stats.db");
+        let path = path.to_str().unwrap();
+        let db = SqliteStatsDb::open(path).await.unwrap();
+        let newer = MIGRATIONS.len() as i64 + 1;
+        sqlx::query(AssertSqlSafe(format!("PRAGMA user_version = {newer}")))
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        drop(db);
+        let err = SqliteStatsDb::open(path).await.err().expect("refused");
+        assert!(matches!(err, StatsError::NewerSchema { found, .. } if found == newer));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

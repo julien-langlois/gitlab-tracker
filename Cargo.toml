@@ -16,10 +16,12 @@ license = "MIT"
 repository = "https://github.com/julien-langlois/gitlab-tracker"
 
 [workspace.dependencies]
-# Internal crates
-gitlab-tracker-core = { version = "0.6.0", path = "gitlab-tracker-core" }
-gitlab-tracker-redmine = { version = "0.6.0", path = "gitlab-tracker-redmine" }
-gitlab-tracker-stats = { version = "0.6.0", path = "gitlab-tracker-stats" }
+# Internal crates, pinned exactly: their API may change in any release
+# (docs/stability.md), so `cargo install gitlab-tracker@x.y.z` must build against
+# the x.y.z of each, never a newer one. cargo-release keeps the `=` on a bump.
+gitlab-tracker-core = { version = "=0.6.0", path = "gitlab-tracker-core" }
+gitlab-tracker-redmine = { version = "=0.6.0", path = "gitlab-tracker-redmine" }
+gitlab-tracker-stats = { version = "=0.6.0", path = "gitlab-tracker-stats" }
 # Third-party crates used by several members. Features listed here apply to every
 # member; each member adds the extra features it needs (e.g. tokio, chrono).
 async-trait = "0.1"
