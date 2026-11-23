@@ -6,6 +6,7 @@ mod changelog;
 mod cli;
 mod columns_core;
 mod config;
+mod crash;
 #[cfg(feature = "gui")]
 mod critical_path;
 mod demo;
@@ -377,6 +378,9 @@ async fn build_session(
         theme: shared.palette,
         project_settings,
     });
+    if let Some(notice) = crash::notice() {
+        app.flash(notice, true);
+    }
 
     // Branch resolution priority:
     //   1. tracked_branches in projects.toml (canonical source after migration)
@@ -618,11 +622,7 @@ async fn open_stats_db() -> Option<Arc<gitlab_tracker_stats::SqliteStatsDb>> {
 async fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
-    let default_panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        utils::restore_terminal();
-        default_panic(info);
-    }));
+    crash::install();
 
     // Load .env before anything else so that all std::env::var() calls below
     // (including inside load_or_create_config_async) already see the env vars.

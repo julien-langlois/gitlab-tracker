@@ -352,6 +352,12 @@ A refresh reads the tracked MRs in lists (100 per request), their pipelines and 
 
 ## Logs and build options
 
+An internal error (a bug) writes a report, `crash-<date>.txt`, next to the logs:
+version, platform, message and where it happened. The next launch shows its path
+in the status bar, once. Please attach it to an
+[issue](https://github.com/julien-langlois/gitlab-tracker/issues/new) — it holds
+no token, but check it for project names you would rather not share.
+
 ```bash
 # Verbose log (daily-rotated file in ~/.config/gitlab-tracker/, default level: warn)
 RUST_LOG=info gitlab-tracker gui
