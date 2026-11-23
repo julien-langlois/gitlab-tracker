@@ -37,7 +37,7 @@ pub enum Command {
         #[arg(long)]
         absent_from: Option<String>,
     },
-    /// Import the tracker state of the versions before tracker.db (tracker_<hash>.json)
+    /// Import the tracker state of the versions before tracker.db (`tracker_<hash>.json`)
     /// into tracker.db: what the first launch does on its own. Every project of
     /// projects.toml, or the one given with --project.
     ImportState,

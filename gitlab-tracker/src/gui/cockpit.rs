@@ -606,7 +606,10 @@ fn release_block(ui: &mut Ui, theme: &Theme, r: &ReleaseView, counts: &Counts<'_
             r.title.clone()
         };
         let response = ui
-            .add(egui::Label::new(semibold(title, theme.text_size).color(color)).sense(Sense::click()))
+            .add(
+                egui::Label::new(semibold(title, theme.text_size).color(color))
+                    .sense(Sense::click()),
+            )
             .on_hover_cursor(egui::CursorIcon::PointingHand)
             .tip(tl("List its MRs"));
         if response.hovered() {
@@ -959,11 +962,7 @@ fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> Option<Pick
             urgent_row(ui, theme, rect.shrink2(Vec2::new(12.0, 0.0)), &cols, &x, u);
             if response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .rich(
-                    Tip::new()
-                        .mr(&u.id, &u.title)
-                        .hint(tl("Open its page")),
-                )
+                .rich(Tip::new().mr(&u.id, &u.title).hint(tl("Open its page")))
                 .clicked()
             {
                 pick = Some(Pick::Mr(u.id.clone()));

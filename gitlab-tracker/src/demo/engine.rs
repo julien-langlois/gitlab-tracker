@@ -91,6 +91,8 @@ pub struct Arrival {
     pub mr: usize,
     pub branch: &'static str,
     pub at: At,
+    /// Read by the demo's stats database only.
+    #[cfg_attr(not(feature = "stats"), allow(dead_code))]
     pub how: How,
 }
 

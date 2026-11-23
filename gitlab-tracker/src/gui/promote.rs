@@ -735,11 +735,7 @@ fn side_row(
     });
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .rich(
-            Tip::new()
-                .mr(&r.id, &r.title)
-                .hint(tl("Open its page")),
-        )
+        .rich(Tip::new().mr(&r.id, &r.title).hint(tl("Open its page")))
         .clicked()
 }
 
@@ -1026,11 +1022,7 @@ fn ready_row(
     }
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .rich(
-            Tip::new()
-                .mr(&r.id, &r.title)
-                .hint(tl("Open its page")),
-        )
+        .rich(Tip::new().mr(&r.id, &r.title).hint(tl("Open its page")))
         .clicked()
         .then_some(ReadyClick::Open)
 }

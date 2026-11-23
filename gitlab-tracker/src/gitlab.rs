@@ -776,7 +776,7 @@ fn review_threads(discussions: &[Discussion]) -> Vec<MrThread> {
 /// Whether a system note moves the MR into draft (`Some(true)`) or out of it,
 /// ready for review (`Some(false)`). GitLab's wording changed over the
 /// versions: "marked this merge request as **draft**" / "as **ready**" (with
-/// " from <sha>" when a commit message did it), and earlier "marked as a
+/// " from `<sha>`" when a commit message did it), and earlier "marked as a
 /// **Work In Progress**" / "unmarked as a **Work In Progress**". A checklist
 /// item ("marked the checklist item **Draft …** as completed") is not one.
 fn draft_move(body: &str) -> Option<bool> {

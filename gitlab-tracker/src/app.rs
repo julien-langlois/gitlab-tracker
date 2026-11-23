@@ -1332,7 +1332,9 @@ impl App {
     /// Drops the MR kept by [`App::keep_selection`] once another MR is selected,
     /// keeping the selection on that other MR as the list shrinks.
     pub fn release_kept(&mut self) {
-        let Some(kept) = &self.kept_visible else { return };
+        let Some(kept) = &self.kept_visible else {
+            return;
+        };
         let selected = self.selected_id();
         if selected.as_ref() == Some(kept) {
             return;
