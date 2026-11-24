@@ -1,0 +1,30 @@
+name: Dependencies
+
+# cargo deny (deny.toml): RustSec advisories, licences, bans, sources.
+# Apart from ci.yml because advisories are published without the code changing:
+# the weekly run catches a new one against an unchanged Cargo.lock.
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 6 * * 1' # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  deny:
+    name: cargo deny (${{ matrix.checks }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Advisories apart: a new advisory must not hide a licence regression.
+        checks:
+          - advisories
+          - bans licenses sources
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check ${{ matrix.checks }}
