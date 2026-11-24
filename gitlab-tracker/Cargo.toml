@@ -11,7 +11,7 @@ repository.workspace = true
 readme = "../README.md"
 description = "Follow your GitLab merge requests across environment branches, in a desktop window or the terminal"
 keywords = ["gitlab", "merge-request", "dashboard", "gui", "tui"]
-categories = ["command-line-utilities", "development-tools"]
+categories = ["gui", "command-line-utilities", "development-tools"]
 exclude = ["../assets/"]
 
 [[bin]]

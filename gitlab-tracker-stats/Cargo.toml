@@ -1,6 +1,8 @@
 [package]
 name = "gitlab-tracker-stats"
-description = "Analytics and correlation engine for gitlab-tracker MR data."
+description = "Analytics and correlation engine for gitlab-tracker MR data"
+keywords = ["gitlab", "merge-request", "analytics", "metrics"]
+categories = ["development-tools"]
 readme = "README.md"
 version.workspace = true
 authors.workspace = true

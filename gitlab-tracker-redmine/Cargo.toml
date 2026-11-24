@@ -7,8 +7,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Optional Redmine integration plugin for gitlab-tracker"
-keywords = ["gitlab", "redmine", "tracker", "tui"]
-categories = ["command-line-utilities"]
+keywords = ["gitlab", "redmine", "issue-tracker", "plugin"]
+categories = ["api-bindings", "development-tools"]
 
 [dependencies]
 gitlab-tracker-core = { workspace = true, features = ["secrets", "pacing"] }
