@@ -110,7 +110,7 @@ fn render_frame(f: &mut Frame, app: &mut App) {
             .split(main_chunks[0])
     };
 
-    let status_bar = status_bar::render_status_bar(app);
+    let status_bar = status_bar::render_status_bar(app, left_chunks[0].width);
     f.render_widget(status_bar, left_chunks[0]);
 
     // The table borrows `app`, so render against a copy of the (tiny) table state
