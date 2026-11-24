@@ -855,6 +855,9 @@ fn review_activity(discussions: &[Discussion], author: &str, draft_now: bool) ->
             } else {
                 if body.starts_with("added ") && body.contains(" commit") {
                     activity.last_push_at = Some(at.clone());
+                    if !user.is_empty() {
+                        activity.last_push_by.insert(user.to_string(), at.clone());
+                    }
                     if activity.first_review_at.is_some() {
                         activity.pushes_after_review += 1;
                     }
@@ -2808,6 +2811,11 @@ pub mod tests {
         );
         // The push came after Alice's review: one round back to the author.
         assert_eq!(activity.pushes_after_review, 1);
+        // Who pushed: the author here, and a push is not a review.
+        assert_eq!(
+            activity.last_push_by.get("dev").map(String::as_str),
+            Some("2026-09-01T12:00:00.000Z")
+        );
         assert_eq!(
             activity.first_review_requested_at.as_deref(),
             Some("2026-09-01T09:00:00.000Z")

@@ -33,6 +33,8 @@ pub struct CommitRec {
     pub title: &'static str,
     pub authored: At,
     pub pushed: At,
+    /// Who wrote it: the MR's author, unless someone else pushed it.
+    pub by: &'static Person,
 }
 
 pub struct JobRec {
@@ -151,7 +153,7 @@ impl BuiltMr {
 
     pub fn fingerprint(&self, commit: &CommitRec) -> CommitFingerprint {
         CommitFingerprint {
-            author_email: self.spec.author.email(),
+            author_email: commit.by.email(),
             authored_at: commit.authored.timestamp(),
             title: commit.title.to_string(),
         }
@@ -351,7 +353,11 @@ impl World {
             built.updated = built.updated.max(*at);
             match *ev {
                 Ev::Open => {}
-                Ev::Push(titles, ci) => {
+                Ev::Push(titles, ci) | Ev::PushBy(_, titles, ci) => {
+                    let by = match *ev {
+                        Ev::PushBy(by, ..) => by,
+                        _ => built.spec.author,
+                    };
                     let n = titles.len();
                     for (i, title) in titles.iter().enumerate() {
                         let k = built.commits.len();
@@ -360,6 +366,7 @@ impl World {
                             title,
                             authored: *at - Duration::minutes(((n - 1 - i) * 23) as i64),
                             pushed: *at,
+                            by,
                         });
                     }
                     pushes += 1;
@@ -857,6 +864,7 @@ impl World {
         let mut first_review: Option<At> = None;
         let mut activity: BTreeMap<String, At> = BTreeMap::new();
         let mut pushes: Vec<At> = Vec::new();
+        let mut pushed_by: BTreeMap<String, At> = BTreeMap::new();
         // Opened as a draft: it has a move to ready, or is a draft today. Notes
         // while a draft are the review along the way, not the review.
         let mut draft = mr.events.iter().any(|(_, ev)| matches!(ev, Ev::Ready))
@@ -882,7 +890,14 @@ impl World {
                         ready = Some(*at);
                     }
                 }
-                Ev::Push(..) | Ev::Rebase(_) => pushes.push(*at),
+                Ev::Push(..) | Ev::Rebase(_) => {
+                    pushes.push(*at);
+                    pushed_by.insert(author.login.into(), *at);
+                }
+                Ev::PushBy(by, ..) => {
+                    pushes.push(*at);
+                    pushed_by.insert(by.login.into(), *at);
+                }
                 Ev::Ask(person) => {
                     review
                         .review_requested_at
@@ -910,6 +925,7 @@ impl World {
             pushes.iter().filter(|p| **p > first).count() as u32
         });
         review.last_activity_by = activity.into_iter().map(|(k, v)| (k, iso(v))).collect();
+        review.last_push_by = pushed_by.into_iter().map(|(k, v)| (k, iso(v))).collect();
         review
     }
 
@@ -1107,7 +1123,7 @@ impl World {
                     .map(|c| MrCommit {
                         sha: c.sha.clone(),
                         fingerprint: mr.fingerprint(c),
-                        author_name: mr.spec.author.name.to_string(),
+                        author_name: c.by.name.to_string(),
                     })
                     .collect(),
                 landed_fingerprint: landed,

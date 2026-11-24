@@ -351,6 +351,10 @@ pub struct ReviewActivity {
     /// along the way, on an MR opened when the work starts.
     #[serde(default)]
     pub draft_comments: u32,
+    /// Last commits pushed by each user ("added N commits"), the author
+    /// included: someone pushing to another's MR shows here.
+    #[serde(default)]
+    pub last_push_by: std::collections::BTreeMap<String, String>,
     /// How these were read: [`REVIEW_ACTIVITY_VERSION`] when current. Older
     /// ones are read again, merged MRs included.
     #[serde(default)]
@@ -374,8 +378,9 @@ impl ReviewActivity {
 }
 
 /// The current way of reading [`ReviewActivity`]: 1 added the drafts (the
-/// move to ready, the review only after it) and left the bots out.
-pub const REVIEW_ACTIVITY_VERSION: u32 = 1;
+/// move to ready, the review only after it) and left the bots out; 2 added who
+/// pushed ([`ReviewActivity::last_push_by`]).
+pub const REVIEW_ACTIVITY_VERSION: u32 = 2;
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author
 /// and the author date, and the title (first message line) is rarely edited.

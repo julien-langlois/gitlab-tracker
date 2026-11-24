@@ -116,6 +116,16 @@ pub struct Waiting {
     pub since: Option<DateTime<Utc>>,
 }
 
+/// Someone else's open MR a person pushed commits to.
+#[derive(Debug, Clone)]
+pub struct Helped {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    /// Their last push to it.
+    pub at: DateTime<Utc>,
+}
+
 /// One of someone's open MRs and its next step.
 #[derive(Debug, Clone)]
 pub struct Own {
@@ -132,6 +142,9 @@ pub struct Person {
     pub name: String,
     pub reviews: Vec<Waiting>,
     pub mrs: Vec<Own>,
+    /// Others' open MRs they pushed to, latest push first: who knows them
+    /// already, should the author be away.
+    pub helped: Vec<Helped>,
     /// Unresolved threads on their MRs whose turn is theirs.
     pub threads: usize,
     /// Median days from a review request to their next activity on the MR.
@@ -153,6 +166,7 @@ impl Person {
             name: String::new(),
             reviews: Vec::new(),
             mrs: Vec::new(),
+            helped: Vec::new(),
             threads: 0,
             response: None,
             load: 0.0,
@@ -294,11 +308,13 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64, bots: bool) -> Analysis
                     .entry(reviewer.clone())
                     .or_default() += 1;
             }
-            let answered = review
-                .last_activity_by
-                .get(reviewer)
-                .and_then(|at| board::parse_time(at))
-                .filter(|at| *at >= requested);
+            // A comment, an approval or a push answers the request: the
+            // first of them since it.
+            let answered = [&review.last_activity_by, &review.last_push_by]
+                .into_iter()
+                .filter_map(|by| by.get(reviewer).and_then(|at| board::parse_time(at)))
+                .filter(|at| *at >= requested)
+                .min();
             if let Some(at) = answered {
                 // Asked on a draft: the answer is waited for once it is ready.
                 let days =
@@ -311,19 +327,46 @@ pub fn analyze(app: &App, now: DateTime<Utc>, days: i64, bots: bool) -> Analysis
                 }
             }
         }
-        for (who, at) in &review.last_activity_by {
+        // Pushes to someone else's MR are part of its review: one per MR and
+        // person, at the latest of their comments, approvals and pushes.
+        let mut took_part: BTreeMap<&String, DateTime<Utc>> = BTreeMap::new();
+        for (who, at) in review.last_activity_by.iter().chain(&review.last_push_by) {
+            if let Some(at) = board::parse_time(at) {
+                let latest = took_part.entry(who).or_insert(at);
+                *latest = (*latest).max(at);
+            }
+        }
+        if mr.state == GitlabMrState::Opened {
+            for (who, at) in &review.last_push_by {
+                if *who == author || who.is_empty() || (!bots && board::is_bot(who)) {
+                    continue;
+                }
+                let Some(at) = board::parse_time(at) else {
+                    continue;
+                };
+                let person = people.entry(who.clone()).or_insert_with(|| blank(who));
+                person.helped.push(Helped {
+                    id: mr.id.clone(),
+                    title: mr.title.clone(),
+                    author: mr.author.clone(),
+                    at,
+                });
+            }
+        }
+        for (who, at) in took_part {
             if *who == author {
                 continue;
             }
-            let Some(at) = board::parse_time(at) else {
-                continue;
-            };
             let weeks_ago = (now - at).num_days() / 7;
             if (0..8).contains(&weeks_ago) {
                 let person = people.entry(who.clone()).or_insert_with(|| blank(who));
                 person.weeks[7 - weeks_ago as usize] += 1;
             }
         }
+    }
+
+    for person in people.values_mut() {
+        person.helped.sort_by_key(|h| std::cmp::Reverse(h.at));
     }
 
     // The load: reviews weighted by how long they wait, own MRs by their effort,
@@ -1610,6 +1653,33 @@ fn inspector(
             }
         },
     );
+    // Only when there is one: an empty "Helped on" says nothing worth the room.
+    if !person.helped.is_empty() {
+        board::section(
+            ui,
+            &theme,
+            tl("Helped on"),
+            &person.helped.len().to_string(),
+            |ui| {
+                for h in &person.helped {
+                    let detail = format!(
+                        "{} · {}",
+                        name_of(&h.author),
+                        tf(
+                            "pushed {time} ago",
+                            &[(
+                                "time",
+                                &board::duration_text(board::days_between(h.at, now))
+                            )]
+                        )
+                    );
+                    if line(ui, &theme, &h.id, &h.title, &detail, None) {
+                        open_mr = Some(h.id.clone());
+                    }
+                }
+            },
+        );
+    }
     board::section(ui, &theme, tl("Reviews"), tl("8 weeks"), |ui| {
         let (rect, _) =
             ui.allocate_exact_size(Vec2::new(ui.available_width(), 56.0), Sense::hover());
@@ -2032,5 +2102,41 @@ mod tests {
         let with = analyze(&app, now, 30, true);
         assert_eq!(with.people.len(), 1);
         assert_eq!(with.people[0].level, Level::Bot);
+    }
+
+    #[test]
+    fn a_push_answers_a_review_and_shows_who_helped() {
+        let mut app = crate::app::tests::test_app();
+        let now = board::parse_time("2026-11-05T08:00:00Z").unwrap();
+        let mut a = mr(
+            "1",
+            "Ann Lee (@ann)",
+            &["Bob Ray (@bob)"],
+            GitlabMrState::Opened,
+        );
+        // Asked on the 3rd, Bob answered with a commit a day later, no comment.
+        a.review = Some(ReviewActivity {
+            review_requested_at: [("bob".to_string(), "2026-11-03T08:00:00Z".to_string())].into(),
+            last_push_by: [
+                ("bob".to_string(), "2026-11-04T08:00:00Z".to_string()),
+                ("ann".to_string(), "2026-11-02T08:00:00Z".to_string()),
+            ]
+            .into(),
+            ..ReviewActivity::default()
+        });
+        app.mrs = vec![a];
+        let analysis = analyze(&app, now, 30, false);
+        let bob = analysis.people.iter().find(|p| p.login == "bob").unwrap();
+        assert_eq!(bob.response, Some(1.0));
+        assert_eq!(bob.weeks[7], 1, "the push counts as this week's review");
+        assert_eq!(bob.helped.len(), 1);
+        assert_eq!(
+            (bob.helped[0].id.as_str(), bob.helped[0].author.as_str()),
+            ("1", "Ann Lee (@ann)")
+        );
+        // Ann's pushes to her own MR are no help to anyone.
+        let ann = analysis.people.iter().find(|p| p.login == "ann").unwrap();
+        assert!(ann.helped.is_empty());
+        assert_eq!(ann.weeks, [0; 8]);
     }
 }

@@ -2326,3 +2326,7 @@ saved view	Restore	恢复
 	Settings › General › Sentinel interval (0 = off)	设置 › 常规 › 哨兵间隔（0 = 关闭）
 	Sentinel interval	哨兵间隔
 	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	两次轻量检查 GitLab 变化之间的秒数（MR、流水线、评论、批准、推送）；只重新读取有变化的内容。0 = 关闭。
+	Reviewed & merged:	已评审并合并：
+	{name}'s MR	{name} 的 MR
+	Helped on	参与协助
+	pushed {time} ago	{time}前推送

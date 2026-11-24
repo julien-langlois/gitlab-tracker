@@ -2326,3 +2326,7 @@ saved view	Restore	Wiederherstellen
 	Settings › General › Sentinel interval (0 = off)	Einstellungen › Allgemein › Wächter-Intervall (0 = aus)
 	Sentinel interval	Wächter-Intervall
 	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	Sekunden zwischen zwei leichten Prüfungen, was sich auf GitLab geändert hat (MRs, Pipelines, Kommentare, Freigaben, Pushes); nur Geändertes wird neu gelesen. 0 = aus.
+	Reviewed & merged:	Reviewt & gemergt:
+	{name}'s MR	MR von {name}
+	Helped on	Mitgeholfen bei
+	pushed {time} ago	vor {time} gepusht

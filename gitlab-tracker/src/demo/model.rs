@@ -47,6 +47,9 @@ pub enum Ev {
     Open,
     /// Commits pushed by the author, and the pipeline they started.
     Push(&'static [&'static str], Ci),
+    /// Commits pushed by someone else than the author (a reviewer finishing
+    /// the work), and the pipeline they started.
+    PushBy(&'static Person, &'static [&'static str], Ci),
     /// The source branch rebased on its target (a force push).
     Rebase(Ci),
     /// A review asked of someone.

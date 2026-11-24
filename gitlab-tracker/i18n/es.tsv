@@ -2326,3 +2326,7 @@ saved view	Restore	Restablecer
 	Settings › General › Sentinel interval (0 = off)	Ajustes › General › Intervalo del centinela (0 = desactivado)
 	Sentinel interval	Intervalo del centinela
 	Seconds between two light checks of what changed on GitLab (MRs, pipelines, comments, approvals, pushes); only what changed is read again. 0 = off.	Segundos entre dos comprobaciones ligeras de lo que cambió en GitLab (MR, pipelines, comentarios, aprobaciones, pushes); solo se vuelve a leer lo que cambió. 0 = desactivado.
+	Reviewed & merged:	Revisadas y fusionadas:
+	{name}'s MR	MR de {name}
+	Helped on	Ha ayudado en
+	pushed {time} ago	push hace {time}

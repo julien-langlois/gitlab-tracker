@@ -12,7 +12,7 @@ use super::widgets::{avatar, card, mono, muted, page_title, split_person};
 use super::{tones, GuiApp, SlotState};
 use crate::app::App;
 use crate::i18n::{tf, tl, tn};
-use crate::models::{GitlabMrState, PipelineState};
+use crate::models::{GitlabMrState, PipelineState, ReviewActivity};
 use crate::snooze::{Snooze, Until};
 use crate::utils::{awaiting_review_by, matches_gitlab_username};
 use gitlab_tracker_core::MergeabilityStatus;
@@ -602,16 +602,71 @@ fn last_working_day(now: chrono::DateTime<chrono::Local>) -> chrono::DateTime<ch
         )
 }
 
-/// My stand-up as text: what I did since the last working day (merged,
-/// reviewed, pushed, opened), what is on today (reviews, fixes, merges) and
-/// what waits on others; across every open tab.
-fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> String {
-    use std::fmt::Write;
-    let since = last_working_day(now);
+/// What I did on an MR since the stand-up's last working day: each MR shows in
+/// one of these only, the first that applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Done {
+    /// Mine, merged (by me or anyone).
+    Merged,
+    /// Someone else's, merged by me: whatever else I did on it, it shows here.
+    ReviewedMerged,
+    /// Mine with new commits, or someone else's I pushed commits to.
+    Pushed,
+    /// Someone else's I commented or approved, without pushing or merging.
+    Reviewed,
+    /// Mine, opened.
+    Opened,
+}
+
+/// Where `mr` goes in `me`'s stand-up, looking back to `since`.
+fn done(
+    mr: &crate::models::TrackedMr,
+    me: &str,
+    since: chrono::DateTime<chrono::Utc>,
+) -> Option<Done> {
     let after = |at: Option<&str>| {
         at.and_then(|a| chrono::DateTime::parse_from_rfc3339(a).ok())
             .is_some_and(|t| t.with_timezone(&chrono::Utc) >= since)
     };
+    let is_me = |who: &str| matches_gitlab_username(who, me) || who == me;
+    let merged = mr.state == GitlabMrState::Merged && after(mr.merged_at.as_deref());
+    let by_me = |map: fn(&ReviewActivity) -> &std::collections::BTreeMap<String, String>| {
+        after(
+            mr.review
+                .as_ref()
+                .and_then(|r| map(r).get(me))
+                .map(String::as_str),
+        )
+    };
+    if is_me(&mr.author) {
+        if merged {
+            Some(Done::Merged)
+        } else if after(mr.created_at.as_deref()) {
+            Some(Done::Opened)
+        } else if mr.state == GitlabMrState::Opened
+            && after(mr.review.as_ref().and_then(|r| r.last_push_at.as_deref()))
+        {
+            Some(Done::Pushed)
+        } else {
+            None
+        }
+    } else if merged && mr.merged_by.as_deref().is_some_and(is_me) {
+        Some(Done::ReviewedMerged)
+    } else if by_me(|r| &r.last_push_by) {
+        Some(Done::Pushed)
+    } else if by_me(|r| &r.last_activity_by) {
+        Some(Done::Reviewed)
+    } else {
+        None
+    }
+}
+
+/// My stand-up as text: what I did since the last working day (merged,
+/// reviewed and merged, pushed, reviewed, opened), what is on today (reviews, fixes, merges) and
+/// what waits on others; across every open tab.
+fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> String {
+    use std::fmt::Write;
+    let since = last_working_day(now);
     let line = |id: &str, title: &str, project: Option<&str>| match project {
         Some(p) => format!("!{id} {title} ({p})"),
         None => format!("!{id} {title}"),
@@ -636,8 +691,8 @@ fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> 
         Some(l) => l.apply(&text),
         None => text,
     };
-    let (mut merged, mut reviewed, mut pushed, mut opened) =
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut merged, mut reviewed_merged, mut pushed, mut reviewed, mut opened) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for (index, slot) in g.tabs.iter().enumerate() {
         let app = match &slot.state {
             SlotState::Active => &g.app,
@@ -653,25 +708,22 @@ fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> 
             .unwrap_or_else(|| app.project_id.clone());
         let project = several.then_some(project.as_str());
         for mr in app.mrs.iter().filter(|mr| !mr.title.is_empty()) {
+            let Some(what) = done(mr, me, since) else {
+                continue;
+            };
+            let mut text = linked(index, line(&mr.id, &mr.title, project));
             let mine = matches_gitlab_username(&mr.author, me) || mr.author == me;
-            let text = linked(index, line(&mr.id, &mr.title, project));
-            if mine {
-                if mr.state == GitlabMrState::Merged && after(mr.merged_at.as_deref()) {
-                    merged.push(text);
-                } else if after(mr.created_at.as_deref()) {
-                    opened.push(text);
-                } else if mr.state == GitlabMrState::Opened
-                    && after(mr.review.as_ref().and_then(|r| r.last_push_at.as_deref()))
-                {
-                    pushed.push(text);
-                }
-            } else if after(
-                mr.review
-                    .as_ref()
-                    .and_then(|r| r.last_activity_by.get(me))
-                    .map(String::as_str),
-            ) {
-                reviewed.push(text);
+            if what == Done::Pushed && !mine {
+                // Pushed to someone else's: say whose.
+                let name = split_person(&mr.author).0;
+                text = format!("{text} — {}", tf("{name}'s MR", &[("name", name)]));
+            }
+            match what {
+                Done::Merged => merged.push(text),
+                Done::ReviewedMerged => reviewed_merged.push(text),
+                Done::Pushed => pushed.push(text),
+                Done::Reviewed => reviewed.push(text),
+                Done::Opened => opened.push(text),
             }
         }
     }
@@ -709,8 +761,9 @@ fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> 
     );
     let done_before = out.len();
     section(&mut out, tl("Merged:"), &merged);
-    section(&mut out, tl("Reviewed:"), &reviewed);
+    section(&mut out, tl("Reviewed & merged:"), &reviewed_merged);
     section(&mut out, tl("Pushed to:"), &pushed);
+    section(&mut out, tl("Reviewed:"), &reviewed);
     section(&mut out, tl("Opened:"), &opened);
     if out.len() == done_before {
         let _ = writeln!(out, "- {}", tl("Nothing on GitLab."));
@@ -1552,6 +1605,49 @@ mod tests {
                 .as_deref()
                 .is_some_and(|b| b.contains("@thomas_db")));
         }
+    }
+
+    #[tokio::test]
+    async fn the_stand_up_puts_each_mr_in_one_section() {
+        let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+        let since = chrono::Utc::now() - chrono::Duration::days(2);
+        let of = |title: &str, me: &str| {
+            let mr = app.mrs.iter().find(|m| m.title.starts_with(title)).unwrap();
+            done(mr, me, since)
+        };
+        // Alex's hotfix: I reviewed and merged it, it shows as merged only.
+        assert_eq!(
+            of("fix(auth): Refresh tokens raced", "thomas_db"),
+            Some(Done::ReviewedMerged)
+        );
+        // Julien's draft: I commented and pushed to it, the push wins.
+        assert_eq!(
+            of("Draft: feat(notif): Mute notifications", "thomas_db"),
+            Some(Done::Pushed)
+        );
+        // Marina's refactor: Julien answered his review with a commit.
+        assert_eq!(
+            of("refactor(api): One module per shipments route", "julien_m"),
+            Some(Done::Pushed)
+        );
+        // My own MR merged: merged, never "reviewed & merged".
+        assert_eq!(
+            of("fix(api): 404, not 500", "thomas_db"),
+            Some(Done::Merged)
+        );
+        // Commented only: reviewed.
+        let mut mute = app
+            .mrs
+            .iter()
+            .find(|m| m.title.starts_with("Draft: feat(notif): Mute"))
+            .unwrap()
+            .clone();
+        mute.review
+            .as_mut()
+            .unwrap()
+            .last_push_by
+            .remove("thomas_db");
+        assert_eq!(done(&mute, "thomas_db", since), Some(Done::Reviewed));
     }
 
     #[test]

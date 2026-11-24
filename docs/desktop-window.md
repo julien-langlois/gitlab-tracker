@@ -219,9 +219,11 @@ failed, conflicts, threads to answer, changes requested), those ready to merge,
 those waiting on others, and the MRs you merged today, whoever wrote them. A
 click shows the MR in its tab; a click on the **Merged today** count lists them
 on the merge requests page (*Merged by me*, merged today). **Copy my stand-up**
-puts what you did since the last working day (merged,
-reviewed, pushed, opened), what is on today and what waits on others in the
-clipboard.
+puts what you did since the last working day, what is on today and what waits
+on others in the clipboard. Each MR shows once, in the first of: **Merged** (yours),
+**Reviewed & merged** (someone else's you merged, whatever else you did on it),
+**Pushed to** (yours with new commits, or someone else's you pushed to, with
+whose it is), **Reviewed** (someone else's you commented or approved), **Opened**.
 
 The moon button of a row **snoozes** the MR: in an hour, tomorrow at 09:00, next
 Monday at 09:00, or until it changes. It leaves Today, the rail's badge and the
@@ -397,8 +399,10 @@ whose owner's account is blocked is flagged: GitLab no longer runs it.
 
 Per person: the reviews waiting on them (red past the review reminder delay),
 their open MRs and what each waits on, the threads they have to answer, how fast
-they answer a review request, and their load; who reviews whom over 7, 30 or 90
-days. The summary and a reminder copy to paste in a chat.
+they answer a review request (a comment, an approval or a pushed commit), and
+their load; who reviews whom over 7, 30 or 90 days. The summary and a reminder
+copy to paste in a chat. The inspector lists the others' open MRs a person
+pushed to (**Helped on**): who already knows an MR, should its author be away.
 
 ![Team: reviews waiting on each person, load, who reviews whom](assets/desktop/team.png)
 

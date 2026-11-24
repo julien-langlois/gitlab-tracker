@@ -1012,6 +1012,8 @@ pub async fn update(State(db): State<Db>, customer: Customer, Json(body): Json<P
             .at(d(3, 11, 1), Push(&["feat(notif): Mute flag on shipments"], Ci::Pass))
             .at(d(2, 17, 0), Push(&["wip: mute from the tracking page"], Ci::Pass))
             .at(d(1, 10, 0), Note(&THOMAS, "scope", None, "Mute per shipment, or per customer too? The preferences MR has the customer level."))
+            // Julien was off: I pushed the customer level myself.
+            .at(d(1, 11, 30), PushBy(&THOMAS, &["feat(notif): Mute per customer too"], Ci::Pass))
             .status(S::Draft),
         MrSpec::new("pkce-verifier", "feat(auth): Keep the PKCE verifier across app restarts", &SARAH)
             .branch("feat/4188-pkce-verifier-store", "feat/4188-oauth-pkce")
@@ -1120,6 +1122,8 @@ pub use list::list;
             .at(d(2, 16, 0), Open)
             .at(d(2, 16, 1), Push(&["refactor(api): One module per shipments route"], Ci::Pass))
             .at(d(2, 16, 5), Ask(&JULIEN))
+            // Julien answered the review with a commit, not a comment.
+            .at(d(1, 14, 0), PushBy(&JULIEN, &["refactor(api): Shared extractors for the shipments routes"], Ci::Pass))
             .at(h(3), Rebase(Ci::Pass))
             .status(S::SyncFailed),
         MrSpec::new("livez-readyz", "chore(ops): Split the health check into /livez and /readyz", &NADIA)

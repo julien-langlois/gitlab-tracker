@@ -1814,7 +1814,13 @@ impl eframe::App for GuiApp {
                 // What a click on Today's "Merged today" opens.
                 Ok("merged") => today::merged_by_me(self, self.active()),
                 Ok("promote") => self.open_page(Page::Promote),
-                Ok("team") => self.open_page(Page::Team),
+                // `GITLAB_TRACKER_GUI_PERSON=<login>` picks them in the inspector.
+                Ok("team") => {
+                    self.open_page(Page::Team);
+                    if let Ok(login) = std::env::var("GITLAB_TRACKER_GUI_PERSON") {
+                        self.team.selected = Some(login);
+                    }
+                }
                 // A person's page: `GITLAB_TRACKER_GUI_PERSON=<login>`, else
                 // the one the team page shows first (the most loaded).
                 Ok("person") => {
