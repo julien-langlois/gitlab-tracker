@@ -1,8 +1,9 @@
 //! Which theme tone and label each MR state, branch cell and effort gets.
 
-use bevel_theme::{Tone, Tones};
+use bevel_theme::{Theme, Tone, Tones};
 use egui::Color32;
 
+use super::colors::{contrast, lerp};
 use crate::branch_flow::Place;
 use crate::i18n::tl;
 use crate::models::{BranchPresence, Effort, GitlabMrState, MergeabilityStatus, PipelineState};
@@ -35,7 +36,9 @@ pub fn status_swatch(kind: StatusKind, tones: &Tones) -> Color32 {
 
 /// The tone of a status: its own hue (see [`StatusKind::rgb`]), as the theme's
 /// tones are made: a tint of it under it on a dark background; on a light one,
-/// darkened over a pale tint.
+/// darkened over a pale tint. The text is then moved toward the theme's text
+/// color as far as needed to read (WCAG AA, 4.5:1) on its tint and on the bare
+/// surfaces it is also drawn on.
 pub fn status_tone(kind: StatusKind, tones: &Tones) -> Tone {
     // The light theme's tones are opaque, the dark one's tints.
     let light = tones.gray.bg.a() == 255;
@@ -43,16 +46,43 @@ pub fn status_tone(kind: StatusKind, tones: &Tones) -> Tone {
     if light {
         let (fr, fg, fb) = kind.rgb_on_light();
         let pale = |c: u8| (255.0 - (255.0 - c as f32) * 0.2) as u8;
+        let bg = Color32::from_rgb(pale(r), pale(g), pale(b));
+        let p = Theme::light().palette;
         Tone {
-            bg: Color32::from_rgb(pale(r), pale(g), pale(b)),
-            fg: Color32::from_rgb(fr, fg, fb),
+            bg,
+            fg: readable(Color32::from_rgb(fr, fg, fb), &[bg, p.content], p.text),
         }
     } else {
+        let bg = Color32::from_rgba_unmultiplied(r, g, b, 41);
+        let p = Theme::dark().palette;
+        // The tint over the lightest surface it lies on: the least contrast.
+        let on_raised = blend(bg, p.raised);
         Tone {
-            bg: Color32::from_rgba_unmultiplied(r, g, b, 41),
-            fg: Color32::from_rgb(r, g, b),
+            bg,
+            fg: readable(Color32::from_rgb(r, g, b), &[on_raised, p.raised], p.text),
         }
     }
+}
+
+/// WCAG AA for normal-size text.
+const AA: f32 = 4.5;
+
+/// `fg`, moved toward `text` in small steps until it reads on every one of
+/// `backgrounds`: as close to its own hue as legibility allows.
+fn readable(fg: Color32, backgrounds: &[Color32], text: Color32) -> Color32 {
+    let reads = |c: Color32| backgrounds.iter().all(|&bg| contrast(c, bg) >= AA);
+    (0..=20)
+        .map(|step| lerp(fg, text, step as f32 * 0.05))
+        .find(|&c| reads(c))
+        .unwrap_or(text)
+}
+
+/// `over` (a translucent tint) composited on the opaque `under`.
+fn blend(over: Color32, under: Color32) -> Color32 {
+    let [r, g, b, a] = over.to_srgba_unmultiplied();
+    let a = f32::from(a) / 255.0;
+    let mix = |o: u8, u: u8| (f32::from(o) * a + f32::from(u) * (1.0 - a)).round() as u8;
+    Color32::from_rgb(mix(r, under.r()), mix(g, under.g()), mix(b, under.b()))
 }
 
 /// Glyph, label and tone of a branch cell (`None`: loading, or `failed`).
@@ -200,5 +230,100 @@ pub fn signature_detail(check: &crate::signatures::CommitCheck) -> String {
         }
         Verdict::BotExempt => tl("From an exempted bot: no signature needed.").into(),
         Verdict::Pending => tl("Being read from GitLab.").into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// bevel-theme 0.1's palette pairs below 4.5:1, to be fixed in bevel itself
+    /// (with text on the selection highlight: muted and accent, both themes).
+    /// The test fails once one is fixed, so the list only shrinks.
+    const KNOWN_IN_BEVEL: &[&str] = &["Dark text_muted on raised", "Light accent on chrome"];
+
+    /// Every text color and tone the window draws reads at WCAG AA (4.5:1) on
+    /// every surface, in both themes, but for [`KNOWN_IN_BEVEL`].
+    #[test]
+    fn text_and_tones_read_at_aa_in_both_themes() {
+        let mut failures = Vec::new();
+        for theme in [Theme::dark(), Theme::light()] {
+            let p = theme.palette;
+            let surfaces = [
+                ("chrome", p.chrome),
+                ("rail", p.rail),
+                ("panel", p.panel),
+                ("content", p.content),
+                ("raised", p.raised),
+                ("input", p.input),
+            ];
+            let texts = [
+                ("text", p.text),
+                ("text_secondary", p.text_secondary),
+                ("text_muted", p.text_muted),
+                ("accent", p.accent),
+            ];
+            let t = theme.tones;
+            let mut tones: Vec<(String, Tone)> = [
+                ("green", t.green),
+                ("purple", t.purple),
+                ("red", t.red),
+                ("amber", t.amber),
+                ("teal", t.teal),
+                ("gray", t.gray),
+                ("blue", t.blue),
+                ("orange", t.orange),
+            ]
+            .into_iter()
+            .map(|(n, tone)| (n.to_string(), tone))
+            .collect();
+            tones.extend(
+                StatusKind::ALL
+                    .iter()
+                    .map(|&k| (format!("status {}", k.name()), status_tone(k, &t))),
+            );
+            let mut check = |what: String, fg: Color32, bg: Color32| {
+                let c = contrast(fg, bg);
+                let what = format!("{:?} {what}", theme.mode);
+                let known = KNOWN_IN_BEVEL.contains(&what.as_str());
+                if (c < AA) != known {
+                    let tag = if known {
+                        "fixed, drop from KNOWN_IN_BEVEL"
+                    } else {
+                        ""
+                    };
+                    failures.push(format!("{what}: {c:.2} {tag}"));
+                }
+            };
+            for (s, bg) in surfaces {
+                for (n, fg) in texts {
+                    check(format!("{n} on {s}"), fg, bg);
+                }
+            }
+            for (s, bg) in [
+                ("content", p.content),
+                ("panel", p.panel),
+                ("raised", p.raised),
+            ] {
+                for (n, tone) in &tones {
+                    check(format!("{n} chip on {s}"), tone.fg, blend(tone.bg, bg));
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "contrast (AA = 4.5:1):\n{}",
+            failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_status_hue_already_legible_is_kept() {
+        let tones = Theme::dark().tones;
+        let (r, g, b) = StatusKind::Mergeable.rgb();
+        assert_eq!(
+            status_tone(StatusKind::Mergeable, &tones).fg,
+            Color32::from_rgb(r, g, b)
+        );
     }
 }

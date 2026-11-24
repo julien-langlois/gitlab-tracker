@@ -50,7 +50,7 @@ fn legible(color: Color32, theme: &Theme) -> Color32 {
     c
 }
 
-fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
+pub(super) fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
     let mix = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
     Color32::from_rgb(mix(a.r(), b.r()), mix(a.g(), b.g()), mix(a.b(), b.b()))
 }
@@ -67,7 +67,7 @@ fn luminance(c: Color32) -> f32 {
     0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
 }
 
-fn contrast(a: Color32, b: Color32) -> f32 {
+pub(super) fn contrast(a: Color32, b: Color32) -> f32 {
     let (la, lb) = (luminance(a), luminance(b));
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
