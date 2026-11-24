@@ -1,0 +1,81 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **A vulnerability? Don't post it here**: see [SECURITY.md](https://github.com/julien-langlois/gitlab-tracker/blob/main/SECURITY.md).
+        Never paste a token. Check logs and screenshots for project names you would rather not share.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Can it be seen with `gitlab-tracker --demo gui`? Say so, it helps a lot.
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: gitlab-tracker version
+      description: Output of `gitlab-tracker --version`
+      placeholder: gitlab-tracker 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options:
+        - .deb
+        - AppImage
+        - .dmg (macOS)
+        - .msi (Windows)
+        - cargo install
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04 (Wayland) / macOS 15 / Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: frontend
+    attributes:
+      label: Where
+      options:
+        - Desktop window
+        - Terminal UI
+        - Command line (checklist, import-state…)
+    validations:
+      required: true
+  - type: input
+    id: gitlab
+    attributes:
+      label: GitLab
+      description: gitlab.com or self-managed, edition (Free / Premium / Ultimate) and version if you know it
+      placeholder: Self-managed CE 18.5, Free
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log or crash report
+      description: |
+        A crash writes `crash-<date>.txt` next to the logs (the next launch says where). For a verbose log, start with `RUST_LOG=info`.
+      render: text
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: For anything visual.

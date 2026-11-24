@@ -1,0 +1,26 @@
+name: Feature request
+description: Something the tracker could tell you, or do better
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Visible changes are agreed on a mockup before any code. The tracker reads GitLab and never writes to it,
+        and it shows what waits on whom, never when or how much people work.
+  - type: textarea
+    id: need
+    attributes:
+      label: The need
+      description: What you are trying to find out or do, and how you do it today (GitLab pages, scripts…).
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: Where it would show (page, panel, terminal), what it would say. A sketch is welcome.
+  - type: input
+    id: gitlab
+    attributes:
+      label: GitLab
+      description: gitlab.com or self-managed, and edition (Free / Premium / Ultimate), since some features depend on it
