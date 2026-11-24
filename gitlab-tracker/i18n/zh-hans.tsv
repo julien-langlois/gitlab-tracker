@@ -2330,3 +2330,20 @@ saved view	Restore	恢复
 	{name}'s MR	{name} 的 MR
 	Helped on	参与协助
 	pushed {time} ago	{time}前推送
+	7 days	7 天
+	GitLab, Mattermost, Teams, Discord	GitLab、Mattermost、Teams、Discord
+	Kept for the next stand-ups	已保存，供下次站会使用
+	Last working day	上一个工作日
+	Links to the MRs and tickets	链接到 MR 和工单
+	No markup, no links	无格式、无链接
+	Once you have copied a stand-up	复制过一次站会后可用
+	Pick the period, the sections and the format	选择时间段、部分和格式
+	Plain text	纯文本
+	Reset	重置
+	Since the last copy	自上次复制以来
+	Slack	Slack
+	Slack's own bold and links	Slack 专用的粗体和链接
+	Stand-up	站会
+	What I did	我做了什么
+	Last copied {when}	上次复制于 {when}
+	last copied {time} ago	{time}前复制

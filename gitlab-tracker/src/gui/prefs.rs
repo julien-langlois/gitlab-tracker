@@ -24,6 +24,8 @@ pub struct Prefs {
     pub folded_sections: Vec<String>,
     /// The export's format and options, for the next export and its shortcut.
     pub export: super::export::Settings,
+    /// How the stand-up is written, and when it was last copied.
+    pub standup: super::standup::Settings,
     /// Inner size in points.
     pub window: Option<[f32; 2]>,
     /// The projects open in tabs, in order.
@@ -119,6 +121,7 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     g.hide_next_column = prefs.hide_next_column;
     g.flow_cells = !prefs.branch_columns;
     g.export.settings = prefs.export;
+    g.standup = prefs.standup;
     *super::widgets::folded_sections() = prefs.folded_sections.iter().cloned().collect();
 }
 
@@ -135,6 +138,7 @@ pub fn current(g: &GuiApp) -> Prefs {
         branch_columns: !g.flow_cells,
         folded_sections: super::widgets::folded_sections().iter().cloned().collect(),
         export: g.export.settings,
+        standup: g.standup,
         window: g.window_size.map(|s| [s.x, s.y]),
         tabs: g
             .tabs
@@ -165,6 +169,12 @@ mod tests {
             branch_columns: false,
             folded_sections: vec!["History".into()],
             export: super::super::export::Settings::default(),
+            standup: super::super::standup::Settings {
+                period: super::super::standup::Period::Week,
+                hidden: 3,
+                last_copied: Some(1_764_000_000),
+                ..Default::default()
+            },
             window: Some([1600.0, 1000.0]),
             tabs: vec![SavedTab {
                 url: "https://g.io".into(),
@@ -176,6 +186,7 @@ mod tests {
         assert_eq!(back.page.as_deref(), Some("cockpit"));
         assert_eq!(back.window, Some([1600.0, 1000.0]));
         assert_eq!(back.tabs, prefs.tabs);
+        assert_eq!(back.standup, prefs.standup);
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());

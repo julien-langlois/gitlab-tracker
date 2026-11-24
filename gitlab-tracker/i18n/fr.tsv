@@ -2330,3 +2330,20 @@ saved view	Restore	Rétablir
 	{name}'s MR	MR de {name}
 	Helped on	A aidé sur
 	pushed {time} ago	a poussé il y a {time}
+	7 days	7 jours
+	GitLab, Mattermost, Teams, Discord	GitLab, Mattermost, Teams, Discord
+	Kept for the next stand-ups	Gardé pour les prochains stand-ups
+	Last working day	Dernier jour ouvré
+	Links to the MRs and tickets	Liens vers les MR et les tickets
+	No markup, no links	Sans mise en forme ni liens
+	Once you have copied a stand-up	Une fois un stand-up copié
+	Pick the period, the sections and the format	Choisir la période, les sections et le format
+	Plain text	Texte brut
+	Reset	Réinitialiser
+	Since the last copy	Depuis la dernière copie
+	Slack	Slack
+	Slack's own bold and links	Le gras et les liens propres à Slack
+	Stand-up	Stand-up
+	What I did	Ce que j'ai fait
+	Last copied {when}	Dernière copie le {when}
+	last copied {time} ago	copié il y a {time}

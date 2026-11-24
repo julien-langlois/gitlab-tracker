@@ -12,7 +12,7 @@ use super::widgets::{avatar, card, mono, muted, page_title, split_person};
 use super::{tones, GuiApp, SlotState};
 use crate::app::App;
 use crate::i18n::{tf, tl, tn};
-use crate::models::{GitlabMrState, PipelineState, ReviewActivity};
+use crate::models::{GitlabMrState, PipelineState};
 use crate::snooze::{Snooze, Until};
 use crate::utils::{awaiting_review_by, matches_gitlab_username};
 use gitlab_tracker_core::MergeabilityStatus;
@@ -346,30 +346,14 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             &[("n", &projects.to_string()), ("user", &who)],
         )
     };
-    let mut standup_copied = false;
     ui.horizontal(|ui| {
         page_title(ui, &theme, tl("Today"), subtitle);
         if !users.is_empty() {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                standup_copied = super::widgets::button(
-                    ui,
-                    &theme,
-                    Some(super::icons::Icon::Copy),
-                    tl("Copy my stand-up"),
-                    false,
-                )
-                .tip(tl(
-                    "What you did since the last working day, what is on today, and what waits on others, as text for the daily meeting",
-                ))
-                .clicked();
+                super::standup::button(g, ui, &items);
             });
         }
     });
-    if standup_copied {
-        ui.ctx().copy_text(standup(g, &items, chrono::Local::now()));
-        g.app
-            .flash(tl("Stand-up copied: paste it in the team's chat"), false);
-    }
     ui.add_space(14.0);
 
     // A deploy freeze of the open project, holding or about to.
@@ -582,225 +566,6 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         }
         None => {}
     }
-}
-
-/// Where the stand-up's "since" starts: the last working day, at midnight
-/// (Friday on a Monday, else yesterday).
-fn last_working_day(now: chrono::DateTime<chrono::Local>) -> chrono::DateTime<chrono::Utc> {
-    use chrono::{Datelike, Weekday};
-    let back = match now.weekday() {
-        Weekday::Mon => 3,
-        Weekday::Sun => 2,
-        _ => 1,
-    };
-    let day = now.date_naive() - chrono::Duration::days(back);
-    day.and_hms_opt(0, 0, 0)
-        .and_then(|t| t.and_local_timezone(chrono::Local).earliest())
-        .map_or_else(
-            || now.with_timezone(&chrono::Utc) - chrono::Duration::days(back),
-            |t| t.with_timezone(&chrono::Utc),
-        )
-}
-
-/// What I did on an MR since the stand-up's last working day: each MR shows in
-/// one of these only, the first that applies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Done {
-    /// Mine, merged (by me or anyone).
-    Merged,
-    /// Someone else's, merged by me: whatever else I did on it, it shows here.
-    ReviewedMerged,
-    /// Mine with new commits, or someone else's I pushed commits to.
-    Pushed,
-    /// Someone else's I commented or approved, without pushing or merging.
-    Reviewed,
-    /// Mine, opened.
-    Opened,
-}
-
-/// Where `mr` goes in `me`'s stand-up, looking back to `since`.
-fn done(
-    mr: &crate::models::TrackedMr,
-    me: &str,
-    since: chrono::DateTime<chrono::Utc>,
-) -> Option<Done> {
-    let after = |at: Option<&str>| {
-        at.and_then(|a| chrono::DateTime::parse_from_rfc3339(a).ok())
-            .is_some_and(|t| t.with_timezone(&chrono::Utc) >= since)
-    };
-    let is_me = |who: &str| matches_gitlab_username(who, me) || who == me;
-    let merged = mr.state == GitlabMrState::Merged && after(mr.merged_at.as_deref());
-    let by_me = |map: fn(&ReviewActivity) -> &std::collections::BTreeMap<String, String>| {
-        after(
-            mr.review
-                .as_ref()
-                .and_then(|r| map(r).get(me))
-                .map(String::as_str),
-        )
-    };
-    if is_me(&mr.author) {
-        if merged {
-            Some(Done::Merged)
-        } else if after(mr.created_at.as_deref()) {
-            Some(Done::Opened)
-        } else if mr.state == GitlabMrState::Opened
-            && after(mr.review.as_ref().and_then(|r| r.last_push_at.as_deref()))
-        {
-            Some(Done::Pushed)
-        } else {
-            None
-        }
-    } else if merged && mr.merged_by.as_deref().is_some_and(is_me) {
-        Some(Done::ReviewedMerged)
-    } else if by_me(|r| &r.last_push_by) {
-        Some(Done::Pushed)
-    } else if by_me(|r| &r.last_activity_by) {
-        Some(Done::Reviewed)
-    } else {
-        None
-    }
-}
-
-/// My stand-up as text: what I did since the last working day (merged,
-/// reviewed and merged, pushed, reviewed, opened), what is on today (reviews, fixes, merges) and
-/// what waits on others; across every open tab.
-fn standup(g: &GuiApp, items: &[Item], now: chrono::DateTime<chrono::Local>) -> String {
-    use std::fmt::Write;
-    let since = last_working_day(now);
-    let line = |id: &str, title: &str, project: Option<&str>| match project {
-        Some(p) => format!("!{id} {title} ({p})"),
-        None => format!("!{id} {title}"),
-    };
-    let several = g
-        .tabs
-        .iter()
-        .filter(|t| matches!(t.state, SlotState::Active | SlotState::Parked(_)))
-        .count()
-        > 1;
-    // Each tab's links: its MRs and tickets, clickable once pasted.
-    let links: Vec<Option<super::board::Links>> = g
-        .tabs
-        .iter()
-        .map(|slot| match &slot.state {
-            SlotState::Active => Some(super::board::Links::of(&g.app)),
-            SlotState::Parked(tab) => Some(super::board::Links::of(&tab.app)),
-            _ => None,
-        })
-        .collect();
-    let linked = |tab: usize, text: String| match links.get(tab).and_then(Option::as_ref) {
-        Some(l) => l.apply(&text),
-        None => text,
-    };
-    let (mut merged, mut reviewed_merged, mut pushed, mut reviewed, mut opened) =
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
-    for (index, slot) in g.tabs.iter().enumerate() {
-        let app = match &slot.state {
-            SlotState::Active => &g.app,
-            SlotState::Parked(tab) => &tab.app,
-            _ => continue,
-        };
-        let Some(me) = app.config.gitlab_username.as_deref() else {
-            continue;
-        };
-        let project = app
-            .project_name
-            .clone()
-            .unwrap_or_else(|| app.project_id.clone());
-        let project = several.then_some(project.as_str());
-        for mr in app.mrs.iter().filter(|mr| !mr.title.is_empty()) {
-            let Some(what) = done(mr, me, since) else {
-                continue;
-            };
-            let mut text = linked(index, line(&mr.id, &mr.title, project));
-            let mine = matches_gitlab_username(&mr.author, me) || mr.author == me;
-            if what == Done::Pushed && !mine {
-                // Pushed to someone else's: say whose.
-                let name = split_person(&mr.author).0;
-                text = format!("{text} — {}", tf("{name}'s MR", &[("name", name)]));
-            }
-            match what {
-                Done::Merged => merged.push(text),
-                Done::ReviewedMerged => reviewed_merged.push(text),
-                Done::Pushed => pushed.push(text),
-                Done::Reviewed => reviewed.push(text),
-                Done::Opened => opened.push(text),
-            }
-        }
-    }
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "**{}**",
-        tf(
-            "Stand-up · {date}",
-            &[("date", &now.format("%Y-%m-%d").to_string())]
-        )
-    );
-    let section = |out: &mut String, title: &str, lines: &[String]| {
-        if lines.is_empty() {
-            return;
-        }
-        let _ = writeln!(out, "{title}");
-        for l in lines {
-            let _ = writeln!(out, "- {l}");
-        }
-    };
-    let _ = writeln!(
-        out,
-        "\n_{}_",
-        tf(
-            "Since {day}",
-            &[(
-                "day",
-                &since
-                    .with_timezone(&chrono::Local)
-                    .format("%Y-%m-%d")
-                    .to_string()
-            )]
-        )
-    );
-    let done_before = out.len();
-    section(&mut out, tl("Merged:"), &merged);
-    section(&mut out, tl("Reviewed & merged:"), &reviewed_merged);
-    section(&mut out, tl("Pushed to:"), &pushed);
-    section(&mut out, tl("Reviewed:"), &reviewed);
-    section(&mut out, tl("Opened:"), &opened);
-    if out.len() == done_before {
-        let _ = writeln!(out, "- {}", tl("Nothing on GitLab."));
-    }
-    let _ = writeln!(out, "\n_{}_", tl("Today"));
-    let today_before = out.len();
-    let with_reasons = |kind: Kind| -> Vec<String> {
-        items
-            .iter()
-            .filter(|i| i.kind == kind)
-            .map(|i| {
-                let base = linked(
-                    i.tab,
-                    line(&i.id, &i.title, several.then_some(i.project.as_str())),
-                );
-                if i.reasons.is_empty() {
-                    base
-                } else {
-                    format!("{base} — {}", i.reasons.join(", "))
-                }
-            })
-            .collect()
-    };
-    section(&mut out, tl("To review:"), &with_reasons(Kind::Review));
-    section(&mut out, tl("To fix:"), &with_reasons(Kind::Fix));
-    section(&mut out, tl("To merge:"), &with_reasons(Kind::Ready));
-    if out.len() == today_before {
-        let _ = writeln!(out, "- {}", tl("Nothing waits for me."));
-    }
-    let waiting = with_reasons(Kind::Waiting);
-    if !waiting.is_empty() {
-        let _ = writeln!(out, "\n_{}_", tl("Waiting on others"));
-        for l in waiting {
-            let _ = writeln!(out, "- {l}");
-        }
-    }
-    out
 }
 
 /// A line of the feed: about which MR (and tab), what, when.
@@ -1605,69 +1370,5 @@ mod tests {
                 .as_deref()
                 .is_some_and(|b| b.contains("@thomas_db")));
         }
-    }
-
-    #[tokio::test]
-    async fn the_stand_up_puts_each_mr_in_one_section() {
-        let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
-        let since = chrono::Utc::now() - chrono::Duration::days(2);
-        let of = |title: &str, me: &str| {
-            let mr = app.mrs.iter().find(|m| m.title.starts_with(title)).unwrap();
-            done(mr, me, since)
-        };
-        // Alex's hotfix: I reviewed and merged it, it shows as merged only.
-        assert_eq!(
-            of("fix(auth): Refresh tokens raced", "thomas_db"),
-            Some(Done::ReviewedMerged)
-        );
-        // Julien's draft: I commented and pushed to it, the push wins.
-        assert_eq!(
-            of("Draft: feat(notif): Mute notifications", "thomas_db"),
-            Some(Done::Pushed)
-        );
-        // Marina's refactor: Julien answered his review with a commit.
-        assert_eq!(
-            of("refactor(api): One module per shipments route", "julien_m"),
-            Some(Done::Pushed)
-        );
-        // My own MR merged: merged, never "reviewed & merged".
-        assert_eq!(
-            of("fix(api): 404, not 500", "thomas_db"),
-            Some(Done::Merged)
-        );
-        // Commented only: reviewed.
-        let mut mute = app
-            .mrs
-            .iter()
-            .find(|m| m.title.starts_with("Draft: feat(notif): Mute"))
-            .unwrap()
-            .clone();
-        mute.review
-            .as_mut()
-            .unwrap()
-            .last_push_by
-            .remove("thomas_db");
-        assert_eq!(done(&mute, "thomas_db", since), Some(Done::Reviewed));
-    }
-
-    #[test]
-    fn the_stand_up_looks_back_to_the_last_working_day() {
-        use chrono::TimeZone;
-        let at = |y, m, d| {
-            chrono::Local
-                .with_ymd_and_hms(y, m, d, 9, 30, 0)
-                .earliest()
-                .unwrap()
-        };
-        let day = |t: chrono::DateTime<chrono::Utc>| t.with_timezone(&chrono::Local).date_naive();
-        // Monday 2026-11-09 → Friday; Wednesday → Tuesday.
-        assert_eq!(
-            day(last_working_day(at(2026, 11, 9))),
-            chrono::NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
-        );
-        assert_eq!(
-            day(last_working_day(at(2026, 11, 11))),
-            chrono::NaiveDate::from_ymd_opt(2026, 11, 10).unwrap()
-        );
     }
 }

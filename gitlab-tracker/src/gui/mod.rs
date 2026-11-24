@@ -51,6 +51,7 @@ mod setup;
 mod shell;
 mod sidebar;
 mod stacks;
+mod standup;
 #[cfg(feature = "stats")]
 mod stats;
 mod table;
@@ -460,6 +461,8 @@ struct GuiApp {
     queues: Vec<merge_queue::Queue>,
     /// The export's choices, and a save under way.
     export: export::State,
+    /// How the stand-up is written.
+    standup: standup::Settings,
     bell_open: bool,
     /// The URLs of the desktop notifications clicked: the window shows their MR.
     clicks: std::sync::mpsc::Receiver<String>,
@@ -629,6 +632,7 @@ impl GuiApp {
             schedule_seen: schedules::Seen::new(),
             queues: Vec::new(),
             export: export::State::default(),
+            standup: standup::Settings::default(),
             bell_open: false,
             compact: false,
             hide_next_column: false,
@@ -1811,6 +1815,8 @@ impl eframe::App for GuiApp {
                 Ok("cockpit") => self.open_page(Page::Cockpit),
                 Ok("tracker") => self.open_page(Page::Tracker),
                 Ok("today") => self.open_page(Page::Today),
+                // Today with the stand-up's panel open.
+                Ok("standup") => self.open_page(Page::Today),
                 // What a click on Today's "Merged today" opens.
                 Ok("merged") => today::merged_by_me(self, self.active()),
                 Ok("promote") => self.open_page(Page::Promote),

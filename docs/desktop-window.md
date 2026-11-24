@@ -223,7 +223,10 @@ puts what you did since the last working day, what is on today and what waits
 on others in the clipboard. Each MR shows once, in the first of: **Merged** (yours),
 **Reviewed & merged** (someone else's you merged, whatever else you did on it),
 **Pushed to** (yours with new commits, or someone else's you pushed to, with
-whose it is), **Reviewed** (someone else's you commented or approved), **Opened**.
+whose it is), **Reviewed** (someone else's you commented or approved), **Opened**. Its **▾** opens a panel to pick the period (last
+working day, 24 h, 7 days, since the last copy), the sections and the format
+(Markdown, Slack, plain text, with or without links), with a preview of what the
+chat will show; the choices are kept for the next copies.
 
 The moon button of a row **snoozes** the MR: in an hour, tomorrow at 09:00, next
 Monday at 09:00, or until it changes. It leaves Today, the rail's badge and the
