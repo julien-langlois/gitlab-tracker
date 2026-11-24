@@ -181,6 +181,50 @@ jobs:
           path: dist/*
           retention-days: 7
 
+  # The SBOM (CycloneDX JSON) of the shipped binary: every crate built into it,
+  # with versions, licences and checksums, as built (--all-features, no build
+  # dependencies). One file for all targets; attached to the release.
+  sbom:
+    name: SBOM
+    needs: github-release
+    if: ${{ !cancelled() && needs.github-release.result != 'failure' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked --version 0.5.10
+
+      # cargo-cyclonedx writes one file per workspace member: only the binary's ships.
+      - name: Generate SBOM
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version="$GITHUB_REF_NAME"
+          else version="v$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)-rehearsal"; fi
+          cargo cyclonedx --all-features --no-build-deps --format json \
+            --override-filename "gitlab-tracker-${version}.cdx"
+          mkdir dist
+          mv "gitlab-tracker/gitlab-tracker-${version}.cdx.json" dist/
+          (cd dist && sha256sum * > "gitlab-tracker-${version}.cdx.json.sha256")
+
+      - name: Upload SBOM
+        if: ${{ !env.ACT && github.ref_type == 'tag' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload rehearsal SBOM
+        if: ${{ !env.ACT && github.ref_type != 'tag' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitlab-tracker-sbom
+          path: dist/*
+          retention-days: 7
+
   # Last: a version on crates.io can never be replaced, so it is published only
   # once every target has built.
   publish-crates:
