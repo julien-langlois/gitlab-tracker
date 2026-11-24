@@ -200,6 +200,15 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── cli.rs           # clap arguments (--demo, --project) and subcommands (tracker-statuses)
     ├── app.rs           # App state and its types (UiLayout, filters, panes); behaviour in app/
     ├── app/
+    │   ├── events.rs         # apply_event: one arm per AppEvent
+    │   ├── refresh.rs        # Startup restore, fetch completion, refresh cycles, discovery, API estimates
+    │   ├── branches.rs       # Branch scans and presence, flow rows, signed-commit checks
+    │   ├── ticks.rs          # The 1 s tick: countdowns, sentinel, flash messages
+    │   ├── session.rs        # "Since last session" summary
+    │   ├── filters.rs        # Visible list: filters, search ranking, status picks, milestone suggestions
+    │   ├── selection.rs      # Selection, row navigation, sort
+    │   ├── clipboard.rs      # Clone command, Markdown checklist
+    │   ├── tests.rs          # App tests (test_app / app_with_mrs shared with other modules)
     │   ├── mr_changes.rs     # Change detection on MR loads → log + desktop notifications
     │   ├── tracker_sync.rs   # Linked-ticket fetches, status transitions, TimeLog cache
     │   ├── stats_recorder.rs # Stats snapshots on MR loads (feature `stats`)
@@ -216,7 +225,8 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── utils.rs         # Fuzzy matching, git clone command, terminal restore
     ├── demo.rs          # Demo mode (--demo): mock data through the real key handler, read-only
     ├── actions.rs       # Action + dispatch: what the user asks for, shared by the TUI and the window
-    ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions
+    ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions;
+    │                    # large pages are a file + a folder of their parts (mr_page/, table/, delivery/)
     ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
     ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
