@@ -309,6 +309,7 @@ pub fn fetch_errors(g: &mut GuiApp, ui: &mut Ui) {
 fn bar_button(ui: &mut Ui, theme: &Theme, width: f32, label: &str, icon: Icon) -> egui::Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(width, TITLE_BAR_HEIGHT - 1.0), Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
     let color = if response.hovered() {
         ui.painter().rect_filled(rect, 0.0, theme.palette.raised);
         theme.palette.text
@@ -409,6 +410,9 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
             TITLE_BAR_HEIGHT - 1.0
         };
         let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::Role::Tab, ui.is_enabled(), view.active, &view.name)
+        });
         let hovered = response.hovered();
         let painter = ui.painter();
         let border = Stroke::new(1.0, theme.palette.border);
@@ -458,13 +462,15 @@ fn project_tabs(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         );
         let mut close_clicked = false;
         if closable && (hovered || view.active || ui.rect_contains_pointer(close_rect)) {
-            let close_response = ui
-                .interact(
-                    close_rect,
-                    ui.scope_id().with(("close_tab", index)),
-                    Sense::click(),
-                )
-                .tip(tl("Close the tab"));
+            let close_response = ui.interact(
+                close_rect,
+                ui.scope_id().with(("close_tab", index)),
+                Sense::click(),
+            );
+            close_response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Button, true, tl("Close the tab"))
+            });
+            let close_response = close_response.tip(tl("Close the tab"));
             if close_response.hovered() {
                 ui.painter()
                     .rect_filled(close_rect, CornerRadius::same(4), theme.palette.border);
@@ -1093,8 +1099,15 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     if let Some((_, tone, what)) = &badge {
                         hint = hint.dot(tone.fg, what.as_str());
                     }
-                    let response =
-                        rail_item(ui, &theme, icon, label, size.height(), page == target);
+                    let response = rail_item(
+                        ui,
+                        &theme,
+                        icon,
+                        label,
+                        items_label(target),
+                        size.height(),
+                        page == target,
+                    );
                     if let Some((n, tone, _)) = badge {
                         rail_badge(ui, &theme, response.rect, n, tone);
                     }
@@ -1103,15 +1116,31 @@ fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     }
                 }
                 ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
-                    if rail_item(ui, &theme, Icon::Settings, None, 34.0, false)
-                        .tip(tl("Settings (,)"))
-                        .clicked()
+                    if rail_item(
+                        ui,
+                        &theme,
+                        Icon::Settings,
+                        None,
+                        tl("Settings"),
+                        34.0,
+                        false,
+                    )
+                    .tip(tl("Settings (,)"))
+                    .clicked()
                     {
                         g.pending.push(Action::OpenSettings);
                     }
-                    if rail_item(ui, &theme, Icon::Help, None, 34.0, false)
-                        .tip(tl("Keyboard shortcuts (?)"))
-                        .clicked()
+                    if rail_item(
+                        ui,
+                        &theme,
+                        Icon::Help,
+                        None,
+                        tl("Keyboard shortcuts"),
+                        34.0,
+                        false,
+                    )
+                    .tip(tl("Keyboard shortcuts (?)"))
+                    .clicked()
                     {
                         g.app.input_mode = InputMode::Help;
                     }
@@ -1224,15 +1253,21 @@ fn items_label(page: Page) -> &'static str {
 }
 
 /// A rail entry: an icon over a short caption, highlighted when `active`.
+/// An entry of the icon rail. `name` is what a screen reader announces, the
+/// caption being hidden on a short window.
 fn rail_item(
     ui: &mut Ui,
     theme: &Theme,
     icon: Icon,
     label: Option<&str>,
+    name: &str,
     height: f32,
     active: bool,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::new(40.0, height), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), active, name)
+    });
     let p = &theme.palette;
     let (fill, color) = if active {
         (p.rail_active, p.accent)

@@ -166,3 +166,93 @@ async fn a_narrow_window_draws_every_page_too() {
         }
     });
 }
+
+/// What a screen reader would announce as a nameless control: a node that
+/// takes a click (or focus) but has neither a label nor a value. Per page,
+/// with its role and where it is drawn.
+fn nameless_controls(harness: &Harness<'_, GuiApp>) -> Vec<String> {
+    use egui::accesskit::{Action, Role};
+    use egui_kittest::kittest::{by, NodeT};
+    harness
+        .query_all(by().predicate(move |n| {
+            let d = n.data();
+            let interactive = d.supports_action(Action::Click);
+            let named = n.label().is_some_and(|l| !l.trim().is_empty())
+                || n.value().is_some_and(|v| !v.trim().is_empty());
+            interactive && !named && !n.is_hidden() && n.role() != Role::Window
+        }))
+        .map(|node| {
+            let n = node.accesskit_node();
+            let at = n.bounding_box().map(|r| (r.x0 as i32, r.y0 as i32));
+            format!("{:?} at {at:?}", n.role())
+        })
+        .collect()
+}
+
+/// Every page's nameless controls, with those of the shell (on every page:
+/// rail, title bar, tabs) apart.
+fn nameless_audit(harness: &mut Harness<'_, GuiApp>) -> (Vec<String>, Vec<(Page, Vec<String>)>) {
+    let per_page: Vec<(Page, Vec<String>)> = PAGES
+        .iter()
+        .map(|&page| {
+            show(harness, page);
+            (page, nameless_controls(harness))
+        })
+        .collect();
+    let shell: Vec<String> = per_page[0]
+        .1
+        .iter()
+        .filter(|c| per_page.iter().all(|(_, cs)| cs.contains(c)))
+        .cloned()
+        .collect();
+    let per_page = per_page
+        .into_iter()
+        .map(|(page, cs)| {
+            (
+                page,
+                cs.into_iter().filter(|c| !shell.contains(c)).collect(),
+            )
+        })
+        .collect();
+    (shell, per_page)
+}
+
+/// A screen reader names every control of the shell: the rail's pages, the
+/// title bar's buttons, the project tabs.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_shell_names_every_control_for_a_screen_reader() {
+    let launch = demo_launch().await;
+    tokio::task::block_in_place(|| {
+        let mut harness = harness(launch);
+        harness.run_steps(10);
+        let (shell, _) = nameless_audit(&mut harness);
+        assert!(
+            shell.is_empty(),
+            "nameless controls in the shell:\n{}",
+            shell.join("\n")
+        );
+    });
+}
+
+/// The screen-reader report of the pages' own controls (rows, chips, cards):
+/// `cargo test --all-features nameless_controls_per_page -- --ignored --nocapture`.
+/// A report, not a gate yet: most list rows have no accessible name so far.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn nameless_controls_per_page() {
+    let launch = demo_launch().await;
+    tokio::task::block_in_place(|| {
+        let mut harness = harness(launch);
+        harness.run_steps(10);
+        let (shell, per_page) = nameless_audit(&mut harness);
+        let mut total = shell.len();
+        for (page, controls) in &per_page {
+            total += controls.len();
+            println!("{page:?}: {}", controls.len());
+            for c in controls.iter().take(4) {
+                println!("    {c}");
+            }
+        }
+        println!("total: {total}");
+    });
+}
