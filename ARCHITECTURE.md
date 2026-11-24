@@ -13,6 +13,12 @@ No code outside of `app::apply_event` is allowed to mutate `app.mrs` directly.
 
 | Module | Role |
 | :--- | :--- |
+| `app/events.rs` | `apply_event` itself: one arm per `AppEvent` |
+| `app/refresh.rs` | Startup restore, fetch completion, refresh cycles, discovery, API call estimates |
+| `app/branches.rs` | Branch scans and presence, flow rows, signed-commit checks |
+| `app/ticks.rs` | The 1 s tick: countdowns, sentinel, flash messages |
+| `app/session.rs` | The "since last session" summary |
+| `app/filters.rs` · `app/selection.rs` · `app/clipboard.rs` | The visible list (filters, search, status picks) · selection, navigation, sort · clipboard actions |
 | `app/mr_changes.rs` | Change detection on MR loads (branches, `updated_at`, mergeability, milestone, complexity) → log + notifications |
 | `app/tracker_sync.rs` | Linked-ticket fetches, automatic status transitions, TimeLog cache |
 | `app/stats_recorder.rs` | Stats snapshots on MR loads (`stats` feature) |
@@ -192,7 +198,7 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
 └── src/
     ├── main.rs          # Entry point: logging, config, project, token, provider wiring, event loop
     ├── cli.rs           # clap arguments (--demo, --project) and subcommands (tracker-statuses)
-    ├── app.rs           # App state, apply_event dispatcher, navigation, sort, filters, UiLayout
+    ├── app.rs           # App state and its types (UiLayout, filters, panes); behaviour in app/
     ├── app/
     │   ├── mr_changes.rs     # Change detection on MR loads → log + desktop notifications
     │   ├── tracker_sync.rs   # Linked-ticket fetches, status transitions, TimeLog cache
