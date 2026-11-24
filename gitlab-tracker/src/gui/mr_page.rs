@@ -2722,14 +2722,15 @@ fn people(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&PageData>) {
     });
     ui.horizontal(|ui| {
         caption(ui, tl("Reviewers"));
-        ui.spacing_mut().item_spacing.x = 4.0;
         if mr.reviewers.is_empty() {
             ui.label(muted(&theme, tl("None")));
         }
-        // One reviewer by name; more as avatars, names on hover.
+        // One reviewer by name, spaced as the rows around; more as avatars
+        // drawn closer, names on hover.
         if mr.reviewers.len() == 1 {
             person(ui, &mr.reviewers[0]);
         } else {
+            ui.spacing_mut().item_spacing.x = 4.0;
             for reviewer in &mr.reviewers {
                 let (name, _) = split_person(reviewer);
                 let approved = mr
