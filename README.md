@@ -10,6 +10,13 @@
 
 ![The merge requests page: views and filters, each MR with its next step and its presence on every branch, the inspector](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/docs/assets/desktop/merge-requests.png)
 
+<details>
+<summary>A tour of the window, on the demo data (animated, 3 MB)</summary>
+
+![The window's pages one after the other: merge requests, cockpit, tracker, statistics, settings, shortcuts, the board, the palette](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/gui.gif)
+
+</details>
+
 ## ✨ Key Features
 
 * 🔍 **Branch presence** — on which branch each MR landed, even cherry-picked, rebased or partly copied.

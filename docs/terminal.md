@@ -6,6 +6,8 @@ the keyboard — for those who live in a terminal or work over SSH. It shares th
 keyring. Installation, the first run and the configuration are in the
 [main README](https://github.com/julien-langlois/gitlab-tracker/blob/main/README.md).
 
+![The terminal UI on the demo data: the inspector, an MR's pipelines, sorting, flags, the filter and column pickers](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/assets/demo.gif)
+
 - [Branch presence](#branch-presence)
 - [MR table](#mr-table)
 - [Flags and filters](#flags-and-filters)
