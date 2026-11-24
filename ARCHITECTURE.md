@@ -178,7 +178,10 @@ the recording never saw or on a reading that changed. A change that adds or
 alters a request records the instances again: `gitlab.com` with the recorder
 (top of `contract.rs`), the GitLab CE versions with
 `scripts/record-gitlab-ce.sh <version>` or the **Record GitLab CE** workflow
-(Docker, ~6 GB of memory).
+(Docker, ~6 GB of memory). The fixture is named after the version that
+answered (`gitlab-ce-19.6`). Recorded: gitlab.com, the current GitLab CE minor
+and the last minor of the previous major (self-managed instances lag behind);
+a new major adds its fixture and retires the oldest one.
 
 ---
 

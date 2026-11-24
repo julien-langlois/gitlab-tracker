@@ -1,0 +1,411 @@
+{
+  "branches": {
+    "main": {
+      "cherry_picked_from": 0,
+      "commits": 4,
+      "fingerprints": 4
+    },
+    "production": {
+      "cherry_picked_from": 0,
+      "commits": 2,
+      "fingerprints": 2
+    },
+    "staging": {
+      "cherry_picked_from": 1,
+      "commits": 3,
+      "fingerprints": 3
+    }
+  },
+  "discovered": 3,
+  "labels": [
+    "bug",
+    "feature"
+  ],
+  "milestones": [
+    "v1.0"
+  ],
+  "mrs": {
+    "1": {
+      "branches": [
+        "main"
+      ],
+      "data": {
+        "approved_by": [
+          "user-1"
+        ],
+        "approvers": [
+          "User 1 (@user-1)"
+        ],
+        "assignee": null,
+        "author": "User 1 (@user-1)",
+        "commits": [
+          {
+            "author_name": "User 2",
+            "fingerprint": {
+              "author_email": "user-2@example.com",
+              "authored_at": 1795527561,
+              "title": "fix: the login keeps the session"
+            },
+            "sha": "50b64db39bb111d9327c7620c7de51e9befb6945"
+          }
+        ],
+        "created_at": "2026-11-24T13:39:21.696Z",
+        "description": "",
+        "diff_stats": {
+          "additions": 1,
+          "commits_behind": null,
+          "commits_count": 1,
+          "deletions": 0,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1,
+                  1
+                ]
+              ],
+              "new_file": true,
+              "path": "fix-login.txt"
+            }
+          ],
+          "files_changed": 1,
+          "files_listed": true
+        },
+        "labels": [
+          "bug"
+        ],
+        "landed_fingerprint": {
+          "author_email": "user-2@example.com",
+          "authored_at": 1795527569,
+          "title": "Merge branch 'fix-login' into 'main"
+        },
+        "merged_at": "2026-11-24T13:39:29.294Z",
+        "merged_by": "User 1 (@user-1)",
+        "milestone": "v1.0",
+        "milestone_description": null,
+        "milestone_due_date": "2026-12-08",
+        "milestone_events": [
+          {
+            "added": true,
+            "at": "2026-11-24T13:39:21.736Z",
+            "by": "User 1 (@user-1)",
+            "milestone": "v1.0"
+          }
+        ],
+        "notes_seen": 0,
+        "pipelines": [
+          {
+            "created_at": "2026-11-24T13:39:24Z",
+            "id": 5,
+            "jobs": [
+              {
+                "duration": 0.0,
+                "id": 9,
+                "name": "unit",
+                "queued_duration": 19.356598,
+                "stage": "test",
+                "status": "failed"
+              },
+              {
+                "duration": null,
+                "id": 10,
+                "name": "build",
+                "queued_duration": null,
+                "stage": "build",
+                "status": "skipped"
+              }
+            ],
+            "needs_read": true,
+            "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+            "status": "failed",
+            "updated_at": "2026-11-24T13:39:49Z"
+          }
+        ],
+        "review": {
+          "approvals": {},
+          "approved_at": null,
+          "draft_comments": 0,
+          "first_review_at": null,
+          "first_review_requested_at": null,
+          "last_activity_by": {},
+          "last_push_at": null,
+          "last_push_by": {},
+          "pushes_after_review": 0,
+          "ready_at": null,
+          "review_requested_at": {},
+          "version": 2,
+          "was_draft": false
+        },
+        "review_read_at": "<read>",
+        "reviewers": [],
+        "sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "source_branch": "fix-login",
+        "state": "merged",
+        "target_branch": "main",
+        "threads": [],
+        "title": "fix: the login keeps the session",
+        "updated_at": "2026-11-24T13:39:29.281Z",
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/1"
+      },
+      "mergeability": "NotOpen"
+    },
+    "2": {
+      "branches": [],
+      "data": {
+        "approved_by": [],
+        "approvers": [],
+        "assignee": null,
+        "author": "User 1 (@user-1)",
+        "commits": [
+          {
+            "author_name": "User 2",
+            "fingerprint": {
+              "author_email": "user-2@example.com",
+              "authored_at": 1795527562,
+              "title": "feat: export the board"
+            },
+            "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b"
+          }
+        ],
+        "created_at": "2026-11-24T13:39:22.630Z",
+        "description": "",
+        "diff_stats": {
+          "additions": 1,
+          "commits_behind": 0,
+          "commits_count": 1,
+          "deletions": 0,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1,
+                  1
+                ]
+              ],
+              "new_file": true,
+              "path": "feat-export.txt"
+            }
+          ],
+          "files_changed": 1,
+          "files_listed": true
+        },
+        "labels": [
+          "feature"
+        ],
+        "landed_fingerprint": null,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": "v1.0",
+        "milestone_description": null,
+        "milestone_due_date": "2026-12-08",
+        "milestone_events": [
+          {
+            "added": true,
+            "at": "2026-11-24T13:39:22.651Z",
+            "by": "User 1 (@user-1)",
+            "milestone": "v1.0"
+          }
+        ],
+        "notes_seen": 1,
+        "pipelines": [
+          {
+            "created_at": "2026-11-24T13:39:27Z",
+            "id": 7,
+            "jobs": [
+              {
+                "duration": 0.0,
+                "id": 13,
+                "name": "unit",
+                "queued_duration": 20.153044,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 0.0,
+                "id": 14,
+                "name": "build",
+                "queued_duration": 2.340093,
+                "stage": "build",
+                "status": "success"
+              }
+            ],
+            "needs_read": true,
+            "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+            "status": "success",
+            "updated_at": "2026-11-24T13:39:54Z"
+          }
+        ],
+        "review": {
+          "approvals": {},
+          "approved_at": null,
+          "draft_comments": 0,
+          "first_review_at": null,
+          "first_review_requested_at": null,
+          "last_activity_by": {
+            "user-1": "2026-11-24T13:39:29.897Z"
+          },
+          "last_push_at": null,
+          "last_push_by": {},
+          "pushes_after_review": 0,
+          "ready_at": null,
+          "review_requested_at": {},
+          "version": 2,
+          "was_draft": false
+        },
+        "review_read_at": "<read>",
+        "reviewers": [],
+        "sha": null,
+        "source_branch": "feat-export",
+        "state": "opened",
+        "target_branch": "main",
+        "threads": [
+          {
+            "author": "user-1",
+            "created_at": "2026-11-24T13:39:29.897Z",
+            "excerpt": "Text written by a person, replaced by the recorder.",
+            "last_note_at": "2026-11-24T13:39:29.897Z",
+            "note_id": 6,
+            "notes": 1,
+            "resolved": false
+          }
+        ],
+        "title": "feat: export the board",
+        "updated_at": "2026-11-24T13:39:24.130Z",
+        "user_notes_count": 1,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/2"
+      },
+      "mergeability": "Mergeable"
+    },
+    "3": {
+      "branches": [],
+      "data": {
+        "approved_by": [],
+        "approvers": [],
+        "assignee": null,
+        "author": "User 1 (@user-1)",
+        "commits": [
+          {
+            "author_name": "User 2",
+            "fingerprint": {
+              "author_email": "user-2@example.com",
+              "authored_at": 1795527563,
+              "title": "Draft: search by label"
+            },
+            "sha": "c2a39066f6fe522399828be5937205963fe4c029"
+          }
+        ],
+        "created_at": "2026-11-24T13:39:23.366Z",
+        "description": "",
+        "diff_stats": {
+          "additions": 1,
+          "commits_behind": 2,
+          "commits_count": 1,
+          "deletions": 0,
+          "files": [
+            {
+              "added": 1,
+              "deleted": 0,
+              "deleted_file": false,
+              "hunks": [
+                [
+                  1,
+                  1
+                ]
+              ],
+              "new_file": true,
+              "path": "wip-search.txt"
+            }
+          ],
+          "files_changed": 1,
+          "files_listed": true
+        },
+        "labels": [
+          "feature"
+        ],
+        "landed_fingerprint": null,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": "v1.0",
+        "milestone_description": null,
+        "milestone_due_date": "2026-12-08",
+        "milestone_events": [
+          {
+            "added": true,
+            "at": "2026-11-24T13:39:23.382Z",
+            "by": "User 1 (@user-1)",
+            "milestone": "v1.0"
+          }
+        ],
+        "notes_seen": 0,
+        "pipelines": [
+          {
+            "created_at": "2026-11-24T13:39:30Z",
+            "id": 9,
+            "jobs": [
+              {
+                "duration": 0.0,
+                "id": 17,
+                "name": "unit",
+                "queued_duration": 23.675719,
+                "stage": "test",
+                "status": "success"
+              },
+              {
+                "duration": 0.0,
+                "id": 18,
+                "name": "build",
+                "queued_duration": 2.284204,
+                "stage": "build",
+                "status": "success"
+              }
+            ],
+            "needs_read": true,
+            "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+            "status": "success",
+            "updated_at": "2026-11-24T13:40:01Z"
+          }
+        ],
+        "review": {
+          "approvals": {},
+          "approved_at": null,
+          "draft_comments": 0,
+          "first_review_at": null,
+          "first_review_requested_at": null,
+          "last_activity_by": {},
+          "last_push_at": null,
+          "last_push_by": {},
+          "pushes_after_review": 0,
+          "ready_at": null,
+          "review_requested_at": {},
+          "version": 2,
+          "was_draft": true
+        },
+        "review_read_at": "<read>",
+        "reviewers": [],
+        "sha": null,
+        "source_branch": "wip-search",
+        "state": "opened",
+        "target_branch": "main",
+        "threads": [],
+        "title": "Draft: search by label",
+        "updated_at": "2026-11-24T13:39:27.383Z",
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/3"
+      },
+      "mergeability": "Draft"
+    }
+  },
+  "sentinel": {
+    "events": 21,
+    "mrs": 3,
+    "pipelines": 11,
+    "truncated": false
+  }
+}

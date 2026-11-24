@@ -120,8 +120,9 @@ for _ in $(seq 1 60); do
 done
 
 echo "Recording…"
-name="gitlab-ce-${version%%-*}"
-[ "$version" = latest ] && name="gitlab-ce-latest"
+# Named after the version that answered (major.minor), "latest" included: a
+# patch release does not change the API, and a fixture must say what it is.
+name="gitlab-ce-$(echo "$gitlab_version" | cut -d. -f1,2)"
 cd "$root"
 GT_RECORD_UPSTREAM="$url" GT_RECORD_TOKEN="$token" GT_RECORD_PROJECT="$project" \
 GT_RECORD_MRS="$merged,$open,$draft" GT_RECORD_BRANCHES=main,staging,production \

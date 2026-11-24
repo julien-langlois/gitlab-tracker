@@ -1,0 +1,16 @@
+{
+  "instance": "GitLab CE 19.6.1 (gitlab/gitlab-ce:latest), seeded by scripts/record-gitlab-ce.sh",
+  "recorded_on": "2026-11-24",
+  "project_id": "1",
+  "mrs": [
+    "1",
+    "2",
+    "3"
+  ],
+  "branches": [
+    "main",
+    "staging",
+    "production"
+  ],
+  "since": "2026-11-21T00:00:00Z"
+}

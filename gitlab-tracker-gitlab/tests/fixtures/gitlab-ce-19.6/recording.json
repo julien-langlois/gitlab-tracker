@@ -1,0 +1,3623 @@
+[
+  {
+    "key": "GET /api/v4/projects/1/events?after=*&sort=desc&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "action_name": "deleted",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:35.002Z",
+        "id": 21,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "removed",
+          "commit_count": 0,
+          "commit_from": "50b64db39bb111d9327c7620c7de51e9befb6945",
+          "commit_title": null,
+          "commit_to": null,
+          "ref": "fix-login",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "commented on",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:33.293Z",
+        "id": 20,
+        "imported": false,
+        "imported_from": "none",
+        "note": {
+          "author": {
+            "avatar_url": "",
+            "id": 1,
+            "locked": false,
+            "name": "User 1",
+            "public_email": null,
+            "state": "active",
+            "username": "user-1",
+            "web_url": "https://gitlab.example/user-1"
+          },
+          "body": "Text written by a person, replaced by the recorder.",
+          "commands_changes": {},
+          "confidential": false,
+          "created_at": "2026-11-24T13:39:29.897Z",
+          "id": 6,
+          "imported": false,
+          "imported_from": "none",
+          "internal": false,
+          "noteable_id": 2,
+          "noteable_iid": 2,
+          "noteable_type": "MergeRequest",
+          "project_id": 1,
+          "resolvable": true,
+          "resolved": false,
+          "resolved_at": null,
+          "resolved_by": null,
+          "system": false,
+          "type": "DiscussionNote",
+          "updated_at": "2026-11-24T13:39:29.897Z"
+        },
+        "project_id": 1,
+        "target_id": 6,
+        "target_iid": 6,
+        "target_title": "feat: export the board",
+        "target_type": "DiscussionNote"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:32.930Z",
+        "id": 19,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 1,
+          "commit_from": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "commit_title": "Merge branch 'fix-login' into 'main'",
+          "commit_to": "f3ce66a20d84f965813a7070492dd11ffa456dd5",
+          "ref": "staging",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:32.559Z",
+        "id": 18,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 2,
+          "commit_from": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "commit_title": "Merge branch 'fix-login' into 'main'",
+          "commit_to": "c757898171c46700347463228f8e1dfa28c16b17",
+          "ref": "main",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "approved",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:31.622Z",
+        "id": 17,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "fix: the login keeps the session",
+        "target_type": "MergeRequest"
+      },
+      {
+        "action_name": "accepted",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:29.294Z",
+        "id": 16,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "fix: the login keeps the session",
+        "target_type": "MergeRequest"
+      },
+      {
+        "action_name": "opened",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:27.105Z",
+        "id": 15,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 3,
+        "target_iid": 3,
+        "target_title": "Draft: search by label",
+        "target_type": "MergeRequest"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:25.925Z",
+        "id": 14,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 1,
+          "commit_from": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "commit_title": "Draft: search by label",
+          "commit_to": "c2a39066f6fe522399828be5937205963fe4c029",
+          "ref": "wip-search",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:25.211Z",
+        "id": 13,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 0,
+          "commit_from": null,
+          "commit_title": null,
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "wip-search",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "opened",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:23.863Z",
+        "id": 12,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 2,
+        "target_iid": 2,
+        "target_title": "feat: export the board",
+        "target_type": "MergeRequest"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:23.597Z",
+        "id": 11,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 1,
+          "commit_from": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "commit_title": "feat: export the board",
+          "commit_to": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+          "ref": "feat-export",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "opened",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:23.555Z",
+        "id": 10,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "fix: the login keeps the session",
+        "target_type": "MergeRequest"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:23.201Z",
+        "id": 9,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 0,
+          "commit_from": null,
+          "commit_title": null,
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "feat-export",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:22.794Z",
+        "id": 8,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 1,
+          "commit_from": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "commit_title": "fix: the login keeps the session",
+          "commit_to": "50b64db39bb111d9327c7620c7de51e9befb6945",
+          "ref": "fix-login",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:21.637Z",
+        "id": 7,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 0,
+          "commit_from": null,
+          "commit_title": null,
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "fix-login",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed to",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:21.214Z",
+        "id": 6,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "pushed",
+          "commit_count": 1,
+          "commit_from": "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18",
+          "commit_title": "ci: a pipeline for every commit",
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "main",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "opened",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:20.964Z",
+        "id": 5,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "v1.0",
+        "target_type": "Milestone"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:20.824Z",
+        "id": 4,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 0,
+          "commit_from": null,
+          "commit_title": null,
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "production",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:20.649Z",
+        "id": 3,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 0,
+          "commit_from": null,
+          "commit_title": null,
+          "commit_to": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "ref": "staging",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "pushed new",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:20.364Z",
+        "id": 2,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "push_data": {
+          "action": "created",
+          "commit_count": 1,
+          "commit_from": null,
+          "commit_title": "Initial commit",
+          "commit_to": "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18",
+          "ref": "main",
+          "ref_count": null,
+          "ref_type": "branch"
+        },
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      },
+      {
+        "action_name": "created",
+        "author": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "author_id": 1,
+        "author_username": "user-1",
+        "created_at": "2026-11-24T13:39:19.126Z",
+        "id": 1,
+        "imported": false,
+        "imported_from": "none",
+        "project_id": 1,
+        "target_id": 1,
+        "target_iid": 1,
+        "target_title": "tracked",
+        "target_type": "Project"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/labels?with_counts=false&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "archived": false,
+        "color": "#d9534f",
+        "description": null,
+        "description_html": "",
+        "id": 1,
+        "is_project_label": true,
+        "name": "bug",
+        "priority": null,
+        "subscribed": false,
+        "text_color": "#FFFFFF"
+      },
+      {
+        "archived": false,
+        "color": "#428bca",
+        "description": null,
+        "description_html": "",
+        "id": 2,
+        "is_project_label": true,
+        "name": "feature",
+        "priority": null,
+        "subscribed": false,
+        "text_color": "#FFFFFF"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/1/approvals",
+    "status": 200,
+    "body": {
+      "approved": true,
+      "approved_by": [
+        {
+          "approved_at": "2026-11-24T13:39:28.888Z",
+          "user": {
+            "avatar_url": "",
+            "id": 1,
+            "locked": false,
+            "name": "User 1",
+            "public_email": null,
+            "state": "active",
+            "username": "user-1",
+            "web_url": "https://gitlab.example/user-1"
+          }
+        }
+      ],
+      "user_can_approve": false,
+      "user_has_approved": true
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/1/changes",
+    "status": 200,
+    "body": {
+      "assignee": null,
+      "assignees": [],
+      "author": {
+        "avatar_url": "",
+        "bot": false,
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "blocking_discussions_resolved": true,
+      "changes": [
+        {
+          "a_mode": "0",
+          "b_mode": "100644",
+          "collapsed": false,
+          "deleted_file": false,
+          "diff": "@@ -0,0 +1 @@\n+fix: the login keeps the session\n",
+          "generated_file": false,
+          "new_file": true,
+          "new_path": "fix-login.txt",
+          "old_path": "fix-login.txt",
+          "renamed_file": false,
+          "too_large": false
+        }
+      ],
+      "changes_count": "1",
+      "closed_at": null,
+      "closed_by": null,
+      "created_at": "2026-11-24T13:39:21.696Z",
+      "description": null,
+      "detailed_merge_status": "not_open",
+      "diff_refs": {
+        "base_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "head_sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "start_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      "discussion_locked": null,
+      "downvotes": 0,
+      "draft": false,
+      "first_deployed_to_production_at": null,
+      "force_remove_source_branch": true,
+      "has_conflicts": false,
+      "head_pipeline": {
+        "archived": false,
+        "before_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "committed_at": null,
+        "coverage": null,
+        "created_at": "2026-11-24T13:39:24.984Z",
+        "detailed_status": {
+          "details_path": "/root/tracked/-/pipelines/5",
+          "favicon": "/assets/ci_favicons/favicon_status_failed-41304d7f7e3828808b0c26771f0309e55296819a9beea3ea9fbf6689d9857c12.png",
+          "group": "failed",
+          "has_details": true,
+          "icon": "status_failed",
+          "illustration": null,
+          "label": "failed",
+          "text": "Failed",
+          "tooltip": "failed"
+        },
+        "duration": 0,
+        "finished_at": "2026-11-24T13:39:49.035Z",
+        "id": 5,
+        "iid": 5,
+        "project_id": 1,
+        "queued_duration": 23,
+        "ref": "fix-login",
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "source": "push",
+        "started_at": "2026-11-24T13:39:48.437Z",
+        "status": "failed",
+        "tag": false,
+        "updated_at": "2026-11-24T13:39:49.043Z",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "web_url": "http://gitlab/root/tracked/-/pipelines/5",
+        "yaml_errors": null
+      },
+      "id": 1,
+      "iid": 1,
+      "imported": false,
+      "imported_from": "none",
+      "labels": [
+        "bug"
+      ],
+      "latest_build_finished_at": null,
+      "latest_build_started_at": "2026-11-24T13:39:48.437Z",
+      "merge_after": null,
+      "merge_commit_sha": "c757898171c46700347463228f8e1dfa28c16b17",
+      "merge_error": null,
+      "merge_status": "can_be_merged",
+      "merge_user": {
+        "avatar_url": "",
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "merge_when_pipeline_succeeds": false,
+      "merged_at": "2026-11-24T13:39:29.294Z",
+      "merged_by": {
+        "avatar_url": "",
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "milestone": {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      },
+      "overflow": false,
+      "pipeline": {
+        "created_at": "2026-11-24T13:39:24.984Z",
+        "id": 5,
+        "iid": 5,
+        "project_id": 1,
+        "ref": "fix-login",
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "source": "push",
+        "status": "failed",
+        "updated_at": "2026-11-24T13:39:49.043Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/5"
+      },
+      "prepared_at": "2026-11-24T13:39:24.030Z",
+      "project_id": 1,
+      "reference": "!1",
+      "references": {
+        "full": "root/tracked!1",
+        "relative": "!1",
+        "short": "!1"
+      },
+      "reviewers": [],
+      "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+      "should_remove_source_branch": null,
+      "source_branch": "fix-login",
+      "source_project_id": 1,
+      "squash": false,
+      "squash_commit_sha": null,
+      "squash_on_merge": false,
+      "state": "merged",
+      "subscribed": true,
+      "target_branch": "main",
+      "target_project_id": 1,
+      "task_completion_status": {
+        "completed_count": 0,
+        "count": 0
+      },
+      "time_stats": {
+        "human_time_estimate": null,
+        "human_total_time_spent": null,
+        "time_estimate": 0,
+        "total_time_spent": 0
+      },
+      "title": "fix: the login keeps the session",
+      "updated_at": "2026-11-24T13:39:29.281Z",
+      "upvotes": 0,
+      "user": {
+        "can_merge": true
+      },
+      "user_notes_count": 0,
+      "web_url": "http://gitlab/root/tracked/-/merge_requests/1",
+      "work_in_progress": false
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/1/commits?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:21.000+00:00",
+        "committed_date": "2026-11-24T13:39:21.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:21.000+00:00",
+        "extended_trailers": {},
+        "id": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "message": "fix: the login keeps the session",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208"
+        ],
+        "short_id": "50b64db3",
+        "title": "fix: the login keeps the session",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/50b64db39bb111d9327c7620c7de51e9befb6945"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/1/discussions?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "id": "1b012127d38b3154d526386778b43f66166aebb1",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:24.347Z",
+            "id": 1,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 1,
+            "noteable_iid": 1,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:24.383Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "e93854424510803d71cfbe1730d7aa2042bba6b9",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:29.750Z",
+            "id": 5,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 1,
+            "noteable_iid": 1,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:29.769Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "e2d72ad916a1630c758122d305f757ca292e8986",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:31.647Z",
+            "id": 8,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 1,
+            "noteable_iid": 1,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:31.661Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "55811208cd54a0554c9246f39c9f45cf6ad8086b",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:34.707Z",
+            "id": 9,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 1,
+            "noteable_iid": 1,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:34.708Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "b93aa16c436f2765ee9c6b7740295c2cd7797d6d",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:35.276Z",
+            "id": 10,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 1,
+            "noteable_iid": 1,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:35.279Z"
+          }
+        ],
+        "resolvable": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/1/resource_milestone_events?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "action": "add",
+        "created_at": "2026-11-24T13:39:21.736Z",
+        "id": 1,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "resource_id": 1,
+        "resource_type": "MergeRequest",
+        "state": "opened",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        }
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2/approvals",
+    "status": 200,
+    "body": {
+      "approved": false,
+      "approved_by": [],
+      "user_can_approve": true,
+      "user_has_approved": false
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2/changes",
+    "status": 200,
+    "body": {
+      "assignee": null,
+      "assignees": [],
+      "author": {
+        "avatar_url": "",
+        "bot": false,
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "blocking_discussions_resolved": true,
+      "changes": [
+        {
+          "a_mode": "0",
+          "b_mode": "100644",
+          "collapsed": false,
+          "deleted_file": false,
+          "diff": "@@ -0,0 +1 @@\n+feat: export the board\n",
+          "generated_file": false,
+          "new_file": true,
+          "new_path": "feat-export.txt",
+          "old_path": "feat-export.txt",
+          "renamed_file": false,
+          "too_large": false
+        }
+      ],
+      "changes_count": "1",
+      "closed_at": null,
+      "closed_by": null,
+      "created_at": "2026-11-24T13:39:22.630Z",
+      "description": null,
+      "detailed_merge_status": "mergeable",
+      "diff_refs": {
+        "base_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "head_sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "start_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      "discussion_locked": null,
+      "downvotes": 0,
+      "draft": false,
+      "first_deployed_to_production_at": null,
+      "force_remove_source_branch": true,
+      "has_conflicts": false,
+      "head_pipeline": {
+        "archived": false,
+        "before_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "committed_at": null,
+        "coverage": null,
+        "created_at": "2026-11-24T13:39:27.793Z",
+        "detailed_status": {
+          "details_path": "/root/tracked/-/pipelines/7",
+          "favicon": "/assets/ci_favicons/favicon_status_success-8451333011eee8ce9f2ab25dc487fe24a8758c694827a582f17f42b0a90446a2.png",
+          "group": "success",
+          "has_details": true,
+          "icon": "status_success",
+          "illustration": null,
+          "label": "passed",
+          "text": "Passed",
+          "tooltip": "passed"
+        },
+        "duration": 1,
+        "finished_at": "2026-11-24T13:39:54.991Z",
+        "id": 7,
+        "iid": 7,
+        "project_id": 1,
+        "queued_duration": 23,
+        "ref": "feat-export",
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "source": "push",
+        "started_at": "2026-11-24T13:39:51.384Z",
+        "status": "success",
+        "tag": false,
+        "updated_at": "2026-11-24T13:39:54.996Z",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "web_url": "http://gitlab/root/tracked/-/pipelines/7",
+        "yaml_errors": null
+      },
+      "id": 2,
+      "iid": 2,
+      "imported": false,
+      "imported_from": "none",
+      "labels": [
+        "feature"
+      ],
+      "latest_build_finished_at": "2026-11-24T13:39:54.991Z",
+      "latest_build_started_at": "2026-11-24T13:39:51.384Z",
+      "merge_after": null,
+      "merge_commit_sha": null,
+      "merge_error": null,
+      "merge_status": "can_be_merged",
+      "merge_user": null,
+      "merge_when_pipeline_succeeds": false,
+      "merged_at": null,
+      "merged_by": null,
+      "milestone": {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      },
+      "overflow": false,
+      "pipeline": {
+        "created_at": "2026-11-24T13:39:27.793Z",
+        "id": 7,
+        "iid": 7,
+        "project_id": 1,
+        "ref": "feat-export",
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:54.996Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/7"
+      },
+      "prepared_at": "2026-11-24T13:39:24.122Z",
+      "project_id": 1,
+      "reference": "!2",
+      "references": {
+        "full": "root/tracked!2",
+        "relative": "!2",
+        "short": "!2"
+      },
+      "reviewers": [],
+      "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+      "should_remove_source_branch": null,
+      "source_branch": "feat-export",
+      "source_project_id": 1,
+      "squash": false,
+      "squash_commit_sha": null,
+      "squash_on_merge": false,
+      "state": "opened",
+      "subscribed": true,
+      "target_branch": "main",
+      "target_project_id": 1,
+      "task_completion_status": {
+        "completed_count": 0,
+        "count": 0
+      },
+      "time_stats": {
+        "human_time_estimate": null,
+        "human_total_time_spent": null,
+        "time_estimate": 0,
+        "total_time_spent": 0
+      },
+      "title": "feat: export the board",
+      "updated_at": "2026-11-24T13:39:24.130Z",
+      "upvotes": 0,
+      "user": {
+        "can_merge": true
+      },
+      "user_notes_count": 1,
+      "web_url": "http://gitlab/root/tracked/-/merge_requests/2",
+      "work_in_progress": false
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2/commits?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:22.000+00:00",
+        "committed_date": "2026-11-24T13:39:22.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:22.000+00:00",
+        "extended_trailers": {},
+        "id": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "message": "feat: export the board",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208"
+        ],
+        "short_id": "f1f49b69",
+        "title": "feat: export the board",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2/discussions?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "id": "e5faac13f96856efdb193f3a06887d5647afcdbf",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:25.933Z",
+            "id": 2,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 2,
+            "noteable_iid": 2,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:25.935Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "29c5016f7d93bb4c4b0f365ca1501ab1cf83210d",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:27.610Z",
+            "id": 3,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 2,
+            "noteable_iid": 2,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:27.612Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "fdc98ec565da8ea452c6f75aeae3cd6481c6d9a1",
+        "individual_note": false,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:29.897Z",
+            "id": 6,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 2,
+            "noteable_iid": 2,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": true,
+            "resolved": false,
+            "resolved_at": null,
+            "resolved_by": null,
+            "system": false,
+            "type": "DiscussionNote",
+            "updated_at": "2026-11-24T13:39:29.897Z"
+          }
+        ],
+        "resolvable": true,
+        "resolved": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2/resource_milestone_events?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "action": "add",
+        "created_at": "2026-11-24T13:39:22.651Z",
+        "id": 2,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "resource_id": 2,
+        "resource_type": "MergeRequest",
+        "state": "opened",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        }
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/2?with_merge_status_recheck=true&include_diverged_commits_count=true",
+    "status": 200,
+    "body": {
+      "assignee": null,
+      "assignees": [],
+      "author": {
+        "avatar_url": "",
+        "bot": false,
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "blocking_discussions_resolved": true,
+      "changes_count": "1",
+      "closed_at": null,
+      "closed_by": null,
+      "created_at": "2026-11-24T13:39:22.630Z",
+      "description": null,
+      "detailed_merge_status": "mergeable",
+      "diff_refs": {
+        "base_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "head_sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "start_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      "discussion_locked": null,
+      "diverged_commits_count": 2,
+      "downvotes": 0,
+      "draft": false,
+      "first_contribution": false,
+      "first_deployed_to_production_at": null,
+      "force_remove_source_branch": true,
+      "has_conflicts": false,
+      "head_pipeline": {
+        "archived": false,
+        "before_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "committed_at": null,
+        "coverage": null,
+        "created_at": "2026-11-24T13:39:27.793Z",
+        "detailed_status": {
+          "details_path": "/root/tracked/-/pipelines/7",
+          "favicon": "/assets/ci_favicons/favicon_status_success-8451333011eee8ce9f2ab25dc487fe24a8758c694827a582f17f42b0a90446a2.png",
+          "group": "success",
+          "has_details": true,
+          "icon": "status_success",
+          "illustration": null,
+          "label": "passed",
+          "text": "Passed",
+          "tooltip": "passed"
+        },
+        "duration": 1,
+        "finished_at": "2026-11-24T13:39:54.991Z",
+        "id": 7,
+        "iid": 7,
+        "project_id": 1,
+        "queued_duration": 23,
+        "ref": "feat-export",
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "source": "push",
+        "started_at": "2026-11-24T13:39:51.384Z",
+        "status": "success",
+        "tag": false,
+        "updated_at": "2026-11-24T13:39:54.996Z",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "web_url": "http://gitlab/root/tracked/-/pipelines/7",
+        "yaml_errors": null
+      },
+      "id": 2,
+      "iid": 2,
+      "imported": false,
+      "imported_from": "none",
+      "labels": [
+        "feature"
+      ],
+      "latest_build_finished_at": "2026-11-24T13:39:54.991Z",
+      "latest_build_started_at": "2026-11-24T13:39:51.384Z",
+      "merge_after": null,
+      "merge_commit_sha": null,
+      "merge_error": null,
+      "merge_status": "can_be_merged",
+      "merge_user": null,
+      "merge_when_pipeline_succeeds": false,
+      "merged_at": null,
+      "merged_by": null,
+      "milestone": {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      },
+      "pipeline": {
+        "created_at": "2026-11-24T13:39:27.793Z",
+        "id": 7,
+        "iid": 7,
+        "project_id": 1,
+        "ref": "feat-export",
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:54.996Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/7"
+      },
+      "prepared_at": "2026-11-24T13:39:24.122Z",
+      "project_id": 1,
+      "reference": "!2",
+      "references": {
+        "full": "root/tracked!2",
+        "relative": "!2",
+        "short": "!2"
+      },
+      "reviewers": [],
+      "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+      "should_remove_source_branch": null,
+      "source_branch": "feat-export",
+      "source_project_id": 1,
+      "squash": false,
+      "squash_commit_sha": null,
+      "squash_on_merge": false,
+      "state": "opened",
+      "subscribed": true,
+      "target_branch": "main",
+      "target_project_id": 1,
+      "task_completion_status": {
+        "completed_count": 0,
+        "count": 0
+      },
+      "time_stats": {
+        "human_time_estimate": null,
+        "human_total_time_spent": null,
+        "time_estimate": 0,
+        "total_time_spent": 0
+      },
+      "title": "feat: export the board",
+      "updated_at": "2026-11-24T13:39:24.130Z",
+      "upvotes": 0,
+      "user": {
+        "can_merge": true
+      },
+      "user_notes_count": 1,
+      "web_url": "http://gitlab/root/tracked/-/merge_requests/2",
+      "work_in_progress": false
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3/approvals",
+    "status": 200,
+    "body": {
+      "approved": false,
+      "approved_by": [],
+      "user_can_approve": true,
+      "user_has_approved": false
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3/changes",
+    "status": 200,
+    "body": {
+      "assignee": null,
+      "assignees": [],
+      "author": {
+        "avatar_url": "",
+        "bot": false,
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "blocking_discussions_resolved": true,
+      "changes": [
+        {
+          "a_mode": "0",
+          "b_mode": "100644",
+          "collapsed": false,
+          "deleted_file": false,
+          "diff": "@@ -0,0 +1 @@\n+Draft: search by label\n",
+          "generated_file": false,
+          "new_file": true,
+          "new_path": "wip-search.txt",
+          "old_path": "wip-search.txt",
+          "renamed_file": false,
+          "too_large": false
+        }
+      ],
+      "changes_count": "1",
+      "closed_at": null,
+      "closed_by": null,
+      "created_at": "2026-11-24T13:39:23.366Z",
+      "description": null,
+      "detailed_merge_status": "draft_status",
+      "diff_refs": {
+        "base_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "head_sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "start_sha": "c757898171c46700347463228f8e1dfa28c16b17"
+      },
+      "discussion_locked": null,
+      "downvotes": 0,
+      "draft": true,
+      "first_deployed_to_production_at": null,
+      "force_remove_source_branch": true,
+      "has_conflicts": false,
+      "head_pipeline": {
+        "archived": false,
+        "before_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "committed_at": null,
+        "coverage": null,
+        "created_at": "2026-11-24T13:39:30.093Z",
+        "detailed_status": {
+          "details_path": "/root/tracked/-/pipelines/9",
+          "favicon": "/assets/ci_favicons/favicon_status_success-8451333011eee8ce9f2ab25dc487fe24a8758c694827a582f17f42b0a90446a2.png",
+          "group": "success",
+          "has_details": true,
+          "icon": "status_success",
+          "illustration": null,
+          "label": "passed",
+          "text": "Passed",
+          "tooltip": "passed"
+        },
+        "duration": 1,
+        "finished_at": "2026-11-24T13:40:01.123Z",
+        "id": 9,
+        "iid": 9,
+        "project_id": 1,
+        "queued_duration": 27,
+        "ref": "wip-search",
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "source": "push",
+        "started_at": "2026-11-24T13:39:57.415Z",
+        "status": "success",
+        "tag": false,
+        "updated_at": "2026-11-24T13:40:01.135Z",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "web_url": "http://gitlab/root/tracked/-/pipelines/9",
+        "yaml_errors": null
+      },
+      "id": 3,
+      "iid": 3,
+      "imported": false,
+      "imported_from": "none",
+      "labels": [
+        "feature"
+      ],
+      "latest_build_finished_at": "2026-11-24T13:40:01.123Z",
+      "latest_build_started_at": "2026-11-24T13:39:57.415Z",
+      "merge_after": null,
+      "merge_commit_sha": null,
+      "merge_error": null,
+      "merge_status": "can_be_merged",
+      "merge_user": null,
+      "merge_when_pipeline_succeeds": false,
+      "merged_at": null,
+      "merged_by": null,
+      "milestone": {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      },
+      "overflow": false,
+      "pipeline": {
+        "created_at": "2026-11-24T13:39:30.093Z",
+        "id": 9,
+        "iid": 9,
+        "project_id": 1,
+        "ref": "wip-search",
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:01.135Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/9"
+      },
+      "prepared_at": "2026-11-24T13:39:27.370Z",
+      "project_id": 1,
+      "reference": "!3",
+      "references": {
+        "full": "root/tracked!3",
+        "relative": "!3",
+        "short": "!3"
+      },
+      "reviewers": [],
+      "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+      "should_remove_source_branch": null,
+      "source_branch": "wip-search",
+      "source_project_id": 1,
+      "squash": false,
+      "squash_commit_sha": null,
+      "squash_on_merge": false,
+      "state": "opened",
+      "subscribed": true,
+      "target_branch": "main",
+      "target_project_id": 1,
+      "task_completion_status": {
+        "completed_count": 0,
+        "count": 0
+      },
+      "time_stats": {
+        "human_time_estimate": null,
+        "human_total_time_spent": null,
+        "time_estimate": 0,
+        "total_time_spent": 0
+      },
+      "title": "Draft: search by label",
+      "updated_at": "2026-11-24T13:39:27.383Z",
+      "upvotes": 0,
+      "user": {
+        "can_merge": true
+      },
+      "user_notes_count": 0,
+      "web_url": "http://gitlab/root/tracked/-/merge_requests/3",
+      "work_in_progress": true
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3/commits?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:23.000+00:00",
+        "committed_date": "2026-11-24T13:39:23.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:23.000+00:00",
+        "extended_trailers": {},
+        "id": "c2a39066f6fe522399828be5937205963fe4c029",
+        "message": "Draft: search by label",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208"
+        ],
+        "short_id": "c2a39066",
+        "title": "Draft: search by label",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/c2a39066f6fe522399828be5937205963fe4c029"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3/discussions?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "id": "0c4b59329e8b8c552e21161bf89bef3d6d8368a5",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:29.374Z",
+            "id": 4,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 3,
+            "noteable_iid": 3,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:29.376Z"
+          }
+        ],
+        "resolvable": false
+      },
+      {
+        "id": "b67608e327992a819bd71ebd6fbf0b76a4091ed0",
+        "individual_note": true,
+        "notes": [
+          {
+            "author": {
+              "avatar_url": "",
+              "id": 1,
+              "locked": false,
+              "name": "User 1",
+              "public_email": null,
+              "state": "active",
+              "username": "user-1",
+              "web_url": "https://gitlab.example/user-1"
+            },
+            "body": "Text written by a person, replaced by the recorder.",
+            "commands_changes": {},
+            "confidential": false,
+            "created_at": "2026-11-24T13:39:30.208Z",
+            "id": 7,
+            "imported": false,
+            "imported_from": "none",
+            "internal": false,
+            "noteable_id": 3,
+            "noteable_iid": 3,
+            "noteable_type": "MergeRequest",
+            "project_id": 1,
+            "resolvable": false,
+            "system": true,
+            "type": null,
+            "updated_at": "2026-11-24T13:39:30.209Z"
+          }
+        ],
+        "resolvable": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3/resource_milestone_events?&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "action": "add",
+        "created_at": "2026-11-24T13:39:23.382Z",
+        "id": 3,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "resource_id": 3,
+        "resource_type": "MergeRequest",
+        "state": "opened",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        }
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests/3?with_merge_status_recheck=true&include_diverged_commits_count=true",
+    "status": 200,
+    "body": {
+      "assignee": null,
+      "assignees": [],
+      "author": {
+        "avatar_url": "",
+        "bot": false,
+        "id": 1,
+        "locked": false,
+        "name": "User 1",
+        "public_email": null,
+        "state": "active",
+        "username": "user-1",
+        "web_url": "https://gitlab.example/user-1"
+      },
+      "blocking_discussions_resolved": true,
+      "changes_count": "1",
+      "closed_at": null,
+      "closed_by": null,
+      "created_at": "2026-11-24T13:39:23.366Z",
+      "description": null,
+      "detailed_merge_status": "draft_status",
+      "diff_refs": {
+        "base_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "head_sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "start_sha": "c757898171c46700347463228f8e1dfa28c16b17"
+      },
+      "discussion_locked": null,
+      "diverged_commits_count": 2,
+      "downvotes": 0,
+      "draft": true,
+      "first_contribution": false,
+      "first_deployed_to_production_at": null,
+      "force_remove_source_branch": true,
+      "has_conflicts": false,
+      "head_pipeline": {
+        "archived": false,
+        "before_sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "committed_at": null,
+        "coverage": null,
+        "created_at": "2026-11-24T13:39:30.093Z",
+        "detailed_status": {
+          "details_path": "/root/tracked/-/pipelines/9",
+          "favicon": "/assets/ci_favicons/favicon_status_success-8451333011eee8ce9f2ab25dc487fe24a8758c694827a582f17f42b0a90446a2.png",
+          "group": "success",
+          "has_details": true,
+          "icon": "status_success",
+          "illustration": null,
+          "label": "passed",
+          "text": "Passed",
+          "tooltip": "passed"
+        },
+        "duration": 1,
+        "finished_at": "2026-11-24T13:40:01.123Z",
+        "id": 9,
+        "iid": 9,
+        "project_id": 1,
+        "queued_duration": 27,
+        "ref": "wip-search",
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "source": "push",
+        "started_at": "2026-11-24T13:39:57.415Z",
+        "status": "success",
+        "tag": false,
+        "updated_at": "2026-11-24T13:40:01.135Z",
+        "user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "web_url": "http://gitlab/root/tracked/-/pipelines/9",
+        "yaml_errors": null
+      },
+      "id": 3,
+      "iid": 3,
+      "imported": false,
+      "imported_from": "none",
+      "labels": [
+        "feature"
+      ],
+      "latest_build_finished_at": "2026-11-24T13:40:01.123Z",
+      "latest_build_started_at": "2026-11-24T13:39:57.415Z",
+      "merge_after": null,
+      "merge_commit_sha": null,
+      "merge_error": null,
+      "merge_status": "can_be_merged",
+      "merge_user": null,
+      "merge_when_pipeline_succeeds": false,
+      "merged_at": null,
+      "merged_by": null,
+      "milestone": {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      },
+      "pipeline": {
+        "created_at": "2026-11-24T13:39:30.093Z",
+        "id": 9,
+        "iid": 9,
+        "project_id": 1,
+        "ref": "wip-search",
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:01.135Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/9"
+      },
+      "prepared_at": "2026-11-24T13:39:27.370Z",
+      "project_id": 1,
+      "reference": "!3",
+      "references": {
+        "full": "root/tracked!3",
+        "relative": "!3",
+        "short": "!3"
+      },
+      "reviewers": [],
+      "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+      "should_remove_source_branch": null,
+      "source_branch": "wip-search",
+      "source_project_id": 1,
+      "squash": false,
+      "squash_commit_sha": null,
+      "squash_on_merge": false,
+      "state": "opened",
+      "subscribed": true,
+      "target_branch": "main",
+      "target_project_id": 1,
+      "task_completion_status": {
+        "completed_count": 0,
+        "count": 0
+      },
+      "time_stats": {
+        "human_time_estimate": null,
+        "human_total_time_spent": null,
+        "time_estimate": 0,
+        "total_time_spent": 0
+      },
+      "title": "Draft: search by label",
+      "updated_at": "2026-11-24T13:39:27.383Z",
+      "upvotes": 0,
+      "user": {
+        "can_merge": true
+      },
+      "user_notes_count": 0,
+      "web_url": "http://gitlab/root/tracked/-/merge_requests/3",
+      "work_in_progress": true
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests?state=all&created_after=*&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:23.366Z",
+        "description": null,
+        "detailed_merge_status": "draft_status",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": true,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 3,
+        "iid": 3,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "can_be_merged",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:27.370Z",
+        "project_id": 1,
+        "reference": "!3",
+        "references": {
+          "full": "root/tracked!3",
+          "relative": "!3",
+          "short": "!3"
+        },
+        "reviewers": [],
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "should_remove_source_branch": null,
+        "source_branch": "wip-search",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "Draft: search by label",
+        "updated_at": "2026-11-24T13:39:27.383Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/3",
+        "work_in_progress": true
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:22.630Z",
+        "description": null,
+        "detailed_merge_status": "mergeable",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 2,
+        "iid": 2,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "can_be_merged",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.122Z",
+        "project_id": 1,
+        "reference": "!2",
+        "references": {
+          "full": "root/tracked!2",
+          "relative": "!2",
+          "short": "!2"
+        },
+        "reviewers": [],
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "should_remove_source_branch": null,
+        "source_branch": "feat-export",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "feat: export the board",
+        "updated_at": "2026-11-24T13:39:24.130Z",
+        "upvotes": 0,
+        "user_notes_count": 1,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/2",
+        "work_in_progress": false
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:21.696Z",
+        "description": null,
+        "detailed_merge_status": "not_open",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 1,
+        "iid": 1,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "bug"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "merge_status": "can_be_merged",
+        "merge_user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": "2026-11-24T13:39:29.294Z",
+        "merged_by": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.030Z",
+        "project_id": 1,
+        "reference": "!1",
+        "references": {
+          "full": "root/tracked!1",
+          "relative": "!1",
+          "short": "!1"
+        },
+        "reviewers": [],
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "should_remove_source_branch": null,
+        "source_branch": "fix-login",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "merged",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "fix: the login keeps the session",
+        "updated_at": "2026-11-24T13:39:29.281Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/1",
+        "work_in_progress": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests?state=all&updated_after=*&order_by=updated_at&sort=desc&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:21.696Z",
+        "description": null,
+        "detailed_merge_status": "not_open",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 1,
+        "iid": 1,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "bug"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "merge_status": "can_be_merged",
+        "merge_user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": "2026-11-24T13:39:29.294Z",
+        "merged_by": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.030Z",
+        "project_id": 1,
+        "reference": "!1",
+        "references": {
+          "full": "root/tracked!1",
+          "relative": "!1",
+          "short": "!1"
+        },
+        "reviewers": [],
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "should_remove_source_branch": null,
+        "source_branch": "fix-login",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "merged",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "fix: the login keeps the session",
+        "updated_at": "2026-11-24T13:39:29.281Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/1",
+        "work_in_progress": false
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:23.366Z",
+        "description": null,
+        "detailed_merge_status": "checking",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": true,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 3,
+        "iid": 3,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "checking",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:27.370Z",
+        "project_id": 1,
+        "reference": "!3",
+        "references": {
+          "full": "root/tracked!3",
+          "relative": "!3",
+          "short": "!3"
+        },
+        "reviewers": [],
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "should_remove_source_branch": null,
+        "source_branch": "wip-search",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "Draft: search by label",
+        "updated_at": "2026-11-24T13:39:27.383Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/3",
+        "work_in_progress": true
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:22.630Z",
+        "description": null,
+        "detailed_merge_status": "checking",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 2,
+        "iid": 2,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "checking",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.122Z",
+        "project_id": 1,
+        "reference": "!2",
+        "references": {
+          "full": "root/tracked!2",
+          "relative": "!2",
+          "short": "!2"
+        },
+        "reviewers": [],
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "should_remove_source_branch": null,
+        "source_branch": "feat-export",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "feat: export the board",
+        "updated_at": "2026-11-24T13:39:24.130Z",
+        "upvotes": 0,
+        "user_notes_count": 1,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/2",
+        "work_in_progress": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/merge_requests?with_merge_status_recheck=true&iids[]=1&iids[]=2&iids[]=3&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:23.366Z",
+        "description": null,
+        "detailed_merge_status": "unchecked",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": true,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 3,
+        "iid": 3,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "unchecked",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:27.370Z",
+        "project_id": 1,
+        "reference": "!3",
+        "references": {
+          "full": "root/tracked!3",
+          "relative": "!3",
+          "short": "!3"
+        },
+        "reviewers": [],
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "should_remove_source_branch": null,
+        "source_branch": "wip-search",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "Draft: search by label",
+        "updated_at": "2026-11-24T13:39:27.383Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/3",
+        "work_in_progress": true
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:22.630Z",
+        "description": null,
+        "detailed_merge_status": "unchecked",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 2,
+        "iid": 2,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "feature"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": null,
+        "merge_status": "unchecked",
+        "merge_user": null,
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": null,
+        "merged_by": null,
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.122Z",
+        "project_id": 1,
+        "reference": "!2",
+        "references": {
+          "full": "root/tracked!2",
+          "relative": "!2",
+          "short": "!2"
+        },
+        "reviewers": [],
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "should_remove_source_branch": null,
+        "source_branch": "feat-export",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "opened",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "feat: export the board",
+        "updated_at": "2026-11-24T13:39:24.130Z",
+        "upvotes": 0,
+        "user_notes_count": 1,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/2",
+        "work_in_progress": false
+      },
+      {
+        "assignee": null,
+        "assignees": [],
+        "author": {
+          "avatar_url": "",
+          "bot": false,
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "blocking_discussions_resolved": true,
+        "closed_at": null,
+        "closed_by": null,
+        "created_at": "2026-11-24T13:39:21.696Z",
+        "description": null,
+        "detailed_merge_status": "not_open",
+        "discussion_locked": null,
+        "downvotes": 0,
+        "draft": false,
+        "force_remove_source_branch": true,
+        "has_conflicts": false,
+        "id": 1,
+        "iid": 1,
+        "imported": false,
+        "imported_from": "none",
+        "labels": [
+          "bug"
+        ],
+        "merge_after": null,
+        "merge_commit_sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "merge_status": "can_be_merged",
+        "merge_user": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "merge_when_pipeline_succeeds": false,
+        "merged_at": "2026-11-24T13:39:29.294Z",
+        "merged_by": {
+          "avatar_url": "",
+          "id": 1,
+          "locked": false,
+          "name": "User 1",
+          "public_email": null,
+          "state": "active",
+          "username": "user-1",
+          "web_url": "https://gitlab.example/user-1"
+        },
+        "milestone": {
+          "created_at": "2026-11-24T13:39:20.942Z",
+          "description": null,
+          "due_date": "2026-12-08",
+          "expired": false,
+          "id": 1,
+          "iid": 1,
+          "project_id": 1,
+          "start_date": null,
+          "state": "active",
+          "title": "v1.0",
+          "updated_at": "2026-11-24T13:39:20.942Z",
+          "web_url": "http://gitlab/root/tracked/-/milestones/1"
+        },
+        "prepared_at": "2026-11-24T13:39:24.030Z",
+        "project_id": 1,
+        "reference": "!1",
+        "references": {
+          "full": "root/tracked!1",
+          "relative": "!1",
+          "short": "!1"
+        },
+        "reviewers": [],
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "should_remove_source_branch": null,
+        "source_branch": "fix-login",
+        "source_project_id": 1,
+        "squash": false,
+        "squash_commit_sha": null,
+        "squash_on_merge": false,
+        "state": "merged",
+        "target_branch": "main",
+        "target_project_id": 1,
+        "task_completion_status": {
+          "completed_count": 0,
+          "count": 0
+        },
+        "time_stats": {
+          "human_time_estimate": null,
+          "human_total_time_spent": null,
+          "time_estimate": 0,
+          "total_time_spent": 0
+        },
+        "title": "fix: the login keeps the session",
+        "updated_at": "2026-11-24T13:39:29.281Z",
+        "upvotes": 0,
+        "user_notes_count": 0,
+        "web_url": "http://gitlab/root/tracked/-/merge_requests/1",
+        "work_in_progress": false
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/milestones?state=active&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "created_at": "2026-11-24T13:39:20.942Z",
+        "description": null,
+        "due_date": "2026-12-08",
+        "expired": false,
+        "id": 1,
+        "iid": 1,
+        "project_id": 1,
+        "start_date": null,
+        "state": "active",
+        "title": "v1.0",
+        "updated_at": "2026-11-24T13:39:20.942Z",
+        "web_url": "http://gitlab/root/tracked/-/milestones/1"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/pipelines?updated_after=*&order_by=updated_at&sort=desc&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "created_at": "2026-11-24T13:39:35.522Z",
+        "id": 11,
+        "iid": 11,
+        "name": null,
+        "project_id": 1,
+        "ref": "staging",
+        "sha": "f3ce66a20d84f965813a7070492dd11ffa456dd5",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:13.075Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/11"
+      },
+      {
+        "created_at": "2026-11-24T13:39:34.971Z",
+        "id": 10,
+        "iid": 10,
+        "name": null,
+        "project_id": 1,
+        "ref": "main",
+        "sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:07.347Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/10"
+      },
+      {
+        "created_at": "2026-11-24T13:39:30.093Z",
+        "id": 9,
+        "iid": 9,
+        "name": null,
+        "project_id": 1,
+        "ref": "wip-search",
+        "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:01.135Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/9"
+      },
+      {
+        "created_at": "2026-11-24T13:39:27.793Z",
+        "id": 7,
+        "iid": 7,
+        "name": null,
+        "project_id": 1,
+        "ref": "feat-export",
+        "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:54.996Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/7"
+      },
+      {
+        "created_at": "2026-11-24T13:39:24.984Z",
+        "id": 5,
+        "iid": 5,
+        "name": null,
+        "project_id": 1,
+        "ref": "fix-login",
+        "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "source": "push",
+        "status": "failed",
+        "updated_at": "2026-11-24T13:39:49.043Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/5"
+      },
+      {
+        "created_at": "2026-11-24T13:39:23.302Z",
+        "id": 4,
+        "iid": 4,
+        "name": null,
+        "project_id": 1,
+        "ref": "production",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:45.960Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/4"
+      },
+      {
+        "created_at": "2026-11-24T13:39:22.319Z",
+        "id": 1,
+        "iid": 1,
+        "name": null,
+        "project_id": 1,
+        "ref": "main",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:40.060Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/1"
+      },
+      {
+        "created_at": "2026-11-24T13:39:22.323Z",
+        "id": 2,
+        "iid": 2,
+        "name": null,
+        "project_id": 1,
+        "ref": "staging",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:39:37.144Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/2"
+      },
+      {
+        "created_at": "2026-11-24T13:39:29.365Z",
+        "id": 8,
+        "iid": 8,
+        "name": null,
+        "project_id": 1,
+        "ref": "wip-search",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "canceled",
+        "updated_at": "2026-11-24T13:39:35.214Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/8"
+      },
+      {
+        "created_at": "2026-11-24T13:39:26.210Z",
+        "id": 6,
+        "iid": 6,
+        "name": null,
+        "project_id": 1,
+        "ref": "feat-export",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "canceled",
+        "updated_at": "2026-11-24T13:39:34.012Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/6"
+      },
+      {
+        "created_at": "2026-11-24T13:39:23.034Z",
+        "id": 3,
+        "iid": 3,
+        "name": null,
+        "project_id": 1,
+        "ref": "fix-login",
+        "sha": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "source": "push",
+        "status": "canceled",
+        "updated_at": "2026-11-24T13:39:29.512Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/3"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/repository/commits/c757898171c46700347463228f8e1dfa28c16b17",
+    "status": 200,
+    "body": {
+      "author_email": "user-2@example.com",
+      "author_name": "User 2",
+      "authored_date": "2026-11-24T13:39:29.000+00:00",
+      "committed_date": "2026-11-24T13:39:29.000+00:00",
+      "committer_email": "user-2@example.com",
+      "committer_name": "User 2",
+      "created_at": "2026-11-24T13:39:29.000+00:00",
+      "extended_trailers": {},
+      "id": "c757898171c46700347463228f8e1dfa28c16b17",
+      "last_pipeline": {
+        "created_at": "2026-11-24T13:39:34.971Z",
+        "id": 10,
+        "iid": 10,
+        "project_id": 1,
+        "ref": "main",
+        "sha": "c757898171c46700347463228f8e1dfa28c16b17",
+        "source": "push",
+        "status": "success",
+        "updated_at": "2026-11-24T13:40:07.347Z",
+        "web_url": "http://gitlab/root/tracked/-/pipelines/10"
+      },
+      "message": "Merge branch 'fix-login' into 'main'",
+      "parent_ids": [
+        "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "50b64db39bb111d9327c7620c7de51e9befb6945"
+      ],
+      "project_id": 1,
+      "short_id": "c7578981",
+      "stats": {
+        "additions": 1,
+        "deletions": 0,
+        "total": 1
+      },
+      "status": "success",
+      "title": "Merge branch 'fix-login' into 'main'",
+      "trailers": {},
+      "web_url": "http://gitlab/root/tracked/-/commit/c757898171c46700347463228f8e1dfa28c16b17"
+    }
+  },
+  {
+    "key": "GET /api/v4/projects/1/repository/commits/c757898171c46700347463228f8e1dfa28c16b17/refs?type=branch&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "name": "main",
+        "type": "branch"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/repository/commits?ref_name=main&since=*&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:29.000+00:00",
+        "committed_date": "2026-11-24T13:39:29.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:29.000+00:00",
+        "extended_trailers": {},
+        "id": "c757898171c46700347463228f8e1dfa28c16b17",
+        "message": "Merge branch 'fix-login' into 'main'",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208",
+          "50b64db39bb111d9327c7620c7de51e9befb6945"
+        ],
+        "short_id": "c7578981",
+        "title": "Merge branch 'fix-login' into 'main'",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/c757898171c46700347463228f8e1dfa28c16b17"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:21.000+00:00",
+        "committed_date": "2026-11-24T13:39:21.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:21.000+00:00",
+        "extended_trailers": {},
+        "id": "50b64db39bb111d9327c7620c7de51e9befb6945",
+        "message": "fix: the login keeps the session",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208"
+        ],
+        "short_id": "50b64db3",
+        "title": "fix: the login keeps the session",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/50b64db39bb111d9327c7620c7de51e9befb6945"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "message": "ci: a pipeline for every commit",
+        "parent_ids": [
+          "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+        ],
+        "short_id": "6bb292df",
+        "title": "ci: a pipeline for every commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18",
+        "message": "Initial commit",
+        "parent_ids": [],
+        "short_id": "da21b72a",
+        "title": "Initial commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/repository/commits?ref_name=production&since=*&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "message": "ci: a pipeline for every commit",
+        "parent_ids": [
+          "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+        ],
+        "short_id": "6bb292df",
+        "title": "ci: a pipeline for every commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18",
+        "message": "Initial commit",
+        "parent_ids": [],
+        "short_id": "da21b72a",
+        "title": "Initial commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+      }
+    ]
+  },
+  {
+    "key": "GET /api/v4/projects/1/repository/commits?ref_name=staging&since=*&per_page=100&page=1",
+    "status": 200,
+    "body": [
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:29.000+00:00",
+        "committed_date": "2026-11-24T13:39:29.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:29.000+00:00",
+        "extended_trailers": {},
+        "id": "f3ce66a20d84f965813a7070492dd11ffa456dd5",
+        "message": "Merge branch 'fix-login' into 'main'\n\n(cherry picked from commit c757898171c46700347463228f8e1dfa28c16b17)",
+        "parent_ids": [
+          "6bb292df8d6bbf4123acd42538556c2b789f5208"
+        ],
+        "short_id": "f3ce66a2",
+        "title": "Merge branch 'fix-login' into 'main'",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/f3ce66a20d84f965813a7070492dd11ffa456dd5"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "6bb292df8d6bbf4123acd42538556c2b789f5208",
+        "message": "ci: a pipeline for every commit",
+        "parent_ids": [
+          "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+        ],
+        "short_id": "6bb292df",
+        "title": "ci: a pipeline for every commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/6bb292df8d6bbf4123acd42538556c2b789f5208"
+      },
+      {
+        "author_email": "user-2@example.com",
+        "author_name": "User 2",
+        "authored_date": "2026-11-24T13:39:19.000+00:00",
+        "committed_date": "2026-11-24T13:39:19.000+00:00",
+        "committer_email": "user-2@example.com",
+        "committer_name": "User 2",
+        "created_at": "2026-11-24T13:39:19.000+00:00",
+        "extended_trailers": {},
+        "id": "da21b72a45f8bfecc0a77378eeb4669b3b0f1c18",
+        "message": "Initial commit",
+        "parent_ids": [],
+        "short_id": "da21b72a",
+        "title": "Initial commit",
+        "trailers": {},
+        "web_url": "http://gitlab/root/tracked/-/commit/da21b72a45f8bfecc0a77378eeb4669b3b0f1c18"
+      }
+    ]
+  },
+  {
+    "key": "POST /api/graphql {\"query\":\"query($ids: [ID!], $iids: [String!], $first: Int) { projects(ids: $ids) { nodes { mergeRequests(iids: $iids, first: $first) { nodes { ...MrPipelines } } } } } fragment MrPipelines on MergeRequest { iid pipelines(first: 5) { nodes { id status createdAt updatedAt sha jobs(first: 50, retried: false) { nodes { id name status duration queuedDuration schedulingType needs { nodes { name } } stage { name } } } } } }\",\"variables\":{\"first\":3,\"ids\":[\"gid://gitlab/Project/1\"],\"iids\":[\"1\",\"2\",\"3\"]}}",
+    "status": 200,
+    "body": {
+      "data": {
+        "projects": {
+          "nodes": [
+            {
+              "mergeRequests": {
+                "nodes": [
+                  {
+                    "iid": "3",
+                    "pipelines": {
+                      "nodes": [
+                        {
+                          "createdAt": "2026-11-24T13:39:30Z",
+                          "id": "gid://gitlab/Ci::Pipeline/9",
+                          "jobs": {
+                            "nodes": [
+                              {
+                                "duration": 0,
+                                "id": "gid://gitlab/Ci::Build/18",
+                                "name": "build",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": 2.284204,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "build"
+                                },
+                                "status": "SUCCESS"
+                              },
+                              {
+                                "duration": 0,
+                                "id": "gid://gitlab/Ci::Build/17",
+                                "name": "unit",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": 23.675719,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "test"
+                                },
+                                "status": "SUCCESS"
+                              }
+                            ]
+                          },
+                          "sha": "c2a39066f6fe522399828be5937205963fe4c029",
+                          "status": "SUCCESS",
+                          "updatedAt": "2026-11-24T13:40:01Z"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "iid": "2",
+                    "pipelines": {
+                      "nodes": [
+                        {
+                          "createdAt": "2026-11-24T13:39:27Z",
+                          "id": "gid://gitlab/Ci::Pipeline/7",
+                          "jobs": {
+                            "nodes": [
+                              {
+                                "duration": 0,
+                                "id": "gid://gitlab/Ci::Build/14",
+                                "name": "build",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": 2.340093,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "build"
+                                },
+                                "status": "SUCCESS"
+                              },
+                              {
+                                "duration": 0,
+                                "id": "gid://gitlab/Ci::Build/13",
+                                "name": "unit",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": 20.153044,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "test"
+                                },
+                                "status": "SUCCESS"
+                              }
+                            ]
+                          },
+                          "sha": "f1f49b69cfd71eacf6a9d19bdc0c4b6011f3e43b",
+                          "status": "SUCCESS",
+                          "updatedAt": "2026-11-24T13:39:54Z"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "iid": "1",
+                    "pipelines": {
+                      "nodes": [
+                        {
+                          "createdAt": "2026-11-24T13:39:24Z",
+                          "id": "gid://gitlab/Ci::Pipeline/5",
+                          "jobs": {
+                            "nodes": [
+                              {
+                                "duration": null,
+                                "id": "gid://gitlab/Ci::Build/10",
+                                "name": "build",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": null,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "build"
+                                },
+                                "status": "SKIPPED"
+                              },
+                              {
+                                "duration": 0,
+                                "id": "gid://gitlab/Ci::Build/9",
+                                "name": "unit",
+                                "needs": {
+                                  "nodes": []
+                                },
+                                "queuedDuration": 19.356598,
+                                "schedulingType": "stage",
+                                "stage": {
+                                  "name": "test"
+                                },
+                                "status": "FAILED"
+                              }
+                            ]
+                          },
+                          "sha": "50b64db39bb111d9327c7620c7de51e9befb6945",
+                          "status": "FAILED",
+                          "updatedAt": "2026-11-24T13:39:49Z"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

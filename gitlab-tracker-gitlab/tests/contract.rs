@@ -471,6 +471,13 @@ fn canonical(mut value: Value) -> Value {
             for item in map.values_mut() {
                 *item = canonical(item.take());
             }
+            // When the client read the review (the machine's clock, not the
+            // instance's answer): only whether it was read can be compared.
+            if let Some(read_at) = map.get_mut("review_read_at") {
+                if !read_at.is_null() {
+                    *read_at = Value::String("<read>".into());
+                }
+            }
         }
         _ => {}
     }
