@@ -531,6 +531,11 @@ struct GuiApp {
         Option<std::sync::mpsc::Receiver<Vec<gitlab_tracker_core::TicketTransitionTarget>>>,
     /// Tickets being moved to another status: what to say once done.
     moves: (MoveSender, std::sync::mpsc::Receiver<MoveResult>),
+    /// A newer version of the app, shown in the title bar; the check in flight.
+    update: Option<crate::update_check::Release>,
+    update_rx: Option<std::sync::mpsc::Receiver<crate::update_check::Release>>,
+    /// Whether to look for newer versions (Settings › Interface).
+    update_check: bool,
     #[cfg(debug_assertions)]
     tour: Option<tour::Tour>,
     #[cfg(target_os = "macos")]
@@ -668,6 +673,9 @@ impl GuiApp {
             statuses,
             statuses_rx,
             moves,
+            update: None,
+            update_rx: None,
+            update_check: true,
             #[cfg(debug_assertions)]
             tour: tour::Tour::from_env(),
             #[cfg(target_os = "macos")]
@@ -694,7 +702,53 @@ impl GuiApp {
             gui.history.clear();
             gui.restore_tabs(&prefs.tabs, &projects_config.projects);
         }
+        if gui.demo {
+            // The demo shows the case: a newer version out, not seen yet.
+            let release = crate::update_check::demo();
+            gui.toasts.push_update(&release, gui.theme.tones.blue, 0.0);
+            gui.update = Some(release);
+        } else if gui.update_check {
+            gui.check_for_update();
+        }
         gui
+    }
+
+    /// Looks for a newer release in the background (GitHub, at most once a day).
+    fn check_for_update(&mut self) {
+        let (done, rx) = std::sync::mpsc::channel();
+        self.update_rx = Some(rx);
+        let ctx = self.ctx.clone();
+        tokio::spawn(async move {
+            if let Some(release) = crate::update_check::newer_release().await {
+                let _ = done.send(release);
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    /// Takes the check's answer: the title bar's pill, and one notification.
+    fn poll_update(&mut self, now: f64) {
+        let Some(release) = self.update_rx.as_ref().and_then(|rx| rx.try_recv().ok()) else {
+            return;
+        };
+        self.update_rx = None;
+        if self.update_check {
+            self.toasts
+                .push_update(&release, self.theme.tones.blue, now);
+            self.update = Some(release);
+        }
+    }
+
+    /// Settings › Interface: turning the check off hides what it found.
+    pub(super) fn set_update_check(&mut self, on: bool) {
+        self.update_check = on;
+        if on {
+            if self.update.is_none() && self.update_rx.is_none() && !self.demo {
+                self.check_for_update();
+            }
+        } else {
+            self.update = None;
+        }
     }
 
     /// Fetches the tracker's statuses once (for the board's columns).
@@ -1762,6 +1816,7 @@ impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll_tabs(ui.input(|i| i.time));
         self.poll_clicks();
+        self.poll_update(ui.input(|i| i.time));
         self.apply_events();
         self.wake_snoozed();
         export::poll(self);

@@ -498,6 +498,14 @@ while it is off.
 
 ![Settings: a tab per section, the search, the signed commits' options](assets/desktop/settings.png)
 
+**New versions.** Once a day at most, the window reads the latest release of
+gitlab-tracker on GitHub (`api.github.com`, without a token; the only call not
+made to your GitLab or your tracker). When a newer one is out, a pill with its
+number appears left of the bell, and one notification in the bell; either opens
+the release's page. Nothing is downloaded or installed: updating stays yours.
+Settings › Interface › *New versions* turns the check off. The demo shows the
+case with a made-up next version.
+
 **Columns** (`C`, or *Columns…* in the table) previews the table's head as it is
 drawn now: the columns picked in the accent, those the window has no room for
 dashed. Below, a card per column to switch on or off: first those shared with

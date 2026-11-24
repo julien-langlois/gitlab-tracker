@@ -2347,3 +2347,9 @@ saved view	Restore	恢复
 	What I did	我做了什么
 	Last copied {when}	上次复制于 {when}
 	last copied {time} ago	{time}前复制
+	Open its release page to download it	打开发布页面进行下载
+	Version {version} is available	版本 {version} 已发布
+	Open the release page	打开发布页面
+	v{version} available	v{version} 可用
+	New versions	新版本
+	Once a day, look on GitHub for a newer release and say so in the title bar. Applied at once; nothing is downloaded.	每天在 GitHub 上检查一次是否有更新的发布，并在标题栏中提示。立即生效；不会下载任何内容。

@@ -2347,3 +2347,9 @@ saved view	Restore	Restablecer
 	What I did	Lo que hice
 	Last copied {when}	Última copia el {when}
 	last copied {time} ago	copiado hace {time}
+	Open its release page to download it	Abra la página de la versión para descargarla
+	Version {version} is available	La versión {version} está disponible
+	Open the release page	Abrir la página de la versión
+	v{version} available	v{version} disponible
+	New versions	Nuevas versiones
+	Once a day, look on GitHub for a newer release and say so in the title bar. Applied at once; nothing is downloaded.	Una vez al día, busca en GitHub una versión más reciente y lo indica en la barra de título. Se aplica al momento; no se descarga nada.

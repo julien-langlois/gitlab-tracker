@@ -30,6 +30,8 @@ pub struct Prefs {
     pub window: Option<[f32; 2]>,
     /// The projects open in tabs, in order.
     pub tabs: Vec<SavedTab>,
+    /// No look for newer versions (Settings › Interface).
+    pub no_update_check: bool,
 }
 
 /// An open tab: its project's GitLab URL and id.
@@ -107,6 +109,7 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     if prefs.light {
         g.set_theme(bevel_theme::Mode::Light);
     }
+    g.update_check = !prefs.no_update_check;
     g.group_by = match prefs.group_by.as_deref() {
         Some("status") => GroupBy::Status,
         Some("milestone") => GroupBy::Milestone,
@@ -149,6 +152,7 @@ pub fn current(g: &GuiApp) -> Prefs {
                 id: t.id.clone(),
             })
             .collect(),
+        no_update_check: !g.update_check,
     }
 }
 
@@ -180,6 +184,7 @@ mod tests {
                 url: "https://g.io".into(),
                 id: "42".into(),
             }],
+            no_update_check: true,
         };
         let text = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&text).unwrap();
@@ -187,8 +192,10 @@ mod tests {
         assert_eq!(back.window, Some([1600.0, 1000.0]));
         assert_eq!(back.tabs, prefs.tabs);
         assert_eq!(back.standup, prefs.standup);
+        assert!(back.no_update_check);
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());
+        assert!(!partial.no_update_check, "new versions are looked for by default");
     }
 }

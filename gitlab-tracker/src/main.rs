@@ -33,6 +33,8 @@ mod shortcuts_core;
 mod status;
 mod storage;
 mod ui;
+#[cfg(feature = "gui")]
+mod update_check;
 mod utils;
 
 // The MR model and the GitLab client live in `gitlab-tracker-gitlab`, the

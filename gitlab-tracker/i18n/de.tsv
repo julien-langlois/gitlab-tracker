@@ -2347,3 +2347,9 @@ saved view	Restore	Wiederherstellen
 	What I did	Was ich getan habe
 	Last copied {when}	Zuletzt kopiert am {when}
 	last copied {time} ago	vor {time} kopiert
+	Open its release page to download it	Öffnen Sie die Release-Seite, um sie herunterzuladen
+	Version {version} is available	Version {version} ist verfügbar
+	Open the release page	Release-Seite öffnen
+	v{version} available	v{version} verfügbar
+	New versions	Neue Versionen
+	Once a day, look on GitHub for a newer release and say so in the title bar. Applied at once; nothing is downloaded.	Sucht einmal täglich auf GitHub nach einem neueren Release und zeigt es in der Titelleiste an. Sofort wirksam; es wird nichts heruntergeladen.

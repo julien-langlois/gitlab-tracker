@@ -38,6 +38,14 @@ pub enum Kind {
     /// A scheduled pipeline failed: its id is `schedule:<id>`, it opens the
     /// CI page.
     ScheduleFailed,
+    /// A newer version of the app is out: its id is the release's page, which
+    /// it opens.
+    Update,
+}
+
+/// Whether a notification's id is a web page (a release) rather than an MR.
+fn is_page(id: &str) -> bool {
+    id.starts_with("https://")
 }
 
 /// A toast kept for the bell: what, about which MR, and when.
@@ -125,6 +133,24 @@ impl Toasts {
             }
         }
         self.list.retain(|t| now - t.born < LIFETIME);
+    }
+
+    /// A newer version is out: one notification, unread, linking to its page.
+    pub fn push_update(&mut self, release: &crate::update_check::Release, tone: Tone, now: f64) {
+        if self.history.iter().any(|p| p.id == release.url) {
+            return;
+        }
+        self.push(
+            &release.url,
+            tl("Open its release page to download it"),
+            Kind::Update,
+            tf(
+                "Version {version} is available",
+                &[("version", &release.version)],
+            ),
+            tone,
+            now,
+        );
     }
 
     pub fn push(&mut self, id: &str, title: &str, kind: Kind, text: String, tone: Tone, now: f64) {
@@ -247,7 +273,9 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
         g.toasts.list.remove(i);
     } else if let Some(i) = clicked {
         let toast = g.toasts.list.remove(i);
-        if toast.id.starts_with("schedule:") {
+        if is_page(&toast.id) {
+            ctx.open_url(egui::OpenUrl::new_tab(&toast.id));
+        } else if toast.id.starts_with("schedule:") {
             g.open_page(super::Page::Ci);
         } else {
             g.open_mr(&toast.id);
@@ -477,6 +505,10 @@ pub fn panel(g: &mut GuiApp, button: &egui::Response) {
         Some(Ask::Clear) => each(&mut |t| t.history.clear()),
         Some(Ask::Open(tab, id, failed)) => {
             each(&mut |t| t.history.iter_mut().for_each(|p| p.read = true));
+            if is_page(&id) {
+                g.ctx.open_url(egui::OpenUrl::new_tab(&id));
+                return;
+            }
             if id.starts_with("schedule:") {
                 g.activate(tab);
                 g.open_page(super::Page::Ci);
@@ -592,6 +624,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
             let glyph = match kind {
                 Kind::PipelineFailed | Kind::ScheduleFailed => "✕",
                 Kind::PipelinePassed => "✓",
+                Kind::Update => "↑",
                 _ => "●",
             };
             painter.text(
@@ -634,7 +667,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         0.0,
         egui::TextFormat::simple(fonts::semibold(theme.text_size), theme.palette.text),
     );
-    let reference = if past.kind == Kind::ScheduleFailed {
+    let reference = if matches!(past.kind, Kind::ScheduleFailed | Kind::Update) {
         String::new()
     } else {
         format!("  !{}", past.id)
@@ -688,6 +721,8 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .tip(if past.kind == Kind::ScheduleFailed {
             tl("Open the CI page")
+        } else if past.kind == Kind::Update {
+            tl("Open the release page")
         } else {
             tl("Open its MR page")
         })

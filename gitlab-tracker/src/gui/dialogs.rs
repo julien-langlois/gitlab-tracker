@@ -272,6 +272,8 @@ enum Row {
     Language,
     /// The window's theme.
     Theme,
+    /// Look for newer versions.
+    UpdateCheck,
     /// A project setting, by its index in the settings editor.
     Item(usize),
 }
@@ -281,7 +283,7 @@ enum Row {
 fn sections(g: &GuiApp) -> Vec<Section> {
     let mut sections = vec![Section {
         key: "Interface",
-        rows: vec![Row::Language, Row::Theme],
+        rows: vec![Row::Language, Row::Theme, Row::UpdateCheck],
     }];
     for (i, item) in g.app.settings_editor.items.iter().enumerate() {
         if GUI_HIDDEN_SETTINGS.contains(&item.def.id) {
@@ -346,6 +348,9 @@ fn section_about(key: &str) -> Option<&str> {
     Some(tl(about))
 }
 
+const UPDATE_CHECK_HELP: &str = "Once a day, look on GitHub for a newer release and say so in \
+     the title bar. Applied at once; nothing is downloaded.";
+
 /// A row's name and help, in the window's language.
 fn row_text(g: &GuiApp, row: Row) -> (&'static str, &'static str) {
     match row {
@@ -357,6 +362,7 @@ fn row_text(g: &GuiApp, row: Row) -> (&'static str, &'static str) {
             tl("Theme"),
             tl("Applied at once, as with the title bar's button."),
         ),
+        Row::UpdateCheck => (tl("New versions"), tl(UPDATE_CHECK_HELP)),
         Row::Item(i) => {
             let def = &g.app.settings_editor.items[i].def;
             (tl(def.label), tl(def.help))
@@ -375,6 +381,7 @@ fn row_matches(g: &GuiApp, row: Row, query: &str) -> bool {
         }
         Row::Language => ["Language", ""],
         Row::Theme => ["Theme", ""],
+        Row::UpdateCheck => ["New versions", UPDATE_CHECK_HELP],
     };
     [label, help, english[0], english[1]]
         .iter()
@@ -385,7 +392,7 @@ fn row_matches(g: &GuiApp, row: Row, query: &str) -> bool {
 fn row_modified(g: &GuiApp, row: Row) -> bool {
     match row {
         Row::Language => g.language_draft != g.language,
-        Row::Theme => false,
+        Row::Theme | Row::UpdateCheck => false,
         Row::Item(i) => g.app.settings_editor.is_modified(i),
     }
 }
@@ -780,12 +787,18 @@ fn control_width(g: &GuiApp, row: Row) -> f32 {
             ProjectSettingKind::Text => CONTROL_WIDTH,
         },
         Row::Language | Row::Theme => CONTROL_WIDTH,
+        Row::UpdateCheck => 40.0,
     }
 }
 
 fn control(g: &mut GuiApp, ui: &mut Ui, row: Row) {
     let theme = g.theme;
     match row {
+        Row::UpdateCheck => {
+            if switch(ui, &theme, g.update_check, "").clicked() {
+                g.set_update_check(!g.update_check);
+            }
+        }
         Row::Language => language_control(ui, &mut g.language_draft),
         Row::Theme => {
             ui.allocate_ui_with_layout(

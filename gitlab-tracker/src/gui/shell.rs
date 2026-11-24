@@ -185,6 +185,7 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
                         g.set_theme(next);
                     }
                     bell(g, ui);
+                    update_pill(g, ui);
                     if matches!(page, Page::MergeRequests | Page::Tracker) {
                         let shown = sizes.inspector.is_some();
                         let label = tl(if shown {
@@ -211,6 +212,58 @@ fn title_bar(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes, page: Page) {
 /// The bell: the session's toasts, the unread ones counted on it.
 /// The bell: the unread notifications of every tab counted on it, the panel
 /// under it ([`super::toasts::panel`]).
+/// A newer version is out: a pill with its number, left of the bell. A click
+/// opens its release page; nothing is downloaded from the app.
+fn update_pill(g: &mut GuiApp, ui: &mut Ui) {
+    let Some(release) = g.update.clone() else {
+        return;
+    };
+    let theme = g.theme;
+    let tone = theme.tones.blue;
+    let text = tf("v{version} available", &[("version", &release.version)]);
+    let font = fonts::medium(theme.text_size - 1.0);
+    let galley = ui.painter().layout_no_wrap(text.clone(), font, tone.fg);
+    // An arrow, the text, the room around them.
+    let size = Vec2::new(galley.size().x + 12.0 + 10.0 + 14.0, 22.0);
+    ui.add_space(4.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Link, ui.is_enabled(), &text));
+    let fill = if response.hovered() {
+        tone.bg.gamma_multiply(1.8)
+    } else {
+        tone.bg
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(11), fill);
+    icons::paint(
+        ui.painter(),
+        Rect::from_center_size(
+            egui::pos2(rect.left() + 13.0, rect.center().y),
+            Vec2::splat(11.0),
+        ),
+        Icon::ArrowUp,
+        tone.fg,
+    );
+    ui.painter().galley(
+        egui::pos2(rect.left() + 22.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        tone.fg,
+    );
+    ui.add_space(6.0);
+    let tip = Tip::new()
+        .title(tf(
+            "Version {version} is available",
+            &[("version", &release.version)],
+        ))
+        .text(tl("Open the release page"));
+    if response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .rich(tip)
+        .clicked()
+    {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(&release.url));
+    }
+}
+
 fn bell(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let response = bar_button(ui, &theme, 44.0, tl("Notifications"), Icon::Bell);
