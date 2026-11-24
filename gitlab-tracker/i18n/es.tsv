@@ -2353,3 +2353,6 @@ saved view	Restore	Restablecer
 	v{version} available	v{version} disponible
 	New versions	Nuevas versiones
 	Once a day, look on GitHub for a newer release and say so in the title bar. Applied at once; nothing is downloaded.	Una vez al día, busca en GitHub una versión más reciente y lo indica en la barra de título. Se aplica al momento; no se descarga nada.
+	MRs open for over 30 days	MR abiertas desde hace más de 30 días
+	MRs open for over 14 days	MR abiertas desde hace más de 14 días
+	MRs open for over 7 days	MR abiertas desde hace más de 7 días

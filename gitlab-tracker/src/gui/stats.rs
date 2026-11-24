@@ -1469,6 +1469,13 @@ fn severity(severity: &AnomalySeverity, theme: &Theme) -> (&'static str, Tone) {
 
 /// `pipeline_failure_rate_spike` → "Pipeline failure rate", translated.
 fn metric_name(metric: &str) -> String {
+    // Pressure signals on MRs left open: their id is not a readable name.
+    match metric {
+        "stale_open_mrs_30d" => return tl("MRs open for over 30 days").to_string(),
+        "stale_open_mrs_14d" => return tl("MRs open for over 14 days").to_string(),
+        "stale_open_mrs_7d" => return tl("MRs open for over 7 days").to_string(),
+        _ => {}
+    }
     let name = metric.trim_end_matches("_spike").replace('_', " ");
     let mut chars = name.chars();
     let name: String = match chars.next() {
@@ -1864,7 +1871,14 @@ fn insights(report: &StatReport, theme: &Theme) -> Vec<(String, Color32, StatsTa
             StatsTab::Correlations,
         ));
     }
-    if let Some(signal) = report.poisson.anomalies.iter().find(|s| s.is_anomalous()) {
+    // Only a figure compared with its own past has a "usual range"; pressure
+    // signals (MRs left open) have their own line above.
+    if let Some(signal) = report
+        .poisson
+        .anomalies
+        .iter()
+        .find(|s| s.is_anomalous() && s.baseline.is_some())
+    {
         out.push((
             tf(
                 "{metric} is out of its usual range.",

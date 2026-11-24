@@ -2353,3 +2353,6 @@ saved view	Restore	Restaurar
 	v{version} available	v{version} disponível
 	New versions	Novas versões
 	Once a day, look on GitHub for a newer release and say so in the title bar. Applied at once; nothing is downloaded.	Uma vez por dia, procura no GitHub uma versão mais recente e avisa na barra de título. Aplicado na hora; nada é baixado.
+	MRs open for over 30 days	MRs abertas há mais de 30 dias
+	MRs open for over 14 days	MRs abertas há mais de 14 dias
+	MRs open for over 7 days	MRs abertas há mais de 7 dias
