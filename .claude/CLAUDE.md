@@ -127,7 +127,8 @@ cargo doc --workspace --all-features --no-deps
 Feature sets that must each compile: default (`gui`,`notifications`),
 `--no-default-features` (terminal only, no Wayland/X headers), `stats`, `redmine`,
 and `gitlab-tracker-core` alone. `cargo deny check` for new dependencies (licences,
-advisories, sources). Bug fix → a regression test; GUI page → covered by the headless
+advisories, sources). Coverage has a floor per crate (`scripts/coverage-floors.py`,
+run in CI): never lower one; raise it when coverage grows. Bug fix → a regression test; GUI page → covered by the headless
 render tests (`gui/render_tests.rs`).
 
 ## Commits

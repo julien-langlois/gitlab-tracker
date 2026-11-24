@@ -200,13 +200,19 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Each library crate and the binary outside gui/ keep their floor
+      # (scripts/coverage-floors.py: floors only go up).
+      - name: Coverage floors
+        run: python3 scripts/coverage-floors.py coverage.txt
+
       - name: HTML report
+        if: ${{ always() }}
         run: cargo llvm-cov report --html
 
       # Line-by-line report, downloadable from the run page. Skipped under act
       # (ACT=true), which has no artifact store.
       - name: Upload HTML report
-        if: ${{ !env.ACT }}
+        if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
