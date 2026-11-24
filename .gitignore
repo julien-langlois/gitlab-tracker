@@ -21,3 +21,6 @@ Thumbs.db
 .secrets
 event.json
 *.log
+
+# --- Claude Code (personal settings) ---
+.claude/settings.local.json
