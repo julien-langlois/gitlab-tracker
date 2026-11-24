@@ -196,6 +196,9 @@ mod tests {
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());
-        assert!(!partial.no_update_check, "new versions are looked for by default");
+        assert!(
+            !partial.no_update_check,
+            "new versions are looked for by default"
+        );
     }
 }
