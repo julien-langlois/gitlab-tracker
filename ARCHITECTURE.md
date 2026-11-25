@@ -219,6 +219,7 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
     ├── storage.rs       # Configuration types (ProjectEntry…); the rest in storage/:
     ├── storage/         # projects_file, projects (active, add, saves), tokens, config_dir, project_store, state
+    ├── owners.rs        # Reviewer suggestions; owners/: codeowners, suggest, read (from GitLab)
     ├── config.rs        # AppConfig, label colours & wildcard matching, VisibleColumns, activity badge
     ├── settings.rs      # Settings dashboard editor state ([,])
     ├── settings_core.rs # inventory::submit! — built-in project settings
@@ -228,7 +229,8 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions;
     │                    # mod.rs: GuiApp and the frame loop; launch, sessions, tabs, navigation, background
     │                    # beside it. Large pages are a file (state, frame) + a folder of their parts:
-    │                    # mr_page/, table/, delivery/, team/, stats/, overlaps/, milestones/, ci/, releases/, setup/
+    │                    # mr_page/, table/, delivery/, team/, stats/, overlaps/, milestones/, ci/, releases/,
+    │                    # setup/, environments/, dialogs/, inspector/, details/, shell/
     ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
     ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
@@ -265,6 +267,13 @@ gitlab-tracker-gitlab/           # Library crate — the MR model and the GitLab
     ├── gitlab_graphql.rs · gitlab_signatures.rs · sentinel.rs · signatures.rs · snooze.rs · history.rs
     ├── models.rs        # MrData, TrackedMr, MrStatus, BranchCommits…
     └── events.rs        # GitlabEvent: what the tasks report
+
+gitlab-tracker-store/            # Library crate — tracker.db
+├── migrations/          # Numbered SQL files, never edited once shipped
+└── src/
+    ├── lib.rs           # Re-exports
+    └── state_db.rs      # Rows, opening the database, keys, migrations; state_db/: tracked (load, save,
+                         # import), caches (merges, owners, settings), events (an MR's history), writes
 
 gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
 └── src/
