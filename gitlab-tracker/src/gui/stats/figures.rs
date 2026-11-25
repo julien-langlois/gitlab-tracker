@@ -166,7 +166,7 @@ pub(super) fn flagged<'a>(report: &'a StatReport, metric: &str) -> Option<&'a An
         .max_by_key(|s| rank(s))
 }
 
-/// One row of [`figures`].
+/// One row of [`figures()`].
 pub(super) struct Figure<'a> {
     pub(super) caption: &'a str,
     pub(super) value: String,
