@@ -108,7 +108,8 @@ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<f64> {
     }
 
     // Score: reward consecutive runs, penalise large gaps.
-    let total_span = match_positions.last().unwrap() - match_positions.first().unwrap() + 1;
+    let (&first, &last) = (match_positions.first()?, match_positions.last()?);
+    let total_span = last - first + 1;
     let matched = match_positions.len() as f64;
     let span = total_span as f64;
 
@@ -116,7 +117,7 @@ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<f64> {
     let compactness = matched / span;
 
     // Position bonus: earlier first match → higher relevance.
-    let first_pos = *match_positions.first().unwrap() as f64;
+    let first_pos = first as f64;
     let position_bonus = 1.0 - (first_pos / h_chars.len() as f64).min(1.0);
 
     // Combine: compactness weighted 70%, position 30%, capped at 0.79
@@ -303,6 +304,19 @@ impl Drop for TerminalGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fuzzy_score_ranks_substrings_over_scattered_letters_and_handles_any_text() {
+        let exact = fuzzy_score("cache", "Fix the cache").unwrap();
+        let scattered = fuzzy_score("fxc", "Fix the cache").unwrap();
+        assert!(exact > scattered, "{exact} vs {scattered}");
+        assert!(fuzzy_score("déj", "Mise à jour du déjà-vu").is_some());
+        assert!(fuzzy_score("mjv", "Mise à jour du déjà-vu").is_some());
+        assert!(fuzzy_score("中文", "修复中文翻译").is_some());
+        assert!(fuzzy_score("xyz", "Fix the cache").is_none());
+        assert!(fuzzy_score("", "anything").is_none());
+        assert!(fuzzy_score("a", "").is_none());
+    }
 
     #[test]
     fn review_queue_keeps_open_unapproved_reviews_requested_from_me() {
