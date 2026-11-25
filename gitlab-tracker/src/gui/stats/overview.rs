@@ -411,5 +411,3 @@ pub(super) fn backlog(ui: &mut Ui, theme: &Theme, report: &StatReport, live: &Li
         );
     });
 }
-
-// ── Flow ─────────────────────────────────────────────────────────────────────

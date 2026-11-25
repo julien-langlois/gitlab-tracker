@@ -621,5 +621,3 @@ pub(super) fn unresolved(mr: &TrackedMr, data: Option<&PageData>) -> usize {
         None => mr.user_notes_count as usize,
     }
 }
-
-// ── Why it can't merge ───────────────────────────────────────────────────────

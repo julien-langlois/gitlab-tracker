@@ -361,7 +361,5 @@ fn lifecycle(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
         });
 }
 
-// ── Top ──────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests;

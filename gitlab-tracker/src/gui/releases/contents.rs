@@ -312,5 +312,3 @@ pub fn contents(app: &App, commits: &[ApiCommit], truncated: bool) -> Contents {
         truncated,
     }
 }
-
-// ── The page's model ─────────────────────────────────────────────────────────

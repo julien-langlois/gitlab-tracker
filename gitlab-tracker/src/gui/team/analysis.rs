@@ -387,5 +387,3 @@ pub(in crate::gui) fn busiest(
     let (who, n) = by_reviewer.iter().max_by_key(|(_, n)| **n)?;
     (total > 0).then(|| (who.to_string(), f64::from(*n) / f64::from(total)))
 }
-
-// ── Screen ───────────────────────────────────────────────────────────────────

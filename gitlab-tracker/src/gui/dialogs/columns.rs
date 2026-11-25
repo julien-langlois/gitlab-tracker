@@ -310,5 +310,3 @@ pub(super) fn toggle_card(
         response
     }
 }
-
-// ── Project picker ───────────────────────────────────────────────────────────

@@ -113,5 +113,3 @@ pub(super) fn item_row(ui: &mut Ui, theme: &Theme, item: &Item, ordered: &[Strin
         )
         .clicked()
 }
-
-// ── Inspector ────────────────────────────────────────────────────────────────

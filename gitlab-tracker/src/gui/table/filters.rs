@@ -333,5 +333,3 @@ pub(super) fn milestone_suggestions(g: &mut GuiApp, ui: &mut Ui, bar: Rect) {
         g.app.milestone_suggestions.clear();
     }
 }
-
-// ── Columns ──────────────────────────────────────────────────────────────────

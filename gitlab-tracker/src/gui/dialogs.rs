@@ -257,5 +257,3 @@ fn tip_dot(ui: &mut Ui, color: Color32, size: f32, tip: &str) {
     ui.painter().circle_filled(rect.center(), size / 2.0, color);
     response.tip(tip);
 }
-
-// ── Settings ─────────────────────────────────────────────────────────────────

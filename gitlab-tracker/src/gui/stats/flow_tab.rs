@@ -119,5 +119,3 @@ pub(super) fn flow(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         |v| format!("{v:.0}"),
     );
 }
-
-// ── Quality ──────────────────────────────────────────────────────────────────

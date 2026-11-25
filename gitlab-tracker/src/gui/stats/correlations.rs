@@ -73,5 +73,3 @@ pub(super) fn correlations(ui: &mut Ui, theme: &Theme, report: &StatReport) {
         ));
     });
 }
-
-// ── Insights ─────────────────────────────────────────────────────────────────

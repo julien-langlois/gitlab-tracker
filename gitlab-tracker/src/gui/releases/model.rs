@@ -432,5 +432,3 @@ pub(super) fn model(g: &mut GuiApp, ctx: &egui::Context, now: DateTime<Utc>) -> 
     };
     analyze(app, overview.as_ref(), &read, now)
 }
-
-// ── The page ─────────────────────────────────────────────────────────────────

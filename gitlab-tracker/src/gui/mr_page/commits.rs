@@ -327,5 +327,3 @@ pub(super) fn commit_presence(
         BranchPresence::Absent
     })
 }
-
-// ── Context tiles ────────────────────────────────────────────────────────────

@@ -179,5 +179,3 @@ pub(super) fn stages_card(ui: &mut Ui, theme: &Theme, ci: &Ci) {
         }
     });
 }
-
-// ── Inspector ────────────────────────────────────────────────────────────────

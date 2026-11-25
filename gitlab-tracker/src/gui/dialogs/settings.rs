@@ -472,5 +472,3 @@ pub(super) fn unit(id: &str) -> Option<&'static str> {
     .find(|(suffix, _)| id.ends_with(suffix))
     .map(|(_, unit)| unit)
 }
-
-// ── Columns ──────────────────────────────────────────────────────────────────
