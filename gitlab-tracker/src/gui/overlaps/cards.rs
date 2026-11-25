@@ -330,6 +330,10 @@ pub(super) fn files_card(
                     f.mrs.iter().any(|m| &m.0 == a) && f.mrs.iter().any(|m| &m.0 == b)
                 });
                 let (rect, response) = board::row(ui, theme, 38.0, selected);
+                // Only the rows in view are drawn.
+                if !ui.is_rect_visible(rect) {
+                    continue;
+                }
                 if !selected {
                     board::row_rule(ui, theme, rect);
                 }

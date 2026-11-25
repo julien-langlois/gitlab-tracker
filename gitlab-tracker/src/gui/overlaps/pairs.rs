@@ -25,6 +25,10 @@ pub(super) fn pairs_card(
                 let selected =
                     pair.is_some_and(|(a, b)| (a == &p.a && b == &p.b) || (a == &p.b && b == &p.a));
                 let (rect, response) = board::row(ui, theme, 46.0, selected);
+                // Only the rows in view are drawn: a busy project has thousands.
+                if !ui.is_rect_visible(rect) {
+                    continue;
+                }
                 if !selected {
                     board::row_rule(ui, theme, rect);
                 }

@@ -83,3 +83,21 @@ fn folders_two_levels_deep() {
     assert_eq!(folder("Cargo.toml"), "/");
     assert_eq!(folder("config/default.toml"), "config/");
 }
+
+#[test]
+fn lookups_find_an_mr_a_pair_in_either_order_and_a_file() {
+    let mut app = crate::app::tests::test_app();
+    app.mrs = vec![
+        mr("1", vec![file("src/a.rs", &[(10, 20)])]),
+        mr("2", vec![file("src/a.rs", &[(15, 25)])]),
+        mr("3", vec![file("src/c.rs", &[(1, 2)])]),
+    ];
+    let o = analyze(&app, false, true);
+    assert_eq!(o.mr("2").map(|m| m.id.as_str()), Some("2"));
+    assert!(o.mr("9").is_none());
+    let pair = o.pair("1", "2").expect("1 and 2 share src/a.rs");
+    assert!(std::ptr::eq(pair, o.pair("2", "1").expect("either order")));
+    assert!(o.pair("1", "3").is_none());
+    assert_eq!(o.file("src/a.rs").map(|f| f.mrs.len()), Some(2));
+    assert!(o.file("src/c.rs").is_none(), "changed by one MR only");
+}

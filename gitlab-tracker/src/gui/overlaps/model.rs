@@ -104,6 +104,11 @@ pub struct Overlaps {
     pub total_files: usize,
     /// Open MRs whose files are not known yet.
     pub unknown: usize,
+    /// Where each MR, pair (lower id first) and file is in the lists above: the
+    /// page looks them up on every frame, thousands of pairs on a busy project.
+    pub(super) mr_at: HashMap<String, usize>,
+    pub(super) pair_at: HashMap<(String, String), usize>,
+    pub(super) file_at: HashMap<String, usize>,
 }
 
 pub(in crate::gui) fn is_lock_file(path: &str) -> bool {
@@ -224,22 +229,52 @@ pub fn analyze(app: &App, lockfiles: bool, drafts: bool) -> Overlaps {
             .then(y.files.len().cmp(&x.files.len()))
             .then(x.a.cmp(&y.a))
     });
+    out.index();
     out
 }
 
+/// The key of the pair of `a` and `b`, in either order.
+fn pair_key(a: &str, b: &str) -> (String, String) {
+    if a <= b {
+        (a.to_string(), b.to_string())
+    } else {
+        (b.to_string(), a.to_string())
+    }
+}
+
 impl Overlaps {
+    /// Fills the lookups from the lists.
+    pub(super) fn index(&mut self) {
+        self.mr_at = self
+            .mrs
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (m.id.clone(), i))
+            .collect();
+        self.pair_at = self
+            .pairs
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (pair_key(&p.a, &p.b), i))
+            .collect();
+        self.file_at = self
+            .files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.path.clone(), i))
+            .collect();
+    }
+
     pub(super) fn mr(&self, id: &str) -> Option<&Mr> {
-        self.mrs.iter().find(|m| m.id == id)
+        self.mr_at.get(id).map(|&i| &self.mrs[i])
     }
 
     pub(super) fn pair(&self, a: &str, b: &str) -> Option<&Pair> {
-        self.pairs
-            .iter()
-            .find(|p| (p.a == a && p.b == b) || (p.a == b && p.b == a))
+        self.pair_at.get(&pair_key(a, b)).map(|&i| &self.pairs[i])
     }
 
     pub(super) fn file(&self, path: &str) -> Option<&Shared> {
-        self.files.iter().find(|f| f.path == path)
+        self.file_at.get(path).map(|&i| &self.files[i])
     }
 }
 
