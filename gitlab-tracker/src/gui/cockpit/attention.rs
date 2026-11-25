@@ -168,6 +168,9 @@ pub(super) fn needs_attention(ui: &mut Ui, theme: &Theme, urgent: &[Urgent]) -> 
         for u in urgent {
             let (rect, response) =
                 ui.allocate_exact_size(Vec2::new(ui.available_width(), 36.0), Sense::click());
+            if !ui.is_rect_visible(rect) {
+                continue;
+            }
             if response.hovered() {
                 ui.painter().rect_filled(
                     rect,

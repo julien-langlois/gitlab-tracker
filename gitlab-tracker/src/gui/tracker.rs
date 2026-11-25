@@ -3,7 +3,7 @@
 //! selects the MR, whose ticket the inspector shows.
 
 use bevel_theme::{fonts, Chip, Theme, Tone};
-use egui::{Align, CornerRadius, Layout, Margin, RichText, Sense, Stroke, Ui, Vec2};
+use egui::{Align, CornerRadius, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, Vec2};
 use gitlab_tracker_core::LinkedTicket;
 
 use super::icons::{self, Icon};
@@ -114,8 +114,14 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         let tone = tones::ticket_status(status, &theme.tones);
                         group_heading(ui, &theme, status, tone, group.len(), time_total(&group));
                         for row in group {
+                            let key = egui::Id::unique(("ticket_row_height", &row.mr_id));
+                            if out_of_view(ui, key) {
+                                ui.add_space(6.0);
+                                continue;
+                            }
                             let (card, avatar) =
                                 ticket_row(ui, &theme, row, selected == Some(row.index));
+                            remember_height(ui, key, card.rect);
                             if card.clicked() {
                                 picked = Some(row.index);
                             }
@@ -303,9 +309,13 @@ fn board_view(
                             }
                             for row in &group {
                                 let selected = selected == Some(row.index);
+                                let id =
+                                    egui::Id::unique(("board_card", &row.ticket.id, row.index));
+                                let key = id.with("height");
+                                if !ui.ctx().is_being_dragged(id) && out_of_view(ui, key) {
+                                    continue;
+                                }
                                 let card = if movable {
-                                    let id =
-                                        egui::Id::unique(("board_card", &row.ticket.id, row.index));
                                     let payload = Dragged {
                                         ticket: row.ticket.id.clone(),
                                         status: row.ticket.status.clone(),
@@ -344,6 +354,7 @@ fn board_view(
                                 ) {
                                     *opened = Some(row.index);
                                 }
+                                remember_height(ui, key, card.rect);
                                 if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
                                     *log_time = Some(row.index);
                                 }
@@ -602,6 +613,26 @@ fn is_over(ticket: &LinkedTicket) -> bool {
 
 /// One ticket as a card: id and type, subject and MR, progress, assignee.
 /// Returns the card's response and where the avatar went.
+/// Whether the card under `key` is out of view, at the height it had when last
+/// drawn: then only its room is taken, so a long list lays out the cards in
+/// view alone (a card never drawn yet is drawn, to know its height).
+fn out_of_view(ui: &mut Ui, key: egui::Id) -> bool {
+    let Some(height) = ui.data(|d| d.get_temp::<f32>(key)) else {
+        return false;
+    };
+    let rect = Rect::from_min_size(ui.cursor().min, Vec2::new(ui.available_width(), height));
+    if ui.is_rect_visible(rect) {
+        return false;
+    }
+    ui.allocate_rect(rect, Sense::hover());
+    true
+}
+
+/// Keeps the height of a card drawn, for [`out_of_view`].
+fn remember_height(ui: &Ui, key: egui::Id, rect: Rect) {
+    ui.data_mut(|d| d.insert_temp(key, rect.height()));
+}
+
 fn ticket_row(
     ui: &mut Ui,
     theme: &Theme,

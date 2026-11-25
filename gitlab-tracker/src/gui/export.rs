@@ -378,7 +378,8 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
     if rows == Rows::Picked && picked_count == 0 {
         rows = Rows::View;
     }
-    let (preview, n) = text(g, rows, settings);
+    // Worked out only while the panel shows (or for a copy): the whole export.
+    let mut built: Option<(String, usize)> = None;
     let saving = g.export.saving.is_some();
     let demo = g.demo;
     let mut copy = false;
@@ -394,6 +395,8 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
         .frame(frame)
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show(|ui| {
+            let (preview, n) = built.insert(text(g, rows, settings));
+            let (preview, n) = (&*preview, *n);
             ui.set_width(WIDTH);
             ui.spacing_mut().item_spacing.y = 0.0;
             header(ui, &theme, n);
@@ -467,9 +470,9 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
                     ui.add_space(10.0);
                     caption(ui, &theme, tl("Preview"));
                     let shown = if settings.format == Format::Markdown && settings.links {
-                        elide_links(&preview)
+                        elide_links(preview)
                     } else {
-                        preview.clone()
+                        preview.to_string()
                     };
                     preview_box(ui, &theme, &shown);
                 });
@@ -507,6 +510,10 @@ pub fn button_and_panel(g: &mut GuiApp, ui: &mut Ui, icon_only: bool) {
         });
     g.export.settings = settings;
     g.export.rows = rows;
+    if !(copy || save_as) {
+        return;
+    }
+    let (preview, n) = built.unwrap_or_else(|| text(g, rows, settings));
     if copy {
         ui.ctx().copy_text(preview);
         g.app.flash(copied_text(n, settings.format), false);

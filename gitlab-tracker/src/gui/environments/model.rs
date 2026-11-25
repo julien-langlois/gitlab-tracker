@@ -17,7 +17,7 @@ pub(super) struct Branch {
 pub(super) type Waiting = (String, String, Option<DateTime<Utc>>);
 
 /// What `app` has on each pair of branches, and the branches in flow order.
-pub(super) struct Model {
+pub(in crate::gui) struct Model {
     pub(super) branches: Vec<Branch>,
     /// (from, to) → the MRs on `from` not (all) on `to`, with since when.
     pub(super) gaps: HashMap<(usize, usize), Vec<Waiting>>,

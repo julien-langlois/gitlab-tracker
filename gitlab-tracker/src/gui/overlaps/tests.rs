@@ -101,3 +101,19 @@ fn lookups_find_an_mr_a_pair_in_either_order_and_a_file() {
     assert_eq!(o.file("src/a.rs").map(|f| f.mrs.len()), Some(2));
     assert!(o.file("src/c.rs").is_none(), "changed by one MR only");
 }
+
+#[test]
+fn the_matrix_takes_the_ten_lowest_ids_and_my_pairs_are_counted_once() {
+    let mut app = crate::app::tests::test_app();
+    app.config.gitlab_username = Some("dev3".into());
+    // Twelve MRs on the same file: every two of them are a pair.
+    app.mrs = (1..=12)
+        .map(|i| mr(&i.to_string(), vec![file("src/a.rs", &[(1, 5)])]))
+        .collect();
+    let o = analyze(&app, false, false);
+    let expected: Vec<String> = (1..=10).map(|i| i.to_string()).collect();
+    // By number, not as text ("10" after "9", "11" and "12" left out).
+    assert_eq!(o.matrix, expected);
+    // !3 is in a pair with each of the eleven others.
+    assert_eq!(o.my_pairs, 11);
+}

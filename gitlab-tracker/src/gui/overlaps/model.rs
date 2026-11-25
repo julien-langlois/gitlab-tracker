@@ -109,6 +109,10 @@ pub struct Overlaps {
     pub(super) mr_at: HashMap<String, usize>,
     pub(super) pair_at: HashMap<(String, String), usize>,
     pub(super) file_at: HashMap<String, usize>,
+    /// The matrix's MRs: the ten lowest ids among the pairs.
+    pub(super) matrix: Vec<String>,
+    /// The pairs with one of my MRs.
+    pub(super) my_pairs: usize,
 }
 
 pub(in crate::gui) fn is_lock_file(path: &str) -> bool {
@@ -230,6 +234,11 @@ pub fn analyze(app: &App, lockfiles: bool, drafts: bool) -> Overlaps {
             .then(x.a.cmp(&y.a))
     });
     out.index();
+    out.my_pairs = out
+        .pairs
+        .iter()
+        .filter(|p| super::mine(app, &out, p))
+        .count();
     out
 }
 
@@ -263,6 +272,14 @@ impl Overlaps {
             .enumerate()
             .map(|(i, f)| (f.path.clone(), i))
             .collect();
+        let ids: std::collections::BTreeSet<&str> = self
+            .pairs
+            .iter()
+            .flat_map(|p| [p.a.as_str(), p.b.as_str()])
+            .collect();
+        let mut ids: Vec<&str> = ids.into_iter().collect();
+        ids.sort_by_key(|id| id.parse::<u64>().unwrap_or(u64::MAX));
+        self.matrix = ids.into_iter().take(10).map(str::to_string).collect();
     }
 
     pub(super) fn mr(&self, id: &str) -> Option<&Mr> {

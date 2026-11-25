@@ -44,6 +44,14 @@ pub struct Row {
 }
 
 /// The MRs between `from` and `to`; closed MRs and those still loading are left out.
+/// [`rows`] kept between frames (see `memo.rs`).
+pub fn kept_rows(g: &super::GuiApp, from: &str, to: &str) -> std::rc::Rc<Vec<Row>> {
+    let key = (from.to_string(), to.to_string());
+    g.memo
+        .promote
+        .get(&g.app.project_id, key, || rows(&g.app, from, to))
+}
+
 pub fn rows(app: &App, from: &str, to: &str) -> Vec<Row> {
     let mut rows = Vec::new();
     for mr in &app.mrs {

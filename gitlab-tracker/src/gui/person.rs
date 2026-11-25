@@ -41,7 +41,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let now = Utc::now();
     let period = g.team.period.min(PERIODS.len() - 1);
     let days = PERIODS[period].0;
-    let analysis = team::analyze(&g.app, now, days, g.team.bots);
+    let bots = g.team.bots;
+    let analysis = g.memo.team.get(&g.app.project_id, (days, bots), || {
+        team::analyze(&g.app, now, days, bots)
+    });
     let list: Vec<String> = team::ordered(&analysis, &g.team, now)
         .into_iter()
         .map(|p| p.login.clone())

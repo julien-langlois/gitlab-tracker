@@ -21,7 +21,7 @@ pub(super) fn inspector(
     };
     let from = &model.branches[i];
     let to = &model.branches[j];
-    let rows: Vec<Row> = promote::rows(&g.app, &from.name, &to.name);
+    let rows = promote::kept_rows(g, &from.name, &to.name);
     let ready: Vec<&Row> = rows.iter().filter(|r| r.stage == Stage::Ready).collect();
     let upstream = rows
         .iter()

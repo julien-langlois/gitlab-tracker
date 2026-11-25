@@ -2,6 +2,25 @@
 
 use super::*;
 
+/// How many MRs the view at `index` shows; the views' counts are kept between
+/// frames (see `memo.rs`).
+fn view_count(g: &GuiApp, index: usize) -> usize {
+    let app = &g.app;
+    let counts = g
+        .memo
+        .view_counts
+        .get(&app.project_id, app.config.hide_merged, || {
+            app.visible_filter_defs()
+                .into_iter()
+                .map(|(i, _)| (i, app.filter_count(i)))
+                .collect()
+        });
+    counts
+        .get(&index)
+        .copied()
+        .unwrap_or_else(|| app.filter_count(index))
+}
+
 /// One view: glyph, name and how many MRs it shows.
 pub(super) fn view_item(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterDef, glyph: &str) {
     let theme = g.theme;
@@ -27,7 +46,7 @@ pub(super) fn view_item(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterD
         egui::FontId::proportional(theme.text_size - 1.0),
         glyph_color,
     );
-    let count = g.app.filter_count(index).to_string();
+    let count = view_count(g, index).to_string();
     let count_rect = ui.painter().text(
         egui::pos2(rect.right() - 8.0, y),
         egui::Align2::RIGHT_CENTER,
@@ -66,7 +85,11 @@ pub(super) fn view_item(g: &mut GuiApp, ui: &mut Ui, index: usize, def: &FilterD
 /// lists its MRs as the cockpit's counters do; a second click shows them all.
 pub(super) fn next_views(g: &mut GuiApp, ui: &mut Ui) {
     use crate::next_step::{Bucket, OTHERS_KEY};
-    let steps = crate::next_step::all(&g.app);
+    let app = &g.app;
+    let steps = g
+        .memo
+        .next_steps
+        .get(&app.project_id, (), || crate::next_step::all(app));
     let count = |key: &str| {
         let buckets = Bucket::of_key(key);
         steps

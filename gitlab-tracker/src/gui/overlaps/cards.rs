@@ -12,14 +12,7 @@ pub(super) fn matrix_card(
     picked: &mut Option<(String, String)>,
 ) {
     board::card(ui, theme, tl("MR × MR"), tl("files in common"), 0.0, |ui| {
-        let mut ids: BTreeSet<&str> = BTreeSet::new();
-        for p in &overlaps.pairs {
-            ids.insert(&p.a);
-            ids.insert(&p.b);
-        }
-        let mut ids: Vec<&str> = ids.into_iter().collect();
-        ids.sort_by_key(|id| id.parse::<u64>().unwrap_or(u64::MAX));
-        ids.truncate(10);
+        let ids: Vec<&str> = overlaps.matrix.iter().map(String::as_str).collect();
         if ids.len() < 2 {
             board::empty(ui, theme, tl("No two open MRs change the same file."));
             return;

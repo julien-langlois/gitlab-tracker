@@ -85,6 +85,9 @@ pub(super) fn ready_row(
 ) -> Option<ReadyClick> {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 48.0), Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return None;
+    }
     if response.hovered() {
         ui.painter()
             .rect_filled(rect, CornerRadius::ZERO, theme.palette.raised);

@@ -35,7 +35,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         ));
         return;
     };
-    let all = rows(&g.app, &from, &to);
+    let all = kept_rows(g, &from, &to);
     let ready: Vec<&Row> = all.iter().filter(|r| r.stage == Stage::Ready).collect();
     let upstream: Vec<&Row> = all.iter().filter(|r| r.stage == Stage::Upstream).collect();
     let merged_upstream: Vec<&Row> = upstream

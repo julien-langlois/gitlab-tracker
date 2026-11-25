@@ -22,6 +22,11 @@ pub fn changed() {
     REVISION.with(|r| r.set(r.get() + 1));
 }
 
+/// How many times the data changed so far: equal twice, nothing changed between.
+pub fn revision() -> u64 {
+    REVISION.with(Cell::get)
+}
+
 /// How long a result holds when nothing changed: the same as the rail badges.
 pub const FRESH: Duration = Duration::from_secs(2);
 
@@ -79,6 +84,15 @@ impl<K: PartialEq, V> Memo<K, V> {
     }
 }
 
+/// Journal's read: the events of every open tab, newest first, and the tabs.
+pub type JournalRead = (Vec<super::journal::Event>, Vec<(usize, String)>);
+
+/// The cockpit's read: its headline and its cards.
+pub type CockpitRead = (
+    crate::ui::cockpit::Headline,
+    Vec<(&'static str, Vec<crate::ui::cockpit::CockpitRow>)>,
+);
+
 /// The pages' memos.
 #[derive(Default)]
 pub struct Memos {
@@ -107,6 +121,22 @@ pub struct Memos {
     /// Today's MRs across the open tabs, and the usernames read: by the number of
     /// open tabs (the rail's count reads it on every page).
     pub today: Memo<usize, (Vec<super::today::Item>, Vec<String>)>,
+    /// Every MR's next step, by id (the table's chips, the views panel).
+    pub next_steps: Memo<(), std::collections::HashMap<String, crate::next_step::NextStep>>,
+    /// Journal: the events of every open tab and the tabs, by (days, open tabs,
+    /// light theme: the events carry their tones).
+    pub journal: Memo<(i64, usize, bool), JournalRead>,
+    /// Environments: by whether the project overview is known.
+    pub environments: Memo<bool, super::environments::Model>,
+    /// Promote: the rows of a pair of branches (from, to).
+    pub promote: Memo<(String, String), Vec<super::promote::Row>>,
+    /// The views panel: how many MRs each view shows, by filter index; by
+    /// "hide merged".
+    pub view_counts: Memo<bool, std::collections::HashMap<usize, usize>>,
+    /// The MR page's lifecycle, by MR id.
+    pub lifecycle: Memo<String, Vec<super::next::Stage>>,
+    /// The cockpit's headline and cards.
+    pub cockpit: Memo<(), CockpitRead>,
     /// The cockpit's labels card: (rows, unlabelled).
     pub labels: Memo<(), (Vec<super::labels::LabelRow>, usize)>,
 }

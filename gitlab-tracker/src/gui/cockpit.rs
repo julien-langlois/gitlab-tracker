@@ -66,8 +66,15 @@ impl Counts<'_> {
 
 pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
-    let headline = crate::ui::cockpit::headline(&g.app);
-    let cards = crate::ui::cockpit::cockpit_cards(&g.app);
+    // Each reads every tracked MR: kept between frames (see `memo.rs`).
+    let app = &g.app;
+    let read = g.memo.cockpit.get(&app.project_id, (), || {
+        (
+            crate::ui::cockpit::headline(app),
+            crate::ui::cockpit::cockpit_cards(app),
+        )
+    });
+    let (headline, cards) = (&read.0, &read.1);
     let urgent = urgent(g);
     let mut pick = None;
     let mut by_label = None;
@@ -121,9 +128,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             ui.add_space(12.0);
             // The counters, then the flow and attention cards, then the weekly
             // trends; the lists last: what needs attention, the labels.
-            let from_tiles = tiles(ui, &theme, &headline, &counts);
+            let from_tiles = tiles(ui, &theme, headline, &counts);
             ui.add_space(12.0);
-            let (from_cards, _) = grid(ui, &theme, &cards, &headline.releases, &counts);
+            let (from_cards, _) = grid(ui, &theme, cards, &headline.releases, &counts);
             ui.add_space(12.0);
             super::flow::trend_tiles(
                 ui,

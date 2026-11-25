@@ -210,7 +210,11 @@ pub(super) fn next_chips(g: &mut GuiApp, ui: &mut Ui) {
         return;
     }
     let theme = g.theme;
-    let steps = crate::next_step::all(&g.app);
+    let app = &g.app;
+    let steps = g
+        .memo
+        .next_steps
+        .get(&app.project_id, (), || crate::next_step::all(app));
     let current = g.app.focus.as_ref().map(|f| f.key.clone());
     let mut clicked = None;
     egui::Frame::new()

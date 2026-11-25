@@ -73,6 +73,9 @@ pub struct Toasts {
     pub history: Vec<Past>,
     /// Status badge and last pipeline, by MR id.
     seen: HashMap<String, (&'static str, Option<PipelineState>)>,
+    /// The data revision and project last compared (see `memo.rs`): nothing to
+    /// compare again until an event changes them.
+    compared: Option<(u64, String)>,
 }
 
 impl Toasts {
@@ -81,9 +84,18 @@ impl Toasts {
         self.history.iter().filter(|p| !p.read).count()
     }
 
-    /// Compares each MR with the last frame and adds a toast for each change, once
+    /// Compares each MR with the last data read and adds a toast for each change, once
     /// the startup fetches are over (they would all look like changes).
     pub fn watch(&mut self, app: &App, theme: &Theme, now: f64) {
+        let at = (super::memo::revision(), app.project_id.clone());
+        if self.compared.as_ref() != Some(&at) {
+            self.compared = Some(at);
+            self.compare(app, theme, now);
+        }
+        self.list.retain(|t| now - t.born < LIFETIME);
+    }
+
+    fn compare(&mut self, app: &App, theme: &Theme, now: f64) {
         let quiet = !app.pending_initial_fetches.is_empty();
         for mr in &app.mrs {
             if mr.title.is_empty() {
@@ -132,7 +144,6 @@ impl Toasts {
                 self.push(&mr.id, &mr.title, kind, text, tone, now);
             }
         }
-        self.list.retain(|t| now - t.born < LIFETIME);
     }
 
     /// A newer version is out: one notification, unread, linking to its page.
@@ -761,4 +772,34 @@ fn empty(ui: &mut egui::Ui, theme: &Theme, nothing_at_all: bool) {
         );
     });
     ui.add_space(26.0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{GitlabMrState, MrData, TrackedMr};
+
+    #[test]
+    fn mrs_are_compared_again_once_an_event_changed_the_data() {
+        let theme = Theme::dark();
+        let mut app = crate::app::tests::test_app();
+        let mut mr = TrackedMr::placeholder("7".into(), "Fix".into(), None);
+        mr.data = MrData {
+            title: "Fix".into(),
+            state: GitlabMrState::Opened,
+            ..MrData::default()
+        };
+        app.mrs = vec![mr];
+        let mut toasts = Toasts::default();
+        toasts.watch(&app, &theme, 0.0);
+        app.mrs[0].data.state = GitlabMrState::Merged;
+        // Frames with nothing applied in between compare nothing again…
+        toasts.watch(&app, &theme, 1.0);
+        assert!(toasts.list.is_empty());
+        // …the event that brought the change makes the next frame see it.
+        super::super::memo::changed();
+        toasts.watch(&app, &theme, 2.0);
+        assert_eq!(toasts.list.len(), 1);
+        assert_eq!(toasts.list[0].id, "7");
+    }
 }

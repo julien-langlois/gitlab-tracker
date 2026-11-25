@@ -4,7 +4,7 @@
 //! the pairs, the files most changed of late, and the pair picked with where
 //! the two MRs meet and which one to merge first.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use bevel_theme::{fonts, Theme, Tone};
 use chrono::{DateTime, Duration, Utc};
@@ -84,7 +84,7 @@ fn me(app: &App) -> Option<String> {
 }
 
 fn mine(app: &App, overlaps: &Overlaps, pair: &Pair) -> bool {
-    let Some(me) = me(app) else {
+    let Some(me) = app.config.gitlab_username.as_deref() else {
         return false;
     };
     [&pair.a, &pair.b].iter().any(|id| {
@@ -102,11 +102,7 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, overlaps: &Overlaps) {
         tn(overlaps.total_files as u64, "{n} file", "{n} files")
     );
     board::nav_header(ui, &theme, tl("Overlaps"), &subtitle);
-    let my_pairs = overlaps
-        .pairs
-        .iter()
-        .filter(|p| mine(&g.app, overlaps, p))
-        .count();
+    let my_pairs = overlaps.my_pairs;
     board::nav_group(ui, &theme, tl("Views"), |ui| {
         for (view, label, n) in [
             (View::Files, tl("Shared files"), overlaps.files.len()),

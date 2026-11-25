@@ -336,7 +336,10 @@ fn next_banner(g: &mut GuiApp, ui: &mut Ui, mr: &TrackedMr) {
 fn lifecycle(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr) {
     let theme = g.theme;
     let step = crate::next_step::of(&g.app, mr, g.app.config.gitlab_username.as_deref());
-    let stages = super::next::lifecycle(&g.app, mr, &step);
+    // Its medians read every tracked MR: kept between frames (see `memo.rs`).
+    let stages = g.memo.lifecycle.get(&g.app.project_id, mr.id.clone(), || {
+        super::next::lifecycle(&g.app, mr, &step)
+    });
     let tone = super::next::tone(&step, &theme);
     egui::Frame::new()
         .fill(theme.palette.panel)

@@ -33,6 +33,7 @@ mod side_panel;
 use cards::*;
 use deployments::*;
 use matrix::*;
+pub(in crate::gui) use model::Model;
 use model::*;
 pub use side_panel::*;
 
@@ -64,7 +65,13 @@ const LATE_DAYS: f64 = 7.0;
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let ctx = ui.ctx().clone();
     let overview = g.details.project(&g.app, &ctx).cloned();
-    let model = model(&g.app, overview.as_ref());
+    let app = &g.app;
+    let model = g
+        .memo
+        .environments
+        .get(&app.project_id, overview.is_some(), || {
+            model(app, overview.as_ref())
+        });
     let pair = model.pair(g.environments.pair.as_ref());
     let now = Utc::now();
     board::screen(

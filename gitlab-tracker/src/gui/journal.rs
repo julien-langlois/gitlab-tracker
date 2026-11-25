@@ -161,7 +161,17 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
     let days = PERIODS[g.journal.period.min(PERIODS.len() - 1)].0;
     let since = now - Duration::days(days);
-    let (all, tabs) = collect(g, since);
+    let open = g
+        .tabs
+        .iter()
+        .filter(|t| matches!(t.state, SlotState::Active | SlotState::Parked(_)))
+        .count();
+    let light = g.theme.mode == bevel_theme::Mode::Light;
+    let read = g
+        .memo
+        .journal
+        .get("", (days, open, light), || collect(g, since));
+    let (all, tabs) = (&read.0, &read.1);
     let me = g.app.config.gitlab_username.clone();
     let query = g.journal.search.trim().to_lowercase();
     let state = &g.journal;
@@ -198,7 +208,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         ui,
         sizes,
         "journal",
-        |g, ui| nav(g, ui, &all, &tabs),
+        |g, ui| nav(g, ui, all, tabs),
         |g, ui| inspector(g, ui, &filtered, selected.as_ref(), now),
         |g, ui| {
             main(
