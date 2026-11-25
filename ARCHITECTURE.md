@@ -226,7 +226,9 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── demo.rs          # Demo mode (--demo): mock data through the real key handler, read-only
     ├── actions.rs       # Action + dispatch: what the user asks for, shared by the TUI and the window
     ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions;
-    │                    # large pages are a file + a folder of their parts (mr_page/, table/, delivery/)
+    │                    # mod.rs: GuiApp and the frame loop; launch, sessions, tabs, navigation, background
+    │                    # beside it. Large pages are a file (state, frame) + a folder of their parts:
+    │                    # mr_page/, table/, delivery/, team/, stats/, overlaps/, milestones/, ci/, releases/, setup/
     ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
     ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
