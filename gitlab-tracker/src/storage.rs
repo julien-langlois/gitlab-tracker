@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 mod config_dir;
+#[cfg(feature = "gui")]
 mod project_store;
 mod projects;
 mod projects_file;
@@ -14,6 +15,7 @@ mod state;
 mod tokens;
 
 pub use config_dir::*;
+#[cfg(feature = "gui")]
 pub use project_store::*;
 pub use projects::*;
 pub use projects_file::*;
