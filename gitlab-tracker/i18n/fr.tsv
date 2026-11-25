@@ -566,7 +566,7 @@ clipboard	Copied	Copié
 	Ball in your court	La balle est dans votre camp
 	Nothing left: it reached every branch of its flow.	Plus rien à faire : elle a atteint toutes les branches de son flux.
 	Then: {steps}	Ensuite : {steps}
-	Open the threads	Ouvrir les fils
+	Open the threads	Ouvrir les discussions
 	Copy the rebase commands	Copier les commandes de rebase
 	See the pipeline	Voir le pipeline
 	Open Promote	Ouvrir Promote
@@ -714,7 +714,7 @@ date	Merged	Fusionnée
 	Click to list these MRs	Cliquer pour afficher ces MR
 	due today	échéance aujourd'hui
 	Click to list them	Cliquer pour les afficher
-	List its MRs	Lister ses MRs
+	List its MRs	Lister ses MR
 	{delta} since {time}	{delta} depuis {time}
 	Needs attention	À traiter en priorité
 	Nothing urgent: no MR is blocked, late or waiting for you.	Rien d'urgent : aucune MR n'est bloquée, en retard ou en attente de vous.
@@ -969,9 +969,9 @@ date	Merged	Fusionnée
 	Across {n} open projects · as {user}	Sur {n} projets ouverts · en tant que {user}
 	Show it in its project's tab	L'afficher dans l'onglet de son projet
 @plural	{n} change since shown|{n} changes since shown	{n} changement depuis l'affichage|{n} changements depuis l'affichage
-@plural	{n} thread to answer|{n} threads to answer	{n} fil à répondre|{n} fils à répondre
+@plural	{n} thread to answer|{n} threads to answer	{n} discussion à traiter|{n} discussions à traiter
 @plural	{n} approval|{n} approvals	{n} approbation|{n} approbations
-@plural	{n} open thread|{n} open threads	{n} fil ouvert|{n} fils ouverts
+@plural	{n} open thread|{n} open threads	{n} discussion ouverte|{n} discussions ouvertes
 @plural	{n} more line|{n} more lines	{n} ligne de plus|{n} lignes de plus
 	Open the MR's page (Enter, or a double click on its row)	Ouvrir la page de la MR (Entrée, ou double-clic sur sa ligne)
 	Open the selected MR's page	Ouvrir la page de la MR sélectionnée
@@ -1096,7 +1096,7 @@ date	Merged	Fusionnée
 	CI running	CI en cours
 	Retrying	Nouvel essai
 	CI must pass	CI requise
-	Open threads	Threads ouverts
+	Open threads	Discussions ouvertes
 	Conflict	Conflit
 	Sync failed	Sync en échec
 	Not open	Plus ouverte
@@ -1144,9 +1144,9 @@ date	Merged	Fusionnée
 	Nothing reached {to} yet.	Rien n'a encore atteint {to}.
 @plural	{n} commit behind|{n} commits behind	{n} commit de retard|{n} commits de retard
 @plural	Rebase: {n} commit behind the target|Rebase: {n} commits behind the target	Rebaser : {n} commit de retard sur la cible|Rebaser : {n} commits de retard sur la cible
-@plural	Answer {n} thread|Answer {n} threads	Répondre à {n} fil|Répondre à {n} fils
-@plural	Read the answer to {n} thread|Read the answers to {n} threads	Lire la réponse à {n} fil|Lire les réponses à {n} fils
-@plural	{n} thread|{n} threads	{n} fil|{n} fils
+@plural	Answer {n} thread|Answer {n} threads	Répondre à {n} discussion|Répondre à {n} discussions
+@plural	Read the answer to {n} thread|Read the answers to {n} threads	Lire la réponse à {n} discussion|Lire les réponses à {n} discussions
+@plural	{n} thread|{n} threads	{n} discussion|{n} discussions
 @plural	{n} answer|{n} answers	{n} réponse|{n} réponses
 @plural	{n} reviewer|{n} reviewers	{n} relecteur|{n} relecteurs
 @plural	MR|MRs	MR|MR
@@ -1158,7 +1158,7 @@ date	Merged	Fusionnée
 
 # Project pages: team, journal, environments, CI, milestones, overlaps
 	!{a} and !{b} change the same files:	!{a} et !{b} modifient les mêmes fichiers :
-	!{id} has waited for {name}'s review for {time}, past the reminder delay.	!{id} attend la review de {name} depuis {time}, au-delà du délai de rappel.
+	!{id} has waited for {name}'s review for {time}, past the reminder delay.	!{id} attend la relecture de {name} depuis {time}, au-delà du délai de rappel.
 	#{id} · failed: {jobs}	#{id} · en échec : {jobs}
 	+{n} pts on the period before	+{n} pts sur la période précédente
 	/ {h} estimated	/ {h} estimées
@@ -1189,8 +1189,8 @@ date	Merged	Fusionnée
 	Copy the summary	Copier le résumé
 	Copy who waits on whom, to paste in a chat	Copier qui attend qui, à coller dans un chat
 	Delivered	Livrées
-	Delivered milestones	Milestones livrés
-	Delivered: on {branch}, the last branch of the flow. The pace is the MRs delivered over the last four weeks.	Livrée : sur {branch}, la dernière branche du flux. Le rythme est celui des MRs livrées sur les quatre dernières semaines.
+	Delivered milestones	Jalons livrés
+	Delivered: on {branch}, the last branch of the flow. The pace is the MRs delivered over the last four weeks.	Livrée : sur {branch}, la dernière branche du flux. Le rythme est celui des MR livrées sur les quatre dernières semaines.
 	Deployed	Déployé
 	Double click: show the MR	Double clic : afficher la MR
 	Drafts	Brouillons
@@ -1207,7 +1207,7 @@ date	Merged	Fusionnée
 	Failed on	En échec sur
 	Failing jobs	Jobs en échec
 	Failures by stage	Échecs par stage
-	Fewer than two open MRs with their files known: nothing can overlap.	Moins de deux MRs ouvertes dont on connaît les fichiers : rien ne peut se recouvrir.
+	Fewer than two open MRs with their files known: nothing can overlap.	Moins de deux MR ouvertes dont on connaît les fichiers : rien ne peut se recouvrir.
 	File	Fichier
 	Flaky	Instable
 	Flaky jobs	Jobs instables
@@ -1217,14 +1217,14 @@ date	Merged	Fusionnée
 	Gaps between branches	Écarts entre branches
 	GitLab lists no deployment for this project: the branches show without their environments.	GitLab ne liste aucun déploiement pour ce projet : les branches s'affichent sans leurs environnements.
 	GitLab lists no deployment of the tracked branches.	GitLab ne liste aucun déploiement des branches suivies.
-	Give the MRs a milestone in GitLab: this page follows each one to production.	Donnez un milestone aux MRs dans GitLab : cette page suit chacun jusqu'à la production.
+	Give the MRs a milestone in GitLab: this page follows each one to production.	Donnez un jalon aux MR dans GitLab : cette page suit chacun jusqu'à la production.
 	Held back by the CI	Bloquées par la CI
 	Hi {name}, nothing waits on you right now.	Bonjour {name}, rien ne t'attend pour l'instant.
-	Hi {name}, these reviews are waiting on you:	Bonjour {name}, ces reviews t'attendent :
+	Hi {name}, these reviews are waiting on you:	Bonjour {name}, ces relectures t'attendent :
 	Hide the bots	Masquer les bots
 	Hot spots	Points chauds
 	In progress	En cours
-	In review	En review
+	In review	En relecture
 	In sync with {branch}	À jour avec {branch}
 	In this period	Sur la période
 	Include bots	Inclure les bots
@@ -1238,22 +1238,22 @@ date	Merged	Fusionnée
 	Last failure	Dernier échec
 	Leave out lock files	Ignorer les lockfiles
 	Lines	Lignes
-	Load: the reviews waiting on someone, heavier as they wait, plus the effort of their open MRs and the threads they have to answer, against the most loaded person.	Charge : les reviews qui attendent la personne, plus lourdes à mesure qu'elles attendent, plus l'effort de ses MRs ouvertes et les threads auxquels répondre, rapportés à la personne la plus chargée.
+	Load: the reviews waiting on someone, heavier as they wait, plus the effort of their open MRs and the threads they have to answer, against the most loaded person.	Charge : les relectures qui attendent la personne, plus lourdes à mesure qu'elles attendent, plus l'effort de ses MR ouvertes et les discussions auxquelles répondre, rapportés à la personne la plus chargée.
 	MR × MR	MR × MR
 	MR, person, branch…	MR, personne, branche…
-	MRs held back by the CI	MRs bloquées par la CI
-	MRs in 30 days	MRs sur 30 jours
+	MRs held back by the CI	MR bloquées par la CI
+	MRs in 30 days	MR sur 30 jours
 	Mark all as read	Tout marquer comme lu
 	Median duration	Durée médiane
 	Merge !{first} first: {why}. !{second} will then need a rebase on its target, where the files meet.	Merger !{first} d'abord : {why}. !{second} devra ensuite être rebasée sur sa cible, là où les fichiers se recoupent.
-	Merged, not on {branch} yet	Mergées, pas encore sur {branch}
+	Merged, not on {branch} yet	Fusionnées, pas encore sur {branch}
 	Merges and closes	Merges et fermetures
 	Message copied	Message copié
-	Milestone {name}	Milestone {name}
-	Milestones	Milestones
-	Milestones: progress, and whether they make their date	Milestones : avancement, et s'ils tiennent leur date
+	Milestone {name}	Jalon {name}
+	Milestones	Jalons
+	Milestones: progress, and whether they make their date	Jalons : avancement, et s'ils tiennent leur date
 	Most active	Les plus actives
-	My MRs	Mes MRs
+	My MRs	Mes MR
 	Name	Nom
 	Never deployed	Jamais déployé
 	Newer commits not deployed	Commits non déployés
@@ -1262,39 +1262,39 @@ date	Merged	Fusionnée
 	No environment	Aucun environnement
 	No environment deployed from it	Aucun environnement déployé depuis cette branche
 	No failed job in the period.	Aucun job en échec sur la période.
-	No file changed by several recent MRs.	Aucun fichier modifié par plusieurs MRs récentes.
-	No file changed by two open MRs here.	Aucun fichier modifié par deux MRs ouvertes ici.
+	No file changed by several recent MRs.	Aucun fichier modifié par plusieurs MR récentes.
+	No file changed by two open MRs here.	Aucun fichier modifié par deux MR ouvertes ici.
 	No finished pipeline in the period.	Aucun pipeline terminé sur la période.
 	No job in this view for the period.	Aucun job dans cette vue sur la période.
-	No milestone on the tracked MRs	Aucun milestone sur les MRs suivies
-	No milestone on the tracked MRs.	Aucun milestone sur les MRs suivies.
+	No milestone on the tracked MRs	Aucun jalon sur les MR suivies
+	No milestone on the tracked MRs.	Aucun jalon sur les MR suivies.
 	No open MR has its latest pipeline failed.	Aucune MR ouverte n'a son dernier pipeline en échec.
 	No open MR.	Aucune MR ouverte.
-	No pair of open MRs in this view.	Aucune paire de MRs ouvertes dans cette vue.
+	No pair of open MRs in this view.	Aucune paire de MR ouvertes dans cette vue.
 	No request from {author} to {reviewer}	Aucune demande de {author} à {reviewer}
 	No request in the period	Aucune demande sur la période
-	No review request in the period.	Aucune demande de review sur la période.
-	No review waiting on them.	Aucune review ne l'attend.
-	No tracked MR in this milestone yet.	Aucune MR suivie dans ce milestone pour l'instant.
+	No review request in the period.	Aucune demande de relecture sur la période.
+	No review waiting on them.	Aucune relecture ne l'attend.
+	No tracked MR in this milestone yet.	Aucune MR suivie dans ce jalon pour l'instant.
 	No tracked branch: add some in the project's settings.	Aucune branche suivie : ajoutez-en dans les réglages du projet.
-	No two open MRs change the same file.	Aucune paire de MRs ouvertes ne modifie le même fichier.
-	No two open MRs change the same file: nothing to pick.	Aucune paire de MRs ouvertes ne modifie le même fichier : rien à choisir.
+	No two open MRs change the same file.	Aucune paire de MR ouvertes ne modifie le même fichier.
+	No two open MRs change the same file: nothing to pick.	Aucune paire de MR ouvertes ne modifie le même fichier : rien à choisir.
 	Nobody in this view.	Personne dans cette vue.
 	None past the reminder delay	Aucune au-delà du délai de rappel
 	Normal	Normale
 	Nothing happened in this period with these filters.	Rien ne s'est passé sur cette période avec ces filtres.
-	Nothing stands out: the reviews flow.	Rien ne ressort : les reviews s'enchaînent.
+	Nothing stands out: the reviews flow.	Rien ne ressort : les relectures s'enchaînent.
 	Nothing to compare with yet	Pas encore de comparaison
 	Nothing yet.	Rien pour l'instant.
 	On the way	En route
 	Only what concerns me	Seulement ce qui me concerne
-	Open MRs that change the same files	MRs ouvertes qui modifient les mêmes fichiers
-	Open MRs that change the same files, before they step on each other	MRs ouvertes qui modifient les mêmes fichiers, avant qu'elles ne se marchent dessus
+	Open MRs that change the same files	MR ouvertes qui modifient les mêmes fichiers
+	Open MRs that change the same files, before they step on each other	MR ouvertes qui modifient les mêmes fichiers, avant qu'elles ne se marchent dessus
 	Open in Promote	Ouvrir dans Promote
 	Open its pipelines	Ouvrir ses pipelines
 	Opened and pushed	Ouvertures et pushs
 	Overlaps	Recouvrements
-	Overlaps between open MRs	Recouvrements entre MRs ouvertes
+	Overlaps between open MRs	Recouvrements entre MR ouvertes
 	Overloaded	Surchargé
 	P90 {d}	P90 {d}
 	Pair picked	Paire choisie
@@ -1302,24 +1302,24 @@ date	Merged	Fusionnée
 	Pairs in the same files	Paires dans les mêmes fichiers
 	Pairs on the same lines	Paires sur les mêmes lignes
 	Person	Personne
-	Pick a milestone.	Choisissez un milestone.
+	Pick a milestone.	Choisissez un jalon.
 	Pick someone in the list to see what waits on them.	Choisissez quelqu'un dans la liste pour voir ce qui l'attend.
 	Pipeline durations	Durées des pipelines
 	Pipelines passing	Pipelines au vert
 	Plan	Plan
-	Read from the changes the app already fetches for the review effort: no request of its own.	Lu dans les changements que l'app récupère déjà pour l'effort de review : aucune requête en plus.
+	Read from the changes the app already fetches for the review effort: no request of its own.	Lu dans les changements que l'app récupère déjà pour l'effort de relecture : aucune requête en plus.
 	Reading the branches' pipelines…	Lecture des pipelines des branches…
 	Reading the deployments and the branches' pipelines from GitLab…	Lecture des déploiements et des pipelines des branches dans GitLab…
 	Reading the deployments…	Lecture des déploiements…
-	Rebuilt from what the MRs carry: their dates, reviews, threads, pipelines and branch arrivals. Nothing is fetched for it.	Reconstruit à partir de ce que portent les MRs : leurs dates, reviews, threads, pipelines et arrivées sur branche. Rien n'est récupéré pour lui.
+	Rebuilt from what the MRs carry: their dates, reviews, threads, pipelines and branch arrivals. Nothing is fetched for it.	Reconstruit à partir de ce que portent les MR : leurs dates, relectures, discussions, pipelines et arrivées sur branche. Rien n'est récupéré pour lui.
 	Report copied	Rapport copié
 	Response	Réponse
-	Review balance	Équilibre des reviews
-	Review response	Réponse aux reviews
-	Reviews	Reviews
-	Reviews and threads	Reviews et threads
-	Reviews waiting	Reviews en attente
-	Reviews waiting on them	Reviews qui l'attendent
+	Review balance	Équilibre des relectures
+	Review response	Réponse aux relectures
+	Reviews	Relectures
+	Reviews and threads	Relectures et discussions
+	Reviews waiting	Relectures en attente
+	Reviews waiting on them	Relectures qui l'attendent
 	Rhythm of {env}	Rythme de {env}
 	Risk	Risque
 	Runs	Exécutions
@@ -1330,9 +1330,9 @@ date	Merged	Fusionnée
 	Selected	Sélection
 	Shared files	Fichiers partagés
 	Show the MR	Afficher la MR
-	Show the blocked MRs	Afficher les MRs bloquées
-	Show their MRs	Afficher ses MRs
-	Show these MRs	Afficher ces MRs
+	Show the blocked MRs	Afficher les MR bloquées
+	Show their MRs	Afficher ses MR
+	Show these MRs	Afficher ces MR
 	Show what this branch has that the next one lacks	Afficher ce que cette branche a et que la suivante n'a pas
 	Stage	Stage
 	Stages	Stages
@@ -1344,15 +1344,15 @@ date	Merged	Fusionnée
 	Tabs	Onglets
 	Team	Équipe
 	The {n} latest events: narrow the period or the types to see older ones.	Les {n} derniers événements : réduisez la période ou les types pour voir les plus anciens.
-	Their MRs	Ses MRs
-	Their open MRs	Ses MRs ouvertes
-	Threads to answer	Threads à répondre
+	Their MRs	Ses MR
+	Their open MRs	Ses MR ouvertes
+	Threads to answer	Discussions à traiter
 	Tickets	Tickets
 	Track at least two branches to compare them.	Suivez au moins deux branches pour les comparer.
 	Trend	Tendance
 	Types	Types
 	Wait	Attente
-	Waited on for a review	Attendus pour une review
+	Waited on for a review	Attendus pour une relecture
 	Waiting on them	L'attendent
 	Waiting the longest	Attendent le plus longtemps
 	What breaks, what slows down, and what it holds back	Ce qui casse, ce qui ralentit, et ce que ça bloque
@@ -1361,9 +1361,9 @@ date	Merged	Fusionnée
 	What {from} has that {to} lacks	Ce que {from} a et que {to} n'a pas
 	Where they meet	Où elles se recoupent
 	Where they stand	Où elles en sont
-	Who reviews whom	Qui review qui
-	Who waits on what, and who can take the next review	Qui attend quoi, et qui peut prendre la prochaine review
-	Who waits on whom, and who can take the next review	Qui attend qui, et qui peut prendre la prochaine review
+	Who reviews whom	Qui relit qui
+	Who waits on what, and who can take the next review	Qui attend quoi, et qui peut prendre la prochaine relecture
+	Who waits on whom, and who can take the next review	Qui attend qui, et qui peut prendre la prochaine relecture
 	already approved	déjà approuvée
 	and {n} more	et {n} de plus
 	approved	approuvée
@@ -1387,17 +1387,17 @@ date	Merged	Fusionnée
 	for {time}	depuis {time}
 	git will stop on them	git s'y arrêtera
 	in merge order	dans l'ordre des merges
-	in review or work	en review ou en cours
+	in review or work	en relecture ou en cours
 	into {target}	dans {target}
 	its own commits	ses propres commits
 	last {n} days	{n} derniers jours
 	latest pipeline	dernier pipeline
 	median {d}	médiane {d}
-	merged by {name}	mergée par {name}
+	merged by {name}	fusionnée par {name}
 	new commits pushed	nouveaux commits poussés
 	no finished pipeline	aucun pipeline terminé
 	no pipeline	aucun pipeline
-	no review lately	aucune review récemment
+	no review lately	aucune relecture récemment
 	none	aucune
 	not approved	non approuvée
 	nothing to compare with	rien à comparer
@@ -1412,7 +1412,7 @@ date	Merged	Fusionnée
 	pipeline started	pipeline lancé
 	pts	pts
 	rerun?	relancer ?
-	review asked of {name}	review demandée à {name}
+	review asked of {name}	relecture demandée à {name}
 	stable	stable
 	the closest to merging	la plus proche du merge
 	the most failing first	les plus en échec d'abord
@@ -1420,7 +1420,7 @@ date	Merged	Fusionnée
 	the riskiest first	les plus risqués d'abord
 	the smaller one	la plus petite
 	this week: {n}	cette semaine : {n}
-	thread opened by {name}	thread ouvert par {name}
+	thread opened by {name}	discussion ouverte par {name}
 	to bring back	à reporter
 	to promote	à promouvoir
 	today	aujourd'hui
@@ -1436,10 +1436,10 @@ date	Merged	Fusionnée
 	{job} makes {share} of the failures of the {stage} stage.	{job} représente {share} des échecs du stage {stage}.
 	{left} · back on their author, the first to unblock: {ids}	{left} · revenues à leur auteur, les premières à débloquer : {ids}
 	{m} min {s}	{m} min {s}
-	{name} answers a review request in {time}, the slowest of the team.	{name} répond à une demande de review en {time}, le plus lentement de l'équipe.
-	{name} gets {share} of the review requests.	{name} reçoit {share} des demandes de review.
-	{name} has no review waiting: they can take the next one.	{name} n'a aucune review en attente : la prochaine peut lui revenir.
-	{name}: their MRs and reviews	{name} : ses MRs et reviews
+	{name} answers a review request in {time}, the slowest of the team.	{name} répond à une demande de relecture en {time}, le plus lentement de l'équipe.
+	{name} gets {share} of the review requests.	{name} reçoit {share} des demandes de relecture.
+	{name} has no review waiting: they can take the next one.	{name} n'a aucune relecture en attente : la prochaine peut lui revenir.
+	{name}: their MRs and reviews	{name} : ses MR et relectures
 	{n} latest runs	{n} dernières exécutions
 	{n} min	{n} min
 	{n} mo	{n} mois
@@ -1448,7 +1448,7 @@ date	Merged	Fusionnée
 	{n} pts on the period before	{n} pts sur la période précédente
 	{n} s	{n} s
 	{n} y	{n} an
-	{period} · rows: authors, columns: reviewers	{period} · lignes : auteurs, colonnes : reviewers
+	{period} · rows: authors, columns: reviewers	{period} · lignes : auteurs, colonnes : relecteurs
 	{source} → {target}	{source} → {target}
 	{time} ago	il y a {time}
 	{to} has everything {from} has.	{to} a tout ce qu'a {from}.
@@ -1480,28 +1480,28 @@ date	Tuesday	mardi
 date	Wed	mer.
 date	Wednesday	mercredi
 @plural	#{id} · {n} job|#{id} · {n} jobs	#{id} · {n} job|#{id} · {n} jobs
-@plural	Read from the changes the app already fetches. {n} open MR is not read yet: its files show after the next refresh.|Read from the changes the app already fetches. {n} open MRs are not read yet: their files show after the next refresh.	Lu dans les changements que l'app récupère déjà. {n} MR ouverte n'est pas encore lue : ses fichiers apparaîtront au prochain refresh.|Lu dans les changements que l'app récupère déjà. {n} MRs ouvertes ne sont pas encore lues : leurs fichiers apparaîtront au prochain refresh.
-@plural	on {n} MR|on {n} MRs	sur {n} MR|sur {n} MRs
-@plural	{author} asked {reviewer} for {n} review|{author} asked {reviewer} for {n} reviews	{author} a demandé {n} review à {reviewer}|{author} a demandé {n} reviews à {reviewer}
-@plural	{n} MR ahead of {to}|{n} MRs ahead of {to}	{n} MR d'avance sur {to}|{n} MRs d'avance sur {to}
-@plural	{n} MR left|{n} MRs left	{n} MR restante|{n} MRs restantes
-@plural	{n} MR left to deliver.|{n} MRs left to deliver.	{n} MR reste à livrer.|{n} MRs restent à livrer.
-@plural	{n} MR to bring back to {to}|{n} MRs to bring back to {to}	{n} MR à reporter sur {to}|{n} MRs à reporter sur {to}
+@plural	Read from the changes the app already fetches. {n} open MR is not read yet: its files show after the next refresh.|Read from the changes the app already fetches. {n} open MRs are not read yet: their files show after the next refresh.	Lu dans les changements que l'app récupère déjà. {n} MR ouverte n'est pas encore lue : ses fichiers apparaîtront au prochain refresh.|Lu dans les changements que l'app récupère déjà. {n} MR ouvertes ne sont pas encore lues : leurs fichiers apparaîtront au prochain refresh.
+@plural	on {n} MR|on {n} MRs	sur {n} MR|sur {n} MR
+@plural	{author} asked {reviewer} for {n} review|{author} asked {reviewer} for {n} reviews	{author} a demandé {n} relecture à {reviewer}|{author} a demandé {n} relectures à {reviewer}
+@plural	{n} MR ahead of {to}|{n} MRs ahead of {to}	{n} MR d'avance sur {to}|{n} MR d'avance sur {to}
+@plural	{n} MR left|{n} MRs left	{n} MR restante|{n} MR restantes
+@plural	{n} MR left to deliver.|{n} MRs left to deliver.	{n} MR reste à livrer.|{n} MR restent à livrer.
+@plural	{n} MR to bring back to {to}|{n} MRs to bring back to {to}	{n} MR à reporter sur {to}|{n} MR à reporter sur {to}
 @plural	{n} change further down the flow is missing upstream: bring it back.|{n} changes further down the flow are missing upstream: bring them back.	{n} changement plus bas dans le flux manque en amont : reportez-le.|{n} changements plus bas dans le flux manquent en amont : reportez-les.
 @plural	{n} day|{n} days	{n} jour|{n} jours
 @plural	{n} environment|{n} environments	{n} environnement|{n} environnements
 @plural	{n} event|{n} events	{n} événement|{n} événements
 @plural	{n} failure a rerun fixed|{n} failures a rerun fixed	{n} échec corrigé par une relance|{n} échecs corrigés par une relance
 @plural	{n} linked|{n} linked	{n} lié|{n} liés
-@plural	{n} milestone in progress|{n} milestones in progress	{n} milestone en cours|{n} milestones en cours
-@plural	{n} open MR|{n} open MRs	{n} MR ouverte|{n} MRs ouvertes
+@plural	{n} milestone in progress|{n} milestones in progress	{n} jalon en cours|{n} jalons en cours
+@plural	{n} open MR|{n} open MRs	{n} MR ouverte|{n} MR ouvertes
 @plural	{n} partly there|{n} partly there	{n} en partie|{n} en partie
 @plural	{n} past the reminder delay|{n} past the reminder delay	{n} au-delà du délai de rappel|{n} au-delà du délai de rappel
 @plural	{n} person|{n} people	{n} personne|{n} personnes
 @plural	{n} pipeline|{n} pipelines	{n} pipeline|{n} pipelines
 @plural	{n} ready|{n} ready	{n} prête|{n} prêtes
 @plural	{n} rerun fixed it|{n} reruns fixed it	{n} relance l'a corrigé|{n} relances l'ont corrigé
-@plural	{n} review|{n} reviews	{n} review|{n} reviews
+@plural	{n} review|{n} reviews	{n} relecture|{n} relectures
 @plural	{n} tab|{n} tabs	{n} onglet|{n} onglets
 @plural	{n} to promote|{n} to promote	{n} à promouvoir|{n} à promouvoir
 @plural	{n} tracked branch|{n} tracked branches	{n} branche suivie|{n} branches suivies
@@ -1525,30 +1525,30 @@ rail	Overlaps	Conflits
 	Activity by day	Activité par jour
 
 # Rail badges of the pages under the rule
-@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} revue attend au-delà du délai de relance|{n} revues attendent au-delà du délai de relance
-	The oldest: !{id}, for {name}'s review, {time}	La plus ancienne : !{id}, revue de {name}, {time}
+@plural	{n} review waits past the reminder delay|{n} reviews wait past the reminder delay	{n} relecture attend au-delà du délai de relance|{n} relectures attendent au-delà du délai de relance
+	The oldest: !{id}, for {name}'s review, {time}	La plus ancienne : !{id}, relecture de {name}, {time}
 @plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} relecteur surchargé|{n} relecteurs surchargés
 @plural	{n} new event since the journal was last read|{n} new events since the journal was last read	{n} nouvel événement depuis la dernière lecture du journal|{n} nouveaux événements depuis la dernière lecture du journal
 @plural	{n} failed pipeline among them|{n} failed pipelines among them	dont {n} pipeline en échec|dont {n} pipelines en échec
 @plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} environnement dont le dernier déploiement a échoué|{n} environnements dont le dernier déploiement a échoué
-@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR attend depuis une semaine ou plus de passer à la branche suivante|{n} MRs attendent depuis une semaine ou plus de passer à la branche suivante
-@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR attend depuis 3 jours ou plus de passer à la branche suivante|{n} MRs attendent depuis 3 jours ou plus de passer à la branche suivante
-@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR ouverte bloquée par un pipeline en échec|{n} MRs ouvertes bloquées par un pipeline en échec
+@plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR attend depuis une semaine ou plus de passer à la branche suivante|{n} MR attendent depuis une semaine ou plus de passer à la branche suivante
+@plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR attend depuis 3 jours ou plus de passer à la branche suivante|{n} MR attendent depuis 3 jours ou plus de passer à la branche suivante
+@plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR ouverte bloquée par un pipeline en échec|{n} MR ouvertes bloquées par un pipeline en échec
 @plural	{n} of them failed on a flaky job: a rerun may do|{n} of them failed on a flaky job: a rerun may do	{n} a échoué sur un job instable : une relance peut suffire|{n} ont échoué sur un job instable : une relance peut suffire
 @plural	{n} job fails more often than before|{n} jobs fail more often than before	{n} job échoue plus souvent qu'avant|{n} jobs échouent plus souvent qu'avant
 	No delivery in the last 4 weeks: no projection	Aucune livraison ces 4 dernières semaines : pas de projection
 	Projected on its due date	Projeté à sa date d'échéance
 @plural	Projected {n} day late|Projected {n} days late	Projeté avec {n} jour de retard|Projeté avec {n} jours de retard
 @plural	Projected {n} day early|Projected {n} days early	Projeté avec {n} jour d'avance|Projeté avec {n} jours d'avance
-@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} MR revenue à son auteur ou en brouillon|{n} MRs revenues à leur auteur ou en brouillon
-@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} paire de MRs ouvertes, dont une à toi, modifie les mêmes fichiers|{n} paires de MRs ouvertes, dont une à toi, modifient les mêmes fichiers
-@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} paire de MRs ouvertes modifie les mêmes fichiers|{n} paires de MRs ouvertes modifient les mêmes fichiers
+@plural	{n} MR back on its author or in draft|{n} MRs back on their author or in draft	{n} MR revenue à son auteur ou en brouillon|{n} MR revenues à leur auteur ou en brouillon
+@plural	{n} pair of open MRs, one of them yours, change the same files|{n} pairs of open MRs, one of them yours, change the same files	{n} paire de MR ouvertes, dont une à toi, modifie les mêmes fichiers|{n} paires de MR ouvertes, dont une à toi, modifient les mêmes fichiers
+@plural	{n} pair of open MRs change the same files|{n} pairs of open MRs change the same files	{n} paire de MR ouvertes modifie les mêmes fichiers|{n} paires de MR ouvertes modifient les mêmes fichiers
 	{what}: {list}	{what} : {list}
 	Delivery	Livraison
 rail	Delivery	Livraison
 rail	Stacks	Piles
 	Steps	Étapes
-	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	La production est {branch}, la dernière branche suivie. Les étapes viennent de l'historique de revue des discussions ; les déploiements, de ceux du projet vers elle.
+	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	La production est {branch}, la dernière branche suivie. Les étapes viennent de l'historique de relecture des discussions ; les déploiements, de ceux du projet vers elle.
 	How fast changes reach production, and where the time goes	À quelle vitesse les changements arrivent en production, et où passe le temps
 	Copy the weekly report	Copier le rapport hebdo
 	Weekly report copied: paste it in a channel or a wiki page	Rapport hebdo copié : collez-le dans un canal ou une page de wiki
@@ -1568,8 +1568,8 @@ rail	Stacks	Piles
 	Where the time goes	Où passe le temps
 	No MR merged in the period.	Aucune MR fusionnée sur la période.
 	Most of the time: {stage}, {share} of the way	L'essentiel du temps : {stage}, {share} du parcours
-	Review rounds	Allers-retours de review
-	pushes after the first review	pushs après la première review
+	Review rounds	Allers-retours de relecture
+	pushes after the first review	pushs après la première relecture
 	No reviewed MR merged in the period.	Aucune MR relue fusionnée sur la période.
 	approved at the first round · median {n}	approuvées au premier tour · médiane {n}
 	No open MR goes back and forth.	Aucune MR ouverte ne fait d'allers-retours.
@@ -1786,7 +1786,7 @@ state	Draft	Brouillon
 	As a reviewer	Comme relecteur·rice
 	reviews asked in the period	relectures demandées sur la période
 	approved by them	approuvées par cette personne
-	threads opened on others' MRs	fils ouverts sur les MR des autres
+	threads opened on others' MRs	discussions ouvertes sur les MR des autres
 	Time to answer a review request	Délai de réponse à une demande de relecture
 	under 4 h	moins de 4 h
 	4 h to 1 d	4 h à 1 j
@@ -2103,7 +2103,7 @@ rail	Releases	Releases
 	a car merges when its pipeline, with every car before it, passes	un wagon est fusionné quand son pipeline, avec tous les wagons devant, passe
 	any moment	d'un instant à l'autre
 	needs a rebase	rebase nécessaire
-	open threads	fils ouverts
+	open threads	discussions ouvertes
 	passed, merging	réussi, fusion en cours
 	pipeline canceled	pipeline annulé
 	running {d}	en cours depuis {d}
@@ -2199,7 +2199,7 @@ rail	Releases	Releases
 	last {when}	dernière fois {when}
 	no merged MR touched it lately	aucune MR fusionnée ne l'a touché récemment
 	no owner	aucun propriétaire
-	no review waiting	aucune review en attente
+	no review waiting	aucune relecture en attente
 	none of these files lately	aucun de ces fichiers récemment
 	only ever changed by the author	modifié uniquement par l'auteur
 	who knows the files this MR changes	qui connaît les fichiers que cette MR modifie
@@ -2207,7 +2207,7 @@ rail	Releases	Releases
 @plural	in {n} MR|in {n} MRs	dans {n} MR|dans {n} MR
 @plural	{n} file with an owner who knows it|{n} files with an owner who knows them	{n} fichier dont un propriétaire le connaît|{n} fichiers dont un propriétaire les connaît
 @plural	{n} more|{n} more	{n} de plus|{n} de plus
-@plural	{n} review waiting|{n} reviews waiting	{n} review en attente|{n} reviews en attente
+@plural	{n} review waiting|{n} reviews waiting	{n} relecture en attente|{n} relectures en attente
 @plural	{n} whose owners did not touch it lately|{n} whose owners did not touch them lately	{n} que ses propriétaires n'ont pas touché récemment|{n} que leurs propriétaires n'ont pas touchés récemment
 @plural	{n} without an owner|{n} without an owner	{n} sans propriétaire|{n} sans propriétaire
 @plural	{n} of {total} files|{n} of {total} files	{n} fichier sur {total}|{n} fichiers sur {total}

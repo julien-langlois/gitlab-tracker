@@ -1722,10 +1722,10 @@ state	Draft	Rascunho
 	{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.	{chance} de chance de todas as MRs estarem mescladas no prazo: metade das simulações termina até {p50}, 85 % até {eta}.
 	Half the simulations have every MR merged by {p50}, 85 % by {eta}.	Metade das simulações tem todas as MRs mescladas até {p50}, 85 % até {eta}.
 	Every MR is merged around {eta}.	Todas as MRs estarão mescladas por volta de {eta}.
-	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	{runs} simulações a partir de {weeks} semanas de mesclagens ({list}) · {pace} por semana ultimamente · depois o release para {branch}.
+	{runs} simulations drawing from {weeks} weeks of merges ({list}) · {pace} a week lately · then the release to {branch}.	{runs} simulações a partir de {weeks} semanas de mesclagens ({list}) · {pace} por semana ultimamente · depois a release para {branch}.
 @plural	{n} MR left to merge.|{n} MRs left to merge.	Falta {n} MR para mesclar.|Faltam {n} MRs para mesclar.
 @plural	{n} MR left to merge|{n} MRs left to merge	{n} MR a mesclar|{n} MRs a mesclar
-	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Entregue: em {branch}, o último branch do fluxo. A previsão repete ao acaso as MRs mescladas em cada uma das últimas oito semanas (desde a primeira mesclagem conhecida), até todas estarem mescladas; o release vem depois.
+	Delivered: on {branch}, the last branch of the flow. The forecast replays the MRs merged each of the last eight weeks (from the first merge the tracker knows), drawn at random, until every MR is merged; the release comes after.	Entregue: em {branch}, o último branch do fluxo. A previsão repete ao acaso as MRs mescladas em cada uma das últimas oito semanas (desde a primeira mesclagem conhecida), até todas estarem mescladas; a release vem depois.
 	Not enough merge history yet: no forecast	Ainda não há histórico de mesclagens suficiente: sem previsão
 	Generate changelog	Gerar changelog
 	The changelog since the last release tag, with the project's git-cliff config	O changelog desde a última tag de versão, com a configuração git-cliff do projeto
