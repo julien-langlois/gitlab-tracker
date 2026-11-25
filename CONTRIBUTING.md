@@ -67,6 +67,7 @@ And, depending on the change:
 | change something visible | attach a screenshot (light and dark theme if colours changed); text must read at WCAG AA |
 | read a new GitLab endpoint or GraphQL type | update the permissions table in [docs/gitlab-token.md](docs/gitlab-token.md) and the README list, and the contract fixtures (`gitlab-tracker-gitlab/tests/`) |
 | change a database schema | add a new numbered migration; never edit a shipped one |
+| change what a page computes or draws | run the load test, in release mode: `cargo test --release -p gitlab-tracker --all-features load_ -- --ignored --nocapture` (every page with ~500 MRs, frame budgets in `gui/load_tests.rs`) |
 | add a setting | give it a default, document it in [docs/configuration.md](docs/configuration.md) |
 | add a dependency | `cargo deny check` passes (licences, advisories) |
 

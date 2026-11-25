@@ -35,7 +35,7 @@ fn builder(size: egui::Vec2) -> egui_kittest::HarnessBuilder<GuiApp> {
 }
 
 /// Every page the icon rail and the shortcuts lead to.
-const PAGES: &[Page] = &[
+pub(super) const PAGES: &[Page] = &[
     Page::Today,
     Page::MergeRequests,
     Page::Mr,
@@ -57,7 +57,7 @@ const PAGES: &[Page] = &[
 ];
 
 /// The demo window, as `gitlab-tracker --demo gui` opens it.
-async fn demo_launch() -> Launch {
+pub(super) async fn demo_launch() -> Launch {
     let config = AppConfig::default();
     let first = crate::demo::demo_app(config.clone()).await;
     let second = crate::demo::mobile_app(config.clone()).await;
@@ -74,14 +74,14 @@ async fn demo_launch() -> Launch {
     }
 }
 
-fn harness(launch: Launch) -> Harness<'static, GuiApp> {
+pub(super) fn harness(launch: Launch) -> Harness<'static, GuiApp> {
     builder(egui::vec2(1440.0, 900.0))
         .build_eframe(move |cc| GuiApp::new(cc, launch, bevel_window::Frame::Desktop))
 }
 
 /// Opens `page` (with what it needs: a selected MR, a selected person) and
 /// draws a few frames, for the layout to settle and the events to land.
-fn show(harness: &mut Harness<'_, GuiApp>, page: Page) {
+pub(super) fn show(harness: &mut Harness<'_, GuiApp>, page: Page) {
     let gui = harness.state_mut();
     if gui.app.selected_mr().is_none() {
         gui.app.table_state.select(Some(0));

@@ -82,6 +82,8 @@ use crate::{build_session, Session, Shared};
 
 mod background;
 mod launch;
+#[cfg(test)]
+mod load_tests;
 mod navigation;
 mod sessions;
 mod tabs;
