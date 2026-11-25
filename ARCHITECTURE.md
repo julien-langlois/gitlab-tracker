@@ -215,7 +215,6 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     │   └── stats_view.rs     # Stats overlay state: tab, window, report, generation guard
     ├── models.rs        # MrData (single MR model), TrackedMr / SavedMr, AppEvent, MrStatus, Effort
     ├── notify.rs        # Desktop notifications: non-blocking notify-rust worker (no-ops without `notifications`)
-    ├── gitlab.rs        # Async GitLab client: pagination, caching guards, rate-limit semaphore
     ├── sentinel.rs      # Sentinel: light updated_after / events checks between refreshes → targeted re-reads
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
     ├── storage.rs       # projects.toml, config.json layer, state files, token lookup
@@ -254,6 +253,15 @@ gitlab-tracker-core/             # Library crate — shared contracts, zero UI d
     ├── shortcuts.rs     # ShortcutBlock / ShortcutFactory + inventory registry
     ├── settings.rs      # ProjectSettingDef / ProjectSettingFactory + inventory registry
     └── secrets.rs       # (feature `secrets`) resolve_secret: env var → OS keyring → prompt
+
+gitlab-tracker-gitlab/           # Library crate — the MR model and the GitLab client
+└── src/
+    ├── gitlab.rs        # Errors, HTTP client, project check; the client's parts in gitlab/:
+    ├── gitlab/          # fetch (spawning, list reads, settled checks, refs), mr (one MR in full),
+    │                    # review, pipelines, diffs, branch_scan, lists, pages, estimate, context, on_demand
+    ├── gitlab_graphql.rs · gitlab_signatures.rs · sentinel.rs · signatures.rs · snooze.rs · history.rs
+    ├── models.rs        # MrData, TrackedMr, MrStatus, BranchCommits…
+    └── events.rs        # GitlabEvent: what the tasks report
 
 gitlab-tracker-redmine/          # Library crate — optional Redmine integration plugin
 └── src/
