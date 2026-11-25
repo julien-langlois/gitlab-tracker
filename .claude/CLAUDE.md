@@ -65,6 +65,13 @@ Read the relevant section of `ARCHITECTURE.md` before touching an area.
   A DB from a newer version is refused, never written.
 - **Secrets:** tokens via `gitlab-tracker-core` `secrets` (env → keyring → prompt),
   zeroized, never logged, never in panic/crash reports or screenshots.
+- **File size:** a source file stays under ~1,000 lines. Past that, split it into a
+  folder of the same name, one file per part (the parent keeps the types and the
+  frame); see `ARCHITECTURE.md`. Canned demo data (`demo/orbit_api.rs`) is exempt.
+- **Tests:** unit tests in the file, `#[cfg(test)] mod tests { use super::*; … }`. They
+  move to a `tests.rs` beside it (`#[cfg(test)] mod tests;`) when they outgrow the
+  code or push the file past the size limit. Tests of the public API only (contract
+  replays) go in the crate's `tests/`. No network in tests: fixtures or a local stub.
 
 ## GUI rules
 
