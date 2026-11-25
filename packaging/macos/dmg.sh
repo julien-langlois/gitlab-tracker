@@ -5,7 +5,8 @@
 #   sh packaging/macos/dmg.sh <binary> <version> <target> <out-dir>
 #
 # Not notarized (no Apple Developer ID yet): the bundle is signed ad hoc, and the
-# first launch needs a right click → Open (or `xattr -d com.apple.quarantine`).
+# first launch needs Privacy & Security → Open Anyway (right click → Open before
+# macOS 15), or `xattr -d com.apple.quarantine`; see docs/desktop-window.md.
 set -eu
 bin=$1 version=$2 target=$3 out=$4
 root=$(cd "$(dirname "$0")/../.." && pwd)

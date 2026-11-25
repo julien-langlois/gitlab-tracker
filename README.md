@@ -55,8 +55,8 @@ From the [Releases](https://github.com/julien-langlois/gitlab-tracker/releases) 
 | :--- | :--- |
 | Debian, Ubuntu | `.deb` (x86_64, ARM64) — `sudo apt install ./gitlab-tracker_*.deb` |
 | Any Linux | `.AppImage` (x86_64, ARM64) — `chmod +x`, then double-click or run it |
-| macOS | `.dmg` (Apple Silicon, Intel) — drag the app to Applications; first launch: right click → Open (not notarized yet) |
-| Windows | `.msi` — Start menu entry, `gitlab-tracker` on `PATH` |
+| macOS | `.dmg` (Apple Silicon, Intel) — drag the app to Applications; not notarized yet, so the first launch [needs one confirmation](docs/desktop-window.md#install-and-run) |
+| Windows | `.msi` — Start menu entry, `gitlab-tracker` on `PATH`; SmartScreen: **More info → Run anyway** |
 
 Or build it (Rust **1.95+**):
 

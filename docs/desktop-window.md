@@ -35,10 +35,20 @@ menu, with its icon. Opened from there — or by a double-click — it shows the
 window; typed in a terminal, `gitlab-tracker` is the terminal UI and
 `gitlab-tracker gui` the window.
 
-The macOS app is not notarized yet: the first time, open it with a right click →
-**Open** (or `xattr -d com.apple.quarantine "/Applications/GitLab Tracker.app"`).
+The macOS app is not notarized yet (no Apple Developer ID), so macOS refuses
+the first launch. Allow it once:
+
+- **macOS 15 (Sequoia) and later:** open the app, close the warning, then go to
+  **System Settings → Privacy & Security** and click **Open Anyway** next to
+  "GitLab Tracker" (it asks for your password), and open the app again;
+- **macOS 14 and earlier:** right click the app → **Open**, then **Open** in the
+  dialog;
+- **either, from a terminal:**
+  `xattr -d com.apple.quarantine "/Applications/GitLab Tracker.app"`.
+
 Windows SmartScreen may warn about an unknown publisher: **More info → Run
-anyway**.
+anyway**. Both warnings come back with each new version until the builds are
+signed.
 
 The window is in the default build of the crate (feature `gui`). Building it needs:
 
