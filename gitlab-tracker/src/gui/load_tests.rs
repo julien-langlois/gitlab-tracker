@@ -16,7 +16,8 @@ use super::render_tests::{demo_launch, harness, show, PAGES};
 use super::*;
 use std::time::{Duration, Instant};
 
-/// How many times the demo project's MRs are copied.
+/// How many times the demo project's MRs are copied; `LOAD_SCALE=40` in the
+/// environment tries another size (budgets unchanged).
 const SCALE: usize = 11;
 
 /// The slowest frame with nothing new allowed on any page (60 fps).
@@ -88,7 +89,11 @@ fn measure(times: usize) -> (usize, Vec<(Page, Duration, Duration)>) {
 #[ignore = "timings: run in release mode, see the module docs"]
 fn load_every_page_keeps_its_frames_short_with_many_mrs() {
     let (base, small) = measure(1);
-    let (tracked, large) = measure(SCALE);
+    let scale = std::env::var("LOAD_SCALE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(SCALE);
+    let (tracked, large) = measure(scale);
     println!(
         "{:<14} {:>22} {:>22}",
         "page",

@@ -29,7 +29,8 @@ use snoozing::*;
 
 pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
-    let (items, users) = collect(g);
+    let read = collect(g);
+    let (items, users) = (&read.0, &read.1);
     let projects = g
         .tabs
         .iter()
@@ -53,7 +54,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         page_title(ui, &theme, tl("Today"), subtitle);
         if !users.is_empty() {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                super::standup::button(g, ui, &items);
+                super::standup::button(g, ui, items);
             });
         }
     });

@@ -247,7 +247,7 @@ impl App {
 
     /// Indices into `self.mrs` of the MRs that pass the active filter, fuzzy-ranked
     /// when a search query is active (see [`App::visible_mrs`]).
-    pub(super) fn compute_visible_indices(&self) -> Vec<usize> {
+    pub(crate) fn compute_visible_indices(&self) -> Vec<usize> {
         // Only rank by relevance when the user has typed a plain search query
         // (not a `@milestone` autocomplete prefix).
         let query = (!self.input.is_empty() && !self.input.starts_with('@')).then_some(());

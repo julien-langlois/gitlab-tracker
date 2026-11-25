@@ -256,3 +256,34 @@ async fn nameless_controls_per_page() {
         println!("total: {total}");
     });
 }
+
+/// The analyses are kept between frames: a change made in the window without
+/// an event (a snooze, here) must still show at once, not when they expire.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_snooze_shows_at_once_on_the_kept_counts() {
+    let launch = demo_launch().await;
+    tokio::task::block_in_place(|| {
+        let mut harness = harness(launch);
+        harness.run_steps(10);
+        let gui = harness.state_mut();
+        let before = super::today::waiting_count(gui);
+        let item = super::today::collect(gui)
+            .0
+            .iter()
+            .find(|i| {
+                i.snoozed.is_none()
+                    && matches!(i.kind, super::today::Kind::Review | super::today::Kind::Fix)
+            })
+            .map(|i| (i.tab, i.id.clone()))
+            .expect("the demo has an MR waiting on me");
+        gui.edit_tab(item.0, |app| {
+            let mr = app
+                .mrs
+                .iter_mut()
+                .find(|m| m.id == item.1)
+                .expect("in its tab");
+            mr.snooze = Some(crate::snooze::Snooze::new(mr, None));
+        });
+        assert_eq!(super::today::waiting_count(harness.state()), before - 1);
+    });
+}

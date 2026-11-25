@@ -165,7 +165,13 @@ impl GuiApp {
     /// focus aside, and on the cockpit without it. Keeps the focus up to date.
     pub(super) fn count_members(&mut self) {
         self.app.focus_suspended = true;
-        self.members = crate::ui::cockpit::metric_members(&self.app);
+        // Reading every MR's counters is the frame's heaviest work: kept while
+        // the same MRs are listed and nothing changed (see `memo.rs`).
+        let listed = self.app.compute_visible_indices();
+        let app = &self.app;
+        self.members = self.memo.members.get(&app.project_id, listed, || {
+            crate::ui::cockpit::metric_members(app)
+        });
         self.app.focus_suspended = self.page() == Page::Cockpit;
         let key = self.app.focus.as_ref().map(|f| f.key.clone());
         if let Some(key) = key.filter(|k| !k.is_empty()) {
@@ -200,6 +206,7 @@ impl GuiApp {
                 for mr in self.app.mrs.iter_mut().filter(|m| ids.contains(&m.id)) {
                     mr.flagged = on;
                 }
+                memo::changed();
                 if !self.demo && !self.app.read_only {
                     self.save_state();
                 }

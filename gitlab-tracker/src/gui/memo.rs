@@ -102,6 +102,11 @@ pub struct Memos {
     pub stacks: Memo<(), Vec<super::stacks::Stack>>,
     /// How long each job usually runs, over the tracked MRs' pipelines.
     pub usual_jobs: Memo<(), std::collections::HashMap<String, f64>>,
+    /// The MRs behind each cockpit counter: by the listed MRs (their indices).
+    pub members: Memo<Vec<usize>, std::collections::HashMap<String, Vec<String>>>,
+    /// Today's MRs across the open tabs, and the usernames read: by the number of
+    /// open tabs (the rail's count reads it on every page).
+    pub today: Memo<usize, (Vec<super::today::Item>, Vec<String>)>,
     /// The cockpit's labels card: (rows, unlabelled).
     pub labels: Memo<(), (Vec<super::labels::LabelRow>, usize)>,
 }

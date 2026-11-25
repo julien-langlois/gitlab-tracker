@@ -6,6 +6,10 @@ use super::*;
 pub(super) type MoveResult = Result<String, String>;
 pub(super) type MoveSender = std::sync::mpsc::Sender<MoveResult>;
 
+/// The ids of the listed MRs behind each cockpit counter, by key (see
+/// [`crate::ui::cockpit::metric_members`]); shared with the memo that keeps it.
+pub(super) type Members = std::rc::Rc<HashMap<String, Vec<String>>>;
+
 /// The counters when the list was first complete, and when that was.
 pub(super) struct Baseline {
     pub(super) counts: HashMap<String, usize>,
@@ -243,7 +247,7 @@ pub(super) struct Tab {
     pub(super) page: Page,
     pub(super) history: history::History,
     pub(super) text_filter: (Option<usize>, String),
-    pub(super) members: HashMap<String, Vec<String>>,
+    pub(super) members: Members,
     pub(super) baseline: Option<Baseline>,
     pub(super) toasts: toasts::Toasts,
     pub(super) last_sync: Option<chrono::DateTime<chrono::Local>>,
@@ -277,7 +281,7 @@ impl Tab {
             page: Page::MergeRequests,
             history: history::History::default(),
             text_filter: (None, String::new()),
-            members: HashMap::new(),
+            members: Members::default(),
             baseline: None,
             toasts: toasts::Toasts::default(),
             last_sync: None,

@@ -46,6 +46,8 @@ impl GuiApp {
     /// and saves that tab's state; the demo, read-only, keeps it in memory.
     pub(crate) fn edit_tab(&mut self, index: usize, edit: impl FnOnce(&mut App)) {
         let save = !self.demo;
+        // The edit changes MRs without an event: the memos read them again.
+        memo::changed();
         match self.tabs.get_mut(index).map(|slot| &mut slot.state) {
             Some(SlotState::Active) => {
                 edit(&mut self.app);
@@ -110,7 +112,12 @@ impl GuiApp {
             last_known_branches: &mut self.last_known_branches,
             state_writer: Some(&self.state_writer),
         };
-        for action in std::mem::take(&mut self.pending) {
+        let pending = std::mem::take(&mut self.pending);
+        if !pending.is_empty() {
+            // An action may change MRs (flag, snooze, dismiss…) without an event.
+            memo::changed();
+        }
+        for action in pending {
             block_on(dispatch(action, &mut self.app, &mut ctx));
         }
     }

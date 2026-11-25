@@ -294,8 +294,18 @@ pub fn waiting_count(g: &GuiApp) -> usize {
         .count()
 }
 
-/// The MRs of every loaded tab, and the usernames they were read as.
-pub(super) fn collect(g: &GuiApp) -> (Vec<Item>, Vec<String>) {
+/// The MRs of every loaded tab, and the usernames they were read as; kept
+/// between frames (see `memo.rs`).
+pub(in crate::gui) fn collect(g: &GuiApp) -> std::rc::Rc<(Vec<Item>, Vec<String>)> {
+    let open = g
+        .tabs
+        .iter()
+        .filter(|t| matches!(t.state, SlotState::Active | SlotState::Parked(_)))
+        .count();
+    g.memo.today.get("", open, || read_all(g))
+}
+
+fn read_all(g: &GuiApp) -> (Vec<Item>, Vec<String>) {
     let today = chrono::Local::now().date_naive();
     let mut items = Vec::new();
     let mut users = Vec::new();

@@ -197,7 +197,7 @@ struct GuiApp {
     language_draft: Option<String>,
     /// The ids of the listed MRs behind each cockpit counter (focus aside),
     /// computed once per frame: the cockpit, the rail badges and the focus use it.
-    members: HashMap<String, Vec<String>>,
+    members: Members,
     /// The rail's badges of the pages under its rule, kept for a moment.
     rail_badges: rail_badges::Cache,
     /// The pages' analyses, kept between frames.
