@@ -220,17 +220,21 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── storage.rs       # Configuration types (ProjectEntry…); the rest in storage/:
     ├── storage/         # projects_file, projects (active, add, saves), tokens, config_dir, project_store, state
     ├── owners.rs        # Reviewer suggestions; owners/: codeowners, suggest, read (from GitLab)
+    ├── gitlab_detail.rs # On-demand reads' types; gitlab_detail/: mr_reads, project_types, project_reads, history_reads
     ├── config.rs        # AppConfig, label colours & wildcard matching, VisibleColumns, activity badge
     ├── settings.rs      # Settings dashboard editor state ([,])
     ├── settings_core.rs # inventory::submit! — built-in project settings
     ├── utils.rs         # Fuzzy matching, git clone command, terminal restore
-    ├── demo.rs          # Demo mode (--demo): mock data through the real key handler, read-only
+    ├── demo/            # Demo mode (--demo): scenarios (orbit_api, orbit_mobile) played by engine/ (play,
+    │                    # answers, snapshots) through the real key handler, read-only
     ├── actions.rs       # Action + dispatch: what the user asks for, shared by the TUI and the window
     ├── gui/             # Desktop window (feature `gui`): egui views over the same App and actions;
     │                    # mod.rs: GuiApp and the frame loop; launch, sessions, tabs, navigation, background
     │                    # beside it. Large pages are a file (state, frame) + a folder of their parts:
     │                    # mr_page/, table/, delivery/, team/, stats/, overlaps/, milestones/, ci/, releases/,
-    │                    # setup/, environments/, dialogs/, inspector/, details/, shell/
+    │                    # setup/, environments/, dialogs/, inspector/, details/, shell/, sidebar/, today/,
+    │                    # board/ (the pages' shared blocks), journal/, cockpit/, person/, standup/,
+    │                    # mr_pipelines/, promote/
     ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
     ├── columns_core.rs  # inventory::submit! — built-in column definitions (activity, labels, …)
