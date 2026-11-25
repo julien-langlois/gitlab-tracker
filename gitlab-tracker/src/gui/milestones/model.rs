@@ -1,4 +1,4 @@
-//! Each milestone's MRs and where they stand: merged, in production, behind.
+//! Each milestone's MRs and where they stand: delivered, on the way, to merge, in review, on the author, draft.
 
 use super::*;
 

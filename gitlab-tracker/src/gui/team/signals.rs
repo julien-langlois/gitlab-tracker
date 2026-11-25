@@ -1,4 +1,4 @@
-//! Signals about the team's load: overloaded reviewers, lone owners, long waits.
+//! The Signals card: what stands out, in sentences — late reviews, an unbalanced load, someone free, the trend.
 
 use super::*;
 

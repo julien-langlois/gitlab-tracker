@@ -1,4 +1,4 @@
-//! The Flow tab: throughput, cycle time, promotions.
+//! The Flow tab: lead time from merge to each branch, time to merge by author, reviewer and milestone.
 
 use super::*;
 
