@@ -217,7 +217,8 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     ├── notify.rs        # Desktop notifications: non-blocking notify-rust worker (no-ops without `notifications`)
     ├── sentinel.rs      # Sentinel: light updated_after / events checks between refreshes → targeted re-reads
     ├── events.rs        # Keyboard & mouse dispatch (Normal / Insert / popups), shared with demo mode
-    ├── storage.rs       # projects.toml, config.json layer, state files, token lookup
+    ├── storage.rs       # Configuration types (ProjectEntry…); the rest in storage/:
+    ├── storage/         # projects_file, projects (active, add, saves), tokens, config_dir, project_store, state
     ├── config.rs        # AppConfig, label colours & wildcard matching, VisibleColumns, activity badge
     ├── settings.rs      # Settings dashboard editor state ([,])
     ├── settings_core.rs # inventory::submit! — built-in project settings
