@@ -522,7 +522,8 @@ before its parent.
 
 *With a tracker plugin such as Redmine.* The tickets linked to the tracked MRs,
 by status, with their time spent against the estimate; the MRs without a ticket
-and the tickets over their estimate.
+and the tickets over their estimate. A ticket shows once, with every MR that
+references it under it (a click on one picks that MR).
 
 ![Tracker: linked tickets with their time spent](assets/desktop/tracker.png)
 

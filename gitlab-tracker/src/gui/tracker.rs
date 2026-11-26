@@ -23,30 +23,69 @@ const ID_WIDTH: f32 = 72.0;
 /// A board column is never narrower than this; past it the board scrolls sideways.
 const BOARD_COLUMN_WIDTH: f32 = 260.0;
 
-/// A listed MR with its ticket.
+/// A linked ticket with the listed MRs that reference it, in list order.
 struct Row {
-    index: usize,
-    mr_id: String,
-    mr_title: String,
     ticket: LinkedTicket,
+    mrs: Vec<RowMr>,
+}
+
+/// One MR under its ticket: its index in the list, id and title.
+struct RowMr {
+    index: usize,
+    id: String,
+    title: String,
+}
+
+impl Row {
+    /// Whether the selected MR is one of this ticket's.
+    fn holds(&self, selected: Option<usize>) -> bool {
+        self.mrs.iter().any(|m| Some(m.index) == selected)
+    }
+
+    /// The MR a click on the card picks: the one under the pointer, else the
+    /// selected one if it is the ticket's, else the first.
+    fn pick(
+        &self,
+        lines: &[(egui::Rect, usize)],
+        at: Option<egui::Pos2>,
+        selected: Option<usize>,
+    ) -> usize {
+        at.and_then(|at| lines.iter().find(|(r, _)| r.contains(at)).map(|l| l.1))
+            .or(selected.filter(|_| self.holds(selected)))
+            .unwrap_or(self.mrs[0].index)
+    }
+}
+
+/// The listed MRs with a ticket, one row per ticket, tickets in the order of
+/// their first MR.
+fn rows_by_ticket<'a>(
+    mrs: impl Iterator<Item = (usize, &'a crate::models::TrackedMr)>,
+) -> Vec<Row> {
+    let mut rows: Vec<Row> = Vec::new();
+    for (index, mr) in mrs {
+        let Some(ticket) = &mr.linked_ticket else {
+            continue;
+        };
+        let line = RowMr {
+            index,
+            id: mr.id.clone(),
+            title: mr.title.clone(),
+        };
+        match rows.iter_mut().find(|r| r.ticket.id == ticket.id) {
+            Some(row) => row.mrs.push(line),
+            None => rows.push(Row {
+                ticket: ticket.clone(),
+                mrs: vec![line],
+            }),
+        }
+    }
+    rows
 }
 
 pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let theme = g.theme;
     let selected = g.app.table_state.selected();
-    let rows: Vec<Row> = g
-        .app
-        .visible_mrs()
-        .enumerate()
-        .filter_map(|(index, mr)| {
-            mr.linked_ticket.clone().map(|ticket| Row {
-                index,
-                mr_id: mr.id.clone(),
-                mr_title: mr.title.clone(),
-                ticket,
-            })
-        })
-        .collect();
+    let rows = rows_by_ticket(g.app.visible_mrs().enumerate());
     let listed = g.app.visible_mrs().count();
     let provider = g.app.tracker.as_ref().map_or("Tracker", |t| t.name());
 
@@ -114,25 +153,26 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         let tone = tones::ticket_status(status, &theme.tones);
                         group_heading(ui, &theme, status, tone, group.len(), time_total(&group));
                         for row in group {
-                            let key = egui::Id::unique(("ticket_row_height", &row.mr_id));
+                            let key = egui::Id::unique(("ticket_row_height", &row.ticket.id));
                             if out_of_view(ui, key) {
                                 ui.add_space(6.0);
                                 continue;
                             }
-                            let (card, avatar) =
-                                ticket_row(ui, &theme, row, selected == Some(row.index));
+                            let (card, avatar, lines) =
+                                ticket_row(ui, &theme, row, row.holds(selected));
                             remember_height(ui, key, card.rect);
+                            let pick = row.pick(&lines, card.interact_pointer_pos(), selected);
                             if card.clicked() {
-                                picked = Some(row.index);
+                                picked = Some(pick);
                             }
                             if super::widgets::double_clicked(ui, &card, ("ticket", &row.ticket.id))
                             {
-                                opened = Some(row.index);
+                                opened = Some(pick);
                             }
                             let right =
                                 avatar.map_or(card.rect.right() - 14.0, |a| a.left() - 10.0);
                             if quick_log(ui, &theme, &card, right) {
-                                log_time = Some(row.index);
+                                log_time = Some(row.mrs[0].index);
                             }
                             ui.add_space(6.0);
                         }
@@ -197,14 +237,9 @@ fn board_columns(
     columns
 }
 
-/// Spent / estimated over the tickets, once each: "5h / 8h".
+/// Spent / estimated over the tickets (one row each): "5h / 8h".
 fn time_total(rows: &[&Row]) -> Option<String> {
-    let mut seen = std::collections::HashSet::new();
-    let tickets: Vec<&LinkedTicket> = rows
-        .iter()
-        .map(|r| &r.ticket)
-        .filter(|t| seen.insert(t.id.clone()))
-        .collect();
+    let tickets: Vec<&LinkedTicket> = rows.iter().map(|r| &r.ticket).collect();
     let spent: u32 = tickets.iter().filter_map(|t| t.time_spent).sum();
     let estimated: u32 = tickets.iter().filter_map(|t| t.time_estimate).sum();
     (spent > 0 || estimated > 0).then(|| {
@@ -308,9 +343,8 @@ fn board_view(
                                 ui.add_space(8.0);
                             }
                             for row in &group {
-                                let selected = selected == Some(row.index);
-                                let id =
-                                    egui::Id::unique(("board_card", &row.ticket.id, row.index));
+                                let held = row.holds(selected);
+                                let id = egui::Id::unique(("board_card", &row.ticket.id));
                                 let key = id.with("height");
                                 if !ui.ctx().is_being_dragged(id) && out_of_view(ui, key) {
                                     continue;
@@ -323,7 +357,7 @@ fn board_view(
                                     if ui.ctx().is_being_dragged(id) {
                                         // Drawn under the pointer while it moves.
                                         ui.dnd_drag_source(id, payload, |ui| {
-                                            board_card(ui, theme, row, selected)
+                                            board_card(ui, theme, row, held)
                                         })
                                         .inner
                                     } else {
@@ -332,31 +366,33 @@ fn board_view(
                                         // card could not be picked nor opened. One
                                         // area takes both: a press that moves drags
                                         // the card, one that does not clicks it.
-                                        let card = board_card(ui, theme, row, selected);
+                                        let (card, lines) = board_card(ui, theme, row, held);
                                         let card = ui
                                             .interact(card.rect, id, Sense::click_and_drag())
                                             .on_hover_cursor(egui::CursorIcon::PointingHand);
                                         if card.drag_started() {
                                             egui::DragAndDrop::set_payload(ui.ctx(), payload);
                                         }
-                                        card
+                                        (card, lines)
                                     }
                                 } else {
-                                    board_card(ui, theme, row, selected)
+                                    board_card(ui, theme, row, held)
                                 };
+                                let (card, lines) = card;
+                                let pick = row.pick(&lines, card.interact_pointer_pos(), selected);
                                 if card.clicked() {
-                                    *picked = Some(row.index);
+                                    *picked = Some(pick);
                                 }
                                 if super::widgets::double_clicked(
                                     ui,
                                     &card,
                                     ("ticket", &row.ticket.id),
                                 ) {
-                                    *opened = Some(row.index);
+                                    *opened = Some(pick);
                                 }
                                 remember_height(ui, key, card.rect);
                                 if quick_log(ui, theme, &card, card.rect.right() - 10.0) {
-                                    *log_time = Some(row.index);
+                                    *log_time = Some(row.mrs[0].index);
                                 }
                             }
                         });
@@ -389,9 +425,16 @@ fn board_view(
     });
 }
 
-/// A ticket on the board: id and type, subject, MR, progress, assignee.
-fn board_card(ui: &mut Ui, theme: &Theme, row: &Row, selected: bool) -> egui::Response {
+/// A ticket on the board: id and type, subject, its MRs, progress, assignee.
+/// Returns the card and where each MR's line went.
+fn board_card(
+    ui: &mut Ui,
+    theme: &Theme,
+    row: &Row,
+    selected: bool,
+) -> (egui::Response, Vec<(egui::Rect, usize)>) {
     let ticket = &row.ticket;
+    let mut lines = Vec::new();
     let (fill, stroke) = if selected {
         (theme.palette.selection, theme.palette.accent)
     } else {
@@ -431,7 +474,7 @@ fn board_card(ui: &mut Ui, theme: &Theme, row: &Row, selected: bool) -> egui::Re
                 )
                 .wrap(),
             );
-            mr_line(ui, theme, row);
+            lines = mr_lines(ui, theme, row);
             ui.add_space(2.0);
             progress(ui, theme, ticket);
         })
@@ -446,7 +489,7 @@ fn board_card(ui: &mut Ui, theme: &Theme, row: &Row, selected: bool) -> egui::Re
             egui::StrokeKind::Inside,
         );
     }
-    response
+    (response, lines)
 }
 
 /// The rows by ticket status, statuses in the order they first show up.
@@ -474,13 +517,9 @@ fn summary(
     listed: usize,
     clicked: &mut Option<(&'static str, &'static str)>,
 ) -> Vec<egui::Rect> {
-    // A ticket linked from two MRs counts once in the totals.
-    let mut seen = std::collections::HashSet::new();
-    let tickets: Vec<&LinkedTicket> = rows
-        .iter()
-        .map(|r| &r.ticket)
-        .filter(|t| seen.insert(t.id.clone()))
-        .collect();
+    // One row per ticket: a ticket linked from two MRs counts once.
+    let tickets: Vec<&LinkedTicket> = rows.iter().map(|r| &r.ticket).collect();
+    let linked: usize = rows.iter().map(|r| r.mrs.len()).sum();
     let spent: u32 = tickets.iter().filter_map(|t| t.time_spent).sum();
     let estimated: u32 = tickets.iter().filter_map(|t| t.time_estimate).sum();
     let over = tickets.iter().filter(|t| is_over(t)).count();
@@ -491,20 +530,17 @@ fn summary(
             tickets.len().to_string(),
             tf(
                 "from {n} of {total} MRs",
-                &[
-                    ("n", &rows.len().to_string()),
-                    ("total", &listed.to_string()),
-                ],
+                &[("n", &linked.to_string()), ("total", &listed.to_string())],
             ),
             None,
             Some(("With ticket", "With ticket")),
         ),
         (
             tl("Without a ticket"),
-            (listed - rows.len()).to_string(),
+            (listed - linked).to_string(),
             tl("merge requests").to_owned(),
-            (listed > rows.len()).then_some(tones.amber),
-            (listed > rows.len()).then_some(("No ticket", "No ticket")),
+            (listed > linked).then_some(tones.amber),
+            (listed > linked).then_some(("No ticket", "No ticket")),
         ),
         (
             tl("Time spent"),
@@ -638,9 +674,10 @@ fn ticket_row(
     theme: &Theme,
     row: &Row,
     selected: bool,
-) -> (egui::Response, Option<egui::Rect>) {
+) -> (egui::Response, Option<egui::Rect>, Vec<(egui::Rect, usize)>) {
     let ticket = &row.ticket;
     let mut avatar_rect = None;
+    let mut lines = Vec::new();
     let wide = ui.available_width() >= WIDE_ROW;
     let stroke = if selected {
         theme.palette.accent
@@ -698,7 +735,7 @@ fn ticket_row(
                             )
                             .truncate(),
                         );
-                        mr_line(ui, theme, row);
+                        lines = mr_lines(ui, theme, row);
                         if !wide {
                             ui.add_space(4.0);
                             progress(ui, theme, ticket);
@@ -748,26 +785,33 @@ fn ticket_row(
             egui::StrokeKind::Inside,
         );
     }
-    (response, avatar_rect)
+    (response, avatar_rect, lines)
 }
 
-/// The MR that links the ticket: its icon, id and title.
-fn mr_line(ui: &mut Ui, theme: &Theme, row: &Row) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 5.0;
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
-        icons::paint(
-            ui.painter(),
-            rect,
-            Icon::MergeRequests,
-            theme.palette.text_muted,
-        );
-        ui.label(
-            mono(format!("!{}", row.mr_id), theme.text_size - 1.5)
-                .color(theme.palette.text_secondary),
-        );
-        ui.add(egui::Label::new(muted(theme, &row.mr_title)).truncate());
-    });
+/// The MRs that link the ticket, one line each: icon, id and title. Returns
+/// where each line went, with its MR's index in the list.
+fn mr_lines(ui: &mut Ui, theme: &Theme, row: &Row) -> Vec<(egui::Rect, usize)> {
+    row.mrs
+        .iter()
+        .map(|mr| {
+            let line = ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 5.0;
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+                icons::paint(
+                    ui.painter(),
+                    rect,
+                    Icon::MergeRequests,
+                    theme.palette.text_muted,
+                );
+                ui.label(
+                    mono(format!("!{}", mr.id), theme.text_size - 1.5)
+                        .color(theme.palette.text_secondary),
+                );
+                ui.add(egui::Label::new(muted(theme, &mr.title)).truncate());
+            });
+            (line.response.rect, mr.index)
+        })
+        .collect()
 }
 
 /// The bar's color for the time used: the accent, amber from 80 % of the
@@ -882,10 +926,12 @@ mod tests {
         let ctx = egui::Context::default();
         ctx.global_style_mut(|style| theme.apply_to_style(style));
         let row = Row {
-            index: 0,
-            mr_id: "104".into(),
-            mr_title: "feat: GraphQL".into(),
             ticket: ticket(),
+            mrs: vec![RowMr {
+                index: 0,
+                id: "104".into(),
+                title: "feat: GraphQL".into(),
+            }],
         };
         // Wide (progress in its column) and narrow (progress under the subject).
         for width in [1200.0, 600.0] {
@@ -900,7 +946,7 @@ mod tests {
             let mut output =
                 ctx.run_ui(input, |ui| out = Some(ticket_row(ui, &theme, &row, false)));
             output.textures_delta.clear();
-            let (card, avatar) = out.unwrap();
+            let (card, avatar, _) = out.unwrap();
             let avatar = avatar.expect("an assignee");
             let offset = (avatar.center().y - card.rect.center().y).abs();
             assert!(
