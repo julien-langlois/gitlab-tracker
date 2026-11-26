@@ -151,17 +151,19 @@ impl World {
         let mut pushes: Vec<At> = Vec::new();
         let mut pushed_by: BTreeMap<String, At> = BTreeMap::new();
         // Opened as a draft: it has a move to ready, or is a draft today. Notes
-        // while a draft are the review along the way, not the review.
+        // on a draft nobody was asked to review yet are the review along the
+        // way, not the review; an approval always is.
         let mut draft = mr.events.iter().any(|(_, ev)| matches!(ev, Ev::Ready))
             || mr.spec.mergeability == MergeabilityStatus::Draft;
         review.was_draft = draft;
         let mut draft_comments = 0;
         let mut ready: Option<At> = None;
+        let mut asked = false;
         for (at, ev) in &mr.events {
-            let mut act = |who: &'static Person, at: At| {
+            let mut act = |who: &'static Person, at: At, approval: bool| {
                 activity.insert(who.login.into(), at);
                 if who != author {
-                    if draft {
+                    if draft && !asked && !approval {
                         draft_comments += 1;
                     } else if first_review.is_none() {
                         first_review = Some(at);
@@ -171,7 +173,7 @@ impl World {
             match *ev {
                 Ev::Ready => {
                     draft = false;
-                    if first_review.is_none() {
+                    if first_review.is_none() || ready.is_none() {
                         ready = Some(*at);
                     }
                 }
@@ -184,15 +186,16 @@ impl World {
                     pushed_by.insert(by.login.into(), *at);
                 }
                 Ev::Ask(person) => {
+                    asked = true;
                     review
                         .review_requested_at
                         .insert(person.login.into(), iso(*at));
                     review.first_review_requested_at.get_or_insert(iso(*at));
                 }
                 Ev::Note(by, ..) | Ev::Reply(by, ..) | Ev::Resolve(by, _) | Ev::Changes(by) => {
-                    act(by, *at)
+                    act(by, *at, false)
                 }
-                Ev::Approve(by) => act(by, *at),
+                Ev::Approve(by) => act(by, *at, true),
                 _ => {}
             }
         }

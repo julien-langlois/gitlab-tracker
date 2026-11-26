@@ -31,17 +31,11 @@ fn activity_of(notes: &[String], draft_now: bool) -> ReviewActivity {
 }
 #[test]
 fn a_draft_is_reviewed_along_the_way_and_its_review_starts_once_ready() {
-    // Opened as a draft (its first move is out of draft), a reviewer asked
-    // at once, comments and pushes during the work, then ready.
+    // Opened as a draft (its first move is out of draft), nobody asked to
+    // review, comments and pushes during the work, then ready.
     let activity = activity_of(
         &[
-            note(
-                1,
-                "dev",
-                true,
-                "requested review from @alice",
-                "2026-09-01T09:00:00Z",
-            ),
+            note(1, "dev", true, "added 1 commit", "2026-09-01T09:00:00Z"),
             note(2, "alice", false, "Early thought", "2026-09-02T10:00:00Z"),
             note(3, "dev", true, "added 1 commit", "2026-09-03T10:00:00Z"),
             note(
@@ -86,6 +80,94 @@ fn a_draft_is_reviewed_along_the_way_and_its_review_starts_once_ready() {
     assert_eq!(activity.pushes_after_review, 1);
     assert_eq!(activity.up_for_review_at(), Some("2026-09-05T09:00:00Z"));
     assert_eq!(activity.version, crate::models::REVIEW_ACTIVITY_VERSION);
+}
+#[test]
+fn a_review_asked_on_a_draft_puts_it_up_for_review() {
+    // The team's way: a draft, a review asked while still a draft, the
+    // approval while still a draft, then marked ready to merge. The wait and
+    // the review are not development (regression: they all went to it).
+    let activity = activity_of(
+        &[
+            note(1, "dev", true, "added 3 commits", "2026-11-23T09:00:00Z"),
+            note(
+                2,
+                "dev",
+                true,
+                "requested review from @alice",
+                "2026-11-23T16:30:00+01:00",
+            ),
+            note(
+                3,
+                "alice",
+                true,
+                "approved this merge request",
+                "2026-11-24T11:23:00+01:00",
+            ),
+            note(
+                4,
+                "dev",
+                true,
+                "marked this merge request as **ready**",
+                "2026-11-24T11:24:00+01:00",
+            ),
+        ],
+        false,
+    );
+    assert!(activity.was_draft);
+    assert_eq!(
+        activity.up_for_review_at(),
+        Some("2026-11-23T16:30:00+01:00"),
+        "the request, not the later move to ready"
+    );
+    assert_eq!(
+        activity.ready_at.as_deref(),
+        Some("2026-11-24T11:24:00+01:00")
+    );
+    assert_eq!(
+        activity.first_review_at.as_deref(),
+        Some("2026-11-24T11:23:00+01:00"),
+        "an approval on a draft is the review"
+    );
+    assert_eq!(activity.draft_comments, 0);
+    // Comments asked for on a draft are the review too.
+    let commented = activity_of(
+        &[
+            note(
+                1,
+                "dev",
+                true,
+                "requested review from @alice",
+                "2026-11-23T16:30:00Z",
+            ),
+            note(2, "alice", false, "Rename this", "2026-11-24T10:00:00Z"),
+        ],
+        true,
+    );
+    assert_eq!(
+        commented.first_review_at.as_deref(),
+        Some("2026-11-24T10:00:00Z")
+    );
+    assert_eq!(commented.up_for_review_at(), Some("2026-11-23T16:30:00Z"));
+    assert_eq!(commented.draft_comments, 0);
+}
+#[test]
+fn an_approval_on_a_draft_nobody_was_asked_to_review_is_the_review() {
+    let activity = activity_of(
+        &[note(
+            1,
+            "alice",
+            true,
+            "approved this merge request",
+            "2026-09-02T10:00:00Z",
+        )],
+        true,
+    );
+    assert_eq!(
+        activity.first_review_at.as_deref(),
+        Some("2026-09-02T10:00:00Z")
+    );
+    assert_eq!(activity.draft_comments, 0);
+    assert_eq!(activity.up_for_review_at(), None, "still being written");
 }
 #[test]
 fn an_mr_never_in_draft_is_up_for_review_at_its_first_request() {

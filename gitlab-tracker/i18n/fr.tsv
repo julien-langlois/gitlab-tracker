@@ -1680,7 +1680,7 @@ rail	Stacks	Piles
 	more	plus
 	< 1 h	< 1 h
 	In development	En développement
-	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	De l'ouverture à la sortie du brouillon (passage en Ready). Une MR jamais en brouillon : jusqu'à sa première demande de relecture. Les commentaires pendant le brouillon sont la relecture au fil de l'eau et restent dans cette étape.
+	From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.	De l'ouverture à la sortie du brouillon (passage en Ready) ou à la première demande de relecture, la première des deux. Les commentaires sur un brouillon dont personne n'a encore été sollicité pour la relecture sont la relecture au fil de l'eau et restent dans cette étape.
 	From ready for review to the first review by someone else (bots left out).	Du passage en Ready à la première relecture par quelqu'un d'autre (bots exclus).
 	From the first review to the approval: the back and forth.	De la première relecture à l'approbation : les allers-retours.
 	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Une MR ouverte en brouillon au début du travail est en développement jusqu'à son passage en Ready. Les commentaires pendant le brouillon sont la relecture au fil de l'eau : ils comptent ici, ni comme première relecture ni comme allers-retours.

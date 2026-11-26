@@ -111,19 +111,22 @@ dashboard follows that:
 | Moment | What marks it |
 | :--- | :--- |
 | **Opened** | The MR's creation. |
-| **Up for review** (the end of the development) | Its move out of draft (**Mark as ready**). An MR never in draft: its first review request. |
-| **First review** | The first comment or approval by someone other than the author **once the MR is ready**. Bots (Renovate, Dependabot, project and group tokens, `*-bot`) never count. |
+| **Up for review** (the end of the development) | Its move out of draft (**Mark as ready**) or its first review request, whichever comes first: a review asked on a draft puts it up for review. An MR never in draft: its first review request. |
+| **First review** | The first comment or approval by someone other than the author **once the MR is up for review**. An approval always counts, even on a draft. Bots (Renovate, Dependabot, project and group tokens, `*-bot`) never count. |
 | **Approved**, **Merged**, **On production** | The approval, the merge, the arrival on the last tracked branch. |
 
-- **Comments while a draft** are the review along the way: they are counted
-  apart ("3 of 18 opened as drafts, 2 reviewed along the way" under *Where the
+- **Comments on a draft nobody was asked to review yet** are the review along
+  the way: they are counted apart ("3 of 18 opened as drafts, 2 reviewed along the way" under *Where the
   time goes*) and are neither the first review nor rounds.
 - **Review rounds** are the pushes after the first review: the pushes of the
   development do not count. An MR sent back to draft after its review and marked
   ready again keeps its first review; its rework pushes are rounds.
-- **A reviewer asked on a draft** is not waiting while the work goes on: their
-  wait (the review reminder, *Team*'s answer times, *Today*, the cockpit, the
-  next step) starts when the MR is ready.
+- **A reviewer asked on a draft** is asked for the review: many teams ask for
+  it, and get the approval, before marking the MR ready. The development ends
+  at that request, and the reviewer's wait (*Team*'s answer times, the next
+  step) starts there. A reviewer named when the draft is opened, before the
+  work is done, therefore makes the development look shorter: nothing tells
+  the two apart.
 
 Where each measure starts:
 
@@ -144,9 +147,10 @@ asked at once gives no sign of when its work ended: its development counts as
 never drafts: development counted up to the review request"). To split the two,
 open the MRs as drafts and mark them ready when the work is done.
 
-**After an update.** The timeline was read differently before drafts were
-followed: each tracked MR, merged ones included, has its discussions read once
-more at the next refresh (one request per MR, then cached again). *Stats* keeps
+**After an update.** When the way the timeline is read changes (drafts
+followed, then a review asked on a draft taken as the review), each tracked
+MR, merged ones included, has its discussions read once more at the next
+refresh (one request per MR, then cached again). *Stats* keeps
 its database: the MRs recorded before have their *Ready → merge* filled at the
 next start, from what the refresh read.
 

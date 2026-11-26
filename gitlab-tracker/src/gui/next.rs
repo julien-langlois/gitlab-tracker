@@ -435,17 +435,15 @@ fn milestones(app: &crate::app::App, mr: &TrackedMr) -> Vec<Milestone> {
     let review = mr.review.as_ref();
     let merged = mr.state == crate::models::GitlabMrState::Merged;
     let created = parse(mr.created_at.as_deref());
-    // Ready for review: out of draft; an MR never in draft, at its first
-    // review request (else its opening). Its development is the hop before.
+    // Up for review: out of draft or its first review request, the earlier;
+    // an MR never in draft with neither, at its opening. Its development is
+    // the hop before.
     let was_draft = review.map_or(
         mr.mergeability == crate::models::MergeabilityStatus::Draft,
         |r| r.was_draft,
     );
-    let ready = if was_draft {
-        parse(review.and_then(|r| r.ready_at.as_deref()))
-    } else {
-        parse(review.and_then(|r| r.up_for_review_at())).or(created)
-    };
+    let up = parse(review.and_then(|r| r.up_for_review_at()));
+    let ready = if was_draft { up } else { up.or(created) };
     let mut out = vec![
         (tl("Created").to_string(), created, true),
         (

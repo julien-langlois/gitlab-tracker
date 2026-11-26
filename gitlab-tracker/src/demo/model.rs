@@ -270,6 +270,18 @@ impl MrSpec {
         self
     }
 
+    /// Opened as a draft and marked ready at `when`: its reviews are asked
+    /// then, as a team that opens its MRs when the work starts does (a review
+    /// asked on a draft puts it up for review).
+    pub fn ready(mut self, when: When) -> Self {
+        for (at, ev) in &mut self.log {
+            if matches!(ev, Ev::Ask(_)) {
+                *at = when.plus(1);
+            }
+        }
+        self.at(when, Ev::Ready)
+    }
+
     pub fn status(mut self, mergeability: MergeabilityStatus) -> Self {
         self.mergeability = mergeability;
         self

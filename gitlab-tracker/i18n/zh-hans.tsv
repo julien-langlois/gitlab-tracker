@@ -1680,7 +1680,7 @@ rail	Stacks	堆叠
 	more	更长
 	< 1 h	< 1 小时
 	In development	开发中
-	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	从创建到退出草稿（标记为就绪）。从未是草稿的 MR：到第一次请求评审为止。草稿期间的评论属于过程中的评审，计入此步骤。
+	From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.	从创建到退出草稿（标记为就绪）或第一次请求评审，以先到者为准。尚未请求任何人评审的草稿上的评论属于过程中的评审，计入此步骤。
 	From ready for review to the first review by someone else (bots left out).	从就绪待评审到他人的第一次评审（不含机器人）。
 	From the first review to the approval: the back and forth.	从第一次评审到批准：来回修改。
 	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	工作开始时以草稿创建的 MR，在标记为就绪之前都处于开发中。草稿期间的评论属于过程中的评审：计入这里，不算第一次评审，也不算轮次。

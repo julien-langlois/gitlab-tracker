@@ -5,8 +5,8 @@ use super::*;
 /// A step of an MR's way to production, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
-    /// Opened, not up for review yet: still being written. A draft until it
-    /// is marked ready; an MR never in draft, until its first review request.
+    /// Opened, not up for review yet: still being written. Until it is marked
+    /// ready or a review is asked, whichever comes first.
     Development,
     /// Review asked, nobody reviewed yet.
     WaitingReview,
@@ -39,7 +39,7 @@ impl Stage {
 
     pub fn hint(self) -> &'static str {
         tl(match self {
-            Stage::Development => "From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.",
+            Stage::Development => "From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.",
             Stage::WaitingReview => "From ready for review to the first review by someone else (bots left out).",
             Stage::InReview => "From the first review to the approval: the back and forth.",
             Stage::ToMerge => "From the approval to the merge.",

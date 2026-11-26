@@ -1680,7 +1680,7 @@ rail	Stacks	Pilhas
 	more	mais
 	< 1 h	< 1 h
 	In development	Em desenvolvimento
-	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	Da abertura até sair do rascunho (marcada como pronta). Uma MR que nunca foi rascunho: até o primeiro pedido de revisão. Os comentários durante o rascunho são a revisão ao longo do caminho e ficam nesta etapa.
+	From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.	Da abertura até sair do rascunho (marcada como pronta) ou até o primeiro pedido de revisão, o que vier primeiro. Os comentários em um rascunho cuja revisão ainda não foi pedida a ninguém são a revisão ao longo do caminho e ficam nesta etapa.
 	From ready for review to the first review by someone else (bots left out).	De pronta para revisão até a primeira revisão de outra pessoa (sem bots).
 	From the first review to the approval: the back and forth.	Da primeira revisão à aprovação: as idas e vindas.
 	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Uma MR aberta como rascunho no início do trabalho está em desenvolvimento até ser marcada como pronta. Os comentários durante o rascunho são a revisão ao longo do caminho: contam aqui, não como primeira revisão nem como rodadas.

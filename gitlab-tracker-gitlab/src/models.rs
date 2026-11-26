@@ -316,8 +316,9 @@ pub struct MrThread {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct ReviewActivity {
     /// First comment or approval by someone other than the author (bots left
-    /// out) once the MR is ready: notes while it is a draft are the review
-    /// along the way, counted in [`Self::draft_comments`], not the review.
+    /// out) once the MR is up for review: comments on a draft nobody was asked
+    /// to review yet are the review along the way, counted in
+    /// [`Self::draft_comments`], not the review. An approval always is.
     pub first_review_at: Option<String>,
     /// Last approval still standing (cleared by a later unapproval).
     pub approved_at: Option<String>,
@@ -340,15 +341,16 @@ pub struct ReviewActivity {
     #[serde(default)]
     pub approvals: std::collections::BTreeMap<String, String>,
     /// When the MR came out of draft for its review: its last move to ready
-    /// before the first review (the latest one while nobody reviewed yet).
+    /// before the first review (the latest one while nobody reviewed yet),
+    /// else its first move after it (reviewed while a draft).
     /// `None` for an MR never in draft, or still in draft.
     #[serde(default)]
     pub ready_at: Option<String>,
     /// It was a draft at some point (opened as one, or marked so later).
     #[serde(default)]
     pub was_draft: bool,
-    /// Comments and approvals by others while the MR was a draft: the review
-    /// along the way, on an MR opened when the work starts.
+    /// Comments by others while the MR was a draft and no review was asked
+    /// yet: the review along the way, on an MR opened when the work starts.
     #[serde(default)]
     pub draft_comments: u32,
     /// Last commits pushed by each user ("added N commits"), the author
@@ -362,25 +364,42 @@ pub struct ReviewActivity {
 }
 
 impl ReviewActivity {
-    /// When the MR was put up for review, where the development ends: out of
-    /// draft for an MR that was one (`None` while it still is), else its first
-    /// review request (the oldest standing one for reads that predate it).
-    /// An MR opened ready, its reviewers asked at once, gives its opening: its
-    /// development then counts as waiting for the review, nothing tells it.
+    /// When the MR was put up for review, where the development ends: the
+    /// earlier of its move out of draft and its first review request (the
+    /// oldest standing one for reads that predate it). A review asked on a
+    /// draft puts it up for review: teams ask for it before marking it ready.
+    /// `None` for a draft nobody was asked to review yet. An MR whose
+    /// reviewers were asked at the opening gives its opening: its development
+    /// then counts as waiting for the review, nothing tells it.
     pub fn up_for_review_at(&self) -> Option<&str> {
-        if self.was_draft {
-            return self.ready_at.as_deref();
-        }
-        self.first_review_requested_at
+        let asked = self
+            .first_review_requested_at
             .as_deref()
-            .or_else(|| self.review_requested_at.values().map(String::as_str).min())
+            .or_else(|| self.review_requested_at.values().map(String::as_str).min());
+        let ready = self.ready_at.as_deref().filter(|_| self.was_draft);
+        match (ready, asked) {
+            (Some(ready), Some(asked)) => Some(earlier(ready, asked)),
+            (one, other) => one.or(other),
+        }
+    }
+}
+
+/// The earlier of two RFC 3339 times (`a` when one does not parse).
+fn earlier<'a>(a: &'a str, b: &'a str) -> &'a str {
+    match (
+        chrono::DateTime::parse_from_rfc3339(a),
+        chrono::DateTime::parse_from_rfc3339(b),
+    ) {
+        (Ok(ta), Ok(tb)) if tb < ta => b,
+        _ => a,
     }
 }
 
 /// The current way of reading [`ReviewActivity`]: 1 added the drafts (the
 /// move to ready, the review only after it) and left the bots out; 2 added who
-/// pushed ([`ReviewActivity::last_push_by`]).
-pub const REVIEW_ACTIVITY_VERSION: u32 = 2;
+/// pushed ([`ReviewActivity::last_push_by`]); 3 puts a draft up for review at
+/// its first review request and takes an approval on a draft as the review.
+pub const REVIEW_ACTIVITY_VERSION: u32 = 3;
 
 /// What survives when a commit is cherry-picked or rebased: git keeps the author
 /// and the author date, and the title (first message line) is rarely edited.
@@ -680,7 +699,7 @@ impl TrackedMr {
             merged_at: self.merged_at.clone(),
             updated_at: self.updated_at.clone(),
             // Known once the review timeline was read the current way: out of
-            // draft, else the first request, else the opening.
+            // draft or the first request, the earlier, else the opening.
             ready_at: self
                 .review
                 .as_ref()

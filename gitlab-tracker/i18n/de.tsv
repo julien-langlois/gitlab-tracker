@@ -1680,7 +1680,7 @@ rail	Stacks	Stapel
 	more	mehr
 	< 1 h	< 1 Std.
 	In development	In Entwicklung
-	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	Von der Eröffnung bis zum Verlassen des Entwurfs (als bereit markiert). Ein MR, der nie Entwurf war: bis zur ersten Review-Anfrage. Kommentare während des Entwurfs sind das begleitende Review und bleiben in diesem Schritt.
+	From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.	Von der Eröffnung bis zum Verlassen des Entwurfs (als bereit markiert) oder bis zur ersten Review-Anfrage, je nachdem, was zuerst kommt. Kommentare zu einem Entwurf, für den noch niemand um ein Review gebeten wurde, sind das begleitende Review und bleiben in diesem Schritt.
 	From ready for review to the first review by someone else (bots left out).	Von bereit zum Review bis zum ersten Review durch jemand anderen (ohne Bots).
 	From the first review to the approval: the back and forth.	Vom ersten Review bis zur Freigabe: das Hin und Her.
 	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Ein MR, der zu Beginn der Arbeit als Entwurf eröffnet wird, ist in Entwicklung, bis er als bereit markiert wird. Kommentare während des Entwurfs sind das begleitende Review: Sie zählen hier, weder als erstes Review noch als Runden.

@@ -98,8 +98,9 @@ pub(super) fn draft_move(body: &str) -> Option<bool> {
 ///
 /// An MR opened when the work starts is reviewed along the way while a draft:
 /// those notes are counted apart ([`ReviewActivity::draft_comments`]), and the
-/// review proper (first review, rounds) starts once it is ready. Bots' notes
-/// are never a review.
+/// review proper (first review, rounds) starts once it is up for review: out
+/// of draft, or a review asked while still a draft. An approval is always the
+/// review. Bots' notes are never a review.
 pub(super) fn review_activity(
     discussions: &[Discussion],
     author: &str,
@@ -128,7 +129,7 @@ pub(super) fn review_activity(
                 draft = became_draft;
                 if became_draft {
                     activity.was_draft = true;
-                } else if activity.first_review_at.is_none() {
+                } else if activity.first_review_at.is_none() || activity.ready_at.is_none() {
                     activity.ready_at = Some(at.clone());
                 }
                 false
@@ -177,7 +178,12 @@ pub(super) fn review_activity(
                 .last_activity_by
                 .insert(user.to_string(), at.clone());
             if user != author && !is_bot(user) {
-                if draft {
+                // A draft is up for review once a review is asked on it, and
+                // an approval is the review whatever the draft says.
+                let along_the_way = draft
+                    && activity.first_review_requested_at.is_none()
+                    && body != "approved this merge request";
+                if along_the_way {
                     activity.draft_comments += 1;
                 } else if activity.first_review_at.is_none() {
                     activity.first_review_at = Some(at.clone());

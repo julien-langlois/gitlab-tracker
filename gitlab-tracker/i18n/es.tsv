@@ -1680,7 +1680,7 @@ rail	Stacks	Pilas
 	more	más
 	< 1 h	< 1 h
 	In development	En desarrollo
-	From the opening to the move out of draft (marked ready). An MR never in draft: to its first review request. Comments while a draft are the review along the way and stay in this step.	Desde la apertura hasta salir del borrador (marcada como lista). Una MR que nunca fue borrador: hasta su primera solicitud de revisión. Los comentarios durante el borrador son la revisión sobre la marcha y quedan en este paso.
+	From the opening to the move out of draft (marked ready) or the first review request, whichever comes first. Comments on a draft nobody was asked to review yet are the review along the way and stay in this step.	Desde la apertura hasta salir del borrador (marcada como lista) o hasta la primera solicitud de revisión, lo que ocurra primero. Los comentarios sobre un borrador cuya revisión aún no se ha pedido a nadie son la revisión sobre la marcha y quedan en este paso.
 	From ready for review to the first review by someone else (bots left out).	Desde lista para revisión hasta la primera revisión de otra persona (sin bots).
 	From the first review to the approval: the back and forth.	De la primera revisión a la aprobación: las idas y vueltas.
 	An MR opened as a draft when the work starts is in development until it is marked ready. Comments while a draft are the review along the way: they count here, not as the first review nor as rounds.	Una MR abierta como borrador al empezar el trabajo está en desarrollo hasta que se marca como lista. Los comentarios durante el borrador son la revisión sobre la marcha: cuentan aquí, no como primera revisión ni como rondas.

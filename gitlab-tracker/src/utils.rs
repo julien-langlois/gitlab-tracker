@@ -42,15 +42,14 @@ pub fn review_waiting_since(
     Some(review.map_or(asked, |r| waits_from(r, asked)))
 }
 
-/// When a review asked at `asked` starts to wait: then, or when the MR came
-/// out of draft if it was one at the time. A reviewer asked at the opening
-/// of a draft is not late while the work goes on.
+/// When a review asked at `asked` starts to wait: then, or when the MR was
+/// put up for review if that came later. A review asked on a draft puts it up
+/// for review, so the wait starts at the request.
 pub fn waits_from(review: &crate::models::ReviewActivity, asked: DateTime<Utc>) -> DateTime<Utc> {
     review
-        .ready_at
-        .as_deref()
+        .up_for_review_at()
         .and_then(parse_utc)
-        .map_or(asked, |ready| ready.max(asked))
+        .map_or(asked, |up| up.max(asked))
 }
 
 fn parse_utc(at: &str) -> Option<DateTime<Utc>> {

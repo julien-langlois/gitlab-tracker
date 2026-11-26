@@ -364,10 +364,11 @@ async fn the_demo_has_drafts_reviewed_along_the_way() {
         let review = mr.review.as_ref().unwrap();
         println!("!{} {}", mr.id, mr.title);
         assert!(review.was_draft, "!{}", mr.id);
-        // The review proper starts once ready.
-        let ready = time(review.ready_at.as_deref().unwrap());
+        // The review proper starts once up for review: ready, or a review
+        // asked while still a draft.
+        let up = time(review.up_for_review_at().unwrap());
         let first = time(review.first_review_at.as_deref().unwrap());
-        assert!(ready <= first, "!{} reviewed before ready", mr.id);
+        assert!(up <= first, "!{} reviewed before up for review", mr.id);
     }
     assert!(drafted
         .iter()

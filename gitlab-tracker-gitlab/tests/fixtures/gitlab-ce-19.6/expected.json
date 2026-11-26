@@ -136,7 +136,7 @@
           "pushes_after_review": 0,
           "ready_at": null,
           "review_requested_at": {},
-          "version": 2,
+          "version": 3,
           "was_draft": false
         },
         "review_read_at": "<read>",
@@ -256,7 +256,7 @@
           "pushes_after_review": 0,
           "ready_at": null,
           "review_requested_at": {},
-          "version": 2,
+          "version": 3,
           "was_draft": false
         },
         "review_read_at": "<read>",
@@ -384,7 +384,7 @@
           "pushes_after_review": 0,
           "ready_at": null,
           "review_requested_at": {},
-          "version": 2,
+          "version": 3,
           "was_draft": true
         },
         "review_read_at": "<read>",
