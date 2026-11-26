@@ -234,7 +234,7 @@ gitlab-tracker/                  # Binary crate — desktop window, terminal UI,
     │                    # mr_page/, table/, delivery/, team/, stats/, overlaps/, milestones/, ci/, releases/,
     │                    # setup/, environments/, dialogs/, inspector/, details/, shell/, sidebar/, today/,
     │                    # board/ (the pages' shared blocks), journal/, cockpit/, person/, standup/,
-    │                    # mr_pipelines/, promote/, persona/ (the rail's pages per role and the
+    │                    # mr_pipelines/, promote/, stacks/, persona/ (the rail's pages per role and the
     │                    # start page: persona.rs the model, kept in prefs.rs; view.rs its pieces)
     ├── shortcuts_core.rs# inventory::submit! — built-in keyboard shortcut block (Core section)
     ├── filters_core.rs  # inventory::submit! — built-in filter definitions (state, mergeability, …)
