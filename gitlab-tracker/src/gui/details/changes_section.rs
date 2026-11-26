@@ -14,10 +14,11 @@ pub fn changes(
     web_url: &str,
     tree: bool,
 ) {
-    if let Some(fetch) = details.diffs.get_mut(mr_id) {
+    let key = mr_id.to_string();
+    if let Some(fetch) = details.diffs.get_mut(&key) {
         fetch.poll();
     }
-    match details.diffs.get(mr_id) {
+    match details.diffs.get(&key) {
         None => {
             if button(ui, theme, None, tl("Show the changed files"), false).clicked() {
                 details.load_diff(app, mr_id, ui.ctx());

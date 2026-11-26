@@ -1,6 +1,7 @@
 //! What the inspector reads from GitLab only when asked: an MR's changed files
-//! with their patches, and the end of a failed job's log. Kept per tab for the
-//! session, fetched in the background; the read-only demo shows canned ones.
+//! with their patches, and the end of a failed job's log. Kept per tab, for the
+//! MRs and jobs opened last ([`KEPT_MRS`], [`KEPT_LOGS`]), fetched in the
+//! background; the read-only demo shows canned ones.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{channel, Receiver};
@@ -17,13 +18,21 @@ use crate::i18n::{tl, tn};
 mod changes_section;
 mod file_tree;
 mod patch_lines;
+mod recent;
 mod side_by_side;
 
 pub use changes_section::*;
 use file_tree::*;
 pub use patch_lines::*;
+use recent::Recent;
 use side_by_side::*;
 
+/// The MRs whose diff and page data are kept: the ones opened last. A diff
+/// can weigh megabytes; an MR opened again after more than this many others is
+/// read again.
+const KEPT_MRS: usize = 20;
+/// The job logs kept, the ones opened last.
+const KEPT_LOGS: usize = 20;
 /// Lines of a job's log kept.
 const LOG_LINES: usize = 200;
 /// Lines of a file's patch drawn; the rest is one click away in GitLab.
@@ -89,16 +98,15 @@ impl<T> Fetch<T> {
     }
 }
 
-/// A tab's fetched details.
-#[derive(Default)]
+/// A tab's fetched details: the latest ones (see [`KEPT_MRS`]).
 pub struct Details {
     /// By MR id.
-    diffs: HashMap<String, Fetch<Vec<FileDiff>>>,
+    diffs: Recent<String, Fetch<Vec<FileDiff>>>,
     /// By job id.
-    logs: HashMap<u64, Fetch<String>>,
+    logs: Recent<u64, Fetch<String>>,
     /// What the MR page read, by MR id and `updated_at` (read again once the MR
     /// changes).
-    pages: HashMap<(String, String), Fetch<crate::gitlab_detail::PageData>>,
+    pages: Recent<(String, String), Fetch<crate::gitlab_detail::PageData>>,
     /// Files unfolded, by MR id and path.
     open_files: HashSet<(String, String)>,
     /// The file to bring into view once the Changes tab shows it.
@@ -124,6 +132,26 @@ pub struct Details {
     declared_next: HashMap<String, Receiver<Result<crate::owners::Declared, String>>>,
 }
 
+impl Default for Details {
+    fn default() -> Self {
+        Self {
+            diffs: Recent::new(KEPT_MRS),
+            logs: Recent::new(KEPT_LOGS),
+            pages: Recent::new(KEPT_MRS),
+            open_files: HashSet::new(),
+            scroll_to: None,
+            selected: HashMap::new(),
+            side_by_side: false,
+            project: None,
+            project_next: None,
+            owners: None,
+            owners_next: None,
+            declared: HashMap::new(),
+            declared_next: HashMap::new(),
+        }
+    }
+}
+
 impl Details {
     fn fetch<T: Send + 'static>(
         ctx: &egui::Context,
@@ -141,7 +169,8 @@ impl Details {
         mr: &crate::models::TrackedMr,
         ctx: &egui::Context,
     ) -> Option<&crate::gitlab_detail::PageData> {
-        if !self.diffs.contains_key(&mr.id) {
+        // Asked on every frame of the page: also keeps its diff among the latest.
+        if self.diffs.get_mut(&mr.id).is_none() {
             self.load_diff(app, &mr.id, ctx);
         }
         self.page_data(app, mr, ctx)
@@ -157,7 +186,7 @@ impl Details {
     ) -> Option<&crate::gitlab_detail::PageData> {
         let key = (mr.id.clone(), mr.updated_at.clone().unwrap_or_default());
         if !self.pages.contains_key(&key) {
-            self.pages.retain(|(id, _), _| id != &mr.id);
+            self.pages.retain(|(id, _)| id != &mr.id);
             let fetch = if app.read_only {
                 Fetch::Ready(crate::demo::demo_page_data(mr))
             } else {
@@ -394,7 +423,7 @@ impl Details {
 
     /// The MR's diff once read.
     pub fn diff(&mut self, mr_id: &str) -> Option<&[FileDiff]> {
-        let fetch = self.diffs.get_mut(mr_id)?;
+        let fetch = self.diffs.get_mut(&mr_id.to_string())?;
         fetch.poll();
         match fetch {
             Fetch::Ready(files) => Some(files),

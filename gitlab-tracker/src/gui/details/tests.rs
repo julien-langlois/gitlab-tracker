@@ -112,3 +112,31 @@ mod split_tests {
         );
     }
 }
+
+#[test]
+fn a_long_session_keeps_the_details_of_the_mrs_opened_last_only() {
+    let mut app = crate::app::tests::test_app();
+    // Read-only: canned details, no network.
+    app.read_only = true;
+    let ctx = egui::Context::default();
+    let mrs: Vec<crate::models::TrackedMr> = (1..=KEPT_MRS + 5)
+        .map(|i| crate::models::TrackedMr::placeholder(i.to_string(), format!("MR {i}"), None))
+        .collect();
+    let mut details = Details::default();
+    for mr in &mrs {
+        details.page(&app, mr, &ctx);
+    }
+    assert_eq!(details.diffs.len(), KEPT_MRS);
+    assert_eq!(details.pages.len(), KEPT_MRS);
+    // The first ones went, the last one is there.
+    assert!(!details.diffs.contains_key(&"1".to_string()));
+    let last = mrs.last().map(|mr| mr.id.clone()).unwrap_or_default();
+    assert!(details.diffs.contains_key(&last));
+    // The MR shown stays while others are opened: it is used on every frame.
+    let shown = &mrs[KEPT_MRS];
+    for other in &mrs[..KEPT_MRS] {
+        details.page(&app, shown, &ctx);
+        details.page(&app, other, &ctx);
+    }
+    assert!(details.diffs.contains_key(&shown.id));
+}
