@@ -156,6 +156,11 @@ pub fn button(
     let icon_room = if icon.is_some() { 20.0 } else { 0.0 };
     let padding = if primary { 12.0 } else { 10.0 };
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    // Its text names it for a screen reader (an icon alone: its tooltip's caller names it).
+    if !text.is_empty() {
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), text));
+    }
     if ui.is_rect_visible(rect) {
         let hovered = response.hovered();
         let fill = match (primary, hovered) {
@@ -508,6 +513,21 @@ pub fn switch_track(ui: &Ui, theme: &Theme, left_center: egui::Pos2, how_on: f32
     let track = Rect::from_min_size(left_center - Vec2::new(0.0, 8.5), Vec2::new(30.0, 17.0));
     let fill = lerp_color(theme.palette.border, theme.palette.accent_fill, how_on);
     ui.painter().rect_filled(track, CornerRadius::same(9), fill);
+    // Off, an outline: the track reads on any panel, not only its knob.
+    if how_on < 1.0 {
+        ui.painter().rect_stroke(
+            track,
+            CornerRadius::same(9),
+            Stroke::new(
+                1.0,
+                theme
+                    .palette
+                    .text_muted
+                    .gamma_multiply(0.55 * (1.0 - how_on)),
+            ),
+            egui::StrokeKind::Inside,
+        );
+    }
     let x = egui::lerp(track.left() + 8.5..=track.right() - 8.5, how_on);
     ui.painter()
         .circle_filled(egui::pos2(x, track.center().y), 6.5, Color32::WHITE);
