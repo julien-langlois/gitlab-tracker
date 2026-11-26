@@ -117,3 +117,93 @@ fn the_matrix_takes_the_ten_lowest_ids_and_my_pairs_are_counted_once() {
     // !3 is in a pair with each of the eleven others.
     assert_eq!(o.my_pairs, 11);
 }
+
+/// An open MR last pushed at `pushed`, and an MR merged into the same target
+/// at `merged`, each with its files.
+fn ahead_pair(
+    mine: Vec<ChangedFile>,
+    theirs: Vec<ChangedFile>,
+    pushed: &str,
+    merged: &str,
+) -> (crate::app::App, TrackedMr) {
+    let mut open = mr("10", mine);
+    open.data.target_branch = "main".into();
+    open.data.review = Some(crate::models::ReviewActivity {
+        last_push_at: Some(pushed.into()),
+        ..Default::default()
+    });
+    let mut done = mr("20", theirs);
+    done.data.target_branch = "main".into();
+    done.data.state = GitlabMrState::Merged;
+    done.data.merged_at = Some(merged.into());
+    done.mergeability = MergeabilityStatus::NotOpen;
+    let mut app = crate::app::tests::test_app();
+    app.mrs = vec![open.clone(), done];
+    (app, open)
+}
+
+#[test]
+fn a_merge_on_the_same_lines_since_the_last_push_is_a_conflict_to_come() {
+    let (app, open) = ahead_pair(
+        vec![file("src/a.rs", &[(18, 22)]), file("src/b.rs", &[(1, 3)])],
+        vec![file("src/a.rs", &[(12, 30)]), file("src/b.rs", &[(40, 50)])],
+        "2026-11-20T10:00:00Z",
+        "2026-11-24T10:00:00Z",
+    );
+    let found = ahead(&app, &open);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].merged, "20");
+    // Only the file met on the same lines; b.rs is apart.
+    assert_eq!(found[0].files.len(), 1);
+    assert_eq!(found[0].files[0].path, "src/a.rs");
+    assert_eq!(lines_text(&found[0].files[0].theirs), "12–30");
+}
+
+#[test]
+fn no_conflict_to_come_when_the_branch_already_has_it_or_lines_differ() {
+    // Merged before the last push: the rebase took it in.
+    let (app, open) = ahead_pair(
+        vec![file("src/a.rs", &[(18, 22)])],
+        vec![file("src/a.rs", &[(12, 30)])],
+        "2026-11-25T10:00:00Z",
+        "2026-11-24T10:00:00Z",
+    );
+    assert!(ahead(&app, &open).is_empty());
+    // Lines a few apart: git merges them.
+    let (app, open) = ahead_pair(
+        vec![file("src/a.rs", &[(40, 42)])],
+        vec![file("src/a.rs", &[(12, 30)])],
+        "2026-11-20T10:00:00Z",
+        "2026-11-24T10:00:00Z",
+    );
+    assert!(ahead(&app, &open).is_empty());
+    // Another target: not in its way.
+    let (mut app, open) = ahead_pair(
+        vec![file("src/a.rs", &[(18, 22)])],
+        vec![file("src/a.rs", &[(12, 30)])],
+        "2026-11-20T10:00:00Z",
+        "2026-11-24T10:00:00Z",
+    );
+    app.mrs[1].data.target_branch = "develop".into();
+    assert!(ahead(&app, &open).is_empty());
+    // Already in conflict: GitLab says so, nothing to foresee.
+    app.mrs[1].data.target_branch = "main".into();
+    let mut conflicted = open.clone();
+    conflicted.mergeability = MergeabilityStatus::Conflict;
+    assert!(ahead(&app, &conflicted).is_empty());
+    assert_eq!(ahead(&app, &open).len(), 1);
+}
+
+#[tokio::test]
+async fn the_demo_shows_a_conflict_to_come() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let index = app
+        .mrs
+        .iter()
+        .find(|m| m.title.starts_with("perf(db): Index shipments"))
+        .expect("the demo's !215");
+    let found = ahead(&app, index);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].title.contains("NULL tracking numbers"));
+    assert_eq!(found[0].files[0].path, "src/db/shipments.rs");
+}

@@ -751,6 +751,14 @@ pub fn write(shipments: &[Shipment], out: impl Write) -> csv::Result<()> {
 +  FROM labels l WHERE l.shipment_id = s.id AND s.tracking_number IS NULL;
  ALTER TABLE shipments ALTER COLUMN tracking_number SET NOT NULL;
 "#)]))
+            // The same line as !215 changes, merged after its last push: the
+            // demo's conflict to come.
+            .file(patch("src/db/shipments.rs", &[(140, r#"
+ /// The shipments of `account` changed since `since`, oldest change first.
+-pub async fn changed_since(db: &Db, account: AccountId, since: DateTime<Utc>) -> Result<Vec<Shipment>> {
++/// Shipments without a tracking number are left out: partners cannot follow them.
++pub async fn changed_since(db: &Db, account: AccountId, since: DateTime<Utc>) -> Result<Vec<Shipment>> {
+"#)]))
             .shipped(&[&THOMAS, &ALEX], d(2, 9, 10), d(2, 9, 40), d(2, 10, 50), d(2, 11, 30),
                 ("Do we backfill the NULLs or skip them?", "Backfilled from the labels: 312 rows, all found."),
                 None),

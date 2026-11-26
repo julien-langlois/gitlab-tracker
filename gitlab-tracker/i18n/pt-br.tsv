@@ -2423,3 +2423,8 @@ saved view	Restore	Restaurar
 	by a cherry-pick	por um cherry-pick
 	by a copy	por uma cópia
 	in part	em parte
+	A conflict is coming: !{id}, merged into {target}, changed the same lines	Um conflito está chegando: !{id}, mesclada em {target}, alterou as mesmas linhas
+	A conflict is coming with {target}	Um conflito com {target} está chegando
+	GitLab sees no conflict yet: it compares with {target} as of the last push. Since then !{id} {title}, merged {when}, changed the same lines: the next rebase or merge stops on them.	O GitLab ainda não vê conflito: ele compara com {target} como estava no último push. Desde então, !{id} {title}, mesclada {when}, alterou as mesmas linhas: o próximo rebase ou merge vai parar nelas.
+	{path}: lines {theirs} there, {mine} here	{path}: linhas {theirs} lá, {mine} aqui
+	See !{id}	Ver !{id}

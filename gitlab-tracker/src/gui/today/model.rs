@@ -146,6 +146,14 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
                     "{n} threads to answer",
                 ));
             }
+            // Not in conflict yet, but it will be at the next rebase or merge
+            // (a merge train would stop on it): the author's to handle.
+            if let Some(first) = super::super::overlaps::ahead(app, mr).first() {
+                reasons.push(tf(
+                    "A conflict is coming: !{id}, merged into {target}, changed the same lines",
+                    &[("id", &first.merged), ("target", &mr.target_branch)],
+                ));
+            }
             if blocked || !reasons.is_empty() {
                 Some(Kind::Fix)
             } else if mr.auto_merge || app.merge_train.contains_key(&mr.id) {

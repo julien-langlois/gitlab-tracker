@@ -25,6 +25,8 @@ pub struct Check {
     pub command: Option<String>,
     /// About the commits: a link opens the Commits tab.
     pub to_commits: bool,
+    /// Another MR it is about: a button opens its page.
+    pub open_mr: Option<String>,
 }
 
 /// What the commits' signatures warn about, when the project enforces signed
@@ -47,6 +49,7 @@ pub fn signature_checks(mr: &TrackedMr, report: &crate::signatures::Report) -> V
         behind: false,
         command,
         to_commits: true,
+        open_mr: None,
     };
     let mut list = Vec::new();
     // From the branch as GitLab has it, signed again over the target, pushed
@@ -163,6 +166,7 @@ pub fn checks(
             behind: false,
             command: None,
             to_commits: false,
+            open_mr: None,
         })
     };
 
@@ -405,8 +409,12 @@ pub(super) fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&Pa
     );
     if let Some(report) = g.app.signature_report(mr) {
         list.extend(signature_checks(mr, &report));
-        list.sort_by_key(|c| rank(c.verdict));
     }
+    // First among the warnings: it says why "N commits behind" matters now.
+    let mut ahead = conflicts_ahead(&g.app, mr);
+    ahead.append(&mut list);
+    let mut list = ahead;
+    list.sort_by_key(|c| rank(c.verdict));
     let mut picked = None;
     let mut open = None;
     let mut to_commits = false;
@@ -489,6 +497,20 @@ pub(super) fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&Pa
                         if let Some(command) = &check.command {
                             copied |= command_box(ui, &theme, command);
                         }
+                        if let Some(id) = &check.open_mr {
+                            ui.add_space(4.0);
+                            if button(
+                                ui,
+                                &theme,
+                                Some(Icon::MergeRequests),
+                                &tf("See !{id}", &[("id", id)]),
+                                false,
+                            )
+                            .clicked()
+                            {
+                                open = Some(id.clone());
+                            }
+                        }
                         if check.to_commits && check.verdict != Verdict::Met {
                             ui.add_space(4.0);
                             if button(
@@ -516,6 +538,58 @@ pub(super) fn blockers(g: &GuiApp, ui: &mut Ui, mr: &TrackedMr, data: Option<&Pa
         commits: to_commits,
         copied,
     }
+}
+
+/// A warning per merged MR the branch will conflict with at its next rebase
+/// or merge (see `overlaps::ahead`): GitLab does not see it yet.
+pub fn conflicts_ahead(app: &crate::app::App, mr: &TrackedMr) -> Vec<Check> {
+    super::super::overlaps::ahead(app, mr)
+        .into_iter()
+        .map(|a| {
+            let lines: Vec<String> = a
+                .files
+                .iter()
+                .map(|f| {
+                    tf(
+                        "{path}: lines {theirs} there, {mine} here",
+                        &[
+                            ("path", &f.path),
+                            ("theirs", &super::super::overlaps::lines_text(&f.theirs)),
+                            ("mine", &super::super::overlaps::lines_text(&f.mine)),
+                        ],
+                    )
+                })
+                .collect();
+            Check {
+                verdict: Verdict::Warns,
+                what: tf(
+                    "A conflict is coming with {target}",
+                    &[("target", &mr.target_branch)],
+                ),
+                why: format!(
+                    "{}\n{}",
+                    tf(
+                        "GitLab sees no conflict yet: it compares with {target} as of the last push. \
+                         Since then !{id} {title}, merged {when}, changed the same lines: the next \
+                         rebase or merge stops on them.",
+                        &[
+                            ("target", &mr.target_branch),
+                            ("id", &a.merged),
+                            ("title", &a.title),
+                            ("when", &crate::utils::format_relative_date(&a.merged_at.to_rfc3339())),
+                        ],
+                    ),
+                    lines.join("\n")
+                ),
+                who: Vec::new(),
+                files: Vec::new(),
+                behind: false,
+                command: Some(super::super::next::rebase_commands(mr)),
+                to_commits: false,
+                open_mr: Some(a.merged),
+            }
+        })
+        .collect()
 }
 
 /// A command to copy: monospace in a box, with the copy icon in its corner;

@@ -205,7 +205,7 @@ on a page of its own; `Esc` goes back, `J` / `K` move to the next or previous MR
   against the estimate, Log time).
 - **Why it can't merge:** conflicts, pipeline, threads, approval rules, commits
   behind (a click lists the merges and pushes on the target the MR lacks), draft,
-  [unsigned commits](signed-commits.md).
+  [unsigned commits](signed-commits.md), and a [conflict to come](#overlaps).
 - **Who could review** (open MRs): the people who know the files the MR
   changes — they changed, reviewed or approved them, or worked in their
   folders, in the MRs merged over the last 90 days — with their reviews
@@ -275,7 +275,7 @@ back to its author if it gets stuck.
 ## Today
 
 Across every open tab: the reviews waiting for you, your MRs that need you (CI
-failed, conflicts, threads to answer, changes requested), those ready to merge,
+failed, conflicts and conflicts to come, threads to answer, changes requested), those ready to merge,
 those waiting on others, and the MRs you merged today, whoever wrote them. A
 click shows the MR in its tab; a click on the **Merged today** count lists them
 on the merge requests page (*Merged by me*, merged today). **Copy my stand-up**
@@ -492,6 +492,16 @@ launch; filters by type, tab, period, and "only what concerns me".
 The open MRs that change the same files, on the same lines, a few lines apart, or
 only in the same file; a matrix of the pairs, the files changed by the most recent
 MRs, and for the pair picked where the two meet and which one to merge first.
+
+**A conflict to come.** GitLab compares a branch with its target as it was at
+the branch's last push, so it shows no conflict yet when an MR merged since
+changed the same lines. The app does see it: an open MR whose target took,
+since its last push, a tracked MR changing the same lines gets a warning in
+*Why it can't merge* (the merged MR, the file and the lines on each side, the
+rebase commands, a button to the merged MR), and, when it is yours, a line in
+Today's *My MRs that need me* — a merge train would stop on it. It is read from
+the changes the app already has (no call of its own); lines only, so a rename or
+a reformat may still surprise, and a merge the app does not track is not seen.
 
 **The pair picked** spans the page under the counters, in the colour of how much
 the two overlap (red on the same lines, orange a few lines apart, amber only in the

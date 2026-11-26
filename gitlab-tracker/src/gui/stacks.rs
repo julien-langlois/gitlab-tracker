@@ -169,7 +169,7 @@ impl Stack {
 }
 
 /// When `mr` last got new commits: its last push, else its newest commit.
-fn last_push(mr: &TrackedMr) -> Option<DateTime<Utc>> {
+pub(in crate::gui) fn last_push(mr: &TrackedMr) -> Option<DateTime<Utc>> {
     mr.review
         .as_ref()
         .and_then(|r| board::time_of(r.last_push_at.as_deref()))

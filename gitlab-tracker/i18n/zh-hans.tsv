@@ -2423,3 +2423,8 @@ saved view	Restore	恢复
 	by a cherry-pick	通过 cherry-pick
 	by a copy	通过复制
 	in part	部分
+	A conflict is coming: !{id}, merged into {target}, changed the same lines	冲突即将出现：!{id} 已合并到 {target}，修改了相同的行
+	A conflict is coming with {target}	即将与 {target} 冲突
+	GitLab sees no conflict yet: it compares with {target} as of the last push. Since then !{id} {title}, merged {when}, changed the same lines: the next rebase or merge stops on them.	GitLab 尚未发现冲突：它按上次推送时的 {target} 进行比较。此后，!{id} {title}（{when}合并）修改了相同的行：下次变基或合并时会在此停下。
+	{path}: lines {theirs} there, {mine} here	{path}：那边第 {theirs} 行，这边第 {mine} 行
+	See !{id}	查看 !{id}

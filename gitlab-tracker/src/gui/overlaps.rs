@@ -24,11 +24,13 @@ use gitlab_tracker_core::MergeabilityStatus;
 /// The folder of a path, two levels deep: `src/api/`.
 use super::hotspots::folder;
 
+mod ahead;
 mod cards;
 mod model;
 mod pairs;
 mod side_panel;
 
+pub(in crate::gui) use ahead::*;
 pub(in crate::gui) use cards::*;
 pub use model::*;
 use pairs::*;
