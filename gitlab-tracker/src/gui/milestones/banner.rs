@@ -46,20 +46,20 @@ pub(super) fn projection_banner(
                     "{chance} chance that every MR is merged by the due date: half the simulations are done by {p50}, 85 % by {eta}.",
                     &[
                         ("chance", &board::percent(chance)),
-                        ("p50", &p50.format("%Y-%m-%d").to_string()),
-                        ("eta", &eta.format("%Y-%m-%d").to_string()),
+                        ("p50", &crate::utils::day_text(p50)),
+                        ("eta", &crate::utils::day_text(eta)),
                     ],
                 ),
                 (Some(p50), None) => tf(
                     "Half the simulations have every MR merged by {p50}, 85 % by {eta}.",
                     &[
-                        ("p50", &p50.format("%Y-%m-%d").to_string()),
-                        ("eta", &eta.format("%Y-%m-%d").to_string()),
+                        ("p50", &crate::utils::day_text(p50)),
+                        ("eta", &crate::utils::day_text(eta)),
                     ],
                 ),
                 _ => tf(
                     "Every MR is merged around {eta}.",
-                    &[("eta", &eta.format("%Y-%m-%d").to_string())],
+                    &[("eta", &crate::utils::day_text(eta))],
                 ),
             },
         ),
@@ -240,7 +240,7 @@ pub(super) fn landing_tile(
     let landing = eta.map(|e| {
         tf(
             "85 % sure by {date}",
-            &[("date", &e.format("%Y-%m-%d").to_string())],
+            &[("date", &crate::utils::day_text(e))],
         )
     });
     let small = landing.as_ref().map(|text| {
@@ -276,8 +276,8 @@ pub(super) fn landing_tile(
         response.tip(tf(
             "Due {due}, projected {eta}",
             &[
-                ("due", &due.format("%Y-%m-%d").to_string()),
-                ("eta", &eta.format("%Y-%m-%d").to_string()),
+                ("due", &crate::utils::day_text(due)),
+                ("eta", &crate::utils::day_text(eta)),
             ],
         ));
     }

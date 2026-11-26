@@ -225,6 +225,12 @@ impl Period {
         })
     }
 
+    /// The period in words when both crons repeat alike, e.g. "Friday 18:00 →
+    /// Monday 07:00, every week"; `None` otherwise (the crons show as they are).
+    pub fn words(&self) -> Option<String> {
+        period_words(&self.start_text, &self.end_text)
+    }
+
     fn next(&self, cron: &Cron, after: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match self.zone {
             Zone::Named(tz) => cron.next(&tz, after),
@@ -434,14 +440,68 @@ fn parse_entry(entry: &str) -> Option<Period> {
     Period::new(start, &end, zone)
 }
 
+/// How a freeze's cron repeats, for [`Period::words`].
+#[derive(PartialEq)]
+enum Repeat {
+    Day,
+    Week,
+    Year,
+}
+
+/// A freeze cron as a moment of its repeat: "18:00", "Friday 18:00" or
+/// "26/11 11:14".
+fn cron_words(cron: &str) -> Option<(Repeat, String)> {
+    let parts: Vec<&str> = cron.split_whitespace().collect();
+    let [minute, hour, day, month, weekday] = parts.as_slice() else {
+        return None;
+    };
+    let minute: u32 = minute.parse().ok().filter(|m| *m < 60)?;
+    let hour: u32 = hour.parse().ok().filter(|h| *h < 24)?;
+    let time = format!("{hour:02}:{minute:02}");
+    match (*day, *month, *weekday) {
+        ("*", "*", "*") => Some((Repeat::Day, time)),
+        ("*", "*", d) => {
+            let name = match d.parse::<u32>().ok().filter(|n| *n <= 7)? {
+                1 => "Monday",
+                2 => "Tuesday",
+                3 => "Wednesday",
+                4 => "Thursday",
+                5 => "Friday",
+                6 => "Saturday",
+                _ => "Sunday",
+            };
+            Some((
+                Repeat::Week,
+                format!("{} {time}", crate::i18n::tc("date", name)),
+            ))
+        }
+        (d, m, "*") => {
+            let d: u32 = d.parse().ok().filter(|d| (1..=31).contains(d))?;
+            let m: u32 = m.parse().ok().filter(|m| (1..=12).contains(m))?;
+            Some((Repeat::Year, format!("{d:02}/{m:02} {time}")))
+        }
+        _ => None,
+    }
+}
+
+/// Two freeze crons in words when they repeat alike; see [`Period::words`].
+fn period_words(start: &str, end: &str) -> Option<String> {
+    let (repeat, from) = cron_words(start)?;
+    let (end_repeat, to) = cron_words(end)?;
+    if repeat != end_repeat {
+        return None;
+    }
+    let span = format!("{from} → {to}");
+    Some(match repeat {
+        Repeat::Day => crate::i18n::tf("{span}, every day", &[("span", &span)]),
+        Repeat::Week => crate::i18n::tf("{span}, every week", &[("span", &span)]),
+        Repeat::Year => crate::i18n::tf("{span}, every year", &[("span", &span)]),
+    })
+}
+
 /// `at` in the machine's zone, as "Fri 21/11 18:00".
 pub fn moment_text(at: DateTime<Utc>) -> String {
-    let local = at.with_timezone(&chrono::Local);
-    format!(
-        "{} {}",
-        crate::snooze::weekday_short(local.weekday()),
-        local.format("%d/%m %H:%M")
-    )
+    crate::utils::moment_text(at)
 }
 
 /// `at` in the period's own zone, as "Fri 21/11 18:00 Europe/Paris": the time
@@ -486,6 +546,36 @@ pub fn left_text(now: DateTime<Utc>, at: DateTime<Utc>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_period_reads_in_words_when_its_crons_repeat_alike() {
+        // Another test may install a translator: the words in its language.
+        use crate::i18n::{tc, tf};
+        let week = format!(
+            "{} 18:00 → {} 07:00",
+            tc("date", "Friday"),
+            tc("date", "Monday")
+        );
+        assert_eq!(
+            period_words("0 18 * * 5", "0 7 * * 1"),
+            Some(tf("{span}, every week", &[("span", week.as_str())]))
+        );
+        assert_eq!(
+            period_words("0 0 20 12 *", "0 0 5 1 *"),
+            Some(tf(
+                "{span}, every year",
+                &[("span", "20/12 00:00 → 05/01 00:00")]
+            ))
+        );
+        assert_eq!(
+            period_words("0 20 * * *", "0 7 * * *"),
+            Some(tf("{span}, every day", &[("span", "20:00 → 07:00")]))
+        );
+        // Unlike repeats, or steps and lists, stay as crons.
+        assert_eq!(period_words("0 18 * * 5", "0 7 * * *"), None);
+        assert_eq!(period_words("*/5 * * * *", "0 7 * * 1"), None);
+        assert_eq!(period_words("0 18 * * 1-5", "0 7 * * 1"), None);
+    }
     use chrono_tz::Europe::Paris;
 
     fn utc(text: &str) -> DateTime<Utc> {

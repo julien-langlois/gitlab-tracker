@@ -172,7 +172,9 @@ pub(in crate::gui) fn planning_body(ui: &mut Ui, theme: &Theme, mr: &TrackedMr) 
                         tones.green.fg
                     };
                     let relative = format_relative_date(&format!("{date}T00:00:00Z"));
-                    ui.label(RichText::new(format!("{date} ({relative})")).color(color));
+                    let shown = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+                        .map_or_else(|_| date.to_string(), crate::utils::day_text);
+                    ui.label(RichText::new(format!("{shown} ({relative})")).color(color));
                 }
             });
         });

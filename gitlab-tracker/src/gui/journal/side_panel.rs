@@ -137,15 +137,7 @@ pub(super) fn inspector(
                 ui.add(egui::Label::new(muted(&theme, &event.detail)).wrap());
             }
             ui.add(egui::Label::new(
-                muted(
-                    &theme,
-                    event
-                        .when
-                        .with_timezone(&Local)
-                        .format("%Y-%m-%d %H:%M")
-                        .to_string(),
-                )
-                .size(theme.text_size - 2.0),
+                muted(&theme, crate::utils::moment_text(event.when)).size(theme.text_size - 2.0),
             ));
             ui.add_space(GAP);
             ui.horizontal_wrapped(|ui| {

@@ -562,7 +562,7 @@ fn day_heading(
     } else if Some(date) == today.pred_opt() {
         tl("Yesterday").to_string()
     } else {
-        date.format("%Y-%m-%d").to_string()
+        crate::utils::day_text(date)
     };
     egui::Frame::new()
         .inner_margin(Margin {
@@ -587,7 +587,7 @@ fn ago(when: chrono::DateTime<chrono::Local>) -> String {
     } else if when.date_naive() == now.date_naive() {
         when.format("%H:%M").to_string()
     } else {
-        when.format("%m-%d %H:%M").to_string()
+        crate::utils::moment_text(when.with_timezone(&chrono::Utc))
     }
 }
 

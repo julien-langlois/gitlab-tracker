@@ -2417,3 +2417,6 @@ saved view	Restore	恢复
 	Who are you?	你的角色是？
 	The left rail shows the pages for your role. Every page stays one click away, and you can change this any time in Settings › Pages.	左侧栏显示与你的角色相关的页面。所有页面都一键可达，可随时在“设置 › 页面”中更改。
 	Saved in projects.toml.	已保存到 projects.toml。
+	{span}, every week	每周 {span}
+	{span}, every day	每天 {span}
+	{span}, every year	每年 {span}

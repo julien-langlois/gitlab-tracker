@@ -194,12 +194,7 @@ pub(super) fn jobs_table(
                             run.status.clone()
                         },
                     )
-                    .text(
-                        run.at
-                            .with_timezone(&Local)
-                            .format("%Y-%m-%d %H:%M")
-                            .to_string(),
-                    );
+                    .text(crate::utils::moment_text(run.at));
                 ui.interact(
                     slot.expand2(Vec2::new(1.5, 4.0)),
                     ui.scope_id().with(("run", job.name.as_str(), k)),

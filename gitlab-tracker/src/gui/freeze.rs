@@ -75,12 +75,10 @@ fn banner_text(freezes: &Freezes, now: DateTime<Utc>, project: Option<&str>) -> 
         Source::Gitlab => tl("deploy jobs that check $CI_DEPLOY_FREEZE do not run"),
         Source::App => tl("from the app's settings: a warning, the pipelines do not know of it"),
     };
-    let detail = format!(
-        "{} → {} · {} · {why}",
-        p.start_text,
-        p.end_text,
-        p.zone.name()
-    );
+    let when = p
+        .words()
+        .unwrap_or_else(|| format!("{} → {}", p.start_text, p.end_text));
+    let detail = format!("{when} · {} · {why}", p.zone.name());
     Some(Banner {
         title,
         detail,
@@ -361,20 +359,46 @@ fn day_tip(
 
 /// A period: its crons and zone, then whether it holds now or when it comes.
 fn period_row(ui: &mut Ui, theme: &Theme, p: &Period, now: DateTime<Utc>, last: bool) {
-    let height = 34.0;
+    let height = 40.0;
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::hover());
     let w = rect.width();
+    // In words, the crons dimmed under them; the crons alone when they do
+    // not read as one repeat.
     let cron = format!("{} → {}", p.start_text, p.end_text);
-    paint_text(
-        ui,
-        egui::pos2(rect.left(), rect.center().y),
-        Align2::LEFT_CENTER,
-        &cron,
-        FontId::monospace(theme.text_size - 1.5),
-        theme.palette.text,
-        w * 0.42 - 12.0,
-    );
+    match p.words() {
+        Some(words) => {
+            paint_text(
+                ui,
+                egui::pos2(rect.left(), rect.center().y - 7.0),
+                Align2::LEFT_CENTER,
+                &words,
+                FontId::proportional(theme.text_size - 1.0),
+                theme.palette.text,
+                w * 0.42 - 12.0,
+            );
+            paint_text(
+                ui,
+                egui::pos2(rect.left(), rect.center().y + 8.0),
+                Align2::LEFT_CENTER,
+                &cron,
+                FontId::monospace(theme.text_size - 3.0),
+                theme.palette.text_muted,
+                w * 0.42 - 12.0,
+            );
+        }
+        None => {
+            paint_text(
+                ui,
+                egui::pos2(rect.left(), rect.center().y),
+                Align2::LEFT_CENTER,
+                &cron,
+                FontId::monospace(theme.text_size - 1.5),
+                theme.palette.text,
+                w * 0.42 - 12.0,
+            );
+        }
+    }
     paint_text(
         ui,
         egui::pos2(rect.left() + w * 0.42, rect.center().y),

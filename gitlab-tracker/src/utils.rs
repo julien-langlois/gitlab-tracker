@@ -125,6 +125,36 @@ pub fn fuzzy_score(query: &str, haystack: &str) -> Option<f64> {
     Some(score.clamp(0.0, 0.79))
 }
 
+/// A day as the window shows it: "Fri 27/11", or "27/11/2025" when it is not
+/// this year. Text meant to be pasted elsewhere (reports, notes) keeps ISO
+/// dates instead.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn day_text(day: chrono::NaiveDate) -> String {
+    day_text_at(day, chrono::Local::now().date_naive())
+}
+
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+fn day_text_at(day: chrono::NaiveDate, today: chrono::NaiveDate) -> String {
+    use chrono::Datelike;
+    if day.year() == today.year() {
+        format!(
+            "{} {}",
+            crate::snooze::weekday_short(day.weekday()),
+            day.format("%d/%m")
+        )
+    } else {
+        day.format("%d/%m/%Y").to_string()
+    }
+}
+
+/// A moment in the machine's zone, as the window shows it: "Fri 27/11 09:00",
+/// or "27/11/2025 09:00" when it is not this year.
+#[cfg_attr(not(feature = "gui"), allow(dead_code))]
+pub fn moment_text(at: DateTime<Utc>) -> String {
+    let local = at.with_timezone(&chrono::Local);
+    format!("{} {}", day_text(local.date_naive()), local.format("%H:%M"))
+}
+
 /// Formats an ISO 8601 timestamp string into a human-readable relative date label.
 ///
 /// Returns English labels such as "just now", "5 min ago", "yesterday", "3 days ago",
@@ -303,6 +333,16 @@ impl Drop for TerminalGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_day_reads_with_its_weekday_this_year_and_its_year_otherwise() {
+        let d = |y, m, day| chrono::NaiveDate::from_ymd_opt(y, m, day).unwrap();
+        let today = d(2026, 11, 26);
+        // Another test may install a translator: the weekday in its language.
+        let fri = crate::snooze::weekday_short(chrono::Weekday::Fri);
+        assert_eq!(day_text_at(d(2026, 11, 27), today), format!("{fri} 27/11"));
+        assert_eq!(day_text_at(d(2025, 12, 31), today), "31/12/2025");
+    }
 
     #[test]
     fn fuzzy_score_ranks_substrings_over_scattered_letters_and_handles_any_text() {

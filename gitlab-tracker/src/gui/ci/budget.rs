@@ -155,7 +155,7 @@ pub(super) fn budget_card(ui: &mut Ui, theme: &Theme, ci: &Ci) {
                     ui.interact(hit, ui.scope_id().with(("budget_day", i)), Sense::hover())
                         .tip(format!(
                             "{} · {}",
-                            day.format("%Y-%m-%d"),
+                            crate::utils::day_text(*day),
                             hours_text(*secs)
                         ));
                     let every = (b.by_day.len() / 6).max(1);

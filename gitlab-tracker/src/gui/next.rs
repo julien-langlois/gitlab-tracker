@@ -317,10 +317,9 @@ pub fn card(
                                     .color(tone.fg),
                             );
                             if let Some(since) = step.since {
-                                let date = since
-                                    .with_timezone(&chrono::Local)
-                                    .format("%d %b")
-                                    .to_string();
+                                let date = crate::utils::day_text(
+                                    since.with_timezone(&chrono::Local).date_naive(),
+                                );
                                 let text = match (&step.actor, &step.reached) {
                                     (Actor::Deploy | Actor::Nobody, Some(branch)) => tf(
                                         "on {branch} since {date}",
@@ -689,12 +688,9 @@ pub fn lifecycle_strip(ui: &mut Ui, theme: &Theme, stages: &[Stage], tone: Tone)
                     fonts::semibold(theme.text_size - 1.5),
                     label_color,
                 );
-                let when =
-                    s.at.map(|at| {
-                        at.with_timezone(&chrono::Local)
-                            .format("%d %b %Y")
-                            .to_string()
-                    })
+                let when = s
+                    .at
+                    .map(|at| crate::utils::day_text(at.with_timezone(&chrono::Local).date_naive()))
                     .unwrap_or_else(|| {
                         if s.reached {
                             "—".into()

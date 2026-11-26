@@ -90,7 +90,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
 }
 
 fn local_date(at: DateTime<Utc>) -> String {
-    at.with_timezone(&Local).format("%Y-%m-%d").to_string()
+    crate::utils::day_text(at.with_timezone(&Local).date_naive())
 }
 
 fn nav(g: &mut GuiApp, ui: &mut Ui, m: &Model, now: DateTime<Utc>) {

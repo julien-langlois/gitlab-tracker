@@ -345,7 +345,8 @@ holds, or starts within two days, a banner says until when on Promote,
 Environments and Today. While it holds, the production card (the end of the flow)
 turns blue, marked frozen, with its end, and the branch before it shows what
 waits for the thaw. The Environments page shows the next two weeks, the
-frozen hours in blue, and each period with when it comes next. The crons are read
+frozen hours in blue, and each period with when it comes next, in words
+(*Friday 18:00 → Monday 07:00, every week*) over its crons. The crons are read
 in the period's own zone, daylight saving included; the times shown are your
 computer's.
 
