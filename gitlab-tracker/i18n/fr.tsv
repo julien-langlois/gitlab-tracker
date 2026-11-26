@@ -2356,3 +2356,66 @@ saved view	Restore	Rétablir
 	MRs open for over 30 days	MR ouvertes depuis plus de 30 jours
 	MRs open for over 14 days	MR ouvertes depuis plus de 14 jours
 	MRs open for over 7 days	MR ouvertes depuis plus de 7 jours
+# Personas: the rail's pages per role, and the start page (Settings › Pages, › Startup, first launch)
+	What waits on you, across projects	Ce qui vous attend, dans tous les projets
+	The merge requests table	Le tableau des merge requests
+	Counters and what needs attention	Compteurs et points d'attention
+	What is ready for the next branch	Ce qui est prêt pour la branche suivante
+	Linked tickets · shown while a tracker is linked	Tickets liés · visible tant qu'un outil de tickets est relié
+	Local statistics over time	Statistiques locales dans le temps
+	What waits on whom	Qui attend qui
+	What moved, in order	Ce qui a bougé, dans l'ordre
+	Environments and deployments	Environnements et déploiements
+	Pipelines and slow jobs	Pipelines et jobs lents
+	MRs changing the same files	MR qui modifient les mêmes fichiers
+	Flow: lead time, deploys, failures	Flux : délai, déploiements, échecs
+	Developer	Développeur
+	Tech lead	Responsable technique
+	Release manager	Responsable des releases
+	Engineering manager	Manager d'équipe
+	Everything	Tout
+	My MRs, what breaks, what collides with mine, my stacked branches.	Mes MR, ce qui casse, ce qui entre en conflit avec les miennes, mes branches empilées.
+	The developer view, plus the team’s review load, the risks and the flow.	La vue développeur, plus la charge de relecture de l'équipe, les risques et le flux.
+	What goes out, where and when: promotions, pipelines, environments, releases, freezes.	Ce qui part, où et quand : promotions, pipelines, environnements, releases, gels.
+	The overview and what blocks the team. What waits on whom, never who works how much.	La vue d'ensemble et ce qui bloque l'équipe. Qui attend qui, jamais qui travaille combien.
+	Every page, as today. Hide the ones you never use later.	Toutes les pages, comme aujourd'hui. Masquez plus tard celles dont vous ne vous servez pas.
+	In your rail · {n} of {total} pages	Dans votre barre · {n} pages sur {total}
+	Opens on {page}	S'ouvre sur {page}
+	Greyed pages stay reachable with Ctrl+K. Tracker shows whenever a ticket tracker is linked.	Les pages grisées restent accessibles avec Ctrl+K. La page Tickets s'affiche dès qu'un outil de tickets est relié.
+	{page}: in your rail	{page} : dans votre barre
+	{page}: hidden	{page} : masquée
+	Your start page · change it in Startup	Votre page d'ouverture · à changer dans Démarrage
+	The start page stays in the rail. Pick another one in Startup to hide it.	La page d'ouverture reste dans la barre. Choisissez-en une autre dans Démarrage pour la masquer.
+	Shown whenever a ticket tracker is linked to the project.	Visible dès qu'un outil de tickets est relié au projet.
+	Pages	Pages
+	Startup	Démarrage
+	The pages of the left rail. A hidden page stays reachable with Ctrl+K and from the links of the other pages. For every project.	Les pages de la barre de gauche. Une page masquée reste accessible avec Ctrl+K et par les liens des autres pages. Pour tous les projets.
+	The page the window opens on, and a project opened in a new tab. For every project.	La page sur laquelle s'ouvrent la fenêtre et un projet ouvert dans un nouvel onglet. Pour tous les projets.
+	Persona	Persona
+	Opens on	S'ouvre sur
+	Your role: the pages the left rail shows for it (developer, tech lead, release manager…).	Votre rôle : les pages que la barre de gauche affiche pour lui (développeur, responsable technique, responsable des releases…).
+	Show or hide each page of the left rail.	Afficher ou masquer chaque page de la barre de gauche.
+	The page the window opens on: your persona's, always the same one, or where you left off.	La page sur laquelle s'ouvre la fenêtre : celle de votre persona, toujours la même, ou là où vous en étiez.
+	This window	Cette fenêtre
+	This project	Ce projet
+	{persona} (customised)	{persona} (personnalisé)
+	Reset to {persona}…	Revenir à {persona}…
+	Show the pages of {persona} again? The pages you showed or hid are dropped.	Revenir aux pages de {persona} ? Les pages que vous avez affichées ou masquées sont oubliées.
+	{persona} opens on {page}. Follows the persona if it changes.	{persona} s'ouvre sur {page}. Suit la persona si elle change.
+	From my persona	Selon ma persona
+	One page, whatever the persona: the pages of your rail.	Une seule page, quelle que soit la persona : parmi les pages de votre barre.
+	Always this page	Toujours cette page
+	Each project's tab opens on the page it showed when the window closed.	L'onglet de chaque projet s'ouvre sur la page qu'il affichait à la fermeture de la fenêtre.
+	Where I left off	Là où j'en étais
+	The start page cannot be hidden from the rail: its switch in Pages is greyed while it is the start page. With “Where I left off”, a page hidden since opens on the persona's start page.	La page d'ouverture ne peut pas être masquée de la barre : son interrupteur dans Pages est grisé tant qu'elle est la page d'ouverture. Avec « Là où j'en étais », une page masquée depuis s'ouvre sur la page d'ouverture de la persona.
+	Enter opens it	Entrée pour l'ouvrir
+	Show in the rail	Afficher dans la barre
+	Hidden from your rail · {persona}	Masquée de votre barre · {persona}
+	{page} is back in your rail	{page} est de retour dans votre barre
+	For every project of this machine.	Pour tous les projets de cette machine.
+	Open the window	Ouvrir la fenêtre
+	Back	Retour
+	Step 2 of 2 · Your window	Étape 2 sur 2 · Votre fenêtre
+	Who are you?	Qui êtes-vous ?
+	The left rail shows the pages for your role. Every page stays one click away, and you can change this any time in Settings › Pages.	La barre de gauche affiche les pages de votre rôle. Toutes les pages restent à un clic, et vous pouvez changer cela à tout moment dans Réglages › Pages.
+	Saved in projects.toml.	Enregistré dans projects.toml.

@@ -31,11 +31,13 @@ use crate::storage::ProjectEntry;
 mod fields;
 mod first_run;
 mod form;
+mod persona_step;
 mod submit;
 mod verify;
 
 pub use first_run::*;
 use form::*;
+use persona_step::*;
 pub use verify::*;
 
 /// What the form asks for.

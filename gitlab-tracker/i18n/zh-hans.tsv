@@ -2356,3 +2356,66 @@ saved view	Restore	恢复
 	MRs open for over 30 days	开放超过 30 天的 MR
 	MRs open for over 14 days	开放超过 14 天的 MR
 	MRs open for over 7 days	开放超过 7 天的 MR
+# Personas: the rail's pages per role, and the start page (Settings › Pages, › Startup, first launch)
+	What waits on you, across projects	所有项目中等你处理的事项
+	The merge requests table	合并请求列表
+	Counters and what needs attention	计数器与需要关注的事项
+	What is ready for the next branch	可推进到下一分支的内容
+	Linked tickets · shown while a tracker is linked	关联的工单 · 关联工单系统时显示
+	Local statistics over time	本地历史统计
+	What waits on whom	谁在等谁
+	What moved, in order	按顺序列出的变动
+	Environments and deployments	环境与部署
+	Pipelines and slow jobs	流水线与慢作业
+	MRs changing the same files	修改相同文件的 MR
+	Flow: lead time, deploys, failures	交付流：前置时间、部署、失败
+	Developer	开发者
+	Tech lead	技术负责人
+	Release manager	发布负责人
+	Engineering manager	工程经理
+	Everything	全部
+	My MRs, what breaks, what collides with mine, my stacked branches.	我的 MR、出错的内容、与我冲突的变更、我的堆叠分支。
+	The developer view, plus the team’s review load, the risks and the flow.	开发者视图，外加团队的评审负载、风险和交付流。
+	What goes out, where and when: promotions, pipelines, environments, releases, freezes.	发布什么、何处、何时：推进、流水线、环境、发布、冻结期。
+	The overview and what blocks the team. What waits on whom, never who works how much.	全局视图与阻塞团队的事项。谁在等谁，而不是谁工作了多少。
+	Every page, as today. Hide the ones you never use later.	所有页面，与现在一样。之后可隐藏不用的页面。
+	In your rail · {n} of {total} pages	侧栏中 · {total} 个页面中的 {n} 个
+	Opens on {page}	启动时打开 {page}
+	Greyed pages stay reachable with Ctrl+K. Tracker shows whenever a ticket tracker is linked.	灰色页面仍可通过 Ctrl+K 打开。关联工单系统后会显示“工单”页。
+	{page}: in your rail	{page}：在侧栏中
+	{page}: hidden	{page}：已隐藏
+	Your start page · change it in Startup	你的启动页 · 可在“启动”中更改
+	The start page stays in the rail. Pick another one in Startup to hide it.	启动页始终保留在侧栏。在“启动”中选择其他页面后即可隐藏它。
+	Shown whenever a ticket tracker is linked to the project.	项目关联工单系统时显示。
+	Pages	页面
+	Startup	启动
+	The pages of the left rail. A hidden page stays reachable with Ctrl+K and from the links of the other pages. For every project.	左侧栏中的页面。隐藏的页面仍可通过 Ctrl+K 和其他页面中的链接打开。适用于所有项目。
+	The page the window opens on, and a project opened in a new tab. For every project.	窗口以及在新标签页中打开的项目首先显示的页面。适用于所有项目。
+	Persona	角色
+	Opens on	启动页
+	Your role: the pages the left rail shows for it (developer, tech lead, release manager…).	你的角色：左侧栏为该角色显示的页面（开发者、技术负责人、发布负责人……）。
+	Show or hide each page of the left rail.	显示或隐藏左侧栏中的每个页面。
+	The page the window opens on: your persona's, always the same one, or where you left off.	窗口启动时打开的页面：你的角色默认页、固定的某一页，或上次停留的页面。
+	This window	此窗口
+	This project	此项目
+	{persona} (customised)	{persona}（已自定义）
+	Reset to {persona}…	恢复为 {persona}…
+	Show the pages of {persona} again? The pages you showed or hid are dropped.	恢复 {persona} 的页面？你显示或隐藏的页面设置将被丢弃。
+	{persona} opens on {page}. Follows the persona if it changes.	{persona} 启动时打开 {page}。角色变化时随之变化。
+	From my persona	按我的角色
+	One page, whatever the persona: the pages of your rail.	无论角色如何都打开同一页：从侧栏页面中选择。
+	Always this page	始终打开此页
+	Each project's tab opens on the page it showed when the window closed.	每个项目标签页都打开关闭窗口时所显示的页面。
+	Where I left off	上次停留的页面
+	The start page cannot be hidden from the rail: its switch in Pages is greyed while it is the start page. With “Where I left off”, a page hidden since opens on the persona's start page.	启动页无法从侧栏隐藏：作为启动页时，它在“页面”中的开关为灰色。选择“上次停留的页面”时，若该页面已被隐藏，则打开角色的默认启动页。
+	Enter opens it	按 Enter 打开
+	Show in the rail	显示在侧栏
+	Hidden from your rail · {persona}	已从侧栏隐藏 · {persona}
+	{page} is back in your rail	{page} 已重新显示在侧栏
+	For every project of this machine.	适用于本机上的所有项目。
+	Open the window	打开窗口
+	Back	返回
+	Step 2 of 2 · Your window	第 2 步，共 2 步 · 你的窗口
+	Who are you?	你的角色是？
+	The left rail shows the pages for your role. Every page stays one click away, and you can change this any time in Settings › Pages.	左侧栏显示与你的角色相关的页面。所有页面都一键可达，可随时在“设置 › 页面”中更改。
+	Saved in projects.toml.	已保存到 projects.toml。

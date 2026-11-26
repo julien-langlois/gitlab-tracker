@@ -32,6 +32,14 @@ pub struct Prefs {
     pub tabs: Vec<SavedTab>,
     /// No look for newer versions (Settings › Interface).
     pub no_update_check: bool,
+    /// The persona whose pages the rail shows (Settings › Pages); none: every page.
+    pub persona: Option<String>,
+    /// Pages shown that the persona hides, and hidden that it shows.
+    pub pages_added: Vec<String>,
+    pub pages_removed: Vec<String>,
+    /// The page the window opens on (Settings › Startup): `persona`, a page,
+    /// or none / `left_off` for where each tab was left.
+    pub start: Option<String>,
 }
 
 /// An open tab: its project's GitLab URL and id.
@@ -39,6 +47,9 @@ pub struct Prefs {
 pub struct SavedTab {
     pub url: String,
     pub id: String,
+    /// The page it showed, for "Where I left off".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<String>,
 }
 
 /// The saved preferences (in `tracker.db`, `gui.json` imported on first use);
@@ -51,7 +62,8 @@ pub fn save(prefs: &Prefs) {
     super::block_on(crate::storage::save_setting("gui", prefs));
 }
 
-fn page_name(page: Page) -> &'static str {
+/// A page's key in the preferences (and in [`super::persona::PAGES`]).
+pub(super) fn page_name(page: Page) -> &'static str {
     match page {
         Page::Today => "today",
         Page::Promote => "promote",
@@ -72,6 +84,55 @@ fn page_name(page: Page) -> &'static str {
     }
 }
 
+/// The page saved as `key`; `None` for an unknown one (or the statistics in a
+/// build without them).
+pub(super) fn page_of(key: &str) -> Option<Page> {
+    Some(match key {
+        "today" => Page::Today,
+        "mrs" => Page::MergeRequests,
+        "cockpit" => Page::Cockpit,
+        "promote" => Page::Promote,
+        "tracker" => Page::Tracker,
+        #[cfg(feature = "stats")]
+        "stats" => Page::Stats,
+        "team" => Page::Team,
+        "journal" => Page::Journal,
+        "environments" => Page::Environments,
+        "ci" => Page::Ci,
+        "milestones" => Page::Milestones,
+        "overlaps" => Page::Overlaps,
+        "delivery" => Page::Delivery,
+        "releases" => Page::Releases,
+        "stacks" => Page::Stacks,
+        _ => return None,
+    })
+}
+
+/// The rail and start page saved in `prefs`.
+pub(super) fn rail(prefs: &Prefs) -> super::persona::Rail {
+    use super::persona::{Persona, Rail, Start, PAGES};
+    let known = |list: &[String]| -> Vec<String> {
+        list.iter()
+            .filter(|k| PAGES.contains(&k.as_str()))
+            .cloned()
+            .collect()
+    };
+    Rail {
+        persona: prefs
+            .persona
+            .as_deref()
+            .map(Persona::from_key)
+            .unwrap_or_default(),
+        added: known(&prefs.pages_added),
+        removed: known(&prefs.pages_removed),
+        start: prefs
+            .start
+            .as_deref()
+            .map(Start::from_key)
+            .unwrap_or_default(),
+    }
+}
+
 fn group_name(group: GroupBy) -> &'static str {
     match group {
         GroupBy::None => "none",
@@ -83,27 +144,22 @@ fn group_name(group: GroupBy) -> &'static str {
     }
 }
 
-/// Applies `prefs` to the window just opened.
+/// Applies `prefs` to the window just opened: the rail, and the page the
+/// shown tab opens on (see [`super::persona::Rail::opening_page`]).
 pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
-    g.page = match prefs.page.as_deref() {
-        Some("cockpit") => Page::Cockpit,
-        Some("tracker") => Page::Tracker,
-        Some("today") => Page::Today,
-        Some("promote") => Page::Promote,
-        Some("team") => Page::Team,
-        Some("journal") => Page::Journal,
-        Some("environments") => Page::Environments,
-        Some("ci") => Page::Ci,
-        Some("milestones") => Page::Milestones,
-        Some("overlaps") => Page::Overlaps,
-        Some("delivery") => Page::Delivery,
-        Some("releases") => Page::Releases,
-        Some("stacks") => Page::Stacks,
-        // The stats open through their action once the window runs.
-        _ => Page::MergeRequests,
+    g.rail = rail(prefs);
+    g.rail_draft = g.rail.clone();
+    let opening = g.rail.opening_page(prefs.page.as_deref()).to_string();
+    // The stats open through their action once the window runs.
+    g.page = match page_of(&opening) {
+        #[cfg(feature = "stats")]
+        Some(Page::Stats) | None => Page::MergeRequests,
+        #[cfg(not(feature = "stats"))]
+        None => Page::MergeRequests,
+        Some(page) => page,
     };
     #[cfg(feature = "stats")]
-    if prefs.page.as_deref() == Some("stats") {
+    if opening == "stats" {
         g.open_page(Page::Stats);
     }
     if prefs.light {
@@ -150,9 +206,19 @@ pub fn current(g: &GuiApp) -> Prefs {
             .map(|t| SavedTab {
                 url: t.url.clone(),
                 id: t.id.clone(),
+                page: match &t.state {
+                    super::SlotState::Active => Some(page_name(g.page())),
+                    super::SlotState::Parked(tab) => Some(page_name(tab.page)),
+                    _ => None,
+                }
+                .map(str::to_string),
             })
             .collect(),
         no_update_check: !g.update_check,
+        persona: Some(g.rail.persona.key().to_string()),
+        pages_added: g.rail.added.clone(),
+        pages_removed: g.rail.removed.clone(),
+        start: Some(g.rail.start.key().to_string()),
     }
 }
 
@@ -183,8 +249,13 @@ mod tests {
             tabs: vec![SavedTab {
                 url: "https://g.io".into(),
                 id: "42".into(),
+                page: Some("journal".into()),
             }],
             no_update_check: true,
+            persona: Some("release_manager".into()),
+            pages_added: vec!["stacks".into()],
+            pages_removed: vec!["stats".into(), "not_a_page".into()],
+            start: Some("persona".into()),
         };
         let text = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&text).unwrap();
@@ -193,9 +264,17 @@ mod tests {
         assert_eq!(back.tabs, prefs.tabs);
         assert_eq!(back.standup, prefs.standup);
         assert!(back.no_update_check);
+        // The rail read back, an unknown page left out.
+        let read = rail(&back);
+        assert_eq!(read.persona, super::super::persona::Persona::ReleaseManager);
+        assert_eq!(read.added, vec!["stacks".to_string()]);
+        assert_eq!(read.removed, vec!["stats".to_string()]);
+        assert_eq!(read.start, super::super::persona::Start::Persona);
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());
+        // No persona yet: every page, each tab where it was left.
+        assert_eq!(rail(&partial), super::super::persona::Rail::default());
         assert!(
             !partial.no_update_check,
             "new versions are looked for by default"

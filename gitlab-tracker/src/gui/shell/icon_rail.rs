@@ -158,6 +158,13 @@ pub(super) fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         tl("Stacked MRs: built on each other, and the order to merge them"),
                     ),
                 ]);
+                // The pages of the persona, and those shown on top of it
+                // (Settings › Pages); the others stay one Ctrl+K away.
+                let first_extra = items[..first_extra]
+                    .iter()
+                    .filter(|item| g.rail.shows(super::super::prefs::page_name(item.0)))
+                    .count();
+                items.retain(|item| g.rail.shows(super::super::prefs::page_name(item.0)));
                 // Captions while every entry fits with them, else icons alone,
                 // smaller still on a short window.
                 let room = ui.available_height() - 2.0 * (34.0 + 6.0) - 16.0;

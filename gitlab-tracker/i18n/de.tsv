@@ -2356,3 +2356,66 @@ saved view	Restore	Wiederherstellen
 	MRs open for over 30 days	Seit über 30 Tagen offene MRs
 	MRs open for over 14 days	Seit über 14 Tagen offene MRs
 	MRs open for over 7 days	Seit über 7 Tagen offene MRs
+# Personas: the rail's pages per role, and the start page (Settings › Pages, › Startup, first launch)
+	What waits on you, across projects	Was auf Sie wartet, über alle Projekte
+	The merge requests table	Die Tabelle der Merge Requests
+	Counters and what needs attention	Zähler und was Aufmerksamkeit braucht
+	What is ready for the next branch	Was für den nächsten Branch bereit ist
+	Linked tickets · shown while a tracker is linked	Verknüpfte Tickets · sichtbar, solange ein Tracker verbunden ist
+	Local statistics over time	Lokale Statistiken im Zeitverlauf
+	What waits on whom	Wer auf wen wartet
+	What moved, in order	Was sich bewegt hat, der Reihe nach
+	Environments and deployments	Umgebungen und Deployments
+	Pipelines and slow jobs	Pipelines und langsame Jobs
+	MRs changing the same files	MRs, die dieselben Dateien ändern
+	Flow: lead time, deploys, failures	Fluss: Durchlaufzeit, Deployments, Fehlschläge
+	Developer	Entwickler
+	Tech lead	Tech Lead
+	Release manager	Release Manager
+	Engineering manager	Engineering Manager
+	Everything	Alles
+	My MRs, what breaks, what collides with mine, my stacked branches.	Meine MRs, was bricht, was mit meinen kollidiert, meine gestapelten Branches.
+	The developer view, plus the team’s review load, the risks and the flow.	Die Entwickleransicht, dazu die Review-Last des Teams, die Risiken und der Fluss.
+	What goes out, where and when: promotions, pipelines, environments, releases, freezes.	Was rausgeht, wohin und wann: Promotions, Pipelines, Umgebungen, Releases, Freezes.
+	The overview and what blocks the team. What waits on whom, never who works how much.	Der Überblick und was das Team blockiert. Wer auf wen wartet, nie wer wie viel arbeitet.
+	Every page, as today. Hide the ones you never use later.	Alle Seiten wie bisher. Blenden Sie ungenutzte später aus.
+	In your rail · {n} of {total} pages	In Ihrer Leiste · {n} von {total} Seiten
+	Opens on {page}	Öffnet mit {page}
+	Greyed pages stay reachable with Ctrl+K. Tracker shows whenever a ticket tracker is linked.	Ausgegraute Seiten bleiben über Strg+K erreichbar. Tracker erscheint, sobald ein Ticket-Tracker verbunden ist.
+	{page}: in your rail	{page}: in Ihrer Leiste
+	{page}: hidden	{page}: ausgeblendet
+	Your start page · change it in Startup	Ihre Startseite · in „Start“ ändern
+	The start page stays in the rail. Pick another one in Startup to hide it.	Die Startseite bleibt in der Leiste. Wählen Sie unter „Start“ eine andere, um sie auszublenden.
+	Shown whenever a ticket tracker is linked to the project.	Sichtbar, sobald ein Ticket-Tracker mit dem Projekt verbunden ist.
+	Pages	Seiten
+	Startup	Start
+	The pages of the left rail. A hidden page stays reachable with Ctrl+K and from the links of the other pages. For every project.	Die Seiten der linken Leiste. Eine ausgeblendete Seite bleibt über Strg+K und die Links der anderen Seiten erreichbar. Für alle Projekte.
+	The page the window opens on, and a project opened in a new tab. For every project.	Die Seite, mit der das Fenster und ein in neuem Tab geöffnetes Projekt starten. Für alle Projekte.
+	Persona	Persona
+	Opens on	Öffnet mit
+	Your role: the pages the left rail shows for it (developer, tech lead, release manager…).	Ihre Rolle: die Seiten, die die linke Leiste dafür zeigt (Entwickler, Tech Lead, Release Manager…).
+	Show or hide each page of the left rail.	Jede Seite der linken Leiste ein- oder ausblenden.
+	The page the window opens on: your persona's, always the same one, or where you left off.	Die Seite, mit der das Fenster öffnet: die Ihrer Persona, immer dieselbe oder dort, wo Sie aufgehört haben.
+	This window	Dieses Fenster
+	This project	Dieses Projekt
+	{persona} (customised)	{persona} (angepasst)
+	Reset to {persona}…	Auf {persona} zurücksetzen…
+	Show the pages of {persona} again? The pages you showed or hid are dropped.	Wieder die Seiten von {persona} zeigen? Die von Ihnen ein- oder ausgeblendeten Seiten werden verworfen.
+	{persona} opens on {page}. Follows the persona if it changes.	{persona} öffnet mit {page}. Folgt der Persona, wenn sie sich ändert.
+	From my persona	Nach meiner Persona
+	One page, whatever the persona: the pages of your rail.	Eine Seite, unabhängig von der Persona: eine der Seiten Ihrer Leiste.
+	Always this page	Immer diese Seite
+	Each project's tab opens on the page it showed when the window closed.	Der Tab jedes Projekts öffnet mit der Seite, die er beim Schließen des Fensters zeigte.
+	Where I left off	Wo ich aufgehört habe
+	The start page cannot be hidden from the rail: its switch in Pages is greyed while it is the start page. With “Where I left off”, a page hidden since opens on the persona's start page.	Die Startseite lässt sich nicht aus der Leiste ausblenden: Ihr Schalter unter „Seiten“ ist ausgegraut, solange sie die Startseite ist. Bei „Wo ich aufgehört habe“ öffnet eine inzwischen ausgeblendete Seite stattdessen die Startseite der Persona.
+	Enter opens it	Eingabe öffnet sie
+	Show in the rail	In der Leiste zeigen
+	Hidden from your rail · {persona}	In Ihrer Leiste ausgeblendet · {persona}
+	{page} is back in your rail	{page} ist wieder in Ihrer Leiste
+	For every project of this machine.	Für alle Projekte auf diesem Rechner.
+	Open the window	Fenster öffnen
+	Back	Zurück
+	Step 2 of 2 · Your window	Schritt 2 von 2 · Ihr Fenster
+	Who are you?	Wer sind Sie?
+	The left rail shows the pages for your role. Every page stays one click away, and you can change this any time in Settings › Pages.	Die linke Leiste zeigt die Seiten für Ihre Rolle. Jede Seite bleibt einen Klick entfernt, und Sie können das jederzeit unter Einstellungen › Seiten ändern.
+	Saved in projects.toml.	In projects.toml gespeichert.

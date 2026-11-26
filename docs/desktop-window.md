@@ -7,6 +7,7 @@ projects.
 
 - [Install and run](#install-and-run)
 - [Projects in tabs](#projects-in-tabs)
+- [Your rail: personas and the start page](#your-rail-personas-and-the-start-page)
 - [Merge requests](#merge-requests)
 - [MR page](#mr-page)
 - [Today](#today)
@@ -96,6 +97,48 @@ keeps a fixed width, so the line does not move as the seconds tick. Both
 intervals are in **Settings › General**; a sentinel at `0` hides its countdown.
 
 ![Title bar countdowns](assets/desktop/sentinel-countdowns.png)
+
+## Your rail: personas and the start page
+
+The left rail shows the pages of your role, its **persona**; every other page
+stays one `Ctrl+K` away. At the first launch, once the project is added, the
+window asks *Who are you?*:
+
+| Persona | Pages in the rail | Opens on |
+| :--- | :--- | :--- |
+| Developer | Today, MRs, Journal, CI, Overlaps, Stacks | Today |
+| Tech lead | Today, MRs, Cockpit, Stats, Team, Journal, CI, Overlaps, Delivery, Stacks | Today |
+| Release manager | Today, MRs, Cockpit, Promote, Stats, Journal, Envs, CI, Plan, Delivery, Releases | Cockpit |
+| Engineering manager | Today, MRs, Cockpit, Stats, Team, Journal, Plan, Delivery | Cockpit |
+| Everything | every page | MRs |
+
+![First launch: a card per persona, the rail it gives](assets/desktop/persona-first-run.png)
+
+A persona only picks the rail's pages and the start page: the data, filters and
+notifications are the same for everyone. The **Tracker** page shows whenever a
+ticket tracker is linked, whatever the persona. Without a persona (a window set
+up before personas), the rail shows every page and each tab opens where it was
+left, as before.
+
+**Settings › Pages** changes the persona, and shows or hides each page on top of
+it: the persona then reads *Tech lead (customised)*, with what changed and a way
+back to the persona's pages. The start page's switch is greyed: it stays in the
+rail while it is the start page.
+
+![Settings › Pages: the persona, a switch per page, the start page greyed](assets/desktop/settings-pages.png)
+
+**Settings › Startup** sets the page the window, and a project opened in a new
+tab, opens on: the persona's, always the same page (among those of the rail), or
+*where I left off*, each project's tab on the page it showed when the window
+closed (the persona's page if that one has been hidden since).
+
+![Settings › Startup: the persona's page, always one page, or where you left off](assets/desktop/settings-startup.png)
+
+Both settings are yours, for every project, kept with the window's other
+preferences. In `Ctrl+K`, a hidden page says so under its name, with a button to
+show it in the rail again.
+
+![A Release manager's rail, and Overlaps found with Ctrl+K](assets/desktop/persona-rail-palette.png)
 
 ## Merge requests
 
@@ -498,7 +541,8 @@ previous value on hover); the legend gives both periods' dates.
 ## Settings and columns
 
 **Settings** (`,`, or the gear at the bottom of the rail) has a tab per section
-on the left: the window's own (language, theme) first, then the project's
+on the left: the window's own (language, theme, [pages and start
+page](#your-rail-personas-and-the-start-page)) first, then the project's
 (general, signed commits, delivery, releases, stats). The search above the tabs
 goes through every section's names and help at once, each tab counting what it
 found. A dot marks what changed and is not saved yet, on the row and on its tab,

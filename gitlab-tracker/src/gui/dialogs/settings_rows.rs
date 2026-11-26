@@ -28,6 +28,12 @@ pub(super) enum Row {
     Theme,
     /// Look for newer versions.
     UpdateCheck,
+    /// The persona whose pages the rail shows (Settings › Pages).
+    Persona,
+    /// The pages shown or hidden on top of it.
+    RailPages,
+    /// The page the window opens on (Settings › Startup).
+    Start,
     /// A project setting, by its index in the settings editor.
     Item(usize),
 }
@@ -35,10 +41,20 @@ pub(super) enum Row {
 /// The window's settings first, then the project's by section, in the order
 /// of their definitions.
 pub(super) fn sections(g: &GuiApp) -> Vec<Section> {
-    let mut sections = vec![Section {
-        key: "Interface",
-        rows: vec![Row::Language, Row::Theme, Row::UpdateCheck],
-    }];
+    let mut sections = vec![
+        Section {
+            key: "Interface",
+            rows: vec![Row::Language, Row::Theme, Row::UpdateCheck],
+        },
+        Section {
+            key: "Pages",
+            rows: vec![Row::Persona, Row::RailPages],
+        },
+        Section {
+            key: "Startup",
+            rows: vec![Row::Start],
+        },
+    ];
     for (i, item) in g.app.settings_editor.items.iter().enumerate() {
         if GUI_HIDDEN_SETTINGS.contains(&item.def.id) {
             continue;
@@ -54,6 +70,8 @@ pub(super) fn sections(g: &GuiApp) -> Vec<Section> {
     // The project's own first; the plug-ins' (statistics…) last.
     const ORDER: &[&str] = &[
         "Interface",
+        "Pages",
+        "Startup",
         "Core",
         "Signed commits",
         "Delivery",
@@ -70,6 +88,9 @@ pub(super) fn sections(g: &GuiApp) -> Vec<Section> {
     sections
 }
 
+/// The window's own sections, for every project; the others are the project's.
+pub(super) const WINDOW_SECTIONS: &[&str] = &["Interface", "Pages", "Startup"];
+
 pub(super) fn section_title(key: &str) -> &str {
     tl(if key == "Core" { "General" } else { key })
 }
@@ -77,6 +98,8 @@ pub(super) fn section_title(key: &str) -> &str {
 pub(super) fn section_icon(key: &str) -> Icon {
     match key {
         "Interface" => Icon::PanelLeft,
+        "Pages" => Icon::Columns,
+        "Startup" => Icon::Flag,
         "Core" => Icon::Home,
         "Signed commits" => Icon::Shield,
         "Delivery" => Icon::Gauge,
@@ -92,6 +115,8 @@ pub(super) fn section_icon(key: &str) -> Icon {
 pub(super) fn section_about(key: &str) -> Option<&str> {
     let about = match key {
         "Interface" => "This window's look. Not part of the project's settings.",
+        "Pages" => "The pages of the left rail. A hidden page stays reachable with Ctrl+K and from the links of the other pages. For every project.",
+        "Startup" => "The page the window opens on, and a project opened in a new tab. For every project.",
         "Core" => "What the project tracks, and how often it refreshes.",
         "Signed commits" => "Warn about the commits of the open MRs that are not signed.",
         "Delivery" => "Hotfixes and deploy freezes.",
@@ -101,6 +126,12 @@ pub(super) fn section_about(key: &str) -> Option<&str> {
     };
     Some(tl(about))
 }
+
+pub(super) const PERSONA_HELP: &str =
+    "Your role: the pages the left rail shows for it (developer, tech lead, release manager…).";
+pub(super) const PAGES_HELP: &str = "Show or hide each page of the left rail.";
+pub(super) const START_HELP: &str =
+    "The page the window opens on: your persona's, always the same one, or where you left off.";
 
 pub(super) const UPDATE_CHECK_HELP: &str =
     "Once a day, look on GitHub for a newer release and say so in \
@@ -118,6 +149,9 @@ pub(super) fn row_text(g: &GuiApp, row: Row) -> (&'static str, &'static str) {
             tl("Applied at once, as with the title bar's button."),
         ),
         Row::UpdateCheck => (tl("New versions"), tl(UPDATE_CHECK_HELP)),
+        Row::Persona => (tl("Persona"), tl(PERSONA_HELP)),
+        Row::RailPages => (tl("Pages"), tl(PAGES_HELP)),
+        Row::Start => (tl("Opens on"), tl(START_HELP)),
         Row::Item(i) => {
             let def = &g.app.settings_editor.items[i].def;
             (tl(def.label), tl(def.help))
@@ -137,6 +171,9 @@ pub(super) fn row_matches(g: &GuiApp, row: Row, query: &str) -> bool {
         Row::Language => ["Language", ""],
         Row::Theme => ["Theme", ""],
         Row::UpdateCheck => ["New versions", UPDATE_CHECK_HELP],
+        Row::Persona => ["Persona", PERSONA_HELP],
+        Row::RailPages => ["Pages", PAGES_HELP],
+        Row::Start => ["Opens on", START_HELP],
     };
     [label, help, english[0], english[1]]
         .iter()
@@ -148,6 +185,11 @@ pub(super) fn row_modified(g: &GuiApp, row: Row) -> bool {
     match row {
         Row::Language => g.language_draft != g.language,
         Row::Theme | Row::UpdateCheck => false,
+        Row::Persona => g.rail_draft.persona != g.rail.persona,
+        Row::RailPages => {
+            g.rail_draft.added != g.rail.added || g.rail_draft.removed != g.rail.removed
+        }
+        Row::Start => g.rail_draft.start != g.rail.start,
         Row::Item(i) => g.app.settings_editor.is_modified(i),
     }
 }

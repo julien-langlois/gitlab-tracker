@@ -79,6 +79,7 @@ pub(super) fn settings(g: &mut GuiApp, ui: &mut Ui) {
             if button(ui, &theme, None, tl("Save"), true).clicked() {
                 g.pending.push(Action::SaveSettings);
                 g.save_language();
+                g.save_rail();
                 g.settings_search.clear();
                 g.app.input_mode = InputMode::Normal;
             }
@@ -115,7 +116,32 @@ pub(super) fn settings_nav(g: &mut GuiApp, ui: &mut Ui, sections: &[Section], qu
     }
     ui.add_space(12.0);
     let mut picked = None;
-    for section in sections {
+    for (index, section) in sections.iter().enumerate() {
+        // "This window" over the window's own sections, "This project" over the rest.
+        let window = WINDOW_SECTIONS.contains(&section.key);
+        let first_of_group =
+            index == 0 || WINDOW_SECTIONS.contains(&sections[index - 1].key) != window;
+        if first_of_group {
+            if index > 0 {
+                ui.add_space(12.0);
+            }
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                ui.label(
+                    semibold(
+                        tl(if window {
+                            "This window"
+                        } else {
+                            "This project"
+                        })
+                        .to_uppercase(),
+                        theme.text_size - 3.0,
+                    )
+                    .color(theme.palette.text_muted),
+                );
+            });
+            ui.add_space(4.0);
+        }
         let found = if query.is_empty() {
             section.rows.len()
         } else {
@@ -231,8 +257,14 @@ pub(super) fn settings_page(g: &mut GuiApp, ui: &mut Ui, sections: &[Section]) {
         ui.label(muted(&theme, about));
     }
     ui.add_space(16.0);
-    let rows = section.rows.clone();
-    card(ui, &theme, |ui| setting_rows(g, ui, &rows));
+    match section.key {
+        "Pages" => pages_page(g, ui),
+        "Startup" => startup_page(g, ui),
+        _ => {
+            let rows = section.rows.clone();
+            card(ui, &theme, |ui| setting_rows(g, ui, &rows));
+        }
+    }
 }
 
 /// The rows answering the search, by section.
@@ -255,7 +287,11 @@ pub(super) fn settings_found(g: &mut GuiApp, ui: &mut Ui, sections: &[Section], 
         any = true;
         caption(ui, &theme, section_title(section.key));
         ui.add_space(2.0);
-        card(ui, &theme, |ui| setting_rows(g, ui, &rows));
+        match section.key {
+            "Pages" => pages_page(g, ui),
+            "Startup" => startup_page(g, ui),
+            _ => card(ui, &theme, |ui| setting_rows(g, ui, &rows)),
+        }
     }
     if !any {
         ui.add_space(40.0);
@@ -360,6 +396,8 @@ pub(super) fn control_width(g: &GuiApp, row: Row) -> f32 {
         },
         Row::Language | Row::Theme => CONTROL_WIDTH,
         Row::UpdateCheck => 40.0,
+        // Drawn by their own pages (see `settings_pages`).
+        Row::Persona | Row::RailPages | Row::Start => 0.0,
     }
 }
 
@@ -372,6 +410,7 @@ pub(super) fn control(g: &mut GuiApp, ui: &mut Ui, row: Row) {
             }
         }
         Row::Language => language_control(ui, &mut g.language_draft),
+        Row::Persona | Row::RailPages | Row::Start => {}
         Row::Theme => {
             ui.allocate_ui_with_layout(
                 Vec2::new(CONTROL_WIDTH, 28.0),

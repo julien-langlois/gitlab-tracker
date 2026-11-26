@@ -30,6 +30,7 @@
 * 🧭 **Journal, Overlaps, Stacked MRs** — what happened, MRs about to conflict, chains of MRs out of step.
 * ✍️ **Signed commits** *(optional)* — warns about unsigned commits, forgives GitLab rebases.
 * 🔐 **Read-only and secure** — tokens in the OS keyring; a read-only fine-grained token is enough.
+* 🧑‍💻 **Personas** — a rail with the pages of your role (developer, tech lead, release or engineering manager) and the start page you want; every page stays one `Ctrl+K` away.
 * ⌨️ **Terminal UI** — the same dashboard from the keyboard, for terminals and SSH sessions.
 
 ![An MR page: why it can't merge, where it is on each branch, people, ticket and lifecycle](https://github.com/julien-langlois/gitlab-tracker/raw/HEAD/docs/assets/desktop/mr-page.png)

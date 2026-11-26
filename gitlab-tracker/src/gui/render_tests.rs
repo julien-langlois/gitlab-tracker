@@ -287,3 +287,72 @@ async fn a_snooze_shows_at_once_on_the_kept_counts() {
         assert_eq!(super::today::waiting_count(harness.state()), before - 1);
     });
 }
+
+/// A persona shapes the rail; Settings › Pages shows a page on top of it (not
+/// hiding the start page, greyed), Save applies it, and Ctrl+K shows a hidden
+/// page in the rail again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_persona_shapes_the_rail_and_its_pages_change_from_the_settings_and_ctrl_k() {
+    use super::persona::{Persona, Rail, Start};
+    use egui::accesskit::Role;
+    use egui_kittest::kittest::by;
+    let launch = demo_launch().await;
+    tokio::task::block_in_place(|| {
+        let mut harness = harness(launch);
+        harness.run_steps(10);
+        let rail = Rail {
+            persona: Persona::ReleaseManager,
+            start: Start::Persona,
+            ..Rail::default()
+        };
+        {
+            let g = harness.state_mut();
+            g.rail = rail.clone();
+            g.rail_draft = rail;
+            g.app.input_mode = crate::app::InputMode::Settings;
+            g.settings_tab = "Pages".into();
+        }
+        harness.run_steps(4);
+        // By their names in the window's language, as a screen reader reads them.
+        let page = |key| super::persona::page_label(key);
+        harness
+            .get(by().role(Role::CheckBox).label(page("overlaps")))
+            .click();
+        // The start page's switch is greyed: a click leaves it on.
+        harness
+            .get(by().role(Role::CheckBox).label(page("cockpit")))
+            .click();
+        harness.run_steps(3);
+        assert!(harness.state().rail_draft.shows("overlaps"));
+        assert!(harness.state().rail_draft.shows("cockpit"));
+        assert!(
+            !harness.state().rail.shows("overlaps"),
+            "applied on Save only"
+        );
+        harness
+            .get(by().role(Role::Button).label(crate::i18n::tl("Save")))
+            .click();
+        harness.run_steps(3);
+        assert!(harness.state().rail.shows("overlaps"));
+        assert!(harness.state().rail.customised());
+
+        // Hidden again, then shown from Ctrl+K.
+        {
+            let g = harness.state_mut();
+            g.rail.toggle("overlaps");
+            g.rail_draft = g.rail.clone();
+            g.palette = Some(super::palette::Palette::with_query(crate::i18n::tl(
+                "Overlaps",
+            )));
+        }
+        harness.run_steps(3);
+        harness
+            .get(
+                by().role(Role::Button)
+                    .label(crate::i18n::tl("Show in the rail")),
+            )
+            .click();
+        harness.run_steps(3);
+        assert!(harness.state().rail.shows("overlaps"));
+    });
+}

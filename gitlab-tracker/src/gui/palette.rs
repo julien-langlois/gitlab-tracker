@@ -61,6 +61,9 @@ struct Entry {
     text: String,
     detail: String,
     command: Command,
+    /// A page the rail hides (Settings › Pages), by its key: said under its
+    /// name, with a button to show it in the rail again.
+    hidden: Option<&'static str>,
 }
 
 fn entries(g: &GuiApp) -> Vec<Entry> {
@@ -71,6 +74,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
         text: text.to_string(),
         detail: detail.to_string(),
         command,
+        hidden: None,
     };
     list.push(command(
         tl("Refresh now"),
@@ -156,6 +160,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
                 String::new()
             },
             command: Command::Tab(index),
+            hidden: None,
         });
     }
     if let Some(focus) = &g.app.focus {
@@ -194,12 +199,14 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
         (Page::Stacks, tl("Stacked MRs"), Icon::Stack),
     ]);
     for (page, name, icon) in pages {
+        let key = super::prefs::page_name(page);
         list.push(Entry {
             kind: tl("Page"),
             icon,
             text: name.to_string(),
             detail: String::new(),
             command: Command::Page(page),
+            hidden: (!g.rail.shows(key)).then_some(key),
         });
     }
 
@@ -214,6 +221,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
                 String::new()
             },
             command: Command::SavedView(index),
+            hidden: None,
         });
     }
 
@@ -227,6 +235,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
             text: tl(def.active_label()).to_string(),
             detail: g.app.filter_count(index).to_string(),
             command: Command::View(index),
+            hidden: None,
         });
     }
 
@@ -237,6 +246,7 @@ fn entries(g: &GuiApp) -> Vec<Entry> {
             text: format!("!{} {}", mr.id, mr.title),
             detail: super::widgets::split_person(&mr.author).0.to_string(),
             command: Command::Mr(mr.id.clone()),
+            hidden: None,
         });
     }
     list
@@ -284,6 +294,7 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
     let mut run = enter
         .then(|| results.get(palette.cursor).map(|e| e.command.clone()))
         .flatten();
+    let mut show_in_rail = None;
 
     let frame = egui::Frame::new()
         .fill(theme.palette.raised)
@@ -320,8 +331,12 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
                 ui.add_space(8.0);
             }
             ui.spacing_mut().item_spacing.y = 2.0;
+            let persona = g.rail.persona.label();
             for (i, entry) in results.iter().take(SHOWN).enumerate() {
-                if row(ui, &theme, entry, i == palette.cursor).clicked() {
+                let (response, show) = row(ui, &theme, entry, i == palette.cursor, persona);
+                if show {
+                    show_in_rail = entry.hidden;
+                } else if response.clicked() {
                     run = Some(entry.command.clone());
                 }
             }
@@ -331,6 +346,9 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
                     .size(theme.text_size - 2.0),
             );
         });
+    if let Some(key) = show_in_rail {
+        g.show_in_rail(key);
+    }
     if modal.should_close() {
         return;
     }
@@ -340,9 +358,18 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
     }
 }
 
-fn row(ui: &mut egui::Ui, theme: &Theme, entry: &Entry, highlighted: bool) -> egui::Response {
+/// A result; for a page the rail hides, a second line saying so and a button
+/// to show it there again (whether that button was clicked).
+fn row(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    entry: &Entry,
+    highlighted: bool,
+    persona: &str,
+) -> (egui::Response, bool) {
+    let height = if entry.hidden.is_some() { 50.0 } else { 34.0 };
     let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::click());
     let fill = if highlighted {
         theme.palette.selection
     } else if response.hovered() {
@@ -353,10 +380,13 @@ fn row(ui: &mut egui::Ui, theme: &Theme, entry: &Entry, highlighted: bool) -> eg
     ui.painter()
         .rect_filled(rect, CornerRadius::same(theme.radii.medium), fill);
     let painter = ui.painter().with_clip_rect(rect);
-    let icon = egui::Rect::from_center_size(
-        egui::pos2(rect.left() + 18.0, rect.center().y),
-        Vec2::splat(14.0),
-    );
+    let icon_y = if entry.hidden.is_some() {
+        rect.top() + 17.0
+    } else {
+        rect.center().y
+    };
+    let icon =
+        egui::Rect::from_center_size(egui::pos2(rect.left() + 18.0, icon_y), Vec2::splat(14.0));
     let tint = if highlighted {
         theme.palette.accent
     } else {
@@ -383,6 +413,82 @@ fn row(ui: &mut egui::Ui, theme: &Theme, entry: &Entry, highlighted: bool) -> eg
         theme.palette.text_muted,
     );
     let text_left = rect.left() + 36.0;
+    // A hidden page: its button (and the hint) on the right, its note under its name.
+    let mut show = false;
+    let mut right = right;
+    let line = if entry.hidden.is_some() {
+        rect.top() + 17.0
+    } else {
+        rect.center().y
+    };
+    if entry.hidden.is_some() {
+        if highlighted {
+            let hint = painter.layout_no_wrap(
+                tl("Enter opens it").to_string(),
+                fonts::medium(theme.text_size - 2.5),
+                theme.palette.text_secondary,
+            );
+            right -= hint.size().x;
+            painter.galley(
+                egui::pos2(right, rect.center().y - hint.size().y / 2.0),
+                hint,
+                theme.palette.text_secondary,
+            );
+            right -= 12.0;
+        }
+        let label = painter.layout_no_wrap(
+            tl("Show in the rail").to_string(),
+            fonts::medium(theme.text_size - 2.0),
+            theme.palette.text,
+        );
+        let button = egui::Rect::from_min_size(
+            egui::pos2(right - label.size().x - 20.0, rect.center().y - 13.0),
+            Vec2::new(label.size().x + 20.0, 26.0),
+        );
+        let clicked = ui.interact(button, response.id.with("show_in_rail"), Sense::click());
+        clicked.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, true, tl("Show in the rail"))
+        });
+        let stroke = if clicked.hovered() {
+            theme.palette.accent
+        } else {
+            theme.palette.border
+        };
+        painter.rect_filled(
+            button,
+            CornerRadius::same(theme.radii.medium),
+            if clicked.hovered() {
+                theme.palette.raised
+            } else {
+                egui::Color32::TRANSPARENT
+            },
+        );
+        painter.rect_stroke(
+            button,
+            CornerRadius::same(theme.radii.medium),
+            Stroke::new(1.0, stroke),
+            egui::StrokeKind::Inside,
+        );
+        painter.galley(
+            button.center() - label.size() / 2.0,
+            label,
+            theme.palette.text,
+        );
+        show = clicked
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .clicked();
+        right = button.left() - 12.0;
+        let note = painter.layout_no_wrap(
+            crate::i18n::tf("Hidden from your rail · {persona}", &[("persona", persona)]),
+            fonts::medium(theme.text_size - 2.5),
+            theme.palette.text_muted,
+        );
+        painter.galley(
+            egui::pos2(text_left, rect.top() + 29.0),
+            note,
+            theme.palette.text_muted,
+        );
+    }
     let text_room = right - detail.size().x - 16.0 - text_left - kind.size().x - 12.0;
     let mut job = egui::text::LayoutJob::single_section(
         entry.text.clone(),
@@ -391,19 +497,19 @@ fn row(ui: &mut egui::Ui, theme: &Theme, entry: &Entry, highlighted: bool) -> eg
     job.wrap = egui::text::TextWrapping::truncate_at_width(text_room.max(40.0));
     let text = painter.layout_job(job);
     painter.galley(
-        egui::pos2(text_left, rect.center().y - text.size().y / 2.0),
+        egui::pos2(text_left, line - text.size().y / 2.0),
         text.clone(),
         theme.palette.text,
     );
     painter.galley(
-        egui::pos2(
-            text_left + text.size().x + 10.0,
-            rect.center().y - kind.size().y / 2.0,
-        ),
+        egui::pos2(text_left + text.size().x + 10.0, line - kind.size().y / 2.0),
         kind,
         theme.palette.text_muted,
     );
-    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+    (
+        response.on_hover_cursor(egui::CursorIcon::PointingHand),
+        show,
+    )
 }
 
 fn execute(g: &mut GuiApp, command: Command) {

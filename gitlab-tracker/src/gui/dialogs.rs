@@ -26,12 +26,14 @@ mod columns;
 mod help;
 mod projects;
 mod settings;
+mod settings_pages;
 mod settings_rows;
 
 use columns::*;
 use help::*;
 use projects::*;
 use settings::*;
+use settings_pages::*;
 use settings_rows::*;
 
 pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
@@ -115,6 +117,7 @@ fn close(g: &mut GuiApp) {
         InputMode::Settings => {
             g.app.settings_editor.cancel();
             g.language_draft = g.language.clone();
+            g.rail_draft = g.rail.clone();
             g.settings_search.clear();
         }
         InputMode::ColumnPicker => save_columns(g),

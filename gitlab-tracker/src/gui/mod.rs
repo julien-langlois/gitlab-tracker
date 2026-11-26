@@ -38,6 +38,7 @@ mod next;
 mod overlaps;
 mod palette;
 mod person;
+mod persona;
 mod pipeline_timeline;
 mod prefs;
 mod promote;
@@ -197,6 +198,13 @@ struct GuiApp {
     /// choice being edited in the settings dialog.
     language: Option<String>,
     language_draft: Option<String>,
+    /// The rail's pages and the start page (Settings › Pages, › Startup), and
+    /// the choice being edited in the settings dialog.
+    rail: persona::Rail,
+    rail_draft: persona::Rail,
+    /// The page each restored tab showed when the window closed, by project
+    /// (GitLab URL, id), until the tab is loaded.
+    left_off: HashMap<(String, String), String>,
     /// The ids of the listed MRs behind each cockpit counter (focus aside),
     /// computed once per frame: the cockpit, the rail badges and the focus use it.
     members: Members,
@@ -389,6 +397,9 @@ impl GuiApp {
             details,
             language_draft: language.clone(),
             language,
+            rail: persona::Rail::default(),
+            rail_draft: persona::Rail::default(),
+            left_off: HashMap::new(),
             members,
             rail_badges: rail_badges::Cache::default(),
             memo: memo::Memos::default(),
@@ -680,6 +691,29 @@ impl eframe::App for GuiApp {
             }
             if std::env::var("GITLAB_TRACKER_GUI_THEME").as_deref() == Ok("light") {
                 self.set_theme(bevel_theme::Mode::Light);
+            }
+            // `GITLAB_TRACKER_GUI_RAIL=tech_lead,+releases,-stats,start=cockpit`:
+            // a persona, pages shown (+) or hidden (-) on top, the start page
+            // (`persona`, `left_off` or a page), as Settings › Pages would.
+            if let Ok(spec) = std::env::var("GITLAB_TRACKER_GUI_RAIL") {
+                let mut rail = persona::Rail::default();
+                for part in spec.split(',') {
+                    if let Some(page) = part.strip_prefix('+') {
+                        rail.added.push(page.to_string());
+                    } else if let Some(page) = part.strip_prefix('-') {
+                        rail.removed.push(page.to_string());
+                    } else if let Some(start) = part.strip_prefix("start=") {
+                        rail.start = persona::Start::from_key(start);
+                    } else {
+                        rail.persona = persona::Persona::from_key(part);
+                    }
+                }
+                self.rail = rail.clone();
+                self.rail_draft = rail;
+            }
+            // `GITLAB_TRACKER_GUI_PALETTE=over`: Ctrl+K open, that typed.
+            if let Ok(query) = std::env::var("GITLAB_TRACKER_GUI_PALETTE") {
+                self.palette = Some(palette::Palette::with_query(&query));
             }
         }
         #[cfg(debug_assertions)]

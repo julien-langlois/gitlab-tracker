@@ -40,6 +40,39 @@ impl GuiApp {
         }
     }
 
+    /// Applies the rail and start page picked in the settings dialog, and saves
+    /// them with the window's preferences (not in the demo, which never writes).
+    pub(super) fn save_rail(&mut self) {
+        if self.rail_draft == self.rail {
+            return;
+        }
+        self.rail = self.rail_draft.clone();
+        if !self.demo {
+            prefs::save(&prefs::current(self));
+        }
+    }
+
+    /// Shows `key` in the rail again (from Ctrl+K), saved at once.
+    pub(super) fn show_in_rail(&mut self, key: &str) {
+        if !self.rail.shows(key) {
+            self.rail.toggle(key);
+        }
+        self.rail_draft = self.rail.clone();
+        if !self.demo {
+            prefs::save(&prefs::current(self));
+        }
+        self.app.flash(
+            format!(
+                "✔ {}",
+                tf(
+                    "{page} is back in your rail",
+                    &[("page", persona::page_label(key))]
+                )
+            ),
+            false,
+        );
+    }
+
     /// Saves the state in the background: the frame never waits on the disk.
     pub(super) fn save_state(&self) {
         save_state(&self.app, &self.last_known_branches, &self.state_writer);
@@ -205,6 +238,15 @@ impl GuiApp {
             else {
                 continue;
             };
+            if let Some(page) = &tab.page {
+                self.left_off.insert(
+                    (
+                        entry.gitlab_url.trim_end_matches('/').to_string(),
+                        entry.project_id.clone(),
+                    ),
+                    page.clone(),
+                );
+            }
             let slot = self.load_slot(entry.clone(), false);
             if seen_current {
                 after.push(slot);
@@ -367,6 +409,16 @@ impl GuiApp {
                 Ok(Loaded::Session(session)) => {
                     let mut tab = Tab::new(*session, &self.ctx);
                     tab.app.theme = self.app.theme;
+                    // Its start page (Settings › Startup): where it was left,
+                    // or the persona's, or the one always opened.
+                    let left_off = self.left_off.remove(&(slot.url.clone(), slot.id.clone()));
+                    let opening = self.rail.opening_page(left_off.as_deref());
+                    tab.page = match prefs::page_of(opening) {
+                        #[cfg(feature = "stats")]
+                        Some(Page::Stats) => Page::MergeRequests,
+                        Some(page) => page,
+                        None => Page::MergeRequests,
+                    };
                     slot.state = SlotState::Parked(Box::new(tab));
                     if wanted {
                         show = Some(index);
