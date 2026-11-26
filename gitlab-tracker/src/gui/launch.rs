@@ -27,8 +27,9 @@ pub async fn run(global_config: AppConfig, project: ProjectEntry) -> anyhow::Res
         #[cfg(feature = "stats")]
         stats_db: crate::open_stats_db().await,
     };
-    let project = with_username(project).await;
+    let probe = project.clone();
     let session = build_session(&global_config, project, &shared).await?;
+    read_username(&probe, session.tx.clone());
     open_window(Launch {
         session,
         more: Vec::new(),

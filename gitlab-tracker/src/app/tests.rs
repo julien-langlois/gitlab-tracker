@@ -1314,3 +1314,24 @@ async fn the_request_counter_shows_what_bulk_reads_save() {
     assert_eq!(saved_percent(2, 1), 33);
     assert_eq!(saved_percent(0, 0), 0);
 }
+
+#[test]
+fn a_username_read_in_the_background_fills_the_me_views_without_replacing_one_set() {
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut app = test_app();
+    let apply = |app: &mut App, name: &str| {
+        app.apply_event(
+            AppEvent::UsernameResolved(name.into()),
+            Arc::new(Semaphore::new(1)),
+            &tx,
+            &mut HashMap::new(),
+        );
+    };
+    assert_eq!(app.config.gitlab_username, None);
+    apply(&mut app, "jane");
+    assert_eq!(app.config.gitlab_username.as_deref(), Some("jane"));
+    // The "me" filters show once it is known.
+    assert!(app.requirement_met(gitlab_tracker_core::Requirement::GitlabUsername));
+    apply(&mut app, "someone_else");
+    assert_eq!(app.config.gitlab_username.as_deref(), Some("jane"));
+}

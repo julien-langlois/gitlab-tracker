@@ -21,6 +21,10 @@ pub enum AppEvent {
     /// Fired when the user removes a MR: Delete key on the selected row, or `-<id>`
     /// typed in the input field.
     MrRemovedById(String),
+    /// The GitLab username of the token's owner, read in the background when the
+    /// project had none (the window opens without waiting for GitLab).
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    UsernameResolved(String),
     /// Fired when the project label list (with colours) has been fetched from GitLab.
     GitlabLabelsLoaded(Vec<GitLabLabelDetail>),
     /// Fired when the milestone list has been fetched from GitLab.

@@ -339,6 +339,12 @@ impl App {
                 false
             }
 
+            AppEvent::UsernameResolved(username) => {
+                // The "me" views and filters read it from the config.
+                self.config.gitlab_username.get_or_insert(username);
+                false
+            }
+
             AppEvent::GitlabLabelsLoaded(labels) => {
                 // Store into config so it flows through everywhere config is passed.
                 self.config.gitlab_label_colors = labels

@@ -125,36 +125,37 @@ pub(super) async fn load_project(
     }) {
         return Ok(Loaded::NeedsTokens(mode));
     }
-    let project = with_username(project).await;
+    let probe = project.clone();
     let session = build_session(global_config, project, shared).await?;
+    read_username(&probe, session.tx.clone());
     Ok(Loaded::Session(Box::new(session)))
 }
 
-/// `project` with the GitLab username of its token's owner, read from GitLab and
-/// saved to `projects.toml` when it has none: the "me" views (Today, "To review
-/// (me)") need it.
-pub(super) async fn with_username(mut project: ProjectEntry) -> ProjectEntry {
+/// Reads the GitLab username of the project's token owner in the background,
+/// when `projects.toml` has none, and saves it there: the "me" views (Today,
+/// "To review (me)") need it. The window opens without waiting: GitLab may be
+/// slow or out of reach (no VPN), and the views fill in once it answers.
+pub(super) fn read_username(project: &ProjectEntry, tx: UnboundedSender<AppEvent>) {
     if project.gitlab_username.is_some() {
-        return project;
+        return;
     }
-    let url = project.gitlab_url.clone();
-    let token = tokio::task::spawn_blocking(move || crate::storage::stored_gitlab_token(&url))
-        .await
-        .ok()
-        .flatten();
-    let Some(token) = token else {
-        return project;
-    };
-    if let Some(username) = crate::gitlab::current_username(&project.gitlab_url, &token).await {
-        crate::storage::save_gitlab_username_async(
-            &username,
-            &project.gitlab_url,
-            &project.project_id,
-        )
-        .await;
-        project.gitlab_username = Some(username);
-    }
-    project
+    let (url, id) = (project.gitlab_url.clone(), project.project_id.clone());
+    tokio::spawn(async move {
+        let token_url = url.clone();
+        let token =
+            tokio::task::spawn_blocking(move || crate::storage::stored_gitlab_token(&token_url))
+                .await
+                .ok()
+                .flatten();
+        let Some(token) = token else {
+            return;
+        };
+        let Some(username) = crate::gitlab::current_username(&url, &token).await else {
+            return;
+        };
+        crate::storage::save_gitlab_username_async(&username, &url, &id).await;
+        let _ = tx.send(AppEvent::UsernameResolved(username));
+    });
 }
 
 /// Applies the events received for a tab; whether its state must be saved.
