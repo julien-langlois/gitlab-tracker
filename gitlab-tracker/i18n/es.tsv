@@ -2419,3 +2419,7 @@ saved view	Restore	Restablecer
 	{span}, every week	{span}, cada semana
 	{span}, every day	{span}, cada día
 	{span}, every year	{span}, cada año
+	by a merge	por una fusión
+	by a cherry-pick	por un cherry-pick
+	by a copy	por una copia
+	in part	en parte

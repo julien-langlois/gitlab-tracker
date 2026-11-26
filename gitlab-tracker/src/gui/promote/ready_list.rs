@@ -196,7 +196,7 @@ pub(super) fn ready_row(
     }
     let mut c = child(ui, cell(6, COL_HOW));
     let (_, label, tone) = tones::presence(r.on_from, false, &theme.tones);
-    c.label(mono(label.to_lowercase(), theme.text_size - 1.5).color(tone.fg));
+    c.label(RichText::new(arrival(r.on_from).unwrap_or(label)).color(tone.fg));
     if click.is_some() {
         return click;
     }
@@ -205,4 +205,16 @@ pub(super) fn ready_row(
         .rich(Tip::new().mr(&r.id, &r.title).hint(tl("Open its page")))
         .clicked()
         .then_some(ReadyClick::Open)
+}
+
+/// How an MR got onto the branch, for the How column: "by a merge" reads
+/// where the presence's "Present" did not.
+fn arrival(presence: Option<BranchPresence>) -> Option<&'static str> {
+    match presence? {
+        BranchPresence::Present => Some(tl("by a merge")),
+        BranchPresence::CherryPicked => Some(tl("by a cherry-pick")),
+        BranchPresence::Copied => Some(tl("by a copy")),
+        BranchPresence::Partial => Some(tl("in part")),
+        BranchPresence::Absent => None,
+    }
 }

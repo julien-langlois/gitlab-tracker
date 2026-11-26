@@ -116,13 +116,28 @@ pub(super) fn open_groups<'a>(
 }
 
 /// "CHANGES REQ." as "Changes req.": the status labels are written for chips.
+/// Acronyms keep their capitals: "CI RUNNING" reads "CI running", not "Ci".
 pub(super) fn sentence_case(label: &str) -> String {
-    let lower = label.to_lowercase();
-    let mut chars = lower.chars();
-    chars
-        .next()
-        .map(|c| c.to_uppercase().chain(chars).collect())
-        .unwrap_or_default()
+    const ACRONYMS: [&str; 3] = ["CI", "MR", "MRS"];
+    let mut out = String::with_capacity(label.len());
+    for (i, word) in label.split(' ').enumerate() {
+        if i > 0 {
+            out.push(' ');
+        }
+        let bare = word.trim_matches(|c: char| !c.is_alphanumeric());
+        if ACRONYMS.contains(&bare) {
+            out.push_str(word);
+        } else if i == 0 {
+            let lower = word.to_lowercase();
+            let mut chars = lower.chars();
+            if let Some(c) = chars.next() {
+                out.extend(c.to_uppercase().chain(chars));
+            }
+        } else {
+            out.push_str(&word.to_lowercase());
+        }
+    }
+    out
 }
 
 /// A thin bar split by group, each segment as wide as its share.

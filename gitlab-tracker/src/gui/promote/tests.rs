@@ -17,3 +17,12 @@ async fn every_mr_lands_in_one_stage_by_its_branches() {
         }
     }
 }
+
+#[test]
+fn a_status_reads_in_sentence_case_with_its_acronyms() {
+    assert_eq!(sentence_case("CHANGES REQ."), "Changes req.");
+    assert_eq!(sentence_case("CI RUNNING"), "CI running");
+    assert_eq!(sentence_case("CI MUST PASS"), "CI must pass");
+    assert_eq!(sentence_case("SYNC FAILED"), "Sync failed");
+    assert_eq!(sentence_case(""), "");
+}

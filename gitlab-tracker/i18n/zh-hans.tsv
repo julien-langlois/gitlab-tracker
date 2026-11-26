@@ -2419,3 +2419,7 @@ saved view	Restore	恢复
 	{span}, every week	每周 {span}
 	{span}, every day	每天 {span}
 	{span}, every year	每年 {span}
+	by a merge	通过合并
+	by a cherry-pick	通过 cherry-pick
+	by a copy	通过复制
+	in part	部分

@@ -409,7 +409,7 @@ impl GuiApp {
             memo: memo::Memos::default(),
             views: views::State::default(),
             baseline,
-            hide_zeros: false,
+            hide_zeros: true,
             group_by: table::GroupBy::None,
             merged_gap: None,
             folded,
@@ -586,6 +586,8 @@ impl eframe::App for GuiApp {
                 Ok("delivery") => self.open_page(Page::Delivery),
                 Ok("releases") => self.open_page(Page::Releases),
                 Ok("stacks") => self.open_page(Page::Stacks),
+                #[cfg(feature = "stats")]
+                Ok("stats") => self.open_page(Page::Stats),
                 // The bell's panel stays open (see `toasts`): the demo fills it.
                 Ok("bell") => {}
                 Ok("mr") => {

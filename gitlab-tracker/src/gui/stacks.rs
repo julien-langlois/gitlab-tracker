@@ -29,6 +29,9 @@ pub struct State {
     pub stack: Option<String>,
     /// The MR picked, by id.
     pub selected: Option<String>,
+    /// Whether an MR was picked for the page's first look (the inspector is
+    /// never empty when there is a stack; a closed one stays closed).
+    pub opened: bool,
 }
 
 /// What goes wrong with an MR of a stack, the worst first.
@@ -343,6 +346,12 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     {
         g.stacks.stack = None;
     }
+    if !g.stacks.opened && g.stacks.selected.is_none() {
+        if let Some(id) = first_pick(&all) {
+            g.stacks.selected = Some(id);
+            g.stacks.opened = true;
+        }
+    }
     board::screen(
         g,
         ui,
@@ -352,6 +361,20 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         |g, ui| inspector(g, ui, &all),
         |g, ui| main(g, ui, &all),
     );
+}
+
+/// The MR the inspector shows first: the first open MR with something out of
+/// step, else the first open one.
+fn first_pick(all: &[Stack]) -> Option<String> {
+    let open = || {
+        all.iter()
+            .flat_map(|s| &s.nodes)
+            .filter(|n| n.state == GitlabMrState::Opened)
+    };
+    open()
+        .find(|n| !n.problems.is_empty())
+        .or_else(|| open().next())
+        .map(|n| n.id.clone())
 }
 
 fn stack_tone(stack: &Stack, theme: &Theme) -> Color32 {

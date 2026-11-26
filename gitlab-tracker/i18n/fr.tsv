@@ -2419,3 +2419,7 @@ saved view	Restore	Rétablir
 	{span}, every week	{span}, chaque semaine
 	{span}, every day	{span}, chaque jour
 	{span}, every year	{span}, chaque année
+	by a merge	par une fusion
+	by a cherry-pick	par un cherry-pick
+	by a copy	par une copie
+	in part	en partie

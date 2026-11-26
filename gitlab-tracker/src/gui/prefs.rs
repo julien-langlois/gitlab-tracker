@@ -8,6 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use super::{table::GroupBy, GuiApp, Page};
 
+fn yes() -> bool {
+    true
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -16,6 +20,8 @@ pub struct Prefs {
     pub group_by: Option<String>,
     pub compact: bool,
     pub tracker_board: bool,
+    /// The cockpit's cards leave out their rows at zero; on unless turned off.
+    #[serde(default = "yes")]
     pub hide_zeros: bool,
     /// The table's Next step column is hidden.
     pub hide_next_column: bool,
@@ -279,5 +285,8 @@ mod tests {
             !partial.no_update_check,
             "new versions are looked for by default"
         );
+        assert!(partial.hide_zeros, "the cockpit hides its zeros by default");
+        let off: Prefs = serde_json::from_str(r#"{"hide_zeros": false}"#).unwrap();
+        assert!(!off.hide_zeros, "a choice made stays");
     }
 }

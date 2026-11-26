@@ -97,7 +97,9 @@ pub fn presence(
         Some(BranchPresence::CherryPicked) => ("◆", tl("Picked"), tones.amber),
         Some(BranchPresence::Copied) => ("≈", tl("Copied"), tones.teal),
         Some(BranchPresence::Partial) => ("◐", tl("Partial"), tones.purple),
-        Some(BranchPresence::Absent) => ("○", tl("Absent"), tones.red),
+        // Not there yet is an MR's usual state, not an alarm: gray. What is
+        // late says so elsewhere (the next step, "Not synced" in amber).
+        Some(BranchPresence::Absent) => ("○", tl("Absent"), tones.gray),
         None if failed => ("✕", tl("Failed"), tones.red),
         None => ("…", tl("Loading"), tones.gray),
     }
@@ -236,6 +238,20 @@ pub fn signature_detail(check: &crate::signatures::CommitCheck) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_mr_not_on_a_branch_yet_is_gray_not_red() {
+        let theme = Theme::dark();
+        let t = &theme.tones;
+        let absent = Some(BranchPresence::Absent);
+        assert_eq!(presence(absent, false, t).2.fg, t.gray.fg);
+        // A branch to sync it has not reached stays amber, a failed read red.
+        assert_eq!(
+            flow_presence(absent, false, Place::Sync, t).2.fg,
+            t.amber.fg
+        );
+        assert_eq!(presence(None, true, t).2.fg, t.red.fg);
+    }
 
     /// bevel-theme 0.1's palette pairs below 4.5:1, to be fixed in bevel itself
     /// (with text on the selection highlight: muted and accent, both themes).

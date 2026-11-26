@@ -2419,3 +2419,7 @@ saved view	Restore	Wiederherstellen
 	{span}, every week	{span}, jede Woche
 	{span}, every day	{span}, jeden Tag
 	{span}, every year	{span}, jedes Jahr
+	by a merge	durch einen Merge
+	by a cherry-pick	durch einen Cherry-Pick
+	by a copy	durch eine Kopie
+	in part	teilweise

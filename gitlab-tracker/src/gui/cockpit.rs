@@ -116,6 +116,11 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
+            // Room on the right for the scroll bar, over nothing (as the
+            // board pages).
+            let room = ui.available_width() - 10.0;
+            ui.set_width(room);
+            ui.set_max_width(room);
             if let Some(digest) = g.app.last_digest.as_deref().filter(|_| !g.digest_closed) {
                 if since_last_session(ui, &theme, digest) {
                     close_digest = true;

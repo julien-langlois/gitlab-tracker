@@ -302,7 +302,8 @@ and the terminal UI keeps it.
 ## Cockpit
 
 Where MRs wait (review, author, approved but not merged, between branches) with
-the bottleneck; the headline counters (blocked, to review, next release, oldest);
+the bottleneck (**Hide zeros**, on by default, leaves out the cards' rows at
+zero); the headline counters (blocked, to review, next release, oldest);
 the attention, delivery, quality and release cards; four weekly trends (merges,
 time to first review — from ready for review —, lead time to production, CI
 success); then the MRs that need attention, most urgent first.

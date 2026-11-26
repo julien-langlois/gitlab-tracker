@@ -56,6 +56,9 @@ type RangeCommits = (Vec<ApiCommit>, bool);
 #[derive(Default)]
 pub struct State {
     selected: Option<String>,
+    /// Whether the latest release was picked for the page's first look (the
+    /// inspector is never empty when there is one; a closed one stays closed).
+    opened: bool,
     /// The project the ranges belong to.
     project: String,
     /// The commits of each range read, and when.
@@ -78,6 +81,12 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         }
     }
     let m = model(g, &ctx, now);
+    if !g.releases.opened && g.releases.selected.is_none() {
+        if let Some(latest) = m.releases.first() {
+            g.releases.selected = Some(latest.record.tag.clone());
+            g.releases.opened = true;
+        }
+    }
     board::screen(
         g,
         ui,
