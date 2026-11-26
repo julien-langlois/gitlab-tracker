@@ -1530,7 +1530,7 @@ rail	Overlaps	Conflitos
 @plural	{n} reviewer overloaded|{n} reviewers overloaded	{n} revisor sobrecarregado|{n} revisores sobrecarregados
 @plural	{n} new event since the journal was last read|{n} new events since the journal was last read	{n} evento novo desde a última leitura do diário|{n} eventos novos desde a última leitura do diário
 @plural	{n} failed pipeline among them|{n} failed pipelines among them	entre eles {n} pipeline com falha|entre eles {n} pipelines com falha
-@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} ambiente cujo último deploy falhou|{n} ambientes cujo último deploy falhou
+@plural	{n} environment whose last deployment failed|{n} environments whose last deployment failed	{n} ambiente cuja última implantação falhou|{n} ambientes cuja última implantação falhou
 @plural	{n} MR waits for a week or more to go one branch further|{n} MRs wait for a week or more to go one branch further	{n} MR espera há uma semana ou mais para ir ao próximo branch|{n} MRs esperam há uma semana ou mais para ir ao próximo branch
 @plural	{n} MR waits for 3 days or more to go one branch further|{n} MRs wait for 3 days or more to go one branch further	{n} MR espera há 3 dias ou mais para ir ao próximo branch|{n} MRs esperam há 3 dias ou mais para ir ao próximo branch
 @plural	{n} open MR held back by a failed pipeline|{n} open MRs held back by a failed pipeline	{n} MR aberto bloqueado por um pipeline com falha|{n} MRs abertos bloqueados por um pipeline com falha
@@ -1927,7 +1927,7 @@ date	Closed	Fechada
 	reverted by this MR	revertido por este MR
 @plural	{n} counted in the change failure rate|{n} counted in the change failure rate	{n} contado na change failure rate|{n} contados na change failure rate
 	no guess	sem palpite
-@plural	with {n} failed deployment|with {n} failed deployments	com {n} deploy com falha|com {n} deploys com falha
+@plural	with {n} failed deployment|with {n} failed deployments	com {n} implantação com falha|com {n} implantações com falha
 	Open MRs by label	MRs abertos por rótulo
 	where they wait, and for how long	onde esperam e há quanto tempo
 	Most MRs	Mais MRs
@@ -2026,19 +2026,19 @@ rail	Releases	Releases
 	{d} d {h} h	{d} d {h} h
 	{h} h {m} min	{h} h {m} min
 	{m} min	{m} min
-	Deploy freeze until {when}	Congelamento de deploys até {when}
-	Deploy freeze, with no end in sight	Congelamento de deploys, sem fim previsto
+	Deploy freeze until {when}	Congelamento de implantações até {when}
+	Deploy freeze, with no end in sight	Congelamento de implantações, sem fim previsto
 	ends in {left}	termina em {left}
-	Deploy freeze from {start} to {end}	Congelamento de deploys de {start} a {end}
-	Deploy freeze from {start}	Congelamento de deploys a partir de {start}
+	Deploy freeze from {start} to {end}	Congelamento de implantações de {start} a {end}
+	Deploy freeze from {start}	Congelamento de implantações a partir de {start}
 	starts in {left}	começa em {left}
-	deploy jobs that check $CI_DEPLOY_FREEZE do not run	os jobs de deploy que verificam $CI_DEPLOY_FREEZE não rodam
+	deploy jobs that check $CI_DEPLOY_FREEZE do not run	os jobs de implantação que verificam $CI_DEPLOY_FREEZE não rodam
 	from the app's settings: a warning, the pipelines do not know of it	das configurações do app: só um aviso, os pipelines não sabem disso
-	Deploy freezes	Congelamentos de deploy
-	The token may not read the project's deploy freezes (Freeze Period › Read).	O token não pode ler os congelamentos de deploy do projeto (Freeze Period › Read).
+	Deploy freezes	Congelamentos de implantação
+	The token may not read the project's deploy freezes (Freeze Period › Read).	O token não pode ler os congelamentos de implantação do projeto (Freeze Period › Read).
 	declared in GitLab · times in your zone	declarados no GitLab · horários no seu fuso
 	declared in the app's settings · times in your zone	declarados nas configurações do app · horários no seu fuso
-	GitLab sets $CI_DEPLOY_FREEZE in the pipelines that run during one: the deploy jobs that check it do not run.	O GitLab define $CI_DEPLOY_FREEZE nos pipelines que rodam durante um: os jobs de deploy que a verificam não rodam.
+	GitLab sets $CI_DEPLOY_FREEZE in the pipelines that run during one: the deploy jobs that check it do not run.	O GitLab define $CI_DEPLOY_FREEZE nos pipelines que rodam durante um: os jobs de implantação que a verificam não rodam.
 	The project declares none in GitLab: these come from the app's settings, as a warning only.	O projeto não declara nenhum no GitLab: estes vêm das configurações do app, só como aviso.
 	The token may not read GitLab's (Freeze Period › Read).	O token não pode ler os do GitLab (Freeze Period › Read).
 	No freeze this day	Nenhum congelamento neste dia
@@ -2132,7 +2132,7 @@ rail	Releases	Releases
 	This window's look. Not part of the project's settings.	A aparência desta janela. Não faz parte das configurações do projeto.
 	What the project tracks, and how often it refreshes.	O que o projeto acompanha e com que frequência atualiza.
 	Warn about the commits of the open MRs that are not signed.	Avisa sobre os commits não assinados dos MRs abertos.
-	Hotfixes and deploy freezes.	Hotfixes e congelamentos de deploy.
+	Hotfixes and deploy freezes.	Hotfixes e congelamentos de implantação.
 	The draft release notes.	O rascunho das notas de versão.
 	The local statistics: how long they are kept, how sprints are cut.	As estatísticas locais: por quanto tempo são mantidas e como os sprints são divididos.
 	Changed, not saved yet	Alterado, ainda não salvo
