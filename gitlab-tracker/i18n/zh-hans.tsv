@@ -791,7 +791,6 @@ date	Merged	合并时间
 	Not checked yet	尚未检查
 	Board	看板
 	List	列表
-	waiting for your review	等待你评审
 	blocked	受阻
 	over their estimate	超出预估
 	On {branch}	在 {branch} 上
@@ -1710,7 +1709,6 @@ rail	Stacks	堆叠
 @plural	{n} round|{n} rounds	{n} 轮
 @plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} 个超过 85% 的已合并 MR
 @plural	{n} MR merged|{n} MRs merged	合并了 {n} 个 MR
-@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} 个未关闭 MR 比 85% 的已合并 MR 更久
 @plural	{n} stack|{n} stacks	{n} 个堆叠
 @plural	{n} MR deep at most|{n} MRs deep at most	最多 {n} 层
 @plural	{n} behind|{n} behind	落后 {n}

@@ -94,7 +94,7 @@ use sessions::*;
 
 /// The page picked in the icon rail. The stats page also follows
 /// `InputMode::Stats`, as the TUI's stats overlay does.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Page {
     /// What waits for me, across the open tabs.
     Today,
@@ -210,6 +210,9 @@ struct GuiApp {
     members: Members,
     /// The rail's badges of the pages under its rule, kept for a moment.
     rail_badges: rail_badges::Cache,
+    /// What each rail entry flagged when its page was last open, by project:
+    /// its dot shows again only once that changes.
+    rail_seen: HashMap<(String, Page), String>,
     /// The pages' analyses, kept between frames.
     memo: memo::Memos,
     /// The table's saved views: the one applied, the dialog open.
@@ -402,6 +405,7 @@ impl GuiApp {
             left_off: HashMap::new(),
             members,
             rail_badges: rail_badges::Cache::default(),
+            rail_seen: HashMap::new(),
             memo: memo::Memos::default(),
             views: views::State::default(),
             baseline,

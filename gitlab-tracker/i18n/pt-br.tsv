@@ -791,7 +791,6 @@ date	Merged	Mesclada
 	Not checked yet	Ainda não verificado
 	Board	Quadro
 	List	Lista
-	waiting for your review	aguardam sua revisão
 	blocked	bloqueadas
 	over their estimate	acima da estimativa
 	On {branch}	Em {branch}
@@ -1710,7 +1709,6 @@ rail	Stacks	Pilhas
 @plural	{n} round|{n} rounds	{n} rodada|{n} rodadas
 @plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} além de 85 % das MRs mescladas|{n} além de 85 % das MRs mescladas
 @plural	{n} MR merged|{n} MRs merged	{n} MR mesclada|{n} MRs mescladas
-@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} MR aberta mais antiga que 85 % das mescladas|{n} MRs abertas mais antigas que 85 % das mescladas
 @plural	{n} stack|{n} stacks	{n} pilha|{n} pilhas
 @plural	{n} MR deep at most|{n} MRs deep at most	no máximo {n} MR de profundidade|no máximo {n} MRs de profundidade
 @plural	{n} behind|{n} behind	{n} atrás|{n} atrás

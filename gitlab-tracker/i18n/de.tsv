@@ -791,7 +791,6 @@ date	Merged	Gemergt
 	Not checked yet	Noch nicht geprüft
 	Board	Board
 	List	Liste
-	waiting for your review	warten auf dein Review
 	blocked	blockiert
 	over their estimate	über ihrer Schätzung
 	On {branch}	Auf {branch}
@@ -1710,7 +1709,6 @@ rail	Stacks	Stapel
 @plural	{n} round|{n} rounds	{n} Runde|{n} Runden
 @plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} über 85 % der gemergten MRs|{n} über 85 % der gemergten MRs
 @plural	{n} MR merged|{n} MRs merged	{n} MR gemergt|{n} MRs gemergt
-@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} offene MR älter als 85 % der gemergten|{n} offene MRs älter als 85 % der gemergten
 @plural	{n} stack|{n} stacks	{n} Stapel|{n} Stapel
 @plural	{n} MR deep at most|{n} MRs deep at most	höchstens {n} MR tief|höchstens {n} MRs tief
 @plural	{n} behind|{n} behind	{n} zurück|{n} zurück

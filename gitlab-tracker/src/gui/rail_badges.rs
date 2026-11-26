@@ -1,6 +1,6 @@
-//! The rail's badges for the pages under its rule (team, journal, environments,
-//! CI, milestones, overlaps): one number, in the tone of the worst thing it
-//! counts, and the sentence for the entry's tooltip. Each page says what its
+//! The rail's marks for the pages under its rule (team, journal, environments,
+//! CI, milestones, overlaps, stacks): what each flags, in the tone of the worst
+//! of it, and the sentence for the entry's tooltip (the rail draws a dot). Each page says what its
 //! badge counts in its own `badge` function; this module keeps them for a while,
 //! as working them out reads every tracked MR.
 
@@ -9,9 +9,7 @@ use std::time::{Duration, Instant};
 use bevel_theme::Tone;
 use chrono::Utc;
 
-use super::{
-    ci, delivery, environments, journal, milestones, overlaps, stacks, team, GuiApp, Page,
-};
+use super::{ci, environments, journal, milestones, overlaps, stacks, team, GuiApp, Page};
 
 /// What a rail entry's badge shows.
 #[derive(Debug, Clone)]
@@ -67,7 +65,6 @@ fn compute(g: &GuiApp) -> Vec<(Page, Badge)> {
         (Page::Ci, ci::badge(g, now)),
         (Page::Milestones, milestones::badge(g, now)),
         (Page::Overlaps, overlaps::badge(g)),
-        (Page::Delivery, delivery::badge(g, now)),
         (Page::Stacks, stacks::badge(g)),
     ]
     .into_iter()

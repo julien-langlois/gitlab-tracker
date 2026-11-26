@@ -791,7 +791,6 @@ date	Merged	Fusionada
 	Not checked yet	Aún sin comprobar
 	Board	Tablero
 	List	Lista
-	waiting for your review	esperan tu revisión
 	blocked	bloqueadas
 	over their estimate	por encima de lo estimado
 	On {branch}	En {branch}
@@ -1710,7 +1709,6 @@ rail	Stacks	Pilas
 @plural	{n} round|{n} rounds	{n} ronda|{n} rondas
 @plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} más allá del 85 % de las MR fusionadas|{n} más allá del 85 % de las MR fusionadas
 @plural	{n} MR merged|{n} MRs merged	{n} MR fusionada|{n} MR fusionadas
-@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} MR abierta más antigua que el 85 % de las fusionadas|{n} MR abiertas más antiguas que el 85 % de las fusionadas
 @plural	{n} stack|{n} stacks	{n} pila|{n} pilas
 @plural	{n} MR deep at most|{n} MRs deep at most	{n} MR de profundidad como máximo|{n} MR de profundidad como máximo
 @plural	{n} behind|{n} behind	{n} por detrás|{n} por detrás

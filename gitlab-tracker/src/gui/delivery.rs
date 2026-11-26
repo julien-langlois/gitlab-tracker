@@ -14,7 +14,6 @@ use egui::{Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke,
 
 use super::board::{self, Figure, GAP};
 use super::jump::{Entry, Jumps};
-use super::rail_badges::{self, Badge};
 use super::shell::Sizes;
 use super::tip::{Tip, TipExt};
 use super::widgets::{button, muted, primary_button, split_person};

@@ -791,7 +791,6 @@ date	Merged	Fusionnée
 	Not checked yet	Pas encore vérifié
 	Board	Tableau
 	List	Liste
-	waiting for your review	en attente de votre relecture
 	blocked	bloquées
 	over their estimate	au-delà de leur estimation
 	On {branch}	Sur {branch}
@@ -1710,7 +1709,6 @@ rail	Stacks	Piles
 @plural	{n} round|{n} rounds	{n} tour|{n} tours
 @plural	{n} past 85 % of the merged MRs|{n} past 85 % of the merged MRs	{n} au-delà de 85 % des MR fusionnées|{n} au-delà de 85 % des MR fusionnées
 @plural	{n} MR merged|{n} MRs merged	{n} MR fusionnée|{n} MR fusionnées
-@plural	{n} open MR older than 85 % of the merged ones|{n} open MRs older than 85 % of the merged ones	{n} MR ouverte plus vieille que 85 % des fusionnées|{n} MR ouvertes plus vieilles que 85 % des fusionnées
 @plural	{n} stack|{n} stacks	{n} pile|{n} piles
 @plural	{n} MR deep at most|{n} MRs deep at most	{n} MR de profondeur au plus|{n} MR de profondeur au plus
 @plural	{n} behind|{n} behind	{n} de retard|{n} de retard

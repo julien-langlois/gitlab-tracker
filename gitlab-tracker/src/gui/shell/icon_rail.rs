@@ -22,17 +22,14 @@ pub(super) fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
             ui.spacing_mut().item_spacing.y = 6.0;
             let count = |key: &str| g.members.get(key).map_or(0, Vec::len);
             let tones = &theme.tones;
-            // What waits on each page: my reviews, the blocked MRs, the tickets
-            // over their estimate.
+            // The rail's rule: a number only on Today, the one page about what
+            // waits on you (your reviews among it). The other pages watch the
+            // project: a dot in the tone of the worst they flag, only while it
+            // is news (it changed since the page was last open), the count in
+            // the tooltip, so the rail stays calm.
             let today = super::super::today::waiting_count(g);
             let fixed = [
                 (Page::Today, today, tones.amber, tl("waiting for you")),
-                (
-                    Page::MergeRequests,
-                    count("To review (me)"),
-                    tones.amber,
-                    tl("waiting for your review"),
-                ),
                 (Page::Cockpit, count("Blocked"), tones.red, tl("blocked")),
                 (
                     Page::Tracker,
@@ -54,7 +51,6 @@ pub(super) fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         Page::Ci,
                         Page::Milestones,
                         Page::Overlaps,
-                        Page::Delivery,
                         Page::Releases,
                         Page::Stacks,
                     ]
@@ -65,6 +61,11 @@ pub(super) fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                     }),
                 )
                 .collect();
+            // The page open marks what it flags as seen.
+            let project = g.app.project_id.clone();
+            if let Some(b) = badges.iter().find(|b| b.0 == page && b.0 != Page::Today) {
+                g.rail_seen.insert((project.clone(), page), b.3.clone());
+            }
             ui.vertical_centered(|ui| {
                 let mut items = vec![
                     (
@@ -204,8 +205,17 @@ pub(super) fn rail(g: &mut GuiApp, ui: &mut Ui, page: Page) {
                         size.height(),
                         page == target,
                     );
-                    if let Some((n, tone, _)) = badge {
-                        rail_badge(ui, &theme, response.rect, n, tone);
+                    match badge {
+                        Some((n, tone, _)) if target == Page::Today => {
+                            rail_badge(ui, &theme, response.rect, n, tone);
+                        }
+                        Some((_, tone, what))
+                            if g.rail_seen.get(&(project.clone(), target)) != Some(&what) =>
+                        {
+                            rail_dot(ui, &theme, response.rect, tone);
+                        }
+                        Some(_) => {}
+                        None => {}
                     }
                     if response.rich(hint).clicked() {
                         g.open_page(target);
@@ -274,6 +284,14 @@ pub(super) fn rail_badge(ui: &Ui, theme: &Theme, item: Rect, n: usize, tone: bev
     let ppp = ui.ctx().pixels_per_point();
     let at = egui::pos2((at.x * ppp).round() / ppp, (at.y * ppp).round() / ppp);
     ui.painter().galley(at, galley, text_color);
+}
+
+/// A dot on a rail entry's top-right corner, in `tone`: the page flags
+/// something, its tooltip says what.
+pub(super) fn rail_dot(ui: &Ui, theme: &Theme, item: Rect, tone: bevel_theme::Tone) {
+    let center = egui::pos2(item.right() - 3.0, item.top() + 3.0);
+    ui.painter().circle_filled(center, 5.5, theme.palette.rail);
+    ui.painter().circle_filled(center, 4.0, tone.fg);
 }
 
 /// A badge's number: "99+" past 99.

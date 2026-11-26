@@ -335,35 +335,3 @@ pub fn weekly_report(
     }
     out
 }
-
-// ── The rail's badge ─────────────────────────────────────────────────────────
-
-/// The open MRs older than 85 % of the merged ones; red when one is twice as old.
-pub fn badge(g: &GuiApp, now: DateTime<Utc>) -> Option<Badge> {
-    let d = g.memo.delivery.get(&g.app.project_id, (30, false), || {
-        analyze(&g.app, None, now, 30)
-    });
-    let p85 = d.p85?;
-    let late: Vec<&Aging> = d.open.iter().filter(|a| a.age >= p85).collect();
-    if late.is_empty() {
-        return None;
-    }
-    let tone = if late.iter().any(|a| a.age >= 2.0 * p85) {
-        g.theme.tones.red
-    } else {
-        g.theme.tones.amber
-    };
-    let ids: Vec<String> = late.iter().map(|a| format!("!{}", a.id)).collect();
-    Some(Badge {
-        n: late.len(),
-        tone,
-        hint: rail_badges::listed(
-            tn(
-                late.len() as u64,
-                "{n} open MR older than 85 % of the merged ones",
-                "{n} open MRs older than 85 % of the merged ones",
-            ),
-            rail_badges::names(&ids, 4),
-        ),
-    })
-}
