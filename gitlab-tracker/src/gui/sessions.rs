@@ -178,6 +178,50 @@ pub(super) fn drain_events(
     needs_save
 }
 
+/// Whether the tab's MRs are being read (startup or refresh).
+pub(super) fn syncing(app: &App) -> bool {
+    !app.pending_initial_fetches.is_empty() || !app.pending_refresh_fetches.is_empty()
+}
+
+/// How often, at most, a tab's state is copied for a save while its MRs are read.
+pub(super) const SAVE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// When a tab's state was last copied for a save, and whether newer data waits.
+///
+/// The copy is taken on the UI thread (the write is not), and on a large
+/// project it costs a frame: during a refresh, whose events land over many
+/// frames, it is taken every [`SAVE_EVERY`] at most, then once the refresh is
+/// over. Outside a refresh, new data is saved at once.
+#[derive(Default)]
+pub(super) struct SaveClock {
+    at: Option<std::time::Instant>,
+    due: bool,
+}
+
+impl SaveClock {
+    /// Whether to save now, given whether new data came (`changed`) and whether
+    /// the MRs are still being read; called on every frame.
+    pub(super) fn ready(&mut self, changed: bool, syncing: bool, now: std::time::Instant) -> bool {
+        self.due |= changed;
+        let ready = self.due
+            && (!syncing
+                || self
+                    .at
+                    .is_none_or(|at| now.duration_since(at) >= SAVE_EVERY));
+        if ready {
+            self.due = false;
+            self.at = Some(now);
+        }
+        ready
+    }
+
+    /// Whether data waits to be saved, which is then no longer due (the window
+    /// closes, the tab is closed).
+    pub(super) fn take_due(&mut self) -> bool {
+        std::mem::take(&mut self.due)
+    }
+}
+
 /// Saves a tab's state in the background: the frame never waits on the disk.
 pub(super) fn save_state(
     app: &App,
@@ -244,6 +288,7 @@ pub(super) struct Tab {
     pub(super) api_semaphore: Arc<Semaphore>,
     pub(super) last_known_branches: HashMap<String, HashSet<String>>,
     pub(super) state_writer: StateWriter,
+    pub(super) save_clock: SaveClock,
     pub(super) page: Page,
     pub(super) history: history::History,
     pub(super) text_filter: (Option<usize>, String),
@@ -278,6 +323,7 @@ impl Tab {
             api_semaphore,
             last_known_branches,
             state_writer: StateWriter::default(),
+            save_clock: SaveClock::default(),
             page: Page::MergeRequests,
             history: history::History::default(),
             text_filter: (None, String::new()),
@@ -304,18 +350,23 @@ impl Tab {
                 crate::demo::apply_demo_event(&mut self.app, event);
                 memo::changed();
             }
-        } else if drain_events(
-            &mut self.app,
-            &self.events,
-            &self.api_semaphore,
-            &self.tx,
-            &mut self.last_known_branches,
-        ) {
-            save_state(&self.app, &self.last_known_branches, &self.state_writer);
+        } else {
+            let changed = drain_events(
+                &mut self.app,
+                &self.events,
+                &self.api_semaphore,
+                &self.tx,
+                &mut self.last_known_branches,
+            );
+            if self
+                .save_clock
+                .ready(changed, syncing(&self.app), std::time::Instant::now())
+            {
+                save_state(&self.app, &self.last_known_branches, &self.state_writer);
+            }
         }
         self.toasts.watch(&self.app, theme, now);
-        let syncing = !self.app.pending_initial_fetches.is_empty()
-            || !self.app.pending_refresh_fetches.is_empty();
+        let syncing = syncing(&self.app);
         if !syncing && self.was_syncing {
             self.last_sync = Some(chrono::Local::now());
         }
@@ -328,5 +379,41 @@ impl Tab {
             .mrs
             .iter()
             .any(|mr| matches!(mr.status, crate::models::MrStatus::Error(_)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_refresh_copies_the_state_every_few_seconds_then_once_it_is_over() {
+        let mut clock = SaveClock::default();
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        // The first data of a refresh is saved at once.
+        assert!(clock.ready(true, true, at(0)));
+        // More data during the refresh: not copied on every frame…
+        assert!(!clock.ready(true, true, at(16)));
+        assert!(!clock.ready(false, true, at(1000)));
+        // …but every SAVE_EVERY, even on a frame with no new data.
+        assert!(clock.ready(false, true, at(2000)));
+        assert!(!clock.ready(false, true, at(2100)));
+        assert!(!clock.ready(true, true, at(2200)));
+        // The refresh over: what waits is saved on the next frame, once.
+        assert!(clock.ready(false, false, at(2300)));
+        assert!(!clock.ready(false, false, at(2400)));
+        // Outside a refresh, new data is saved at once.
+        assert!(clock.ready(true, false, at(2416)));
+    }
+
+    #[test]
+    fn data_not_saved_yet_is_handed_over_once_when_the_window_closes() {
+        let mut clock = SaveClock::default();
+        assert!(clock.ready(true, true, Instant::now()));
+        assert!(!clock.ready(true, true, Instant::now()));
+        assert!(clock.take_due());
+        assert!(!clock.take_due());
     }
 }

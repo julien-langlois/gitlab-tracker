@@ -187,6 +187,8 @@ struct GuiApp {
     pending: Vec<Action>,
     /// Writes the state off the UI thread.
     state_writer: StateWriter,
+    /// When the state was last copied for a save (see [`sessions::SaveClock`]).
+    save_clock: sessions::SaveClock,
     /// The selected MR's description, rendered in the inspector and the MR page.
     description: markdown::Description,
     /// Diffs and job logs read on demand for the inspector.
@@ -339,6 +341,7 @@ impl GuiApp {
             api_semaphore,
             last_known_branches,
             state_writer,
+            save_clock,
             page,
             history,
             text_filter,
@@ -381,6 +384,7 @@ impl GuiApp {
             focus_search: false,
             pending: Vec::new(),
             state_writer,
+            save_clock,
             description: markdown::Description::default(),
             details,
             language_draft: language.clone(),
@@ -760,9 +764,16 @@ impl eframe::App for GuiApp {
     /// Writes the last state queued before the window closed, and the window's
     /// preferences.
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // What a refresh read since the last copy is saved before the window goes.
+        if self.save_clock.take_due() {
+            save_state(&self.app, &self.last_known_branches, &self.state_writer);
+        }
         block_on(self.state_writer.flush());
-        for slot in &self.tabs {
-            if let SlotState::Parked(tab) = &slot.state {
+        for slot in &mut self.tabs {
+            if let SlotState::Parked(tab) = &mut slot.state {
+                if tab.save_clock.take_due() {
+                    save_state(&tab.app, &tab.last_known_branches, &tab.state_writer);
+                }
                 block_on(tab.state_writer.flush());
             }
         }

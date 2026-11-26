@@ -19,7 +19,10 @@ impl GuiApp {
             &self.tx,
             &mut self.last_known_branches,
         );
-        if needs_save {
+        if self
+            .save_clock
+            .ready(needs_save, syncing(&self.app), std::time::Instant::now())
+        {
             self.save_state();
         }
     }
@@ -260,6 +263,7 @@ impl GuiApp {
         swap(&mut self.api_semaphore, &mut tab.api_semaphore);
         swap(&mut self.last_known_branches, &mut tab.last_known_branches);
         swap(&mut self.state_writer, &mut tab.state_writer);
+        swap(&mut self.save_clock, &mut tab.save_clock);
         swap(&mut self.page, &mut tab.page);
         swap(&mut self.history, &mut tab.history);
         swap(&mut self.text_filter, &mut tab.text_filter);
