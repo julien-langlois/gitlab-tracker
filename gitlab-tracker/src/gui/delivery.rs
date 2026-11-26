@@ -238,22 +238,8 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery, before: Option<&Delivery>, per
             );
         }
     });
-    board::nav_group(ui, &theme, tl("Steps"), |ui| {
-        for stage in Stage::ALL {
-            let value = d.medians[stage as usize]
-                .map(board::duration_text)
-                .unwrap_or_else(|| board::dash().to_string());
-            board::nav_item(
-                ui,
-                &theme,
-                stage.label(),
-                &value,
-                Some(stage.tone(&theme).fg),
-                false,
-            )
-            .rich(Tip::new().title(stage.label()).text(stage.hint()));
-        }
-    });
+    // The steps' medians are the "Where the time goes" card's: not repeated
+    // here.
     board::nav_note(
         ui,
         &theme,

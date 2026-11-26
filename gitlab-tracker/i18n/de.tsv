@@ -1546,7 +1546,6 @@ rail	Overlaps	Konflikte
 	Delivery	Auslieferung
 rail	Delivery	Lieferung
 rail	Stacks	Stapel
-	Steps	Schritte
 	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	Produktion ist {branch}, der letzte verfolgte Branch. Die Schritte stammen aus dem Review-Verlauf der Diskussionen, die Deployments aus denen des Projekts dorthin.
 	How fast changes reach production, and where the time goes	Wie schnell Änderungen in Produktion gehen und wo die Zeit bleibt
 	Copy the weekly report	Wochenbericht kopieren

@@ -1546,7 +1546,6 @@ rail	Overlaps	Solapes
 	Delivery	Entrega
 rail	Delivery	Entrega
 rail	Stacks	Pilas
-	Steps	Etapas
 	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	La producción es {branch}, la última rama seguida. Las etapas salen del historial de revisión de las discusiones; los despliegues, de los del proyecto hacia ella.
 	How fast changes reach production, and where the time goes	Lo rápido que los cambios llegan a producción, y adónde va el tiempo
 	Copy the weekly report	Copiar el informe semanal

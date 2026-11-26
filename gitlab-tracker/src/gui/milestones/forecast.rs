@@ -114,7 +114,9 @@ pub fn forecast(m: &Milestone, weekly: &[u32], now: DateTime<Utc>) -> Forecast {
     Forecast {
         p50: at(0.5),
         p85: at(0.85),
-        chance: m.due.map(|due| {
+        // A due date already past has no chance left to tell: the dates say
+        // how late.
+        chance: m.due.filter(|due| *due >= today).map(|due| {
             let within = (due - today).num_days();
             days.iter().filter(|d| **d <= within).count() as f64 / days.len() as f64
         }),
@@ -176,76 +178,75 @@ pub(super) fn forecast_section(
         |ui| {
             let p95 = days[((days.len() - 1) as f64 * 0.95).round() as usize];
             let weeks = ((p95 + 6) / 7).clamp(1, 16) as usize;
-            let due_week = m
-                .due
-                .map(|d| ((d - today).num_days() as f64 / 7.0).ceil() as i64);
-            let (area, _) =
-                ui.allocate_exact_size(Vec2::new(ui.available_width(), 92.0), Sense::hover());
-            let slot = area.width() / weeks as f32;
-            for w in 0..weeks {
-                let end = (w as i64 + 1) * 7;
-                let share = days.iter().filter(|d| **d <= end).count() as f32 / days.len() as f32;
-                let h = (area.height() - 18.0) * share;
-                let bar = Rect::from_min_max(
-                    egui::pos2(
-                        area.left() + w as f32 * slot + 2.0,
-                        area.bottom() - 16.0 - h,
-                    ),
-                    egui::pos2(
-                        area.left() + (w as f32 + 1.0) * slot - 2.0,
-                        area.bottom() - 16.0,
-                    ),
-                );
-                let in_time = due_week.is_none_or(|d| (w as i64) < d.max(0));
-                let color = if in_time {
-                    theme.tones.green.fg
-                } else {
-                    theme.tones.amber.fg
-                };
-                ui.painter()
-                    .rect_filled(bar, CornerRadius::same(2), color.gamma_multiply(0.8));
-                ui.interact(
-                    Rect::from_min_max(egui::pos2(bar.left(), area.top()), bar.max),
-                    ui.scope_id().with(("forecast_week", w)),
-                    Sense::hover(),
-                )
-                .tip(tf(
-                    "{share} done by {date}",
-                    &[
-                        ("share", &board::percent(f64::from(share))),
-                        (
-                            "date",
-                            &(today + Duration::days(end)).format("%Y-%m-%d").to_string(),
+            // Every run done within the week: one full bar says nothing, the
+            // dates under it do.
+            if weeks > 1 {
+                let due_week = m
+                    .due
+                    .map(|d| ((d - today).num_days() as f64 / 7.0).ceil() as i64);
+                let (area, _) =
+                    ui.allocate_exact_size(Vec2::new(ui.available_width(), 92.0), Sense::hover());
+                let slot = area.width() / weeks as f32;
+                for w in 0..weeks {
+                    let end = (w as i64 + 1) * 7;
+                    let share =
+                        days.iter().filter(|d| **d <= end).count() as f32 / days.len() as f32;
+                    let h = (area.height() - 18.0) * share;
+                    let bar = Rect::from_min_max(
+                        egui::pos2(
+                            area.left() + w as f32 * slot + 2.0,
+                            area.bottom() - 16.0 - h,
                         ),
-                    ],
-                ));
-                if w % (weeks / 4).max(1) == 0 {
-                    board::paint_text(
+                        egui::pos2(
+                            area.left() + (w as f32 + 1.0) * slot - 2.0,
+                            area.bottom() - 16.0,
+                        ),
+                    );
+                    let in_time = due_week.is_none_or(|d| (w as i64) < d.max(0));
+                    let color = if in_time {
+                        theme.tones.green.fg
+                    } else {
+                        theme.tones.amber.fg
+                    };
+                    ui.painter()
+                        .rect_filled(bar, CornerRadius::same(2), color.gamma_multiply(0.8));
+                    ui.interact(
+                        Rect::from_min_max(egui::pos2(bar.left(), area.top()), bar.max),
+                        ui.scope_id().with(("forecast_week", w)),
+                        Sense::hover(),
+                    )
+                    .tip(tf(
+                        "{share} done by {date}",
+                        &[
+                            ("share", &board::percent(f64::from(share))),
+                            ("date", &crate::utils::day_text(today + Duration::days(end))),
+                        ],
+                    ));
+                    if w % (weeks / 4).max(1) == 0 {
+                        board::paint_text(
+                            ui,
+                            egui::pos2(bar.center().x, area.bottom() - 6.0),
+                            Align2::CENTER_CENTER,
+                            &tf("W{n}", &[("n", &(w + 1).to_string())]),
+                            FontId::proportional(theme.text_size - 3.0),
+                            theme.palette.text_muted,
+                            slot * 2.0,
+                        );
+                    }
+                }
+                if let Some(d) = due_week.filter(|d| *d > 0 && (*d as usize) <= weeks) {
+                    let x = area.left() + d as f32 * slot;
+                    dashed(
                         ui,
-                        egui::pos2(bar.center().x, area.bottom() - 6.0),
-                        Align2::CENTER_CENTER,
-                        &tf("W{n}", &[("n", &(w + 1).to_string())]),
-                        FontId::proportional(theme.text_size - 3.0),
-                        theme.palette.text_muted,
-                        slot * 2.0,
+                        egui::pos2(x, area.top()),
+                        egui::pos2(x, area.bottom() - 14.0),
+                        theme.tones.amber.fg,
                     );
                 }
             }
-            if let Some(d) = due_week.filter(|d| *d > 0 && (*d as usize) <= weeks) {
-                let x = area.left() + d as f32 * slot;
-                dashed(
-                    ui,
-                    egui::pos2(x, area.top()),
-                    egui::pos2(x, area.bottom() - 14.0),
-                    theme.tones.amber.fg,
-                );
-            }
             ui.add_space(8.0);
             let date = |d: Option<NaiveDate>| {
-                d.map_or_else(
-                    || board::dash().to_string(),
-                    |d| d.format("%Y-%m-%d").to_string(),
-                )
+                d.map_or_else(|| board::dash().to_string(), crate::utils::day_text)
             };
             let p95_date = (p95 < 104 * 7).then(|| today + Duration::days(p95));
             let mut rows = vec![

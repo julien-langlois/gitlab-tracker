@@ -122,3 +122,21 @@ fn the_forecast_draws_from_the_recent_weeks() {
     assert!(f.chance.unwrap() < 1.0);
     assert_eq!(f, forecast(&m, &uneven, now));
 }
+
+#[test]
+fn a_milestone_past_its_date_has_dates_but_no_chance() {
+    let now = board::parse_time("2026-11-26T12:00:00Z").unwrap();
+    let today = now.date_naive();
+    let m = Milestone {
+        title: "Security audit".into(),
+        due: Some(today - Duration::days(7)),
+        description: None,
+        items: vec![item("203", Stand::ToMerge)],
+    };
+    let f = forecast(&m, &[3; WEEKS], now);
+    assert!(f.p85.is_some());
+    assert_eq!(
+        f.chance, None,
+        "a 0 % chance of a date already past says nothing"
+    );
+}

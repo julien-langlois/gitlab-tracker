@@ -12,24 +12,7 @@ pub(super) fn activity_card(
     now: DateTime<Utc>,
 ) {
     let hourly = days <= 1;
-    let local_now = now.with_timezone(&Local);
-    // The buckets, oldest first: their start (local) and label.
-    let buckets: Vec<chrono::DateTime<Local>> = if hourly {
-        let hour = local_now
-            .date_naive()
-            .and_hms_opt(local_now.hour(), 0, 0)
-            .and_then(|t| t.and_local_timezone(Local).earliest())
-            .unwrap_or(local_now);
-        (0..24).rev().map(|h| hour - Duration::hours(h)).collect()
-    } else {
-        let today = local_now.date_naive();
-        (0..days)
-            .rev()
-            .filter_map(|d| today.checked_sub_days(chrono::Days::new(d as u64)))
-            .filter_map(|d| d.and_hms_opt(0, 0, 0))
-            .filter_map(|t| t.and_local_timezone(Local).earliest())
-            .collect()
-    };
+    let buckets = buckets(now, days);
     let step = if hourly {
         Duration::hours(1)
     } else {
@@ -93,7 +76,7 @@ pub(super) fn activity_card(
             let when = if hourly {
                 buckets[i].format("%H:00").to_string()
             } else {
-                buckets[i].format("%Y-%m-%d").to_string()
+                crate::utils::day_text(buckets[i].date_naive())
             };
             let mut tip = Tip::new().title(format!(
                 "{when} · {}",
@@ -159,4 +142,45 @@ pub(super) fn activity_card(
             .collect();
         board::legend(ui, theme, &legend);
     });
+}
+
+/// The bars' starts (local), oldest first: an hour each over 24 h, a day each
+/// otherwise. The first holds the period's start, so every event the page
+/// counts lands in a bar: "7 d" from this hour a week ago is today and the
+/// seven days before, the oldest partly.
+fn buckets(now: DateTime<Utc>, days: i64) -> Vec<chrono::DateTime<Local>> {
+    let local_now = now.with_timezone(&Local);
+    if days <= 1 {
+        let hour = local_now
+            .date_naive()
+            .and_hms_opt(local_now.hour(), 0, 0)
+            .and_then(|t| t.and_local_timezone(Local).earliest())
+            .unwrap_or(local_now);
+        (0..=24).rev().map(|h| hour - Duration::hours(h)).collect()
+    } else {
+        let today = local_now.date_naive();
+        (0..=days)
+            .rev()
+            .filter_map(|d| today.checked_sub_days(chrono::Days::new(d as u64)))
+            .filter_map(|d| d.and_hms_opt(0, 0, 0))
+            .filter_map(|t| t.and_local_timezone(Local).earliest())
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_bars_start_no_later_than_the_period() {
+        let now = Utc::now();
+        for days in [1, 7, 30] {
+            let b = buckets(now, days);
+            assert!(
+                b[0] <= (now - Duration::days(days)).with_timezone(&Local),
+                "{days} d: the oldest bar starts after the period"
+            );
+        }
+    }
 }

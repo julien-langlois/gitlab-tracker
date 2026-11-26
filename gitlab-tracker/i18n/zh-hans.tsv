@@ -1546,7 +1546,6 @@ rail	Overlaps	重叠
 	Delivery	交付
 rail	Delivery	交付
 rail	Stacks	堆叠
-	Steps	步骤
 	Production is {branch}, the last tracked branch. The steps come from the review timeline the discussions give; the deployments from the project's deployments to it.	生产环境是 {branch}，即最后一个跟踪的分支。步骤来自讨论中的评审时间线；部署来自项目对它的部署。
 	How fast changes reach production, and where the time goes	变更多快到达生产环境，时间花在了哪里
 	Copy the weekly report	复制周报

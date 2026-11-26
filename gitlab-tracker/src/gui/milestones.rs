@@ -157,11 +157,9 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Milestone], shown: Option<&str>, now:
                     inner.width() * 0.5,
                 ) + 8.0
             };
-            let font = if m.title.is_empty() {
-                FontId::proportional(theme.text_size - 0.5)
-            } else {
-                egui::FontId::monospace(theme.text_size - 0.5)
-            };
+            // A milestone's name is words ("Security audit") as often as a
+            // version: one font for every name, "No milestone" included.
+            let font = FontId::proportional(theme.text_size - 0.5);
             board::paint_text(
                 ui,
                 egui::pos2(inner.left(), inner.top() + 8.0),
@@ -262,7 +260,7 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
         subtitle.insert(
             0,
             match m.due {
-                Some(d) => format!("{} · {}", d.format("%Y-%m-%d"), due),
+                Some(d) => format!("{} · {}", crate::utils::day_text(d), due),
                 None => due.clone(),
             },
         );
