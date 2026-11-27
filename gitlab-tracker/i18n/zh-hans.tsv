@@ -2462,3 +2462,5 @@ saved view	Restore	恢复
 	What this promotion completes	本次推进完成的内容
 	milestone {name}: {before} → {after} of {all} on {to}	里程碑 {name}：{to} 上 {before} → {after}，共 {all}
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	工单 #{id} {subject}：其所有 MR 均在 {to} 上（跟踪器中为 {status}）
+	Only my flagged MRs	仅我标记的 MR
+	The MRs flagged with the star in the table (Space)	在表格中用星标标记的 MR（空格键）

@@ -2462,3 +2462,5 @@ saved view	Restore	Wiederherstellen
 	What this promotion completes	Was diese Promotion vervollständigt
 	milestone {name}: {before} → {after} of {all} on {to}	Meilenstein {name}: {before} → {after} von {all} auf {to}
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	Ticket #{id} {subject}: alle seine MRs auf {to} ({status} im Tracker)
+	Only my flagged MRs	Nur meine markierten MRs
+	The MRs flagged with the star in the table (Space)	Die in der Tabelle mit dem Stern markierten MRs (Leertaste)

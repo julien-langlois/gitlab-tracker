@@ -2462,3 +2462,5 @@ saved view	Restore	Restablecer
 	What this promotion completes	Lo que esta promoción completa
 	milestone {name}: {before} → {after} of {all} on {to}	hito {name}: {before} → {after} de {all} en {to}
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject}: todas sus MR en {to} ({status} en el tracker)
+	Only my flagged MRs	Solo mis MRs marcadas
+	The MRs flagged with the star in the table (Space)	Las MRs marcadas con la estrella en la tabla (Espacio)

@@ -129,6 +129,8 @@ pub struct State {
     pub hidden: HashSet<Kind>,
     pub hidden_tabs: HashSet<usize>,
     pub mine: bool,
+    /// Only the events of the MRs flagged in the table.
+    pub flagged: bool,
     pub bots: bool,
     pub search: String,
     pub selected: Option<(usize, String, i64, Kind, String)>,
@@ -141,6 +143,7 @@ impl Default for State {
             hidden: HashSet::new(),
             hidden_tabs: HashSet::new(),
             mine: false,
+            flagged: false,
             bots: true,
             search: String::new(),
             selected: None,
@@ -175,6 +178,9 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let me = g.app.config.gitlab_username.clone();
     let query = g.journal.search.trim().to_lowercase();
     let state = &g.journal;
+    let flagged = flagged_mrs(g);
+    // Off while nothing is flagged any more: the switch is greyed then.
+    let only_flagged = state.flagged && !flagged.is_empty();
     let filtered: Vec<&Event> = all
         .iter()
         .filter(|e| !state.hidden.contains(&e.kind))
@@ -185,6 +191,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
                     .as_deref()
                     .is_some_and(|me| e.people.iter().any(|p| p == me))
         })
+        .filter(|e| !only_flagged || flagged.contains(&(e.tab, e.id.clone())))
         .filter(|e| state.bots || !e.people.first().is_some_and(|p| board::is_bot(p)))
         .filter(|e| {
             query.is_empty()
@@ -208,7 +215,7 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
         ui,
         sizes,
         "journal",
-        |g, ui| nav(g, ui, all, tabs),
+        |g, ui| nav(g, ui, all, tabs, flagged.len()),
         |g, ui| inspector(g, ui, &filtered, selected.as_ref(), now),
         |g, ui| {
             main(
@@ -225,7 +232,32 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     );
 }
 
-fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Event], tabs: &[(usize, String)]) {
+/// The MRs flagged in the table (Space), in every open tab: (tab, id).
+fn flagged_mrs(g: &GuiApp) -> HashSet<(usize, String)> {
+    flagged_in(
+        g.tabs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, slot)| match &slot.state {
+                SlotState::Active => Some((index, &g.app)),
+                SlotState::Parked(tab) => Some((index, &tab.app)),
+                _ => None,
+            }),
+    )
+}
+
+/// The flagged MRs of these tabs' apps: (tab, id).
+fn flagged_in<'a>(apps: impl Iterator<Item = (usize, &'a App)>) -> HashSet<(usize, String)> {
+    apps.flat_map(|(index, app)| {
+        app.mrs
+            .iter()
+            .filter(|mr| mr.flagged)
+            .map(move |mr| (index, mr.id.clone()))
+    })
+    .collect()
+}
+
+fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Event], tabs: &[(usize, String)], flagged: usize) {
     let theme = g.theme;
     let subtitle = tf(
         "{events} · {tabs}",
@@ -287,6 +319,19 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, all: &[Event], tabs: &[(usize, String)]) {
                 g.journal.mine = !g.journal.mine;
             }
         });
+        ui.add_enabled_ui(flagged > 0, |ui| {
+            let on = g.journal.flagged && flagged > 0;
+            let count = if flagged > 0 {
+                flagged.to_string()
+            } else {
+                String::new()
+            };
+            if board::nav_switch_count(ui, &theme, on, tl("Only my flagged MRs"), &count) {
+                g.journal.flagged = !on;
+            }
+        })
+        .response
+        .tip(tl("The MRs flagged with the star in the table (Space)"));
         if board::nav_switch(ui, &theme, !g.journal.bots, tl("Hide the bots")) {
             g.journal.bots = !g.journal.bots;
         }

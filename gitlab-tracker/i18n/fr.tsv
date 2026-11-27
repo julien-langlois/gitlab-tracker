@@ -2462,3 +2462,5 @@ saved view	Restore	Rétablir
 	What this promotion completes	Ce que cette promotion complète
 	milestone {name}: {before} → {after} of {all} on {to}	jalon {name} : {before} → {after} sur {all} sur {to}
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject} : toutes ses MR sur {to} ({status} dans le tracker)
+	Only my flagged MRs	Seulement mes MR marquées
+	The MRs flagged with the star in the table (Space)	Les MR marquées de l’étoile dans le tableau (Espace)

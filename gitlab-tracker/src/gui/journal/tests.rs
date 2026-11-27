@@ -39,3 +39,17 @@ fn events_come_from_the_dates_of_the_mrs() {
     let since = board::parse_time("2026-11-03T12:00:00Z").unwrap();
     assert_eq!(events_of(&app, 0, since, &theme).len(), 1);
 }
+
+#[tokio::test]
+async fn the_flagged_mrs_are_read_in_every_tab() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let mut other = crate::app::tests::test_app();
+    other.mrs = vec![TrackedMr::placeholder("7".into(), "Fix it".into(), None)];
+    // The demo flags two MRs; the second tab none, until one is.
+    let found = flagged_in([(0, &app), (1, &other)].into_iter());
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(found.iter().all(|(tab, _)| *tab == 0));
+    other.mrs[0].flagged = true;
+    let found = flagged_in([(0, &app), (1, &other)].into_iter());
+    assert!(found.contains(&(1, "7".to_string())));
+}

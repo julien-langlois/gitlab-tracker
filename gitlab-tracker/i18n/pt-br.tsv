@@ -2462,3 +2462,5 @@ saved view	Restore	Restaurar
 	What this promotion completes	O que esta promoção completa
 	milestone {name}: {before} → {after} of {all} on {to}	marco {name}: {before} → {after} de {all} em {to}
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject}: todas as MRs dele em {to} ({status} no tracker)
+	Only my flagged MRs	Só minhas MRs marcadas
+	The MRs flagged with the star in the table (Space)	As MRs marcadas com a estrela na tabela (Espaço)

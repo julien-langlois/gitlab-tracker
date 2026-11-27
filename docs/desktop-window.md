@@ -507,7 +507,8 @@ latest MRs. Their figures are compared with the team's median, never ranked.
 What happened on the MRs of every open tab, newest first and by day: opened,
 review asked, approved, threads, pipelines, merged, arrived on a branch (and
 how). Rebuilt from what the MRs already carry, so it has a past from the first
-launch; filters by type, tab, period, and "only what concerns me".
+launch; filters by type, tab, period, "only what concerns me", and "only my
+flagged MRs" (the MRs starred in the table with Space; greyed while none is).
 
 ![Journal: what happened on the MRs, by day](assets/desktop/journal.png)
 

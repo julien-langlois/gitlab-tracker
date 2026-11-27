@@ -259,6 +259,11 @@ pub fn segmented(
 /// A switch on its own line of the side panel, its label cut to the panel's
 /// width (the whole label on hover when cut); whether it was clicked.
 pub fn nav_switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> bool {
+    nav_switch_count(ui, theme, on, label, "")
+}
+
+/// [`nav_switch`] with a count at the end of the line, as the checks have.
+pub fn nav_switch_count(ui: &mut Ui, theme: &Theme, on: bool, label: &str, trailing: &str) -> bool {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::click());
     let how_on = ui.ctx().animate_bool(response.id, on);
@@ -285,13 +290,26 @@ pub fn nav_switch(ui: &mut Ui, theme: &Theme, on: bool, label: &str) -> bool {
     let x = egui::lerp(track.left() + 8.5..=track.right() - 8.5, how_on);
     ui.painter()
         .circle_filled(egui::pos2(x, track.center().y), 6.5, Color32::WHITE);
+    let trailing_width = if trailing.is_empty() {
+        0.0
+    } else {
+        12.0 + paint_text(
+            ui,
+            egui::pos2(rect.right() - 10.0, rect.center().y),
+            Align2::RIGHT_CENTER,
+            trailing,
+            FontId::proportional(theme.text_size - 2.0),
+            theme.palette.text_muted,
+            60.0,
+        )
+    };
     let left = track.right() + 10.0;
     let galley = one_line(
         ui,
         label,
         FontId::proportional(theme.text_size),
         theme.palette.text,
-        rect.right() - 6.0 - left,
+        rect.right() - 6.0 - trailing_width - left,
     );
     let cut = galley.elided;
     ui.painter().galley(
