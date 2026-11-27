@@ -24,12 +24,14 @@ mod analysis;
 mod budget;
 mod charts;
 mod jobs;
+mod red;
 mod side_panel;
 
 pub use analysis::*;
 use budget::*;
 use charts::*;
 use jobs::*;
+pub(in crate::gui) use red::*;
 pub use side_panel::*;
 
 /// The views of the side panel.
@@ -234,6 +236,16 @@ fn main(
     if super::schedules::worst(schedules).is_some() {
         if let Some(url) = super::schedules::banner(ui, &theme, schedules, &project) {
             board::open_url(ui, &url);
+        }
+        ui.add_space(GAP);
+    }
+    // A tracked branch red run after run, and the MRs that arrived as it turned.
+    let branches = overview.map(|o| o.pipelines.as_slice()).unwrap_or(&[]);
+    for red in red_branches(&g.app, branches) {
+        match red_banner(ui, &theme, &red) {
+            Some(RedClick::Mr(id)) => g.open_mr(&id),
+            Some(RedClick::Url(url)) => board::open_url(ui, &url),
+            None => {}
         }
         ui.add_space(GAP);
     }

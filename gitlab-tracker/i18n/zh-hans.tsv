@@ -2440,3 +2440,11 @@ saved view	Restore	恢复
 	{status}, but its MRs are on {branch} for {days}	{status}，但其 MR 已在 {branch} 上 {days}
 	Out of step with the code · {n}	与代码不一致 · {n}
 	the tracker's closed statuses, against {branch}	按跟踪器的关闭状态，对照 {branch}
+	{branch} is red since !{id} arrived ({since})	自 !{id} 到达后 {branch} 一直失败（{since}）
+	{branch} is red since {since}	{branch} 自 {since} 起一直失败
+	{branch} is red since {mrs} arrived ({since})	自 {mrs} 到达后 {branch} 一直失败（{since}）
+	last green: {when}	上次成功：{when}
+	no green pipeline in the last {n}	最近 {n} 次中没有成功的流水线
+	Open !{id}	打开 !{id}
+	Open the first red pipeline	打开第一个失败的流水线
+@plural	{n} pipeline failed in a row|{n} pipelines failed in a row	连续 {n} 个流水线失败

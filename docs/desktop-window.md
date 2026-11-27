@@ -446,7 +446,12 @@ version tags stand in (see [GitLab token](gitlab-token.md)).
 How often the tracked MRs' pipelines pass and how long they take, each job's last
 20 runs with its failure rate and trend, the flaky jobs (a failure, then a pass on
 the same commit), failures by stage, the MRs held back by the CI and the tracked
-branches' latest pipeline. A **CI budget** adds up runner time, what failed
+branches' latest pipeline. A tracked branch whose pipelines failed twice in a row or more
+gets a banner: **red since** when, with the MRs that reached it between its last
+green pipeline and the first red one — merged into it, or arrived on it — the
+likely cause, not a verdict; with none, it is the infrastructure's or an older
+change's, and the banner opens the first red pipeline. The branches' last 20
+pipelines are read for it, in the same call as their latest. A **CI budget** adds up runner time, what failed
 pipelines spent, the wait for a runner, and the costliest jobs.
 
 **Pipeline schedules** (the nightly runs nobody watches) each show their cron in

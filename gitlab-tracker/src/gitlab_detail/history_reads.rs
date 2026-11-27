@@ -223,11 +223,21 @@ pub(super) async fn branch_pipeline(target: &Target, branch: &str) -> Option<Bra
     }
     let list: Vec<Raw> = target
         .get(&format!(
-            "pipelines?ref={}&per_page=1&order_by=id&sort=desc",
+            "pipelines?ref={}&per_page={HISTORY}&order_by=id&sort=desc",
             urlencoding::encode(branch)
         ))
         .await
         .ok()?;
+    let history: Vec<PipelineRun> = list
+        .iter()
+        .map(|r| PipelineRun {
+            id: r.id,
+            sha: r.sha.clone(),
+            status: r.status,
+            created_at: r.created_at.clone(),
+            web_url: r.web_url.clone(),
+        })
+        .collect();
     let raw = list.into_iter().next()?;
     let failed_jobs = if raw.status == crate::models::PipelineState::Failed {
         target
@@ -250,5 +260,10 @@ pub(super) async fn branch_pipeline(target: &Target, branch: &str) -> Option<Bra
         updated_at: raw.updated_at,
         web_url: raw.web_url,
         failed_jobs,
+        history,
     })
 }
+
+/// How many recent pipelines of a tracked branch are read: enough to find
+/// when it turned red in a busy week, in the same call as the latest one.
+const HISTORY: usize = 20;

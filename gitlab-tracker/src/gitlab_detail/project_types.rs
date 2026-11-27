@@ -29,6 +29,19 @@ pub struct BranchPipeline {
     pub web_url: String,
     /// The jobs that failed in it, by name.
     pub failed_jobs: Vec<String>,
+    /// The branch's recent pipelines, newest first, this one included: when
+    /// it turned red, and since what.
+    pub history: Vec<PipelineRun>,
+}
+
+/// A past pipeline of a tracked branch.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PipelineRun {
+    pub id: u64,
+    pub sha: String,
+    pub status: crate::models::PipelineState,
+    pub created_at: String,
+    pub web_url: String,
 }
 
 /// What the environments and CI pages read about the project itself.

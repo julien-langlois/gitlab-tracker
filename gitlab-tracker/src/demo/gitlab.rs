@@ -261,11 +261,30 @@ impl World {
             .branches
             .iter()
             .filter_map(|branch| {
-                let p = self
+                let url = |id: u64| {
+                    format!(
+                        "https://gitlab.orbit-logistics.dev/{}/-/pipelines/{id}",
+                        self.spec.path
+                    )
+                };
+                let mut runs: Vec<_> = self
                     .pipelines
                     .iter()
                     .filter(|p| p.owner == Owner::Branch(branch))
-                    .max_by_key(|p| p.created)?;
+                    .collect();
+                runs.sort_by_key(|p| std::cmp::Reverse(p.created));
+                let history = runs
+                    .iter()
+                    .take(20)
+                    .map(|p| crate::gitlab_detail::PipelineRun {
+                        id: p.id,
+                        sha: p.sha.clone(),
+                        status: p.status,
+                        created_at: iso(p.created),
+                        web_url: url(p.id),
+                    })
+                    .collect();
+                let p = runs.first()?;
                 Some(BranchPipeline {
                     branch: (*branch).into(),
                     id: p.id,
@@ -283,6 +302,7 @@ impl World {
                         .filter(|j| j.status == "failed")
                         .map(|j| j.name.to_string())
                         .collect(),
+                    history,
                 })
             })
             .collect();

@@ -52,8 +52,9 @@ pub fn spec() -> ProjectSpec {
             from: "main",
             to: "staging",
             by: &NADIA,
-            // The registry timed out yesterday: staging still runs the build before.
-            deploy: if n == 1 { Deploy::Failed } else { Deploy::Ok },
+            // The registry has timed out since the sync before last: staging
+            // still runs the build before them, red since what came with it.
+            deploy: if n <= 3 { Deploy::Failed } else { Deploy::Ok },
         });
     }
     for n in (3..=58).step_by(5) {

@@ -2440,3 +2440,11 @@ saved view	Restore	Wiederherstellen
 	{status}, but its MRs are on {branch} for {days}	{status}, aber seine MRs sind seit {days} auf {branch}
 	Out of step with the code · {n}	Nicht im Takt mit dem Code · {n}
 	the tracker's closed statuses, against {branch}	geschlossene Status des Trackers, verglichen mit {branch}
+	{branch} is red since !{id} arrived ({since})	{branch} ist rot, seit !{id} angekommen ist ({since})
+	{branch} is red since {since}	{branch} ist rot seit {since}
+	{branch} is red since {mrs} arrived ({since})	{branch} ist rot, seit {mrs} angekommen sind ({since})
+	last green: {when}	zuletzt grün: {when}
+	no green pipeline in the last {n}	keine grüne Pipeline unter den letzten {n}
+	Open !{id}	!{id} öffnen
+	Open the first red pipeline	Erste rote Pipeline öffnen
+@plural	{n} pipeline failed in a row|{n} pipelines failed in a row	{n} Pipeline in Folge fehlgeschlagen|{n} Pipelines in Folge fehlgeschlagen
