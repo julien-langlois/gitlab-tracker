@@ -334,6 +334,12 @@ impl App {
             }
 
             #[cfg(feature = "stats")]
+            AppEvent::DoraMonthsLoaded(months) => {
+                self.dora_months = months;
+                false
+            }
+
+            #[cfg(feature = "stats")]
             AppEvent::StatsSnapshotRecorded => {
                 self.stats_report_dirty = true;
                 false

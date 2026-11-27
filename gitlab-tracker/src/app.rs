@@ -570,6 +570,11 @@ pub struct App {
         allow(dead_code, reason = "only the window draws the branch flow")
     )]
     pub branch_arrivals: HashMap<(String, String), chrono::DateTime<chrono::Utc>>,
+
+    /// The four DORA measures over the last twelve months, read from the stats
+    /// DB with the report (oldest first); empty until then.
+    #[cfg(feature = "stats")]
+    pub dora_months: Vec<gitlab_tracker_stats::DoraMonth>,
     /// The MRs on a GitLab merge train, by id: their car and the train's
     /// length. Set by the window each frame (it reads the trains).
     #[cfg_attr(
@@ -727,6 +732,8 @@ impl App {
             #[cfg(feature = "stats")]
             stats_report_dirty: false,
             branch_arrivals: HashMap::new(),
+            #[cfg(feature = "stats")]
+            dora_months: Vec::new(),
             merge_train: HashMap::new(),
             // Disabled by default — opt-in via `discover_new_mrs = true` in projects.toml.
             discovery_enabled: false,

@@ -2464,3 +2464,24 @@ saved view	Restore	Wiederherstellen
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	Ticket #{id} {subject}: alle seine MRs auf {to} ({status} im Tracker)
 	Only my flagged MRs	Nur meine markierten MRs
 	The MRs flagged with the star in the table (Space)	Die in der Tabelle mit dem Stern markierten MRs (Leertaste)
+date	Jan	Jan.
+date	Feb	Feb.
+date	Mar	März
+date	Apr	Apr.
+date	Jun	Juni
+date	Jul	Juli
+date	Aug	Aug.
+date	Sep	Sept.
+date	Oct	Okt.
+date	Nov	Nov.
+date	Dec	Dez.
+	6 months	6 Monate
+	12 months	12 Monate
+	not kept yet	noch nicht gespeichert
+	as in {month}	wie im {month}
+	▲ from {value} in {month}	▲ von {value} im {month}
+	▼ from {value} in {month}	▼ von {value} im {month}
+	no incident	kein Vorfall
+	One point a month from the stats database; a month with too few cases has none (dashed).	Ein Punkt pro Monat aus der Statistikdatenbank; ein Monat mit zu wenigen Fällen hat keinen (gestrichelt).
+@plural	{n} MR reaching production|{n} MRs reaching production	{n} MR in Produktion|{n} MRs in Produktion
+@plural	too few to tell ({n} case)|too few to tell ({n} cases)	zu wenige für eine Aussage ({n} Fall)|zu wenige für eine Aussage ({n} Fälle)

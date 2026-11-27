@@ -244,6 +244,7 @@ pub(super) fn dora_figures(
     d: &Delivery,
     before: Option<&Delivery>,
     period: Period,
+    monthly: Option<Trend>,
 ) {
     let dora = &d.dora;
     // Compared: the period before says it all, under each figure.
@@ -362,8 +363,11 @@ pub(super) fn dora_figures(
             caption_color: restore_color,
         },
     ];
+    // Month by month at the bottom of each tile; how each went under its
+    // caption, unless the period before takes that line.
+    let (sparks, sentences) = monthly.unwrap_or_default();
     let Some(b) = before.map(|b| &b.dora) else {
-        board::figures(ui, theme, &figures);
+        board::figures_full(ui, theme, &figures, &sentences, &sparks);
         return;
     };
     let freq_text = |per_week: f64| {
@@ -426,5 +430,8 @@ pub(super) fn dora_figures(
             })
         })
         .collect();
-    board::figures_with(ui, theme, &figures, &notes);
+    board::figures_full(ui, theme, &figures, &notes, &sparks);
 }
+
+/// Each figure's line month by month, and how it went since the first month.
+pub(super) type Trend = (Vec<Option<board::Spark>>, Vec<Option<(String, Color32)>>);

@@ -26,7 +26,11 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0001_initial.sql"),
     include_str!("../migrations/0002_branch_arrivals.sql"),
     include_str!("../migrations/0003_ready_at.sql"),
+    include_str!("../migrations/0004_deployments.sql"),
 ];
+
+mod deployments;
+pub use deployments::Deployment;
 
 /// A stored snapshot as returned by [`SqliteStatsDb::query`].
 ///
@@ -417,8 +421,13 @@ impl SqliteStatsDb {
                 .bind(&cutoff)
                 .execute(&self.pool)
                 .await?;
-        // Branch arrivals follow the same retention.
+        // Branch arrivals and deployments follow the same retention.
         sqlx::query("DELETE FROM mr_branch_arrivals WHERE project_id = ? AND arrived_at < ?")
+            .bind(project_id)
+            .bind(&cutoff)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM deployments WHERE project_id = ? AND created_at < ?")
             .bind(project_id)
             .bind(&cutoff)
             .execute(&self.pool)

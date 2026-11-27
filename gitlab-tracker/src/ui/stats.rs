@@ -211,6 +211,10 @@ pub fn trigger_background_stats_refresh(
     trigger_stats_report_refresh(app, tx, false);
 }
 
+/// The months of DORA read for the Delivery page's trend (it shows 6 or 12).
+#[cfg(feature = "stats")]
+const DORA_MONTHS: u32 = 12;
+
 fn trigger_stats_report_refresh(
     app: &mut App,
     tx: &tokio::sync::mpsc::UnboundedSender<crate::models::AppEvent>,
@@ -239,6 +243,13 @@ fn trigger_stats_report_refresh(
         let window = app.stats_view.window.to_query_window();
         let project_id = app.project_id.clone();
         let sprint_weeks = app.stats_view.sprint_weeks;
+        // Production: the last tracked branch, for the DORA months.
+        let production = app
+            .branch_flow()
+            .in_order()
+            .last()
+            .map(|b| b.name.clone())
+            .unwrap_or_default();
         let tx2 = tx.clone();
 
         tokio::spawn(async move {
@@ -267,6 +278,20 @@ fn trigger_stats_report_refresh(
 
             // The dates the MRs reached the tracked branches, for the timelines.
             if let Some(project_id) = &cockpit_filter.project_id {
+                match gitlab_tracker_stats::dora::load(
+                    db.as_ref(),
+                    project_id,
+                    &production,
+                    DORA_MONTHS,
+                    chrono::Utc::now(),
+                )
+                .await
+                {
+                    Ok(months) => {
+                        let _ = tx2.send(crate::models::AppEvent::DoraMonthsLoaded(months));
+                    }
+                    Err(e) => tracing::warn!(error = %e, "Failed to read the DORA months"),
+                }
                 match db.query_branch_arrivals(project_id, None, None).await {
                     Ok(rows) => {
                         let arrivals = rows

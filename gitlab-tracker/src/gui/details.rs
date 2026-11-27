@@ -152,6 +152,28 @@ impl Default for Details {
     }
 }
 
+/// The deployments of `overview` as the stats DB keeps them (no one's name).
+#[cfg(feature = "stats")]
+pub(crate) fn stats_deployments(
+    overview: &crate::gitlab_detail::ProjectOverview,
+) -> Vec<gitlab_tracker_stats::Deployment> {
+    overview
+        .deployments
+        .iter()
+        .filter_map(|d| {
+            Some(gitlab_tracker_stats::Deployment {
+                environment: d.environment.clone(),
+                reference: d.reference.clone(),
+                sha: d.sha.clone(),
+                created_at: chrono::DateTime::parse_from_rfc3339(&d.created_at)
+                    .ok()?
+                    .with_timezone(&chrono::Utc),
+                status: d.status.clone(),
+            })
+        })
+        .collect()
+}
+
 impl Details {
     fn fetch<T: Send + 'static>(
         ctx: &egui::Context,
@@ -245,8 +267,22 @@ impl Details {
                     .map(|o| o.merges.clone())
                     .unwrap_or_default();
                 let cache = crate::storage::project_store(&app.base_url, &app.project_id);
+                #[cfg(feature = "stats")]
+                let keep = app.stats_db.clone().map(|db| (db, app.project_id.clone()));
                 Self::fetch(ctx, async move {
-                    Ok(crate::gitlab_detail::fetch_project(target, branches, merges, cache).await)
+                    let overview =
+                        crate::gitlab_detail::fetch_project(target, branches, merges, cache).await;
+                    // Kept for the DORA trend: GitLab's list only goes back so far.
+                    #[cfg(feature = "stats")]
+                    if let Some((db, project_id)) = keep {
+                        if let Err(e) = db
+                            .record_deployments(&project_id, &stats_deployments(&overview))
+                            .await
+                        {
+                            tracing::warn!(error = %e, "Failed to keep the deployments");
+                        }
+                    }
+                    Ok(overview)
                 })
             };
             // Keep showing the previous overview while the new one loads.

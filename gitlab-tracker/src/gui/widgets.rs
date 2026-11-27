@@ -752,6 +752,17 @@ pub fn month_name(month0: usize) -> &'static str {
     )
 }
 
+/// The short name of the month `month0` (0: Jan), in the window's language.
+#[cfg_attr(not(feature = "stats"), allow(dead_code))]
+pub fn month_short(month0: usize) -> &'static str {
+    crate::i18n::tc(
+        "date",
+        [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ][month0 % 12],
+    )
+}
+
 /// A day in words, in the window's language: "Wednesday 18 November", with
 /// the year after it when `year` ("Wednesday 18 November 2026").
 pub fn long_date(day: chrono::NaiveDate, year: bool) -> String {

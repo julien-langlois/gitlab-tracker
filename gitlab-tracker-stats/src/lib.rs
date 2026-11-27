@@ -10,6 +10,7 @@
 //! - [`metrics`]     — pure functions computing per-MR durations and rates.
 //! - [`aggregator`]  — time-window and milestone aggregations over a set of snapshots.
 //! - [`correlation`] — Spearman rank correlation between pairs of metrics.
+//! - [`dora`]        — the four DORA measures month by month, for the Delivery trend.
 //! - [`promotion`]   — promotion lead time: merge → arrival on the other tracked branches.
 //! - [`report`]      — [`StatReport`]: final output, serialisable to JSON or CSV.
 //!
@@ -22,6 +23,7 @@
 pub mod aggregator;
 pub mod correlation;
 pub mod db;
+pub mod dora;
 pub mod metrics;
 pub mod poisson;
 pub mod promotion;
@@ -32,7 +34,8 @@ pub mod snapshot;
 
 pub use aggregator::{AggregatedStats, MrSizeBucketStats, QueryFilter, TimeWindow};
 pub use correlation::{CorrelationResult, CorrelationStrength, MetricPair};
-pub use db::{SqliteStatsDb, StatsError};
+pub use db::{Deployment, SqliteStatsDb, StatsError};
+pub use dora::DoraMonth;
 pub use metrics::PerMrMetrics;
 pub use poisson::{
     AnomalySeverity, AnomalySignal, PoissonInsights, QueueInsight, QueueStatus, ThroughputForecast,

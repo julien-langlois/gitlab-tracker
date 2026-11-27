@@ -423,6 +423,21 @@ counts only what happened in it: an MR merged since is in the current one. It
 reads the same data as the page, so a project tracked for less than two
 periods has little to compare yet.
 
+**Month by month.** *With the stats feature.* At the bottom of each DORA
+tile, a line of its last 6 or 12 months (*Trend* in the side panel; *Off*
+hides it), one point a month, the current month so far last; hovering a point
+says the month's figure and on how many cases. Without *Compare with*, the line
+under the caption says how it went since the first month with a point ("▼ from
+14 d in Dec"), green when better. It is read from the stats database:
+frequency and lead time from the merges and branch arrivals it keeps (the lead
+time counts from the MR's opening there, the database not keeping commits);
+change failure rate and time to restore from the deployments it keeps too, read
+with the environments, with the reverts and hotfix-labelled MRs. A month before
+the database's history has no point; so has a lead time or a failure rate on
+fewer than three cases, and a time to restore without an incident: the line
+goes dashed across. Deployments count from the month after the first one kept;
+before, the MRs reaching production stand for them.
+
 **Copy the weekly report** puts it all, with the CI and the milestones'
 forecasts, in the clipboard as Markdown.
 

@@ -2464,3 +2464,24 @@ saved view	Restore	恢复
 	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	工单 #{id} {subject}：其所有 MR 均在 {to} 上（跟踪器中为 {status}）
 	Only my flagged MRs	仅我标记的 MR
 	The MRs flagged with the star in the table (Space)	在表格中用星标标记的 MR（空格键）
+date	Jan	1月
+date	Feb	2月
+date	Mar	3月
+date	Apr	4月
+date	Jun	6月
+date	Jul	7月
+date	Aug	8月
+date	Sep	9月
+date	Oct	10月
+date	Nov	11月
+date	Dec	12月
+	6 months	6 个月
+	12 months	12 个月
+	not kept yet	尚未保存
+	as in {month}	与 {month} 相同
+	▲ from {value} in {month}	▲ 自 {month} 的 {value}
+	▼ from {value} in {month}	▼ 自 {month} 的 {value}
+	no incident	无事故
+	One point a month from the stats database; a month with too few cases has none (dashed).	每月一个点，来自统计数据库；案例太少的月份没有点（虚线）。
+@plural	{n} MR reaching production|{n} MRs reaching production	{n} 个 MR 到达生产
+@plural	too few to tell ({n} case)|too few to tell ({n} cases)	太少，无法判断（{n} 个案例）

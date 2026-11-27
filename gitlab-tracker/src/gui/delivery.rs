@@ -30,6 +30,8 @@ mod dora;
 mod model;
 mod report;
 mod steps;
+#[cfg(feature = "stats")]
+mod trend;
 
 use aging::*;
 pub use analysis::*;
@@ -52,6 +54,10 @@ pub struct State {
     pub jumps: Jumps,
     /// Each figure against the period before, of the same length.
     pub compare: bool,
+    /// The DORA figures month by month under the tiles: an index in the
+    /// trend lengths (0: off). Read from the stats database only.
+    #[cfg_attr(not(feature = "stats"), allow(dead_code))]
+    pub trend: usize,
 }
 
 impl Default for State {
@@ -61,6 +67,7 @@ impl Default for State {
             selected: None,
             jumps: Jumps::default(),
             compare: true,
+            trend: 1,
         }
     }
 }
@@ -238,6 +245,25 @@ fn nav(g: &mut GuiApp, ui: &mut Ui, d: &Delivery, before: Option<&Delivery>, per
             );
         }
     });
+    #[cfg(feature = "stats")]
+    if g.app.dora_months.iter().any(|m| m.covered()) {
+        board::nav_group(ui, &theme, tl("Trend"), |ui| {
+            let labels: Vec<&str> = trend::TRENDS.iter().map(|t| tl(t.1)).collect();
+            if let Some(i) =
+                board::segmented(ui, &theme, "delivery_trend", &labels, g.delivery.trend)
+            {
+                g.delivery.trend = i;
+            }
+            ui.add_space(6.0);
+            ui.label(
+                muted(
+                    &theme,
+                    tl("One point a month from the stats database; a month with too few cases has none (dashed)."),
+                )
+                .size(theme.text_size - 1.5),
+            );
+        });
+    }
     // The steps' medians are the "Where the time goes" card's: not repeated
     // here.
     board::nav_note(
@@ -281,7 +307,15 @@ fn main(
         );
     }
     ui.add_space(14.0);
-    dora_figures(ui, &theme, d, before, period);
+    #[cfg(feature = "stats")]
+    let trend = trend::sparks(
+        &theme,
+        &g.app.dora_months,
+        trend::TRENDS[g.delivery.trend.min(trend::TRENDS.len() - 1)].0,
+    );
+    #[cfg(not(feature = "stats"))]
+    let trend = None;
+    dora_figures(ui, &theme, d, before, period, trend);
 
     let mut picked = None;
     let selected = g.delivery.selected.as_deref();

@@ -93,6 +93,9 @@ pub enum AppEvent {
     BranchArrivalsLoaded(
         std::collections::HashMap<(String, String), chrono::DateTime<chrono::Utc>>,
     ),
+    /// The four DORA measures month by month, read from the stats DB.
+    #[cfg(feature = "stats")]
+    DoraMonthsLoaded(Vec<gitlab_tracker_stats::DoraMonth>),
     /// Fired after a snapshot was written to the stats DB; marks the report stale.
     #[cfg(feature = "stats")]
     StatsSnapshotRecorded,

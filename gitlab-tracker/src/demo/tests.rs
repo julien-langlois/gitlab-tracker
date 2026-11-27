@@ -374,3 +374,25 @@ async fn the_demo_has_drafts_reviewed_along_the_way() {
         .iter()
         .any(|m| m.review.as_ref().unwrap().draft_comments > 0));
 }
+
+/// The months before the demo's MRs give the Delivery page a year of DORA:
+/// shipping more often and faster, with one bad month.
+#[cfg(feature = "stats")]
+#[tokio::test]
+async fn the_demo_has_a_year_of_dora() {
+    let db = crate::demo::seed_demo_stats_db("1")
+        .await
+        .expect("stats DB");
+    let months = gitlab_tracker_stats::dora::load(&db, "1", "production", 12, chrono::Utc::now())
+        .await
+        .expect("months");
+    let covered: Vec<_> = months.iter().filter(|m| m.covered()).collect();
+    assert!(covered.len() >= 10, "{months:?}");
+    // Faster: the first lead time read is longer than the last.
+    let leads: Vec<f64> = covered.iter().filter_map(|m| m.lead).collect();
+    assert!(leads.first() > leads.last(), "{leads:?}");
+    // One month with failures, restored.
+    assert!(covered
+        .iter()
+        .any(|m| m.failure_rate.is_some_and(|r| r > 0.2) && m.restore.is_some()));
+}

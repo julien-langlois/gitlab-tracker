@@ -90,6 +90,10 @@ recorded (`app/stats_recorder.rs`): same-SHA arrivals from `MrLoaded` (branches 
 since `last_known_branches`, see `reached_branches`), copies from
 `BranchCommitsLoaded` (dated by `BranchCommits::copied_at`). Branches added in the
 session are ignored until every MR has been re-fetched (`just_added_branches`).
+The project's deployments are kept as read with the project overview
+(`gui/details.rs`, `stats_deployments`); the stats refresh reads twelve months of
+DORA from them, the snapshots and the arrivals (`gitlab_tracker_stats::dora`) into
+`App::dora_months`, which the Delivery page draws (`gui/delivery/trend.rs`).
 
 ---
 

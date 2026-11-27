@@ -171,6 +171,19 @@ async fn app_for(world: &'static World, config: AppConfig, first_time_entry: u64
     #[cfg(feature = "stats")]
     {
         app.stats_db = stats::seed(world, &app.mrs, spec.id, &spec.profile).await;
+        // Read up front, as the report's refresh would: the Delivery trend.
+        if let Some(db) = &app.stats_db {
+            let production = app
+                .branch_flow()
+                .in_order()
+                .last()
+                .map(|b| b.name.clone())
+                .unwrap_or_default();
+            app.dora_months =
+                gitlab_tracker_stats::dora::load(db, spec.id, &production, 12, clock::clock().now)
+                    .await
+                    .unwrap_or_default();
+        }
     }
 
     // The tracker's data is loaded up front: the demo drops fetch results.

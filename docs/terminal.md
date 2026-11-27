@@ -305,8 +305,11 @@ absent, `…` loading. Combine with `m` to export only what is left to deploy.
 *Optional — `--features stats`.* `G` opens a fullscreen analytics overlay
 (`gitlab-tracker-stats` crate). Snapshots go into a local SQLite database
 (`stats.db`) on every merge, close or daily refresh, dated at the real GitLab
-event. The schema is versioned; legacy rows are repaired once (after a backup to
-`stats.db.bak`) and snapshots older than `retention_days` are purged.
+event; the project's deployments, as the window's pages read them (who started
+one is not kept), go there too, for the Delivery page's month-by-month DORA.
+The schema is versioned; legacy rows are repaired once (after a backup to
+`stats.db.bak`) and snapshots, arrivals and deployments older than
+`retention_days` are purged.
 
 ![Stats overlay, Flow tab: cycle time by author, reviewer and milestone, promotion lead time](assets/terminal/stats-flow.png)
 
