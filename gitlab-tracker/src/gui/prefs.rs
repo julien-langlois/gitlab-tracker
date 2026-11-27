@@ -25,6 +25,8 @@ pub struct Prefs {
     pub hide_zeros: bool,
     /// The table's Next step column is hidden.
     pub hide_next_column: bool,
+    /// Today's reviews by the longest wait, not by what each lets go.
+    pub today_oldest_first: bool,
     /// The table's branches in a column each (default: one flow cell).
     pub branch_columns: bool,
     pub folded_sections: Vec<String>,
@@ -184,6 +186,7 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     g.tracker_board = prefs.tracker_board;
     g.hide_zeros = prefs.hide_zeros;
     g.hide_next_column = prefs.hide_next_column;
+    g.today_oldest_first = prefs.today_oldest_first;
     g.flow_cells = !prefs.branch_columns;
     g.export.settings = prefs.export;
     g.standup = prefs.standup;
@@ -200,6 +203,7 @@ pub fn current(g: &GuiApp) -> Prefs {
         tracker_board: g.tracker_board,
         hide_zeros: g.hide_zeros,
         hide_next_column: g.hide_next_column,
+        today_oldest_first: g.today_oldest_first,
         branch_columns: !g.flow_cells,
         folded_sections: super::widgets::folded_sections().iter().cloned().collect(),
         export: g.export.settings,
@@ -242,6 +246,7 @@ mod tests {
             tracker_board: true,
             hide_zeros: true,
             hide_next_column: false,
+            today_oldest_first: true,
             branch_columns: false,
             folded_sections: vec!["History".into()],
             export: super::super::export::Settings::default(),
@@ -286,6 +291,11 @@ mod tests {
             "new versions are looked for by default"
         );
         assert!(partial.hide_zeros, "the cockpit hides its zeros by default");
+        assert!(
+            !partial.today_oldest_first,
+            "reviews by what they let go by default"
+        );
+        assert!(back.today_oldest_first);
         let off: Prefs = serde_json::from_str(r#"{"hide_zeros": false}"#).unwrap();
         assert!(!off.hide_zeros, "a choice made stays");
     }

@@ -100,3 +100,20 @@ pub fn lines_text(hunks: &[(u32, u32)]) -> String {
         .collect::<Vec<_>>()
         .join(", ")
 }
+
+/// The open MRs changing the same lines as `id` that should merge after it,
+/// in the page's merge order: reviewing `id` first lets them go.
+pub fn merge_after(o: &Overlaps, id: &str) -> Vec<String> {
+    let Some(me) = o.mr(id) else {
+        return Vec::new();
+    };
+    o.pairs
+        .iter()
+        .filter(|p| p.level() == Level::SameLines && (p.a == id || p.b == id))
+        .filter_map(|p| {
+            let other = o.mr(if p.a == id { &p.b } else { &p.a })?;
+            let (first, second, _) = merge_order(me, other);
+            (first.id == id).then(|| second.id.clone())
+        })
+        .collect()
+}

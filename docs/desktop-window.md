@@ -297,6 +297,12 @@ the end of the page, with **Wake now**. The times are your computer's local time
 right moment after a clock change or a trip; it is saved with the project's state,
 and the terminal UI keeps it.
 
+**Reviews by what they let go.** The reviews waiting for you come first by what
+each lets go — the MRs stacked on it, the MRs changing the same lines that
+should merge after it, then a milestone due within two weeks (or late) — each
+said under its title, then by how long it has waited. *Oldest first* orders
+them by the wait alone; the choice is kept.
+
 ![Today: reviews waiting for you, your MRs that need you, ready to merge](assets/desktop/today.png)
 
 ## Cockpit

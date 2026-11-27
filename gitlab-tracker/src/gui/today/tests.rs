@@ -70,3 +70,38 @@ async fn merged_today_counts_what_i_merged_whoever_wrote_it() {
             .is_some_and(|b| b.contains("@thomas_db")));
     }
 }
+
+#[tokio::test]
+async fn reviews_come_by_what_they_let_go_then_by_their_wait() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let iid = crate::demo::iid;
+    let today = chrono::Local::now().date_naive();
+    let items = classify(&app, "thomas_db", 0, today);
+    // As the page lists them: the snoozed ones wait apart.
+    let mut reviews: Vec<&Item> = items
+        .iter()
+        .filter(|i| i.kind == Kind::Review && i.snoozed.is_none())
+        .collect();
+    // The snoozed !198 still says what it lets go: the MRs stacked on it.
+    let stacked = items
+        .iter()
+        .find(|i| i.id == iid("push-notifications") && i.kind == Kind::Review)
+        .expect("!198 waits for my review");
+    assert_eq!(stacked.unblocks, 2);
+    // !220 changes the same lines and goes after the GraphQL endpoint: that
+    // review lets it go, though it has waited less than the PKCE one.
+    let graphql = iid("graphql-shipments");
+    let pkce = iid("pkce-verifier");
+    sort_reviews(&mut reviews, false);
+    let order: Vec<&str> = reviews.iter().map(|i| i.id.as_str()).collect();
+    assert_eq!(order, [graphql.as_str(), pkce.as_str()], "{reviews:#?}");
+    assert_eq!(reviews[0].unblocks, 1);
+    assert!(
+        reviews[0].reasons[0].contains(&format!("!{}", iid("split-handlers"))),
+        "{:?}",
+        reviews[0].reasons
+    );
+    // Oldest first: the longest wait leads.
+    sort_reviews(&mut reviews, true);
+    assert_eq!(reviews[0].id, pkce);
+}

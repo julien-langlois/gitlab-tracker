@@ -108,13 +108,22 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let wide = ui.available_width() >= 1100.0;
     type Pick = Option<(usize, String, Option<super::mr_page::Tab>)>;
     type Snoozing = Option<(usize, String, Option<Until>)>;
-    let lists = |ui: &mut Ui, pick: &mut Pick, copied: &mut bool, snooze: &mut Snoozing| {
+    let oldest_first = g.today_oldest_first;
+    let mut set_order = None;
+    let lists = |ui: &mut Ui,
+                 pick: &mut Pick,
+                 copied: &mut bool,
+                 snooze: &mut Snoozing,
+                 set_order: &mut Option<bool>| {
         let mut empty = Vec::new();
         for kind in Kind::ALL {
-            let list: Vec<&Item> = items
+            let mut list: Vec<&Item> = items
                 .iter()
                 .filter(|i| i.kind == kind && i.snoozed.is_none())
                 .collect();
+            if kind == Kind::Review {
+                sort_reviews(&mut list, oldest_first);
+            }
             // The quiet sections only when they have something.
             if list.is_empty() && matches!(kind, Kind::Assigned | Kind::Waiting) {
                 continue;
@@ -131,6 +140,25 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         &theme,
                         tl("Your MRs blocked by someone else: a reminder can unblock them."),
                     ));
+                    ui.add_space(4.0);
+                }
+                // Two reviews or more: the order is a choice.
+                if kind == Kind::Review && list.len() > 1 {
+                    ui.horizontal(|ui| {
+                        ui.label(muted(&theme, tl("Order")));
+                        ui.allocate_ui(Vec2::new(300.0, 28.0), |ui| {
+                            let labels = [tl("What it unblocks"), tl("Oldest first")];
+                            if let Some(i) = super::board::segmented(
+                                ui,
+                                &theme,
+                                "today review order",
+                                &labels,
+                                usize::from(oldest_first),
+                            ) {
+                                *set_order = Some(i == 1);
+                            }
+                        });
+                    });
                     ui.add_space(4.0);
                 }
                 ui.spacing_mut().item_spacing.y = 2.0;
@@ -193,7 +221,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         Layout::top_down(Align::Min),
                         |ui| {
                             ui.set_width(left);
-                            lists(ui, &mut pick, &mut copied, &mut snooze);
+                            lists(ui, &mut pick, &mut copied, &mut snooze, &mut set_order);
                         },
                     );
                     ui.add_space(16.0);
@@ -211,7 +239,7 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     );
                 });
             } else {
-                lists(ui, &mut pick, &mut copied, &mut snooze);
+                lists(ui, &mut pick, &mut copied, &mut snooze, &mut set_order);
                 ui.add_space(10.0);
                 match feed_card(ui, &theme, &changes, several) {
                     Some(FeedClick::Open(tab, id)) => pick = Some((tab, id, None)),
@@ -220,6 +248,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                 }
             }
         });
+    if let Some(oldest) = set_order {
+        g.today_oldest_first = oldest;
+    }
     if copied {
         g.app.flash(
             tl("Reminder copied: paste it in a chat or a comment"),

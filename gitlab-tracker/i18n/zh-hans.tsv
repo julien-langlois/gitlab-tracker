@@ -2448,3 +2448,9 @@ saved view	Restore	恢复
 	Open !{id}	打开 !{id}
 	Open the first red pipeline	打开第一个失败的流水线
 @plural	{n} pipeline failed in a row|{n} pipelines failed in a row	连续 {n} 个流水线失败
+	{n} stacked on it: {mrs}	其上叠放 {n}：{mrs}
+	{mrs} to merge after it (same lines)	{mrs} 需在其后合并（相同的行）
+	milestone {name} due in {days}	里程碑 {name} 还有 {days} 到期
+	milestone {name} {days} late	里程碑 {name} 已逾期 {days}
+	Order	顺序
+	What it unblocks	能解除阻塞的

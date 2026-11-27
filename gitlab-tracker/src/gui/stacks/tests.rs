@@ -85,3 +85,19 @@ async fn a_stack_in_step_has_no_commands() {
         assert_eq!(commands(stack), None);
     }
 }
+
+#[tokio::test]
+async fn the_mrs_stacked_on_one_come_in_merge_order() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let iid = crate::demo::iid;
+    let all = stacks(&app);
+    assert_eq!(
+        stacked_on(&all, &iid("push-notifications")),
+        [iid("notif-preferences"), iid("notif-mute")]
+    );
+    assert_eq!(
+        stacked_on(&all, &iid("notif-preferences")),
+        [iid("notif-mute")]
+    );
+    assert!(stacked_on(&all, &iid("notif-mute")).is_empty());
+}

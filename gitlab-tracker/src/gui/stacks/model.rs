@@ -136,3 +136,23 @@ pub fn stacks(app: &App) -> Vec<Stack> {
     });
     out
 }
+
+/// The open MRs stacked on `id`, at any depth, in merge order: merging `id`
+/// first lets them go.
+pub(in crate::gui) fn stacked_on(all: &[Stack], id: &str) -> Vec<String> {
+    let Some(stack) = all.iter().find(|s| s.nodes.iter().any(|n| n.id == id)) else {
+        return Vec::new();
+    };
+    // Merge order puts each MR after its parent: one pass finds them all.
+    let mut above: Vec<&str> = vec![id];
+    let mut out = Vec::new();
+    for node in &stack.nodes {
+        if node.parent.as_deref().is_some_and(|p| above.contains(&p)) {
+            above.push(&node.id);
+            if node.state == GitlabMrState::Opened {
+                out.push(node.id.clone());
+            }
+        }
+    }
+    out
+}

@@ -2448,3 +2448,9 @@ saved view	Restore	Rétablir
 	Open !{id}	Ouvrir !{id}
 	Open the first red pipeline	Ouvrir le premier pipeline rouge
 @plural	{n} pipeline failed in a row|{n} pipelines failed in a row	{n} pipeline en échec d'affilée|{n} pipelines en échec d'affilée
+	{n} stacked on it: {mrs}	{n} empilées dessus : {mrs}
+	{mrs} to merge after it (same lines)	{mrs} à fusionner après elle (mêmes lignes)
+	milestone {name} due in {days}	jalon {name} dû dans {days}
+	milestone {name} {days} late	jalon {name} en retard de {days}
+	Order	Ordre
+	What it unblocks	Ce qu'elle débloque

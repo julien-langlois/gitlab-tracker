@@ -88,6 +88,80 @@ pub struct Item {
     pub action: Option<(super::super::mr_page::Tab, &'static str)>,
     /// Snoozed: until when ("until Mon 09:00"); it then shows apart, at the end.
     pub snoozed: Option<String>,
+    /// A review: how many MRs it lets go (stacked on it, or to merge after it
+    /// on the same lines), and in how many days its milestone is due.
+    pub unblocks: usize,
+    pub due_in: Option<i64>,
+    /// Days it has waited for its step, for the oldest-first order.
+    pub waited: Option<f64>,
+}
+
+/// Days within which a milestone's date makes a review come first.
+const DUE_SOON_DAYS: i64 = 14;
+
+/// What a review lets go: the reasons to show, how many MRs, and in how many
+/// days its milestone is due (when soon, or past).
+fn unblocking(
+    mr: &crate::models::TrackedMr,
+    read: &(
+        super::super::overlaps::Overlaps,
+        Vec<super::super::stacks::Stack>,
+    ),
+    today: chrono::NaiveDate,
+) -> (Vec<String>, usize, Option<i64>) {
+    let ids = |list: &[String]| {
+        list.iter()
+            .map(|id| format!("!{id}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut reasons = Vec::new();
+    let stacked = super::super::stacks::stacked_on(&read.1, &mr.id);
+    if !stacked.is_empty() {
+        reasons.push(tf(
+            "{n} stacked on it: {mrs}",
+            &[
+                ("n", &tn(stacked.len() as u64, "{n} MR", "{n} MRs")),
+                ("mrs", &ids(&stacked)),
+            ],
+        ));
+    }
+    let after: Vec<String> = super::super::overlaps::merge_after(&read.0, &mr.id)
+        .into_iter()
+        .filter(|id| !stacked.contains(id))
+        .collect();
+    if !after.is_empty() {
+        reasons.push(tf(
+            "{mrs} to merge after it (same lines)",
+            &[("mrs", &ids(&after))],
+        ));
+    }
+    let due_in = mr
+        .milestone_due_date
+        .as_deref()
+        .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
+        .map(|due| (due - today).num_days())
+        .filter(|days| *days <= DUE_SOON_DAYS);
+    if let (Some(days), Some(milestone)) = (due_in, mr.milestone.as_deref()) {
+        reasons.push(if days >= 0 {
+            tf(
+                "milestone {name} due in {days}",
+                &[
+                    ("name", milestone),
+                    ("days", &tn(days as u64, "{n} day", "{n} days")),
+                ],
+            )
+        } else {
+            tf(
+                "milestone {name} {days} late",
+                &[
+                    ("name", milestone),
+                    ("days", &tn((-days) as u64, "{n} day", "{n} days")),
+                ],
+            )
+        });
+    }
+    (reasons, stacked.len() + after.len(), due_in)
 }
 
 /// Where each MR of `app` stands for `username`; the MRs that are none of my
@@ -103,6 +177,8 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
     let local_now = chrono::Local::now();
     // Built the first time a reminder needs it.
     let mut links: Option<super::super::board::Links> = None;
+    // The overlaps and stacks, read the first time a review needs them.
+    let mut unblock_read = None;
     let mut items = Vec::new();
     for mr in &app.mrs {
         if mr.title.is_empty() {
@@ -213,6 +289,18 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
             ),
             None => days_text(w),
         });
+        let (mut unblocks, mut due_in) = (0, None);
+        if kind == Some(Kind::Review) {
+            let read = unblock_read.get_or_insert_with(|| {
+                (
+                    super::super::overlaps::analyze(app, false, true),
+                    super::super::stacks::stacks(app),
+                )
+            });
+            let (why, n, due) = unblocking(mr, read, today);
+            reasons.extend(why);
+            (unblocks, due_in) = (n, due);
+        }
         let mut reminder = None;
         if kind == Some(Kind::Waiting) && !step.mine && !step.people.is_empty() {
             let names: Vec<&str> = step.people.iter().map(|p| first_name(p)).collect();
@@ -287,10 +375,36 @@ pub fn classify(app: &App, username: &str, tab: usize, today: chrono::NaiveDate)
                     .as_ref()
                     .filter(|_| open)
                     .map(|s| s.text(&local_now)),
+                unblocks,
+                due_in,
+                waited,
             });
         }
     }
     items
+}
+
+/// The reviews in the order picked: what each lets go first (MRs stacked on
+/// it or to merge after it, then a milestone near its date), then the longest
+/// wait; or the longest wait alone.
+pub(super) fn sort_reviews(list: &mut [&Item], oldest_first: bool) {
+    let waited = |i: &Item| std::cmp::Reverse(wait_minutes(i.waited));
+    if oldest_first {
+        list.sort_by_key(|i| waited(i));
+    } else {
+        list.sort_by_key(|i| {
+            (
+                std::cmp::Reverse(i.unblocks),
+                i.due_in.unwrap_or(i64::MAX),
+                waited(i),
+            )
+        });
+    }
+}
+
+/// A wait in minutes, for sorting (none: no wait).
+fn wait_minutes(days: Option<f64>) -> i64 {
+    days.map_or(-1, |d| (d * 1440.0) as i64)
 }
 
 /// What waits for me now (reviews and fixes), for the rail's badge.

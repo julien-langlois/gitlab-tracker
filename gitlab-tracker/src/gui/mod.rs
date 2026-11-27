@@ -221,6 +221,8 @@ struct GuiApp {
     baseline: Option<Baseline>,
     /// The cockpit hides its counters at zero.
     hide_zeros: bool,
+    /// Today's reviews by the longest wait (else by what each lets go).
+    today_oldest_first: bool,
     /// How the table groups its rows, and the groups folded away.
     group_by: table::GroupBy,
     folded: HashSet<String>,
@@ -410,6 +412,7 @@ impl GuiApp {
             views: views::State::default(),
             baseline,
             hide_zeros: true,
+            today_oldest_first: false,
             group_by: table::GroupBy::None,
             merged_gap: None,
             folded,
