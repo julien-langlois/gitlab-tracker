@@ -98,6 +98,15 @@ pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     );
 }
 
+/// Opens the Releases page, on `tag` when given.
+pub(in crate::gui) fn open_on(g: &mut GuiApp, tag: Option<String>) {
+    if tag.is_some() {
+        g.releases.selected = tag;
+        g.releases.opened = true;
+    }
+    g.open_page(super::Page::Releases);
+}
+
 fn local_date(at: DateTime<Utc>) -> String {
     crate::utils::day_text(at.with_timezone(&Local).date_naive())
 }

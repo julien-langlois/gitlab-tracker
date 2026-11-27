@@ -85,7 +85,7 @@ pub struct Milestone {
 }
 
 impl Milestone {
-    pub(super) fn delivered(&self) -> usize {
+    pub(in crate::gui) fn delivered(&self) -> usize {
         self.items
             .iter()
             .filter(|i| i.stand == Stand::Delivered)
@@ -227,4 +227,19 @@ pub fn milestones(app: &App) -> Vec<Milestone> {
         ))
     });
     list
+}
+
+/// The version a milestone or release name stands for: "v2.4.0", "2.4.0" and
+/// "Release 2.4.0" all give "2.4.0"; `None` for a name that is no version
+/// ("Security audit").
+pub(in crate::gui) fn version_key(name: &str) -> Option<String> {
+    let name = name.trim().to_lowercase();
+    let name = name
+        .strip_prefix("release")
+        .map_or(name.as_str(), str::trim_start);
+    let name = name.strip_prefix('v').unwrap_or(name);
+    name.chars().next().filter(char::is_ascii_digit)?;
+    name.chars()
+        .all(|c| c.is_ascii_alphanumeric() || ".-+".contains(c))
+        .then(|| name.to_string())
 }

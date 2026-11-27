@@ -71,6 +71,9 @@ pub struct Model {
     pub recent: usize,
     /// The version the unreleased MRs call for.
     pub next: Option<(String, Bump)>,
+    /// The milestone named like the next version: its title, MRs delivered
+    /// and in all.
+    pub milestone: Option<(String, usize, usize)>,
 }
 
 /// The ranges the page reads: each of the newest releases from the one
@@ -192,6 +195,7 @@ pub fn analyze(
             cadence: None,
             recent: 0,
             next: None,
+            milestone: None,
         };
     };
     let records = &overview.releases;
@@ -258,8 +262,19 @@ pub fn analyze(
         cadence: median(gaps),
         releases,
         pending,
+        milestone: next.as_ref().and_then(|(v, _)| milestone_of(app, v)),
         next,
     }
+}
+
+/// The milestone named like `version`, if any: its title, MRs delivered and
+/// in all.
+pub(in crate::gui) fn milestone_of(app: &App, version: &str) -> Option<(String, usize, usize)> {
+    let key = super::super::milestones::version_key(version)?;
+    super::super::milestones::milestones(app)
+        .into_iter()
+        .find(|m| super::super::milestones::version_key(&m.title).as_deref() == Some(&key))
+        .map(|m| (m.title.clone(), m.delivered(), m.items.len()))
 }
 
 /// Release notes of `items`: a section per kind, newest last.

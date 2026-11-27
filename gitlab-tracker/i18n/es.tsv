@@ -2455,3 +2455,7 @@ saved view	Restore	Restablecer
 	Order	Orden
 	What it unblocks	Lo que desbloquea
 	{tag} + {mrs}	{tag} + {mrs}
+	{bump} · milestone {done}/{all} delivered	{bump} · hito {done}/{all} entregadas
+	tagged {when}	etiquetado {when}
+	not tagged yet	aún sin etiquetar
+	See in Releases	Ver en Releases

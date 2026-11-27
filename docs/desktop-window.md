@@ -374,6 +374,10 @@ date — a Monte Carlo forecast replaying the project's merges of the last eight
 weeks 2,000 times: the chance to make the date and the 50 / 85 / 95 % dates. Plus
 a burn-up, its tickets' time and its people. Copies as release notes.
 
+A milestone named like a version (`v2.4.0`, `2.4.0`, `Release 2.4.0`) says
+whether that release is tagged yet, with a button to it in **Releases**; there,
+the **Next version** says how much of its milestone is delivered.
+
 ![Milestones: progress, due-date forecast, burn-up](assets/desktop/milestones.png)
 
 ## Delivery

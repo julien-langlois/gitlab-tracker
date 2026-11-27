@@ -44,6 +44,14 @@ pub struct State {
 
 pub fn screen(g: &mut GuiApp, ui: &mut Ui, sizes: &Sizes) {
     let now = Utc::now();
+    // Development aid (debug builds): `GITLAB_TRACKER_GUI_MILESTONE=v2.4.0`
+    // shows that milestone, for a screenshot.
+    #[cfg(debug_assertions)]
+    if g.milestones.selected.is_none() {
+        if let Ok(title) = std::env::var("GITLAB_TRACKER_GUI_MILESTONE") {
+            g.milestones.selected = Some(title);
+        }
+    }
     let all = g
         .memo
         .milestones
@@ -265,9 +273,38 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
             },
         );
     }
+    // A milestone named like a version: its release, tagged or to come.
+    let overview = g.details.project(&g.app, ui.ctx()).cloned();
+    let release = version_key(&m.title).map(|key| {
+        overview.as_ref().and_then(|o| {
+            o.releases
+                .iter()
+                .find(|r| version_key(&r.tag).as_deref() == Some(key.as_str()))
+                .cloned()
+        })
+    });
+    // The version is the title: its tag's state comes right after the date.
+    let tag_state = match &release {
+        Some(Some(r)) => Some(tf(
+            "tagged {when}",
+            &[(
+                "when",
+                &board::time_of(r.released_at.as_deref())
+                    .or_else(|| board::parse_time(&r.committed_at))
+                    .map(|at| crate::utils::day_text(at.date_naive()))
+                    .unwrap_or_default(),
+            )],
+        )),
+        Some(None) => Some(tl("not tagged yet").to_string()),
+        None => None,
+    };
+    if let Some(state) = tag_state {
+        subtitle.insert(subtitle.len() - 1, state);
+    }
     if let Some(d) = &m.description {
         subtitle.push(d.lines().next().unwrap_or_default().to_string());
     }
+    let mut to_releases = false;
     let mut notes = false;
     let mut show = false;
     let mut changelog = false;
@@ -275,6 +312,9 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
     let cliff = super::changelog::config(g, ui.ctx());
     board::heading(ui, &theme, &m.name(), &subtitle.join(" · "), |ui| {
         show = primary_button(ui, &theme, tl("Show in the table")).clicked();
+        if release.is_some() {
+            to_releases = button(ui, &theme, None, tl("See in Releases"), false).clicked();
+        }
         notes = button(
             ui,
             &theme,
@@ -297,6 +337,10 @@ fn main(g: &mut GuiApp, ui: &mut Ui, m: Option<&Milestone>, weekly: &[u32], now:
             .clicked();
         }
     });
+    if to_releases {
+        let tag = release.flatten().map(|r| r.tag);
+        super::releases::open_on(g, tag);
+    }
     if let (true, Some(config)) = (changelog, cliff) {
         super::changelog::open(g, ui.ctx(), config, &m.title);
     }

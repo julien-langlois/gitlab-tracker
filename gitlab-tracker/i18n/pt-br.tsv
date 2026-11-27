@@ -2455,3 +2455,7 @@ saved view	Restore	Restaurar
 	Order	Ordem
 	What it unblocks	O que ela desbloqueia
 	{tag} + {mrs}	{tag} + {mrs}
+	{bump} · milestone {done}/{all} delivered	{bump} · marco {done}/{all} entregues
+	tagged {when}	tag criada {when}
+	not tagged yet	ainda sem tag
+	See in Releases	Ver em Releases

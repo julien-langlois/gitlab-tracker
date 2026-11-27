@@ -2455,3 +2455,7 @@ saved view	Restore	恢复
 	Order	顺序
 	What it unblocks	能解除阻塞的
 	{tag} + {mrs}	{tag} + {mrs}
+	{bump} · milestone {done}/{all} delivered	{bump} · 里程碑已交付 {done}/{all}
+	tagged {when}	已于 {when} 打标签
+	not tagged yet	尚未打标签
+	See in Releases	在 Releases 中查看

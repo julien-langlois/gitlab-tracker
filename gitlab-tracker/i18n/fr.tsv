@@ -2455,3 +2455,7 @@ saved view	Restore	Rétablir
 	Order	Ordre
 	What it unblocks	Ce qu'elle débloque
 	{tag} + {mrs}	{tag} + {mrs}
+	{bump} · milestone {done}/{all} delivered	{bump} · jalon {done}/{all} livrées
+	tagged {when}	tagué {when}
+	not tagged yet	pas encore tagué
+	See in Releases	Voir dans Releases

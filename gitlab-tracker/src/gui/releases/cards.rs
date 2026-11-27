@@ -65,6 +65,19 @@ pub(super) fn figures(
         ),
         _ => (board::dash().to_string(), String::new()),
     };
+    // The milestone of the same name, delivered so far: the version is the
+    // figure, the bump alone keeps the caption on one line.
+    let next_caption = match (&m.milestone, &m.next) {
+        (Some((_, delivered, all)), Some((_, bump))) if !next_caption.is_empty() => tf(
+            "{bump} · milestone {done}/{all} delivered",
+            &[
+                ("bump", bump.label()),
+                ("done", &delivered.to_string()),
+                ("all", &all.to_string()),
+            ],
+        ),
+        _ => next_caption,
+    };
     let figures = [
         Figure {
             label: tl("Latest release").into(),

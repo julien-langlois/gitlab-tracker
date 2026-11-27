@@ -2455,3 +2455,7 @@ saved view	Restore	Wiederherstellen
 	Order	Reihenfolge
 	What it unblocks	Was sie freigibt
 	{tag} + {mrs}	{tag} + {mrs}
+	{bump} · milestone {done}/{all} delivered	{bump} · Meilenstein {done}/{all} ausgeliefert
+	tagged {when}	getaggt {when}
+	not tagged yet	noch nicht getaggt
+	See in Releases	In Releases ansehen

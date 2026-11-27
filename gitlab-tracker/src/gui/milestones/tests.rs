@@ -140,3 +140,24 @@ fn a_milestone_past_its_date_has_dates_but_no_chance() {
         "a 0 % chance of a date already past says nothing"
     );
 }
+
+#[test]
+fn a_name_is_a_version_with_or_without_its_v() {
+    assert_eq!(version_key("v2.4.0").as_deref(), Some("2.4.0"));
+    assert_eq!(version_key("2.4.0").as_deref(), Some("2.4.0"));
+    assert_eq!(version_key("Release 2.4.0").as_deref(), Some("2.4.0"));
+    assert_eq!(version_key(" V3.0.0-rc.1 ").as_deref(), Some("3.0.0-rc.1"));
+    assert_eq!(version_key("Security audit"), None);
+    assert_eq!(version_key("v-next"), None);
+    assert_eq!(version_key(""), None);
+}
+
+#[tokio::test]
+async fn the_next_version_finds_its_milestone() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let found = super::super::releases::milestone_of(&app, "v2.4.0");
+    let (title, delivered, all) = found.expect("the demo's v2.4.0 milestone");
+    assert_eq!(title, "v2.4.0");
+    assert!(delivered < all);
+    assert_eq!(super::super::releases::milestone_of(&app, "v9.9.9"), None);
+}
