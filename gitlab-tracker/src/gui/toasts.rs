@@ -41,6 +41,15 @@ pub enum Kind {
     /// A newer version of the app is out: its id is the release's page, which
     /// it opens.
     Update,
+    /// A tracked branch turned red: its id is `branch:<name>`, it opens the CI
+    /// page.
+    BranchRed,
+}
+
+/// Whether a notification opens the CI page (a schedule, a branch) rather
+/// than an MR.
+fn opens_ci(id: &str) -> bool {
+    id.starts_with("schedule:") || id.starts_with("branch:")
 }
 
 /// Whether a notification's id is a web page (a release) rather than an MR.
@@ -286,7 +295,7 @@ pub fn show(g: &mut GuiApp, ctx: &egui::Context) {
         let toast = g.toasts.list.remove(i);
         if is_page(&toast.id) {
             ctx.open_url(egui::OpenUrl::new_tab(&toast.id));
-        } else if toast.id.starts_with("schedule:") {
+        } else if opens_ci(&toast.id) {
             g.open_page(super::Page::Ci);
         } else {
             g.open_mr(&toast.id);
@@ -309,7 +318,10 @@ impl Filter {
     fn keeps(self, kind: Kind) -> bool {
         match self {
             Filter::All => true,
-            Filter::Failures => matches!(kind, Kind::PipelineFailed | Kind::ScheduleFailed),
+            Filter::Failures => matches!(
+                kind,
+                Kind::PipelineFailed | Kind::ScheduleFailed | Kind::BranchRed
+            ),
             Filter::Merges => kind == Kind::Merged,
             Filter::Changes => matches!(kind, Kind::Status | Kind::PipelinePassed),
         }
@@ -520,7 +532,7 @@ pub fn panel(g: &mut GuiApp, button: &egui::Response) {
                 g.ctx.open_url(egui::OpenUrl::new_tab(&id));
                 return;
             }
-            if id.starts_with("schedule:") {
+            if opens_ci(&id) {
                 g.activate(tab);
                 g.open_page(super::Page::Ci);
                 return;
@@ -633,7 +645,7 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         ),
         kind => {
             let glyph = match kind {
-                Kind::PipelineFailed | Kind::ScheduleFailed => "✕",
+                Kind::PipelineFailed | Kind::ScheduleFailed | Kind::BranchRed => "✕",
                 Kind::PipelinePassed => "✓",
                 Kind::Update => "↑",
                 _ => "●",
@@ -653,7 +665,9 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         .split_once(" · ")
         .map_or(past.text.as_str(), |(_, w)| w);
     let mut what_chars = what.chars();
+    // A branch's name keeps its case: "staging turned red".
     let what = match what_chars.next() {
+        Some(_) if past.kind == Kind::BranchRed => what.to_string(),
         Some(first) => first.to_uppercase().collect::<String>() + what_chars.as_str(),
         None => String::new(),
     };
@@ -678,7 +692,10 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
         0.0,
         egui::TextFormat::simple(fonts::semibold(theme.text_size), theme.palette.text),
     );
-    let reference = if matches!(past.kind, Kind::ScheduleFailed | Kind::Update) {
+    let reference = if matches!(
+        past.kind,
+        Kind::ScheduleFailed | Kind::Update | Kind::BranchRed
+    ) {
         String::new()
     } else {
         format!("  !{}", past.id)
@@ -730,13 +747,15 @@ fn row(ui: &mut egui::Ui, theme: &Theme, line: &Line, several: bool) -> bool {
 
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .tip(if past.kind == Kind::ScheduleFailed {
-            tl("Open the CI page")
-        } else if past.kind == Kind::Update {
-            tl("Open the release page")
-        } else {
-            tl("Open its MR page")
-        })
+        .tip(
+            if matches!(past.kind, Kind::ScheduleFailed | Kind::BranchRed) {
+                tl("Open the CI page")
+            } else if past.kind == Kind::Update {
+                tl("Open the release page")
+            } else {
+                tl("Open its MR page")
+            },
+        )
         .clicked()
 }
 

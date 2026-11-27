@@ -174,3 +174,43 @@ fn one_red_pipeline_or_a_green_one_last_is_no_banner() {
     ];
     assert!(red_branches(&app, &[branch(fixed)]).is_empty());
 }
+
+#[test]
+fn the_bell_hears_of_a_branch_turning_red_once() {
+    use PipelineState::*;
+    let mut app = crate::app::tests::test_app();
+    app.branches = vec!["main".into()];
+    let theme = bevel_theme::Theme::dark();
+    let mut toasts = crate::gui::toasts::Toasts::default();
+    let mut seen = Seen::default();
+    let green = vec![run(11, Success, "2026-11-20T09:05:00Z", "aaa")];
+    let red = vec![
+        run(13, Failed, "2026-11-25T10:05:00Z", "ccc"),
+        run(12, Failed, "2026-11-23T10:05:00Z", "bbb"),
+        run(11, Success, "2026-11-20T09:05:00Z", "aaa"),
+    ];
+    // Red when the app opens: the CI page's banner says it, not the bell.
+    watch(
+        &mut toasts,
+        &mut seen,
+        &app,
+        &[branch(red.clone())],
+        &theme,
+        0.0,
+    );
+    assert_eq!(toasts.unread(), 0);
+    // Green again, then red: one notification, and only one.
+    watch(&mut toasts, &mut seen, &app, &[branch(green)], &theme, 1.0);
+    watch(
+        &mut toasts,
+        &mut seen,
+        &app,
+        &[branch(red.clone())],
+        &theme,
+        2.0,
+    );
+    watch(&mut toasts, &mut seen, &app, &[branch(red)], &theme, 3.0);
+    assert_eq!(toasts.unread(), 1);
+    assert_eq!(toasts.history[0].id, branch_id("main"));
+    assert_eq!(toasts.history[0].kind, crate::gui::toasts::Kind::BranchRed);
+}

@@ -2485,3 +2485,5 @@ date	Dec	dic.
 	One point a month from the stats database; a month with too few cases has none (dashed).	Un punto al mes de la base de estadísticas; un mes con muy pocos casos no tiene (discontinuo).
 @plural	{n} MR reaching production|{n} MRs reaching production	{n} MR llegada a producción|{n} MRs llegadas a producción
 @plural	too few to tell ({n} case)|too few to tell ({n} cases)	muy pocos para saberlo ({n} caso)|muy pocos para saberlo ({n} casos)
+	{branch} turned red since !{id} arrived	{branch} se puso en rojo desde que llegó !{id}
+	{branch} turned red	{branch} se puso en rojo

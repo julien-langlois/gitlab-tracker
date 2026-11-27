@@ -98,6 +98,24 @@ pub(super) fn seed_demo_bell(toasts: &mut toasts::Toasts, app: &App, tones: &bev
             read,
         });
     }
+    // The tracked branches red this morning, unread.
+    let overview = crate::demo::demo_project_overview(app);
+    for red in super::ci::red_branches(app, &overview.pipelines) {
+        let Some(at) = super::board::parse_time(&red.first_red.created_at) else {
+            continue;
+        };
+        let (text, title) = super::ci::bell_text(&red);
+        toasts.history.push(toasts::Past {
+            id: super::ci::branch_id(&red.branch),
+            title,
+            kind: toasts::Kind::BranchRed,
+            text,
+            tone: tones.red,
+            when: at.with_timezone(&chrono::Local),
+            read: false,
+        });
+    }
+    toasts.history.sort_by_key(|p| p.when);
 }
 
 /// The window on the demo project (`gitlab-tracker --demo gui`): mock data,

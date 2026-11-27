@@ -5,7 +5,9 @@
 
 use super::*;
 use crate::gitlab_detail::{BranchPipeline, PipelineRun};
+use crate::gui::toasts::{Kind, Toasts};
 use crate::models::TrackedMr;
+use std::collections::{HashMap, HashSet};
 
 /// Red pipelines in a row from which a branch gets a banner: one alone may
 /// be a flaky job.
@@ -39,8 +41,9 @@ pub fn red_branches(app: &App, pipelines: &[BranchPipeline]) -> Vec<RedBranch> {
         .collect()
 }
 
-fn red_branch(app: &App, p: &BranchPipeline) -> Option<RedBranch> {
-    // Finished ones only: a running pipeline says nothing yet.
+/// The finished pipelines of `p` (a running one says nothing yet), newest
+/// first, and how many of the latest failed in a row.
+fn streak(p: &BranchPipeline) -> (Vec<&PipelineRun>, usize) {
     let finished: Vec<&PipelineRun> = p
         .history
         .iter()
@@ -50,6 +53,11 @@ fn red_branch(app: &App, p: &BranchPipeline) -> Option<RedBranch> {
         .iter()
         .take_while(|r| r.status == PipelineState::Failed)
         .count();
+    (finished, failed)
+}
+
+fn red_branch(app: &App, p: &BranchPipeline) -> Option<RedBranch> {
+    let (finished, failed) = streak(p);
     if failed < STREAK {
         return None;
     }
@@ -103,6 +111,91 @@ fn arrived_between(
         .filter(|mr| reached(mr))
         .map(|mr| (mr.id.clone(), mr.title.clone()))
         .collect()
+}
+
+/// What the bell was told of: the projects looked at, and the first red
+/// pipeline of each red branch, by project and branch.
+#[derive(Debug, Default)]
+pub struct Seen {
+    looked: HashSet<String>,
+    red: HashMap<(String, String), u64>,
+}
+
+/// The id of a red branch's notification: it opens the CI page, not an MR.
+pub fn branch_id(branch: &str) -> String {
+    format!("branch:{branch}")
+}
+
+/// Adds a notification for each tracked branch that turned red since the last
+/// look (a new first red pipeline). The first look only records what is there:
+/// a branch red before the app opened shows in the CI page's banner, not in the
+/// bell. Cheap while nothing turns red: the MRs are read only for a new one.
+pub fn watch(
+    toasts: &mut Toasts,
+    seen: &mut Seen,
+    app: &App,
+    pipelines: &[BranchPipeline],
+    theme: &Theme,
+    now: f64,
+) {
+    let first_look = seen.looked.insert(app.project_id.clone());
+    // The branches green again leave the list: red again later is news.
+    seen.red.retain(|(project, branch), _| {
+        *project != app.project_id
+            || pipelines
+                .iter()
+                .find(|p| p.branch == *branch)
+                .is_some_and(|p| streak(p).1 >= STREAK)
+    });
+    let tracked = app.branch_flow();
+    for p in pipelines {
+        if tracked.get(&p.branch).is_none() {
+            continue;
+        }
+        let (finished, failed) = streak(p);
+        if failed < STREAK {
+            continue;
+        }
+        let first_red = finished[failed - 1].id;
+        let key = (app.project_id.clone(), p.branch.clone());
+        if seen.red.insert(key, first_red) == Some(first_red) || first_look {
+            continue;
+        }
+        let Some(red) = red_branch(app, p) else {
+            continue;
+        };
+        let (text, title) = bell_text(&red);
+        toasts.push(
+            &branch_id(&red.branch),
+            &title,
+            Kind::BranchRed,
+            text,
+            theme.tones.red,
+            now,
+        );
+    }
+}
+
+/// A red branch's notification: what happened ("staging turned red since
+/// !214 arrived"), and the line under it (that MR's title, else the streak).
+pub fn bell_text(red: &RedBranch) -> (String, String) {
+    match red.arrived.as_slice() {
+        [(id, title)] => (
+            tf(
+                "{branch} turned red since !{id} arrived",
+                &[("branch", &red.branch), ("id", id)],
+            ),
+            title.clone(),
+        ),
+        _ => (
+            tf("{branch} turned red", &[("branch", &red.branch)]),
+            tn(
+                red.failed as u64,
+                "{n} pipeline failed in a row",
+                "{n} pipelines failed in a row",
+            ),
+        ),
+    }
 }
 
 /// What a click on the banner asks for.

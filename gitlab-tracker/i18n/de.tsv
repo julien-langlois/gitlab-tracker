@@ -2485,3 +2485,5 @@ date	Dec	Dez.
 	One point a month from the stats database; a month with too few cases has none (dashed).	Ein Punkt pro Monat aus der Statistikdatenbank; ein Monat mit zu wenigen Fällen hat keinen (gestrichelt).
 @plural	{n} MR reaching production|{n} MRs reaching production	{n} MR in Produktion|{n} MRs in Produktion
 @plural	too few to tell ({n} case)|too few to tell ({n} cases)	zu wenige für eine Aussage ({n} Fall)|zu wenige für eine Aussage ({n} Fälle)
+	{branch} turned red since !{id} arrived	{branch} ist rot, seit !{id} angekommen ist
+	{branch} turned red	{branch} ist rot geworden

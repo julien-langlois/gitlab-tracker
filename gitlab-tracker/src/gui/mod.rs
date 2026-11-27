@@ -240,6 +240,8 @@ struct GuiApp {
     bell_filter: toasts::Filter,
     /// The latest run of each pipeline schedule the bell has seen.
     schedule_seen: schedules::Seen,
+    /// The red branches the bell was told of.
+    red_seen: ci::Seen,
     /// The merge queues of the open project, worked out each frame.
     queues: Vec<merge_queue::Queue>,
     /// The export's choices, and a save under way.
@@ -425,6 +427,7 @@ impl GuiApp {
             clicks: notification_clicks(&cc.egui_ctx),
             bell_filter: toasts::Filter::All,
             schedule_seen: schedules::Seen::new(),
+            red_seen: ci::Seen::default(),
             queues: Vec::new(),
             export: export::State::default(),
             standup: standup::Settings::default(),
@@ -752,6 +755,15 @@ impl eframe::App for GuiApp {
                 &mut self.schedule_seen,
                 &self.app.project_id,
                 &overview.schedules,
+                &self.theme,
+                ui.input(|i| i.time),
+            );
+            // A tracked branch that turned red, in the bell too.
+            ci::watch(
+                &mut self.toasts,
+                &mut self.red_seen,
+                &self.app,
+                &overview.pipelines,
                 &self.theme,
                 ui.input(|i| i.time),
             );

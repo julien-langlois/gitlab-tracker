@@ -2485,3 +2485,5 @@ date	Dec	12月
 	One point a month from the stats database; a month with too few cases has none (dashed).	每月一个点，来自统计数据库；案例太少的月份没有点（虚线）。
 @plural	{n} MR reaching production|{n} MRs reaching production	{n} 个 MR 到达生产
 @plural	too few to tell ({n} case)|too few to tell ({n} cases)	太少，无法判断（{n} 个案例）
+	{branch} turned red since !{id} arrived	自 !{id} 到达后 {branch} 变红
+	{branch} turned red	{branch} 变红了

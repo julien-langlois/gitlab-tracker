@@ -484,7 +484,9 @@ branches' latest pipeline. A tracked branch whose pipelines failed twice in a ro
 gets a banner: **red since** when, with the MRs that reached it between its last
 green pipeline and the first red one — merged into it, or arrived on it — the
 likely cause, not a verdict; with none, it is the infrastructure's or an older
-change's, and the banner opens the first red pipeline. The branches' last 20
+change's, and the banner opens the first red pipeline. A branch that turns red
+while the app is open also lands in the bell ("staging turned red since !214
+arrived"), once; one red before it opened has the banner only. The branches' last 20
 pipelines are read for it, in the same call as their latest. A **CI budget** adds up runner time, what failed
 pipelines spent, the wait for a runner, and the costliest jobs.
 
