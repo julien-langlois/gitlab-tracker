@@ -2459,3 +2459,6 @@ saved view	Restore	Wiederherstellen
 	tagged {when}	getaggt {when}
 	not tagged yet	noch nicht getaggt
 	See in Releases	In Releases ansehen
+	What this promotion completes	Was diese Promotion vervollständigt
+	milestone {name}: {before} → {after} of {all} on {to}	Meilenstein {name}: {before} → {after} von {all} auf {to}
+	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	Ticket #{id} {subject}: alle seine MRs auf {to} ({status} im Tracker)

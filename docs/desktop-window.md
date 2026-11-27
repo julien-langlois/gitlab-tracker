@@ -333,6 +333,10 @@ Between two tracked branches (the last two by default, e.g.
 and what holds it back, and what already went. The ready list copies as a release
 checklist or shows in the table.
 
+**What this promotion completes**, under the commands: each milestone the
+ticked MRs move forward on the target branch (`v2.4.0: 5 → 8 of 14 on
+production`), and each ticket whose every MR they bring there.
+
 ![Promote: what is ready to go from staging to production, with the commands](assets/desktop/promote.png)
 
 ## Environments

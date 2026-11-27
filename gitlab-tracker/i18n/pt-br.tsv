@@ -2459,3 +2459,6 @@ saved view	Restore	Restaurar
 	tagged {when}	tag criada {when}
 	not tagged yet	ainda sem tag
 	See in Releases	Ver em Releases
+	What this promotion completes	O que esta promoção completa
+	milestone {name}: {before} → {after} of {all} on {to}	marco {name}: {before} → {after} de {all} em {to}
+	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject}: todas as MRs dele em {to} ({status} no tracker)

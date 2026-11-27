@@ -2459,3 +2459,6 @@ saved view	Restore	Rétablir
 	tagged {when}	tagué {when}
 	not tagged yet	pas encore tagué
 	See in Releases	Voir dans Releases
+	What this promotion completes	Ce que cette promotion complète
+	milestone {name}: {before} → {after} of {all} on {to}	jalon {name} : {before} → {after} sur {all} sur {to}
+	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject} : toutes ses MR sur {to} ({status} dans le tracker)

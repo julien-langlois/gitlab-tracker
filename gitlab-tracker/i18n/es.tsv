@@ -2459,3 +2459,6 @@ saved view	Restore	Restablecer
 	tagged {when}	etiquetado {when}
 	not tagged yet	aún sin etiquetar
 	See in Releases	Ver en Releases
+	What this promotion completes	Lo que esta promoción completa
+	milestone {name}: {before} → {after} of {all} on {to}	hito {name}: {before} → {after} de {all} en {to}
+	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	ticket #{id} {subject}: todas sus MR en {to} ({status} en el tracker)

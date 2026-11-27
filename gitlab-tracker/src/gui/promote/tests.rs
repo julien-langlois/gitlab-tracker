@@ -26,3 +26,23 @@ fn a_status_reads_in_sentence_case_with_its_acronyms() {
     assert_eq!(sentence_case("SYNC FAILED"), "Sync failed");
     assert_eq!(sentence_case(""), "");
 }
+
+#[tokio::test]
+async fn the_promotion_says_what_it_completes() {
+    let app = crate::demo::demo_app(crate::config::AppConfig::default()).await;
+    let all = rows(&app, "staging", "production");
+    let ready: Vec<&Row> = all.iter().filter(|r| r.stage == Stage::Ready).collect();
+    let lines = completes(&app, &ready, "production");
+    // The v2.4.0 milestone moves forward by the three ready MRs.
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("v2.4.0") && l.contains(&format!("{} of", ready.len() + 5))),
+        "{lines:?}"
+    );
+    // #4310's only MR goes: the ticket is all there. #4188 keeps !214 open.
+    assert!(lines.iter().any(|l| l.contains("#4310")), "{lines:?}");
+    assert!(!lines.iter().any(|l| l.contains("#4188")), "{lines:?}");
+    // Nothing picked, nothing completed.
+    assert!(completes(&app, &[], "production").is_empty());
+}

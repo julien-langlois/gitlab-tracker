@@ -16,10 +16,12 @@ use crate::i18n::{tf, tl, tn};
 use crate::models::{BranchPresence, GitlabMrState, PipelineState};
 use gitlab_tracker_core::MergeabilityStatus;
 
+mod completes;
 mod model;
 mod ready_list;
 mod side_cards;
 
+use completes::*;
 pub use model::*;
 use ready_list::*;
 pub use side_cards::*;
@@ -58,6 +60,8 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
         .filter(|r| !g.promote_skipped.contains(&r.id))
         .collect();
 
+    // What shipping the picked MRs moves forward on `to`.
+    let completed = completes(&g.app, &picked, &to);
     let mut picked_pair = None;
     let mut action = None;
     ui.horizontal(|ui| {
@@ -260,6 +264,20 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                         tl("Commits listed oldest merge first, so they apply in the order the branch got them."),
                     ));
                 });
+                if !completed.is_empty() && !picked.is_empty() {
+                    ui.add_space(16.0);
+                    theme.card_frame().show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        ui.label(semibold(
+                            tl("What this promotion completes"),
+                            theme.text_size,
+                        ));
+                        for line in &completed {
+                            ui.add(egui::Label::new(RichText::new(line).color(theme.palette.text_secondary)).wrap());
+                        }
+                    });
+                }
             };
             let side_cards = |ui: &mut Ui, show: &mut Option<String>, action: &mut Option<Action>| {
                 ui.spacing_mut().item_spacing.y = 16.0;

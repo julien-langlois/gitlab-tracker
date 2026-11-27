@@ -2459,3 +2459,6 @@ saved view	Restore	恢复
 	tagged {when}	已于 {when} 打标签
 	not tagged yet	尚未打标签
 	See in Releases	在 Releases 中查看
+	What this promotion completes	本次推进完成的内容
+	milestone {name}: {before} → {after} of {all} on {to}	里程碑 {name}：{to} 上 {before} → {after}，共 {all}
+	ticket #{id} {subject}: every MR of it on {to} ({status} in the tracker)	工单 #{id} {subject}：其所有 MR 均在 {to} 上（跟踪器中为 {status}）
