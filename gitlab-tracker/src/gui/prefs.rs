@@ -1,7 +1,8 @@
 //! The window's own preferences, kept between sessions in `tracker.db` (the
 //! `gui` setting; `gui.json` before, imported on first use): the page, the
 //! theme, the table's grouping and density, the tracker's board, the cockpit's
-//! zeros, the inspector's folded sections, the window's size and its open tabs.
+//! zeros, the inspector's folded sections, the window's size and its open tabs,
+//! what the rail's dots last flagged on each page.
 //! The demo neither reads nor writes them.
 
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,18 @@ pub struct Prefs {
     /// The page the window opens on (Settings › Startup): `persona`, a page,
     /// or none / `left_off` for where each tab was left.
     pub start: Option<String>,
+    /// What each rail entry flagged when its page was last open, by project:
+    /// its dot stays off after a restart until that changes.
+    pub rail_seen: Vec<RailSeen>,
+}
+
+/// What a rail entry flagged when its page was last open.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct RailSeen {
+    pub project: String,
+    /// The page's key (see [`page_name`]).
+    pub page: String,
+    pub what: String,
 }
 
 /// An open tab: its project's GitLab URL and id.
@@ -191,6 +204,16 @@ pub fn apply(g: &mut GuiApp, prefs: &Prefs) {
     g.export.settings = prefs.export;
     g.standup = prefs.standup;
     *super::widgets::folded_sections() = prefs.folded_sections.iter().cloned().collect();
+    g.rail_seen = rail_seen(prefs);
+}
+
+/// The rail marks seen, saved in `prefs`; an unknown page left out.
+pub(super) fn rail_seen(prefs: &Prefs) -> std::collections::HashMap<(String, Page), String> {
+    prefs
+        .rail_seen
+        .iter()
+        .filter_map(|s| Some(((s.project.clone(), page_of(&s.page)?), s.what.clone())))
+        .collect()
 }
 
 /// The window's preferences as they are now.
@@ -229,6 +252,19 @@ pub fn current(g: &GuiApp) -> Prefs {
         pages_added: g.rail.added.clone(),
         pages_removed: g.rail.removed.clone(),
         start: Some(g.rail.start.key().to_string()),
+        rail_seen: {
+            let mut seen: Vec<RailSeen> = g
+                .rail_seen
+                .iter()
+                .map(|((project, page), what)| RailSeen {
+                    project: project.clone(),
+                    page: page_name(*page).to_string(),
+                    what: what.clone(),
+                })
+                .collect();
+            seen.sort();
+            seen
+        },
     }
 }
 
@@ -267,6 +303,18 @@ mod tests {
             pages_added: vec!["stacks".into()],
             pages_removed: vec!["stats".into(), "not_a_page".into()],
             start: Some("persona".into()),
+            rail_seen: vec![
+                RailSeen {
+                    project: "42".into(),
+                    page: "ci".into(),
+                    what: "main is red".into(),
+                },
+                RailSeen {
+                    project: "42".into(),
+                    page: "not_a_page".into(),
+                    what: "?".into(),
+                },
+            ],
         };
         let text = serde_json::to_string(&prefs).unwrap();
         let back: Prefs = serde_json::from_str(&text).unwrap();
@@ -281,11 +329,19 @@ mod tests {
         assert_eq!(read.added, vec!["stacks".to_string()]);
         assert_eq!(read.removed, vec!["stats".to_string()]);
         assert_eq!(read.start, super::super::persona::Start::Persona);
+        // The rail's marks seen, an unknown page left out.
+        let seen = rail_seen(&back);
+        assert_eq!(seen.len(), 1);
+        assert_eq!(
+            seen.get(&("42".to_string(), Page::Ci)).map(String::as_str),
+            Some("main is red")
+        );
         // An older or hand-edited file: the rest takes its default.
         let partial: Prefs = serde_json::from_str(r#"{"compact": true}"#).unwrap();
         assert!(partial.compact && !partial.light && partial.page.is_none());
         // No persona yet: every page, each tab where it was left.
         assert_eq!(rail(&partial), super::super::persona::Rail::default());
+        assert!(rail_seen(&partial).is_empty());
         assert!(
             !partial.no_update_check,
             "new versions are looked for by default"

@@ -211,7 +211,8 @@ struct GuiApp {
     /// The rail's badges of the pages under its rule, kept for a moment.
     rail_badges: rail_badges::Cache,
     /// What each rail entry flagged when its page was last open, by project:
-    /// its dot shows again only once that changes.
+    /// its dot shows again only once that changes. Kept between sessions
+    /// (`prefs.rs`).
     rail_seen: HashMap<(String, Page), String>,
     /// The pages' analyses, kept between frames.
     memo: memo::Memos,

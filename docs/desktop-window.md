@@ -142,7 +142,8 @@ every tab. The other pages watch the project and show at most a dot, in the
 tone of the worst thing they flag (blocked MRs, reviews past the reminder
 delay, a failed deployment, a late milestone…), and only while it is news: the
 dot goes once the page has been open, and comes back when what it flags
-changes. Its tooltip says what it counts. In `Ctrl+K`, a hidden page says so under its name, with a button to
+changes — after a restart too: what each page flagged when last open is kept
+with the window's preferences. Its tooltip says what it counts. In `Ctrl+K`, a hidden page says so under its name, with a button to
 show it in the rail again.
 
 ![A Release manager's rail, and Overlaps found with Ctrl+K](assets/desktop/persona-rail-palette.png)
