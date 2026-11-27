@@ -56,6 +56,9 @@ pub struct RedmineIssue {
 pub struct RedmineStatus {
     pub id: u64,
     pub name: String,
+    /// A ticket in this status is closed (Closed, Rejected by default).
+    #[serde(default)]
+    pub is_closed: bool,
 }
 
 /// Envelope returned by `GET /issues/{id}.json`.
@@ -238,6 +241,7 @@ pub async fn fetch_issue_statuses(
                 .map(|status| TicketTransitionTarget {
                     id: status.id.to_string(),
                     label: status.name,
+                    closed: status.is_closed,
                 })
                 .collect()
         })
@@ -574,6 +578,7 @@ mod tests {
             status: RedmineStatus {
                 id: 1,
                 name: "New".into(),
+                is_closed: false,
             },
             tracker: None,
             priority: None,

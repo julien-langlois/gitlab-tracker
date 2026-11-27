@@ -234,6 +234,10 @@ pub struct TicketTransitionTarget {
     pub id: String,
     /// Human-readable label shown to the user, e.g. "Resolved" or "Done".
     pub label: String,
+    /// The tracker counts a ticket in this status as closed (Redmine's
+    /// `is_closed`); `false` when the tracker does not say.
+    #[serde(default)]
+    pub closed: bool,
 }
 
 /// Optional capability for tracker providers that can transition ticket statuses.

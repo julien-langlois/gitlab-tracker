@@ -557,6 +557,8 @@ SELECT partman.create_parent('public.scan_events', 'scanned_at', 'native', 'mont
                 Some("feat(auth): Rehash legacy keys on first use")),
         MrSpec::new("no-stack-traces", "fix(api): Stop leaking stack traces in 500 responses", &SARAH)
             .branch("fix/4102-no-stack-traces", "main")
+            // On production for two weeks, its ticket still In Progress.
+            .ticket(4102)
             .milestone("Security audit")
             .labels(&["security", "api"])
             .about("Finding #5 of the audit: a 500 returned the panic message and its backtrace.")
@@ -707,6 +709,8 @@ pub fn verify(verifier: &str, challenge: &str, method: &str) -> Result<(), AuthE
                 Some("fix(auth): Refuse plain PKCE challenges")),
         MrSpec::new("csv-export", "feat(export): CSV export of shipments", &MARINA)
             .branch("feat/4310-csv-export", "main")
+            // Its ticket closed while it is on staging only.
+            .ticket(4310)
             .milestone("v2.4.0")
             .labels(&["feature"])
             .about("Account managers export a customer's shipments of a month for their reconciliation.")
@@ -2049,6 +2053,40 @@ fn snapshots() -> FileChange {
 fn tickets() -> Vec<TicketSpec> {
     vec![
         TicketSpec {
+            id: 4102,
+            subject: "Stack traces leak in 500 responses",
+            tracker: "Bug",
+            status: "In Progress",
+            priority: "High",
+            version: None,
+            author: &ALEX,
+            assignee: &SARAH,
+            estimate_hours: Some(4.0),
+            done: 90,
+            start: d(19, 9, 0),
+            entries: vec![
+                (d(18, 17, 0), 2.5, 0, "Generic error body", &SARAH),
+                (d(17, 10, 0), 0.5, 1, "Review", &ALEX),
+            ],
+        },
+        TicketSpec {
+            id: 4310,
+            subject: "CSV export of a customer's shipments",
+            tracker: "Feature",
+            status: "Closed",
+            priority: "Normal",
+            version: Some("v2.4.0"),
+            author: &THOMAS,
+            assignee: &MARINA,
+            estimate_hours: Some(6.0),
+            done: 100,
+            start: d(6, 9, 0),
+            entries: vec![
+                (d(5, 18, 0), 4.0, 0, "Export and columns", &MARINA),
+                (d(4, 11, 0), 1.0, 1, "Review", &THOMAS),
+            ],
+        },
+        TicketSpec {
             id: 4271,
             subject: "Expose shipments over GraphQL for the partners",
             tracker: "Feature",
@@ -2167,7 +2205,8 @@ fn tickets() -> Vec<TicketSpec> {
             id: 4350,
             subject: "Partners ask how failed webhooks are retried",
             tracker: "Support",
-            status: "New",
+            // Rejected while its MR is still open.
+            status: "Rejected",
             priority: "Low",
             version: None,
             author: &SARAH,

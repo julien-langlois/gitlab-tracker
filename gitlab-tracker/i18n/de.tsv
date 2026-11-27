@@ -2435,3 +2435,8 @@ saved view	Restore	Wiederherstellen
 	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	dann in GitLab den Zielbranch von !{id} auf {base} setzen (Bearbeiten › Zielbranch)
 	Bring the stack back in step	Den Stapel wieder in Takt bringen
 	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	Jeder zu verschiebende MR, dann die darauf gestapelten, in Merge-Reihenfolge. Die App liest nur: Sie gibt Ihnen die Befehle, Sie führen sie aus.
+	{status}, but {mrs} still open	{status}, aber {mrs} noch offen
+	{status}, but {mrs} not on {branch} yet	{status}, aber {mrs} noch nicht auf {branch}
+	{status}, but its MRs are on {branch} for {days}	{status}, aber seine MRs sind seit {days} auf {branch}
+	Out of step with the code · {n}	Nicht im Takt mit dem Code · {n}
+	the tracker's closed statuses, against {branch}	geschlossene Status des Trackers, verglichen mit {branch}

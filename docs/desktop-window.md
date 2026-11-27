@@ -545,6 +545,14 @@ by status, with their time spent against the estimate; the MRs without a ticket
 and the tickets over their estimate. A ticket shows once, with every MR that
 references it under it (a click on one picks that MR).
 
+**Out of step with the code.** Over the list, the tickets whose status says
+otherwise than their MRs: closed while an MR of theirs is still open, closed
+while a merged MR is not on production yet (the last tracked branch), or still
+open a week after every MR of theirs reached production. "Closed" is the
+tracker's own word, Redmine's closed statuses (Closed and Rejected by default;
+Resolved is not), read with the board's columns. A click opens the ticket;
+nothing is changed in the tracker.
+
 ![Tracker: linked tickets with their time spent](assets/desktop/tracker.png)
 
 ## Stats

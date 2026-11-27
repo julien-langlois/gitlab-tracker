@@ -2435,3 +2435,8 @@ saved view	Restore	Restablecer
 	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	luego cambia la rama destino de !{id} a {base} en GitLab (Editar › Rama destino)
 	Bring the stack back in step	Poner la pila al día
 	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	Cada MR que mover, y luego las apiladas encima, en orden de fusión. La aplicación solo lee: te da los comandos, tú los ejecutas.
+	{status}, but {mrs} still open	{status}, pero {mrs} sigue abierta
+	{status}, but {mrs} not on {branch} yet	{status}, pero {mrs} aún no está en {branch}
+	{status}, but its MRs are on {branch} for {days}	{status}, pero sus MR están en {branch} desde hace {days}
+	Out of step with the code · {n}	Desfasados respecto al código · {n}
+	the tracker's closed statuses, against {branch}	estados cerrados del tracker, frente a {branch}

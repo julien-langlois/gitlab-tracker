@@ -2435,3 +2435,8 @@ saved view	Restore	Rétablir
 	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	puis passez la branche cible de !{id} à {base} dans GitLab (Modifier › Branche cible)
 	Bring the stack back in step	Remettre la pile d'aplomb
 	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	Chaque MR à déplacer, puis celles empilées dessus, dans l'ordre de fusion. L'application ne fait que lire : elle vous donne les commandes, vous les lancez.
+	{status}, but {mrs} still open	{status}, mais {mrs} encore ouverte
+	{status}, but {mrs} not on {branch} yet	{status}, mais {mrs} pas encore sur {branch}
+	{status}, but its MRs are on {branch} for {days}	{status}, mais ses MR sont sur {branch} depuis {days}
+	Out of step with the code · {n}	En décalage avec le code · {n}
+	the tracker's closed statuses, against {branch}	statuts fermés du tracker, comparés à {branch}

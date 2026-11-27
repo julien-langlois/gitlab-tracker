@@ -49,6 +49,7 @@ impl gitlab_tracker_core::TicketTransitionProvider for DemoTracker {
             .map(|(i, label)| gitlab_tracker_core::TicketTransitionTarget {
                 id: (i + 1).to_string(),
                 label: (*label).into(),
+                closed: CLOSED.contains(label),
             })
             .collect())
     }
@@ -63,7 +64,18 @@ impl gitlab_tracker_core::TicketTransitionProvider for DemoTracker {
 }
 
 /// Redmine's default workflow.
-pub const STATUSES: [&str; 5] = ["New", "In Progress", "Assigned", "Feedback", "Resolved"];
+pub const STATUSES: [&str; 7] = [
+    "New",
+    "In Progress",
+    "Assigned",
+    "Feedback",
+    "Resolved",
+    "Closed",
+    "Rejected",
+];
+
+/// The statuses Redmine counts as closed (`is_closed`), as by default.
+pub const CLOSED: [&str; 2] = ["Closed", "Rejected"];
 
 /// The time-tracking activities.
 pub fn activities() -> Vec<Activity> {

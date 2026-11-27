@@ -372,6 +372,9 @@ async fn statuses_are_listed_and_applied() {
         .map(|t| (t.id.as_str(), t.label.as_str()))
         .collect();
     assert_eq!(pairs, [("1", "New"), ("5", "Closed")]);
+    // Redmine's own word on which statuses close a ticket.
+    let closed: Vec<bool> = targets.iter().map(|t| t.closed).collect();
+    assert_eq!(closed, [false, true]);
 
     provider.transition_ticket_status("42", "5").await.unwrap();
     // Workflow rules or role forbid it: reported, not swallowed.

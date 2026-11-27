@@ -2435,3 +2435,8 @@ saved view	Restore	Restaurar
 	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	depois mude o branch de destino de !{id} para {base} no GitLab (Editar › Branch de destino)
 	Bring the stack back in step	Colocar a pilha em dia
 	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	Cada MR a mover, depois as empilhadas sobre ela, na ordem de merge. O app só lê: ele entrega os comandos, você os executa.
+	{status}, but {mrs} still open	{status}, mas {mrs} ainda aberta
+	{status}, but {mrs} not on {branch} yet	{status}, mas {mrs} ainda não está em {branch}
+	{status}, but its MRs are on {branch} for {days}	{status}, mas suas MRs estão em {branch} há {days}
+	Out of step with the code · {n}	Fora de sintonia com o código · {n}
+	the tracker's closed statuses, against {branch}	status fechados do tracker, comparados com {branch}

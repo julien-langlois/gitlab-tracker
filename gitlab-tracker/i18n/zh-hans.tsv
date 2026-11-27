@@ -2435,3 +2435,8 @@ saved view	Restore	恢复
 	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	然后在 GitLab 中将 !{id} 的目标分支改为 {base}（编辑 › 目标分支）
 	Bring the stack back in step	让这一叠 MR 重新对齐
 	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	每个需要移动的 MR，然后是叠在其上的 MR，按合并顺序。本应用只读：它给出命令，由你执行。
+	{status}, but {mrs} still open	{status}，但 {mrs} 仍未关闭
+	{status}, but {mrs} not on {branch} yet	{status}，但 {mrs} 尚未到达 {branch}
+	{status}, but its MRs are on {branch} for {days}	{status}，但其 MR 已在 {branch} 上 {days}
+	Out of step with the code · {n}	与代码不一致 · {n}
+	the tracker's closed statuses, against {branch}	按跟踪器的关闭状态，对照 {branch}

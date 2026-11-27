@@ -25,7 +25,7 @@ pub mod orbit_api;
 pub mod orbit_mobile;
 #[cfg(feature = "stats")]
 mod stats;
-mod tracker;
+pub(crate) mod tracker;
 
 pub(crate) use tracker::DemoTracker;
 

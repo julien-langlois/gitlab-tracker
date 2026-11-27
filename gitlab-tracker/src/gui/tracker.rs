@@ -16,6 +16,8 @@ use super::{tones, GuiApp};
 use crate::actions::Action;
 use crate::i18n::{tf, tl, tn};
 
+mod drift;
+
 /// Below this list width the progress column goes under the subject.
 const WIDE_ROW: f32 = 720.0;
 const PROGRESS_WIDTH: f32 = 180.0;
@@ -87,6 +89,12 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
     let selected = g.app.table_state.selected();
     let rows = rows_by_ticket(g.app.visible_mrs().enumerate());
     let listed = g.app.visible_mrs().count();
+    // Closed or open against where the code is; once the statuses are read.
+    let (production, _) = super::milestones::flow_of(&g.app);
+    let drifting = g.statuses.as_deref().map_or_else(Vec::new, |statuses| {
+        drift::drifts(&g.app, statuses, chrono::Utc::now())
+    });
+    let mut open_ticket = None;
     let provider = g.app.tracker.as_ref().map_or("Tracker", |t| t.name());
 
     let mut picked = None;
@@ -121,6 +129,10 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
             ui.add_space(16.0);
             summary(ui, &theme, &rows, listed, &mut tile);
             ui.add_space(20.0);
+            if !drifting.is_empty() {
+                open_ticket = drift::card(ui, &theme, &drifting, &production);
+                ui.add_space(20.0);
+            }
             if rows.is_empty() {
                 ui.add_space(32.0);
                 ui.vertical_centered(|ui| {
@@ -180,6 +192,9 @@ pub fn page(g: &mut GuiApp, ui: &mut Ui) {
                     }
                 });
         });
+    if let Some(url) = open_ticket {
+        let _ = open::that_detached(url);
+    }
     if let Some(board) = set_board {
         g.tracker_board = board;
     }
