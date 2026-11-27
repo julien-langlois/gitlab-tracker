@@ -22,10 +22,12 @@ use crate::i18n::{tc, tf, tl, tn};
 use crate::models::{GitlabMrState, PipelineState, TrackedMr};
 use gitlab_tracker_core::MergeabilityStatus;
 
+mod commands;
 mod model;
 mod page;
 mod side_panel;
 
+pub use commands::*;
 pub use model::*;
 use page::*;
 pub use side_panel::*;
@@ -121,6 +123,8 @@ pub struct Node {
     pub depth: usize,
     pub parent: Option<String>,
     pub problems: Vec<Problem>,
+    /// Its own commits, as GitLab lists them (0: not read yet).
+    pub own_commits: usize,
 }
 
 impl Node {

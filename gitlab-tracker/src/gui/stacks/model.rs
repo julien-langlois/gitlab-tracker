@@ -97,6 +97,7 @@ pub fn stacks(app: &App) -> Vec<Stack> {
                 depth,
                 parent: parent.map(|p| p.id.clone()),
                 problems,
+                own_commits: mr.commits.len(),
             };
             if node.ready() && parent.is_some_and(|p| p.state == GitlabMrState::Opened) {
                 let parent = node.parent.clone().unwrap_or_default();

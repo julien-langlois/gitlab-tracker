@@ -527,6 +527,15 @@ merged while its child still targets its branch (retarget), a parent pushed to
 after its child (rebase), a parent holding its children back, and a child ready
 before its parent.
 
+**Bring the stack back in step.** Under a stack with an MR to retarget or
+rebase, the git commands to copy: each such MR, then every MR stacked on it,
+moved in merge order, each with its own commits only (`git rebase --onto <new
+base> HEAD~n`, n its commits as GitLab lists them), so it works whether the
+parent's branch still exists or was deleted at its merge; one
+`git push --force-with-lease` for them all at the end, and for a retarget, the
+reminder to change the target branch in GitLab. The app only reads: you run
+them.
+
 ![Stacked MRs: chains of MRs and what is out of step](assets/desktop/stacks.png)
 
 ## Tracker

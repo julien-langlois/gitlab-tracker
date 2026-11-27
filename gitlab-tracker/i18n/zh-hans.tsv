@@ -2428,3 +2428,10 @@ saved view	Restore	恢复
 	GitLab sees no conflict yet: it compares with {target} as of the last push. Since then !{id} {title}, merged {when}, changed the same lines: the next rebase or merge stops on them.	GitLab 尚未发现冲突：它按上次推送时的 {target} 进行比较。此后，!{id} {title}（{when}合并）修改了相同的行：下次变基或合并时会在此停下。
 	{path}: lines {theirs} there, {mine} here	{path}：那边第 {theirs} 行，这边第 {mine} 行
 	See !{id}	查看 !{id}
+	!{id}: onto !{parent}, moved above	!{id}：放到 !{parent} 上（它已在上方移动）
+	!{id}: its parent !{parent} is merged, onto {base}	!{id}：其父 MR !{parent} 已合并，放到 {base} 上
+	!{id}: onto the last commits of !{parent}	!{id}：放到 !{parent} 的最新提交上
+	its commits are not known yet: rebase it by hand	其提交尚未读取：请手动变基
+	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	然后在 GitLab 中将 !{id} 的目标分支改为 {base}（编辑 › 目标分支）
+	Bring the stack back in step	让这一叠 MR 重新对齐
+	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	每个需要移动的 MR，然后是叠在其上的 MR，按合并顺序。本应用只读：它给出命令，由你执行。

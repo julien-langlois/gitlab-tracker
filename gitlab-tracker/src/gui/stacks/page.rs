@@ -131,6 +131,7 @@ pub(super) fn main(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
         .collect();
     let mut picked = None;
     let mut open = None;
+    let mut copied = false;
     for stack in shown {
         let root = stack.root();
         board::card(
@@ -154,6 +155,18 @@ pub(super) fn main(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
                     &mut picked,
                     &mut open,
                 );
+                if let Some(commands) = commands(stack) {
+                    ui.add_space(12.0);
+                    ui.label(semibold(
+                        tl("Bring the stack back in step"),
+                        theme.text_size,
+                    ));
+                    ui.label(muted(
+                        &theme,
+                        tl("Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them."),
+                    ));
+                    copied |= super::super::mr_page::command_box(ui, &theme, &commands);
+                }
             },
         );
         ui.add_space(GAP);
@@ -163,6 +176,9 @@ pub(super) fn main(g: &mut GuiApp, ui: &mut Ui, all: &[Stack]) {
     }
     if let Some(id) = open {
         g.open_mr(&id);
+    }
+    if copied {
+        g.app.flash(tl("Commands copied"), false);
     }
 }
 

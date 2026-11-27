@@ -2428,3 +2428,10 @@ saved view	Restore	Rétablir
 	GitLab sees no conflict yet: it compares with {target} as of the last push. Since then !{id} {title}, merged {when}, changed the same lines: the next rebase or merge stops on them.	GitLab ne voit pas encore de conflit : il compare avec {target} tel qu'au dernier push. Depuis, !{id} {title}, fusionnée {when}, a modifié les mêmes lignes : le prochain rebase ou la prochaine fusion s'y arrêtera.
 	{path}: lines {theirs} there, {mine} here	{path} : lignes {theirs} là-bas, {mine} ici
 	See !{id}	Voir !{id}
+	!{id}: onto !{parent}, moved above	!{id} : sur !{parent}, déplacée juste avant
+	!{id}: its parent !{parent} is merged, onto {base}	!{id} : sa parente !{parent} est fusionnée, sur {base}
+	!{id}: onto the last commits of !{parent}	!{id} : sur les derniers commits de !{parent}
+	its commits are not known yet: rebase it by hand	ses commits ne sont pas encore connus : rebasez-la à la main
+	then set the target branch of !{id} to {base} in GitLab (Edit › Target branch)	puis passez la branche cible de !{id} à {base} dans GitLab (Modifier › Branche cible)
+	Bring the stack back in step	Remettre la pile d'aplomb
+	Each MR to move, then those stacked on it, in merge order. The app only reads: it hands you the commands, you run them.	Chaque MR à déplacer, puis celles empilées dessus, dans l'ordre de fusion. L'application ne fait que lire : elle vous donne les commandes, vous les lancez.
