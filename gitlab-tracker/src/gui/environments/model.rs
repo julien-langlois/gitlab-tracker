@@ -11,6 +11,8 @@ pub(super) struct Branch {
     pub(super) environments: Vec<String>,
     pub(super) last: Option<DeploymentRecord>,
     pub(super) pipeline: Option<BranchPipeline>,
+    /// The version it runs: a release's tag, and the MRs on it merged since.
+    pub(super) version: Option<(String, usize)>,
 }
 
 /// An MR on a branch and not on another: id, title, since when on the first.
@@ -59,15 +61,17 @@ pub(super) fn model(app: &App, overview: Option<&ProjectOverview>) -> Model {
                     environments.push(d.environment.clone());
                 }
             }
+            let last = deployments
+                .iter()
+                .find(|d| d.status == "success")
+                .map(|d| (*d).clone());
             Branch {
+                version: overview.and_then(|o| version_of(app, o, &b.name, last.as_ref())),
                 name: b.name.clone(),
                 alias: b.alias.clone(),
                 role: b.role,
                 environments,
-                last: deployments
-                    .iter()
-                    .find(|d| d.status == "success")
-                    .map(|d| (*d).clone()),
+                last,
                 pipeline: overview
                     .and_then(|o| o.pipelines.iter().find(|p| p.branch == b.name).cloned()),
             }
@@ -143,6 +147,52 @@ impl Model {
             .max_by_key(|i| (self.gap(*i, i + 1).len(), *i))
             .map(|i| (i, i + 1))
     }
+}
+
+/// The version `branch` runs: the release whose commit its last deployment
+/// is, exactly; else the latest release and the MRs that reached the branch
+/// before that deployment and are not on production yet (the last tracked
+/// branch, where releases are made). `None` without a release, or without a
+/// deployment.
+pub(super) fn version_of(
+    app: &App,
+    overview: &ProjectOverview,
+    branch: &str,
+    last: Option<&DeploymentRecord>,
+) -> Option<(String, usize)> {
+    let deployed = last?;
+    let same = |sha: &str| {
+        !sha.is_empty()
+            && !deployed.sha.is_empty()
+            && (sha.starts_with(&deployed.sha) || deployed.sha.starts_with(sha))
+    };
+    if let Some(r) = overview.releases.iter().find(|r| same(&r.sha)) {
+        return Some((r.tag.clone(), 0));
+    }
+    let latest = overview.releases.first()?;
+    let production = app.branch_flow().in_order().last()?.name.clone();
+    let on = |mr: &crate::models::TrackedMr, b: &str| {
+        app.branch_presence(mr, b).is_some_and(|p| !p.is_missing())
+    };
+    // What the deployment holds: the MRs that reached the branch by then
+    // (when their arrival is known).
+    let deployed_at = board::parse_time(&deployed.created_at);
+    let since = app
+        .mrs
+        .iter()
+        .filter(|mr| mr.state == GitlabMrState::Merged)
+        .filter(|mr| on(mr, branch) && !on(mr, &production))
+        .filter(|mr| {
+            match (
+                super::super::milestones::arrived(app, mr, branch),
+                deployed_at,
+            ) {
+                (Some(arrived), Some(deployed)) => arrived <= deployed,
+                _ => true,
+            }
+        })
+        .count();
+    Some((latest.tag.clone(), since))
 }
 
 pub(super) fn oldest(list: &[Waiting]) -> Option<DateTime<Utc>> {

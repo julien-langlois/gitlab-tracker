@@ -2454,3 +2454,4 @@ saved view	Restore	Wiederherstellen
 	milestone {name} {days} late	Meilenstein {name} {days} überfällig
 	Order	Reihenfolge
 	What it unblocks	Was sie freigibt
+	{tag} + {mrs}	{tag} + {mrs}

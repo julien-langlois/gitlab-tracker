@@ -28,7 +28,7 @@ pub(super) fn flow_strip(
     } else {
         ((width - GAP * (per_line - 1) as f32) / per_line as f32).floor()
     };
-    let height = 176.0;
+    let height = 198.0;
     let mut index = 0;
     while index < n {
         let line = (n - index).min(per_line);
@@ -349,6 +349,17 @@ pub(super) fn branch_card(
         &sha.unwrap_or_else(|| board::dash().to_string()),
         None,
     );
+    y += 22.0;
+    // The release it runs, and what reached it since.
+    let version = match &b.version {
+        Some((tag, 0)) => tag.clone(),
+        Some((tag, n)) => tf(
+            "{tag} + {mrs}",
+            &[("tag", tag), ("mrs", &tn(*n as u64, "{n} MR", "{n} MRs"))],
+        ),
+        None => board::dash().to_string(),
+    };
+    key_value(ui, theme, inner, y, tl("Version"), &version, None);
     ui.set_opacity(opacity);
     // At the bottom: what waits for the next branch.
     let foot = Rect::from_min_max(egui::pos2(inner.left(), inner.bottom() - 24.0), inner.max);

@@ -2454,3 +2454,4 @@ saved view	Restore	恢复
 	milestone {name} {days} late	里程碑 {name} 已逾期 {days}
 	Order	顺序
 	What it unblocks	能解除阻塞的
+	{tag} + {mrs}	{tag} + {mrs}

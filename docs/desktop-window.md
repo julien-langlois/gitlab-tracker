@@ -342,6 +342,11 @@ deployed from each, its last deployment, its branch's latest pipeline, and what
 it has that the next branch lacks; every gap between two branches (fixes to bring
 back upstream included), two weeks of deployments, and a way into Promote.
 
+**The version each runs.** A card's *Version* is the release its last
+deployment is, when it deployed a tagged commit (`v2.3.3`); else the latest
+release and the MRs that had reached the branch by that deployment and are not
+on production yet (`v2.3.3 + 4 MRs`): what is deployed there beyond the release.
+
 **Deploy freezes** are read from GitLab (Settings › CI/CD › Deploy freezes). A
 project that declares none there can declare them in the app's settings (`,` ›
 Delivery › Deploy freezes), in the same form: a start cron, `->`, an end cron and
